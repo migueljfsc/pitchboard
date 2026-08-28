@@ -3,6 +3,13 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.4.0 (2026-08-28)
+
+### Feat
+
+- every link starts as a chain
+- drawing tools — arrows, lines, zones, freehand and text
+
 ## v0.3.0 (2026-08-28)
 
 ### Feat
