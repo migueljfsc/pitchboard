@@ -44,6 +44,11 @@ Notable changes to Pitchboard. Format loosely follows
 - Contrast lifted on muted text, borders, disabled controls and the smallest type.
 - Renaming a link sits behind an explicit chevron rather than the colour dot.
 
+- **Team names in the grass behind the goal each side defends**, in the team's colour, running
+  along the goal line. Hidden with the team, and omitted when a name is blank.
+- **Release workflow** — commitizen bumps the version from conventional commits, updates the
+  changelog, tags, and opens a GitHub Release.
+- **CODEOWNERS**, sole owner for the repository.
 - **Player size**, 0.5x to 2.5x, scaling tokens, the ball, the carry offset, shirt numbers and
   hit-testing together. Stored on the document so exports and shared boards reproduce it.
 

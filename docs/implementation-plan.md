@@ -346,6 +346,12 @@ Requested during M3 review and built straight away:
   other half drew into the spare canvas width and it read as a shift. Orientation stays an
   independent toggle.
 - **Player size**, 0.5x to 2.5x (D18), scaling the drawing and hit-testing together.
+- **Team names behind the goals**, laid along the goal line so they read upright in both
+  orientations. The grass padding grew to 5 m to seat them, shared as `PITCH_PADDING` between
+  the fit and the half-view clip so the band is never cut off.
+- **Release workflow** — commitizen bump, changelog, tag and GitHub Release, matching the other
+  projects here. Needs a `RELEASE_TOKEN` secret: `main` is protected and the built-in
+  `GITHUB_TOKEN` cannot push to it.
 - **Contrast pass.** Muted text was under 4.5:1 on the panel background and borders were nearly
   invisible; both were lifted, along with disabled states and the smallest type.
 - **GitHub Pages deploy** (D16), gated on the full check suite.

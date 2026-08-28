@@ -32,6 +32,13 @@ export const TOKEN_RADIUS = 1.1;
 /** Drawn larger than a real ball (0.11 m) so it reads at board scale. */
 export const BALL_RADIUS = 0.45;
 
+/**
+ * Grass drawn beyond the touchlines and goal lines, in metres. Deep enough to
+ * seat a team name behind each goal. fitViewport and the half-view clip both
+ * read it, so the band is never cut off.
+ */
+export const PITCH_PADDING = 5;
+
 export const MIN_TOKEN_SCALE = 0.5;
 export const MAX_TOKEN_SCALE = 2.5;
 
@@ -78,7 +85,7 @@ export function drawPitch(
   const P = PITCH;
 
   // Surface, with a margin band so the pitch is not flush to the canvas edge.
-  const pad = 3;
+  const pad = PITCH_PADDING;
   ctx.fillStyle = theme.grass;
   ctx.fillRect(-pad, -pad, L + pad * 2, W + pad * 2);
 

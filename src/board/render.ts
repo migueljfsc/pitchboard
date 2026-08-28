@@ -16,6 +16,8 @@ import { BALL_ID } from "./types";
 import {
   BALL_RADIUS,
   DEFAULT_THEME,
+  PITCH_PADDING,
+  PITCH,
   TOKEN_RADIUS,
   ballRadius,
   drawPitch,
@@ -66,7 +68,7 @@ export function drawBoard(
   // whatever canvas width is left over.
   if (view.half !== "full") {
     const [x0, x1] = halfRange(view.half, doc.pitch.length);
-    const pad = 3;
+    const pad = PITCH_PADDING;
     ctx.beginPath();
     ctx.rect(
       view.half === "left" ? x0 - pad : x0,
@@ -78,6 +80,7 @@ export function drawBoard(
   }
 
   drawPitch(ctx, doc.pitch, theme);
+  drawTeamNames(ctx, doc, view.rotated);
   // Links sit under the tokens so a connector never covers a shirt number.
   drawLinks(ctx, doc, frame, view.rotated);
   drawPaths(ctx, doc, frame, view);
@@ -108,6 +111,50 @@ export function drawBoard(
   }
 
   ctx.restore();
+}
+
+/**
+ * Each team's name in the grass behind the goal it defends.
+ *
+ * teams[0] defends x=0 and teams[1] defends x=length — the same convention
+ * facingOf uses, and how createBoardDoc lays a board out.
+ *
+ * The name always runs PARALLEL to the goal line, which reads bottom-to-top on a
+ * horizontal board and straight across on a vertical one. That is the stadium
+ * look, and it is the only orientation that fits the band behind the goal.
+ */
+function drawTeamNames(ctx: Ctx, doc: BoardDoc, rotated: boolean): void {
+  // Between the back of the goal and the edge of the grass.
+  const band = (PITCH_PADDING + PITCH.goalDepth) / 2;
+
+  doc.teams.forEach((team, i) => {
+    const name = team.name.trim();
+    if (team.hidden || !name) return;
+
+    const at = {
+      x: i === 0 ? -band : doc.pitch.length + band,
+      y: doc.pitch.width / 2,
+    };
+
+    ctx.save();
+    ctx.translate(at.x, at.y);
+    // The name runs along the pitch's y axis, which is the goal line. Upright
+    // that is a quarter turn anticlockwise, so it reads bottom-to-top. On a
+    // vertical board the outer matrix already turns -90 degrees, so +90 here
+    // nets to zero and the name sits straight across the goal.
+    ctx.rotate(rotated ? Math.PI / 2 : -Math.PI / 2);
+
+    ctx.font = "700 2.1px Inter, system-ui, -apple-system, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "rgba(0,0,0,0.5)";
+    ctx.lineWidth = 0.5;
+    ctx.strokeText(name, 0, 0);
+    ctx.fillStyle = withAlpha(team.color, 0.9);
+    ctx.fillText(name, 0, 0);
+    ctx.restore();
+  });
 }
 
 /**

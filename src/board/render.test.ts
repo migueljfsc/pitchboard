@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { drawBoard, TOKEN_RADIUS } from "./render";
+import { PITCH_PADDING } from "./pitch";
 import { frameAt } from "./timeline";
 import { createRecordingCtx } from "./recording-ctx";
 import { createBoardDoc } from "@/formations";
@@ -68,9 +69,10 @@ describe("drawBoard", () => {
     expect(turned.calls("transform")[0]).not.toBe(flat.calls("transform")[0]);
 
     // ...except that each token's text is counter-rotated so numbers stay upright.
+    // Compared against the flat baseline, because other text (the team names
+    // behind each goal) rotates in both.
     const players = doc.teams[0].players.length + doc.teams[1].players.length;
-    expect(flat.count("rotate")).toBe(0);
-    expect(turned.count("rotate")).toBe(players);
+    expect(turned.count("rotate") - flat.count("rotate")).toBe(players);
   });
 
   it("counter-rotates distance labels too", () => {
@@ -81,7 +83,9 @@ describe("drawBoard", () => {
       0,
     );
 
+    const flat = createRecordingCtx();
     const turned = createRecordingCtx();
+    drawBoard(flat.ctx, doc, 0, view());
     drawBoard(
       turned.ctx,
       doc,
@@ -90,7 +94,7 @@ describe("drawBoard", () => {
     );
 
     const players = doc.teams[0].players.length + doc.teams[1].players.length;
-    expect(turned.count("rotate")).toBe(players + labels);
+    expect(turned.count("rotate") - flat.count("rotate")).toBe(players + labels);
   });
 
   it("clips to a half, so the other half cannot spill into spare canvas", () => {
@@ -113,9 +117,9 @@ describe("drawBoard", () => {
       // outside only — the halfway line is a hard edge.
       const rect = r.calls("rect")[0];
       const [x, , w] = rect.slice(5, -1).split(",").map(Number);
-      expect(w, half).toBeCloseTo(doc.pitch.length / 2 + 3);
+      expect(w, half).toBeCloseTo(doc.pitch.length / 2 + PITCH_PADDING);
       expect(half === "left" ? x : x + w, half).toBeCloseTo(
-        half === "left" ? -3 : doc.pitch.length + 3,
+        half === "left" ? -PITCH_PADDING : doc.pitch.length + PITCH_PADDING,
       );
     }
   });
@@ -214,6 +218,63 @@ describe("drawBoard", () => {
     expect(exported.count("setLineDash")).toBe(0);
     // Hover ring present in the editor only.
     expect(editor.count("arc")).toBeGreaterThan(exported.count("arc"));
+  });
+});
+
+describe("team names", () => {
+  const nameCalls = (r: ReturnType<typeof createRecordingCtx>, name: string) =>
+    r.log.filter((l) => l.startsWith(`fillText(${JSON.stringify(name)},`));
+
+  it("writes each team's name once, behind the goal it defends", () => {
+    const doc = createBoardDoc();
+    doc.teams[0].name = "Arsenal";
+    doc.teams[1].name = "City";
+
+    const r = createRecordingCtx();
+    drawBoard(r.ctx, doc, 0, view());
+    expect(nameCalls(r, "Arsenal")).toHaveLength(1);
+    expect(nameCalls(r, "City")).toHaveLength(1);
+
+    // Drawn in the translated frame, so the call itself is at the origin; the
+    // placement is the preceding translate.
+    const translates = r.calls("translate");
+    expect(translates.some((t) => t.startsWith("translate(-3.5,34)"))).toBe(true);
+    expect(translates.some((t) => t.startsWith("translate(108.5,34)"))).toBe(true);
+  });
+
+  it("omits a hidden team's name", () => {
+    const doc = createBoardDoc();
+    doc.teams[1].name = "City";
+    doc.teams[1].hidden = true;
+    const r = createRecordingCtx();
+    drawBoard(r.ctx, doc, 0, view());
+    expect(nameCalls(r, "City")).toHaveLength(0);
+  });
+
+  it("omits a blank name rather than drawing an empty string", () => {
+    const doc = createBoardDoc();
+    doc.teams[0].name = "   ";
+    const r = createRecordingCtx();
+    drawBoard(r.ctx, doc, 0, view());
+    expect(r.calls("fillText").some((c) => c.startsWith('fillText("   "'))).toBe(false);
+  });
+
+  it("lays the name along the goal line in both orientations", () => {
+    const doc = createBoardDoc();
+    const flat = createRecordingCtx();
+    const turned = createRecordingCtx();
+    drawBoard(flat.ctx, doc, 0, view());
+    drawBoard(
+      turned.ctx,
+      doc,
+      0,
+      view({ ...fitViewport(W, H, doc.pitch.length, doc.pitch.width, { half: "full", rotated: true }) }),
+    );
+    // A quarter turn anticlockwise when flat; clockwise when the board is
+    // already turned, so it nets to zero. Both leave the name along the line —
+    // getting this wrong renders it sideways and clipped off the canvas.
+    expect(flat.calls("rotate")).toContain(`rotate(${round(-Math.PI / 2)})`);
+    expect(turned.calls("rotate")).toContain(`rotate(${round(Math.PI / 2)})`);
   });
 });
 

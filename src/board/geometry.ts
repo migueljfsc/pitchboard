@@ -8,6 +8,7 @@
 
 import type { PitchHalf, PitchView, Vec2, Viewport } from "./types";
 import { DEFAULT_PITCH_VIEW } from "./types";
+import { PITCH_PADDING } from "./pitch";
 
 // ---------------------------------------------------------------- vectors
 
@@ -95,7 +96,7 @@ export function fitViewport(
   length: number,
   width: number,
   view: PitchView = DEFAULT_PITCH_VIEW,
-  padding = 3,
+  padding = PITCH_PADDING,
 ): Viewport {
   const [x0, x1] = halfRange(view.half, length);
   const along = x1 - x0;
