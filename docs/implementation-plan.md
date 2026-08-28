@@ -175,7 +175,8 @@ Goal: the headline feature.
 4. **Link editor** — create from the current selection, name it, reorder members (order defines
    the chain sequence), pick style and colour, show/hide.
 5. **Preset-seeded links** — formations ship their own links. Choosing 4-3-3 yields a back-4
-   chain and a midfield-3 triangle already wired.
+   chain and a midfield-3 chain already wired. (Seeded as triangles originally; every unit now
+   seeds as an open chain, and closing one is the author's choice — see D21.)
 6. **Group operations** — select a link to select its members; drag the unit; nudge the line.
 
 ### Definition of done

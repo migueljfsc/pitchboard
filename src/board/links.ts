@@ -132,7 +132,9 @@ export function createLink(
   }
   if (ordered.length < 2) return doc;
 
-  const style: LinkStyle = options.style ?? (ordered.length === 3 ? "polygon" : "chain");
+  // Chain whatever the size. A closed shape draws an edge back across the unit,
+  // which is a claim about the group that a link should not make on its own.
+  const style: LinkStyle = options.style ?? "chain";
   const link: Link = {
     id: freshId(doc),
     // Named after its members, in link order — far more use than "Link 3".

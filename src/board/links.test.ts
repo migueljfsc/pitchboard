@@ -198,11 +198,16 @@ describe("createLink", () => {
     expect(order).toEqual(expected);
   });
 
-  it("defaults a three to a shape and everything else to a chain", () => {
-    const three = createLink(createBoardDoc(), [A, B, C]);
-    expect(three.links[three.links.length - 1].style).toBe("polygon");
-    const four = createLink(createBoardDoc(), [A, B, C, D]);
-    expect(four.links[four.links.length - 1].style).toBe("chain");
+  it("defaults to a chain at every size — closing a group is the author's call", () => {
+    for (const members of [[A, B], [A, B, C], [A, B, C, D]]) {
+      const next = createLink(createBoardDoc(), members);
+      expect(next.links[next.links.length - 1].style).toBe("chain");
+    }
+  });
+
+  it("still takes an explicit style", () => {
+    const next = createLink(createBoardDoc(), [A, B, C], { style: "filled" });
+    expect(next.links[next.links.length - 1].style).toBe("filled");
   });
 
   it("stores no colour of its own, so the kit stays the single source", () => {
@@ -291,13 +296,12 @@ describe("hitTestLink", () => {
 });
 
 describe("seeded links from formations", () => {
-  it("gives 4-3-3 an open back four and a closed midfield three", () => {
+  it("leaves every seeded unit open, including a three", () => {
     const doc = createBoardDoc();
-    const back = doc.links.find((l: Link) => l.name.includes("Back 4"))!;
-    const mid = doc.links.find((l: Link) => l.name.includes("Midfield 3"))!;
-
-    expect(linkGeometry(back, resolveAt(doc, 0), doc)!.closed).toBe(false);
-    expect(linkGeometry(mid, resolveAt(doc, 0), doc)!.closed).toBe(true);
+    for (const link of doc.links) {
+      expect(link.style).toBe("chain");
+      expect(linkGeometry(link, resolveAt(doc, 0), doc)!.closed).toBe(false);
+    }
   });
 
   it("has distances off by default, so the board starts clean", () => {

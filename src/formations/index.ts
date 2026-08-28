@@ -112,11 +112,10 @@ function nameFor(index: number, lastIndex: number, count: number): string {
   return index === 1 ? `Holding ${count}` : index === lastIndex - 1 ? `Attacking ${count}` : `Midfield ${count}`;
 }
 
-function linkFor(count: number, index: number): LinkStyle | undefined {
-  if (count < 2) return undefined;
-  // A flat line reads as a chain; a three is a shape worth closing.
-  if (index === 0) return "chain";
-  return count === 3 ? "polygon" : "chain";
+function linkFor(count: number): LinkStyle | undefined {
+  // Every seeded line is a chain, matching what createLink defaults to. Closing
+  // a three is a choice, and it belongs to whoever is drawing the tactic.
+  return count < 2 ? undefined : "chain";
 }
 
 /**
@@ -159,7 +158,7 @@ export function fromNotation(notation: string, group: string): Formation {
     depth: last === 0 ? (DEPTH_MIN + DEPTH_MAX) / 2 : DEPTH_MIN + ((DEPTH_MAX - DEPTH_MIN) * i) / last,
     spread: spreadFor(count, widthFactor(count, i, last, counts[last])),
     numbers: numbersByLine[i],
-    link: linkFor(count, i),
+    link: linkFor(count),
   }));
 
   return { id: notation, name: notation, group, lines: [GK, ...lines] };

@@ -88,7 +88,7 @@ the shape distort while players move independently: the back 4 breaking as one d
 out, the midfield triangle stretching under a press.
 
 Per-link style rather than a single global style, because a back 4 needs an open chain (a closing
-edge across the pitch is obviously wrong) while a midfield 3 needs a closed triangle and a press
+edge across the pitch is obviously wrong) while a midfield 3 may want a closed triangle and a press
 trap wants a translucent fill.
 
 ---
@@ -373,6 +373,22 @@ into scene *i* counts as scene *i*, matching where paths are stored.
 
 `Annotation.color` is a plain colour, unlike `Link.color` (D-less, see `linkColor`): a drawing
 belongs to whoever drew it, not to a team.
+
+---
+
+## D21 — Every link starts as a chain
+
+**Decision.** `createLink` and the formation seeder both default to `chain`, whatever the size.
+Closing a shape is a deliberate act, made in the link panel.
+
+The original rule closed a three into a triangle automatically, on the grounds that a flat line
+reads as a chain while a three is a shape worth closing. That is true of a midfield three and
+false of most other threes — a front three, a back three pushed high, any three picked ad hoc
+out of a selection. A closed shape draws an edge back across the unit, which is a claim about
+how those players relate, and the tool should not be making it unprompted.
+
+*Rejected — keep the size rule.* It is right often enough to feel clever and wrong often enough
+to need undoing, which is the worst combination for a default.
 
 ---
 

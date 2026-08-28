@@ -163,13 +163,13 @@ describe("buildTeam", () => {
     for (const l of links) expect(l.members.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("gives a back four an open chain and a midfield three a polygon", () => {
+  it("seeds every line as an open chain", () => {
     const { links } = buildTeam({ ...HOME, formation: "4-3-3" }, PITCH);
     const back = links.find((l) => l.name.includes("Back 4"));
     const mid = links.find((l) => l.name.includes("Midfield 3"));
     expect(back?.style).toBe("chain");
     expect(back?.members).toHaveLength(4);
-    expect(mid?.style).toBe("polygon");
+    expect(mid?.style).toBe("chain");
     expect(mid?.members).toHaveLength(3);
   });
 });
