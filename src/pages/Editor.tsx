@@ -34,6 +34,8 @@ export function Editor() {
   const [expandedLink, setExpandedLink] = useState<string | null>(null);
   const [pitchView, setPitchView] = useState<PitchView>(DEFAULT_PITCH_VIEW);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [selectionOpen, setSelectionOpen] = useState(true);
+  const [focusName, setFocusName] = useState(0);
 
   const directions = useMemo<[Direction, Direction]>(() => [HOME.direction, AWAY.direction], []);
   const total = totalSeconds(doc);
@@ -131,6 +133,16 @@ export function Editor() {
     },
     [visible, activeScene],
   );
+
+  /**
+   * Double-clicking a player on the board is a rename gesture. The canvas has
+   * already narrowed the selection to that player; this opens the panel holding
+   * the field and asks it for the cursor.
+   */
+  const onEditName = () => {
+    setSelectionOpen(true);
+    setFocusName((n) => n + 1);
+  };
 
   const onCreateLink = () => {
     const members = [...visible].filter((id) => id !== "ball");
@@ -255,7 +267,12 @@ export function Editor() {
           />
         </Section>
 
-        <Section title="Selection" badge={visible.size ? String(visible.size) : undefined}>
+        <Section
+          title="Selection"
+          badge={visible.size ? String(visible.size) : undefined}
+          open={selectionOpen}
+          onOpenChange={setSelectionOpen}
+        >
           <Inspector
             doc={doc}
             selection={visible}
@@ -269,6 +286,7 @@ export function Editor() {
             onRenumber={(id, n) => setDoc((d) => setPlayerNumber(d, id, n))}
             onTravelChange={onTravelChange}
             onRemovePlayer={(id) => setDoc((d) => removePlayer(d, id))}
+            focusName={focusName}
           />
         </Section>
         <div className="mt-auto border-t border-ink-700 p-4">
@@ -304,6 +322,7 @@ export function Editor() {
             selection={visible}
             onSelectionChange={setSelection}
             onDocChange={setDoc}
+            onEditName={onEditName}
           />
         </div>
 

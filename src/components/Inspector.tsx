@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { UserMinus } from "lucide-react";
 import type { BoardDoc } from "@/board/types";
 import { BALL_ID } from "@/board/types";
@@ -17,6 +18,12 @@ type Props = {
   onRenumber: (playerId: string, number: number) => void;
   onTravelChange: (ms: number | null) => void;
   onRemovePlayer: (playerId: string) => void;
+  /**
+   * Bumped to put the cursor in the name field — a double-click on the board.
+   * A counter rather than a boolean so renaming the same player twice in a row
+   * still fires.
+   */
+  focusName?: number;
 };
 
 export function Inspector({
@@ -32,7 +39,18 @@ export function Inspector({
   onRenumber,
   onTravelChange,
   onRemovePlayer,
+  focusName,
 }: Props) {
+  const nameRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!focusName) return;
+    // Focusing also scrolls the sidebar to it, which matters when the board is
+    // tall enough to push the panel out of view.
+    nameRef.current?.focus();
+    nameRef.current?.select();
+  }, [focusName]);
+
   const scene = doc.scenes[activeScene];
   const nameOf = (id: string) => {
     if (id === BALL_ID) return "Ball";
@@ -46,8 +64,8 @@ export function Inspector({
   if (selection.size === 0) {
     return (
       <p className="text-[11px] leading-relaxed text-ink-300">
-        Click a player to select. Shift-click to add, or drag on empty grass to marquee.
-        Arrow keys nudge; hold shift for 5&nbsp;m. Space plays.
+        Click a player to select, double-click to rename. Shift-click to add, or drag on
+        empty grass to marquee. Arrow keys nudge; hold shift for 5&nbsp;m. Space plays.
       </p>
     );
   }
@@ -82,6 +100,7 @@ export function Inspector({
           <label className="flex min-w-0 flex-1 flex-col gap-1">
             <span className="text-[11px] uppercase tracking-wide text-ink-400">Name</span>
             <input
+              ref={nameRef}
               value={player.label}
               onChange={(e) => onRename(player.id, e.target.value)}
               placeholder={`Player ${player.number}`}

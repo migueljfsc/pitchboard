@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { BoardDoc, PitchView, Vec2 } from "@/board/types";
-import { DEFAULT_PITCH_VIEW } from "@/board/types";
+import { BALL_ID, DEFAULT_PITCH_VIEW } from "@/board/types";
 import { fitViewport, toPitch } from "@/board/geometry";
 import { drawBoard } from "@/board/render";
 import { frameAt } from "@/board/timeline";
@@ -34,6 +34,8 @@ type Props = {
   selection: ReadonlySet<string>;
   onSelectionChange: (next: Set<string>) => void;
   onDocChange: (next: BoardDoc) => void;
+  /** A double-click on a player asks to rename it. The ball has no name. */
+  onEditName?: (playerId: string) => void;
 };
 
 type Drag =
@@ -51,6 +53,7 @@ export function BoardCanvas({
   selection,
   onSelectionChange,
   onDocChange,
+  onEditName,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -99,7 +102,7 @@ export function BoardCanvas({
   }, [doc, t, size, selection, hover, drag, editScene, pitchView]);
 
   const pointFrom = useCallback(
-    (e: React.PointerEvent<HTMLCanvasElement>): Vec2 => {
+    (e: React.MouseEvent<HTMLCanvasElement>): Vec2 => {
       const rect = e.currentTarget.getBoundingClientRect();
       const view = fitViewport(rect.width, rect.height, doc.pitch.length, doc.pitch.width, pitchView);
       return toPitch({ x: e.clientX - rect.left, y: e.clientY - rect.top }, view);
@@ -171,6 +174,19 @@ export function BoardCanvas({
     setDrag({ ...drag, b: p });
   };
 
+  /**
+   * Double-click a player to rename it. Narrows the selection to that one player
+   * first: renaming is a single-player edit, and the panel only offers the field
+   * when exactly one is selected.
+   */
+  const onDoubleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!onEditName) return;
+    const hit = hitTest(doc, frameAt(doc, t), pointFrom(e));
+    if (!hit || hit.id === BALL_ID) return;
+    onSelectionChange(new Set([hit.id]));
+    onEditName(hit.id);
+  };
+
   const onPointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (drag?.kind === "marquee") {
       const inside = entitiesInRect(doc, frameAt(doc, t), drag.a, drag.b);
@@ -199,6 +215,7 @@ export function BoardCanvas({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerLeave={() => setHover(null)}
+        onDoubleClick={onDoubleClick}
       />
     </div>
   );
