@@ -1,13 +1,17 @@
 # Pitchboard
 
 [![ci](https://github.com/migueljfsc/pitchboard/actions/workflows/ci.yml/badge.svg)](https://github.com/migueljfsc/pitchboard/actions/workflows/ci.yml)
+[![deploy](https://github.com/migueljfsc/pitchboard/actions/workflows/deploy.yml/badge.svg)](https://github.com/migueljfsc/pitchboard/actions/workflows/deploy.yml)
 
 An animated football tactics board that runs in the browser. Draw a formation, move players
 between scenes along curved runs, and export the result as **MP4**, **GIF**, or **PNG** —
 all client-side, no server rendering.
 
-> **Status: pre-implementation.** The design is complete and documented; the scaffold lands
-> in M1. See [`docs/implementation-plan.md`](docs/implementation-plan.md).
+**Live:** https://migueljfsc.github.io/pitchboard/
+
+> **Status: in progress.** The board, animation and links are built (M1–M3). Export to MP4 /
+> GIF / PNG is next. See [`docs/implementation-plan.md`](docs/implementation-plan.md) for the
+> plan and [`docs/bugs.md`](docs/bugs.md) for known defects.
 
 ## What makes it different
 
@@ -34,9 +38,13 @@ alternatives are in [`docs/decisions.md`](docs/decisions.md).
 
 ## Stack
 
-React 19 + TypeScript (strict) + Vite 8 + Tailwind v4, deployed as a single Cloudflare Worker
-serving both the static SPA and the share API, with KV for stored boards. Infrastructure is
-OpenTofu; the Worker itself is deployed by wrangler.
+React 19 + TypeScript (strict) + Vite 8 + Tailwind v4. Deployed to GitHub Pages by
+`.github/workflows/deploy.yml` on every push to `main`, behind the same lint / typecheck / test
+/ build gates CI runs.
+
+Pages is static, so share links will use the self-contained compressed-URL form. A backend for
+larger boards (Cloudflare Worker + KV) remains an option for M5 — see
+[`docs/decisions.md`](docs/decisions.md).
 
 ## Develop
 
@@ -46,12 +54,13 @@ pnpm dev          # http://localhost:5173
 pnpm test         # vitest — engine only
 pnpm lint
 pnpm typecheck
-pnpm build
+pnpm build        # base path /pitchboard/ for GitHub Pages
 ```
 
 Node >= 22.12. Package manager: pnpm.
 
-> These land with the M1 scaffold. Right now the repo contains documentation and tooling only.
+`base` is only applied to production builds, so `pnpm dev` stays at the root. Override it with
+`PITCHBOARD_BASE=/ pnpm build` for a root-domain deploy.
 
 ### Contributing to yourself later
 
@@ -70,6 +79,7 @@ anything else on a PR.
 | [`docs/architecture.md`](docs/architecture.md) | Renderer contract, coordinate system, `BoardDoc` schema, timeline and ball model, links, export pipeline, sharing |
 | [`docs/implementation-plan.md`](docs/implementation-plan.md) | Phases M0–M6 with tasks, definition of done, and per-phase risks |
 | [`docs/decisions.md`](docs/decisions.md) | Decision log — what was chosen, and what was rejected |
+| [`docs/bugs.md`](docs/bugs.md) | Known defects, with the cause where it is understood |
 | [`AGENTS.md`](AGENTS.md) | Working conventions and the invariants that must not be broken |
 
 ## Licence

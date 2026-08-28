@@ -143,6 +143,34 @@ export function setCarrier(doc: BoardDoc, index: number, carrier: string | null)
   return replace(doc, scenes);
 }
 
+/**
+ * Give an entity its own travel time into scene `index`, or `null` to fall back
+ * to the scene's. Clamped to the same range as a scene duration.
+ */
+export function setTravel(
+  doc: BoardDoc,
+  index: number,
+  entityId: string,
+  ms: number | null,
+): BoardDoc {
+  const scene = doc.scenes[index];
+  if (!scene) return doc;
+
+  const travel = { ...(scene.travel ?? {}) };
+  if (ms === null) delete travel[entityId];
+  else travel[entityId] = Math.max(0, Math.min(60_000, Math.round(ms)));
+
+  // Drop the key entirely once empty, so a scene with no overrides serialises
+  // exactly as it did before the field existed.
+  const next: Scene = { ...scene };
+  if (Object.keys(travel).length === 0) delete next.travel;
+  else next.travel = travel;
+
+  const scenes = doc.scenes.slice();
+  scenes[index] = next;
+  return replace(doc, scenes);
+}
+
 /** Set or clear the curve an entity travels along into scene `index`. */
 export function setPath(
   doc: BoardDoc,

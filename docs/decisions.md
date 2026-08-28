@@ -255,7 +255,54 @@ a nudge can never move a token nobody can see, and unhiding the team gives the s
 
 ---
 
-## D14 — Stack follows `wtc/ui`, with pnpm
+## D14 — Per-entity travel time, with the scene sized to its slowest mover
+
+**Decision.** `Scene.travel` maps an entity to its own travel time in milliseconds. The scene's
+`transitionMs` is the baseline everyone uses; the window the scene actually occupies is the
+longest of them. An entity that finishes early holds at its destination.
+
+**Rejected — a normalised start/end window per player** (fractions of the scene transition).
+Expresses "arrives early" and "sets off late" but cannot express "slower than the scene" without
+making everyone else faster, which is backwards from how a coach thinks about it.
+
+**Rejected — leaving the scene fixed and clipping a slow run.** A run cut off mid-stride is
+never what was meant.
+
+Letting the scene stretch keeps one number meaningful: the scene's Travel field is the default
+for everybody, and the timeline total accounts for whoever needs longer. The UI states the
+effective duration whenever an override is in play.
+
+---
+
+## D15 — Half views orient themselves
+
+**Decision.** Choosing Left or Right turns the board vertical. The orientation toggle still
+overrides afterwards.
+
+Half a pitch is 52.5 x 68 — taller than it is long. Cropping to it on a wide screen changes
+nothing: the height still constrains the fit, so the scale is identical to the full pitch and
+the half simply sits re-centred with dead space either side. That is a shift, not a zoom, and it
+is useless for the close analysis a half view exists for. Turned, the same crop fills the board
+at nearly twice the scale.
+
+---
+
+## D16 — GitHub Pages
+
+**Decision.** Deploy the SPA to GitHub Pages from `main`, gated on lint, typecheck, test and
+build.
+
+**Supersedes part of D8.** The Cloudflare Worker + KV design stands as the answer for
+server-stored share links, but it is not needed to put the board in front of people, and Pages
+matches how the other two static projects here deploy. The self-contained compressed-URL share
+link works on a static host; KV only earns its place for boards too large for a URL.
+
+`base` applies to production builds only, so `pnpm dev` stays at the root rather than moving to
+`/pitchboard/`.
+
+---
+
+## D17 — Stack follows `wtc/ui`, with pnpm
 
 **Decision.** React 19.2 + TS 5.6 strict + Vite 8 + Tailwind v4 + shadcn-style primitives,
 matching `wtc/ui/`. pnpm rather than npm.

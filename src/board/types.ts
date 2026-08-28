@@ -48,6 +48,12 @@ export type Scene = {
   ballPos?: Vec2;
   /** Curve the ball travels along into this scene. */
   ballPath?: PathCurve | null;
+  /**
+   * Per-entity travel time into this scene, in milliseconds, overriding
+   * `transitionMs`. Lets one player cover their run faster or slower than the
+   * rest of the scene. The scene lasts as long as its slowest mover.
+   */
+  travel?: Record<string, number>;
 };
 
 export type LinkStyle = "chain" | "polygon" | "filled";

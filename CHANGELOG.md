@@ -33,3 +33,20 @@ Notable changes to Pitchboard. Format loosely follows
   drawn alone; a half-pitch view (left / full / right) for attacking or defensive analysis; and
   a vertical board with the attacking direction up the screen, text staying upright. The sidebar
   is now collapsible sections with badges. 180 engine tests.
+- **Deployed to GitHub Pages** on every push to `main`, behind the full check suite.
+- **Player names and numbers**, editable from the selection panel.
+- **Per-player travel time**, so one player can run faster or slower than the rest of the scene;
+  the scene stretches to fit its slowest mover.
+- New links are named after their members in link order, falling back to shirt numbers.
+
+### Changed
+
+- Choosing a half pitch now turns the board vertical, so the half fills the space instead of
+  being re-centred at the same scale.
+- Contrast lifted on muted text, borders, disabled controls and the smallest type.
+- Renaming a link sits behind an explicit chevron rather than the colour dot.
+
+### Known issues
+
+- A pass to a moving receiver curves rather than travelling straight — see
+  [`docs/bugs.md`](./docs/bugs.md) BUG-1.

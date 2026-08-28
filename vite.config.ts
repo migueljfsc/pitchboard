@@ -2,7 +2,11 @@ import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  // GitHub Pages serves project sites from a subpath, but dev should stay at the
+  // root so the local URL is just localhost:5173. Overridable so a future
+  // root-domain deploy needs no code change.
+  base: command === "build" ? (process.env.PITCHBOARD_BASE ?? "/pitchboard/") : "/",
   plugins: [react()],
   resolve: {
     alias: { "@": path.resolve(import.meta.dirname, "./src") },
@@ -17,4 +21,4 @@ export default defineConfig({
     environment: "node",
     include: ["src/**/*.test.ts"],
   },
-});
+}));

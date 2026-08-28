@@ -21,7 +21,12 @@ export function ViewControls({ view, onChange }: Props) {
           <button
             key={h.value}
             type="button"
-            onClick={() => onChange({ ...view, half: h.value })}
+            // A half pitch is taller than it is long, so it only fills a wide
+            // board once turned. Picking a half orients it; the toggle below
+            // still overrides.
+            onClick={() =>
+              onChange({ half: h.value, rotated: h.value === "full" ? view.rotated : true })
+            }
             className={cn(
               "flex-1 rounded border px-1 py-1.5 text-[11px] transition",
               view.half === h.value
@@ -50,9 +55,9 @@ export function ViewControls({ view, onChange }: Props) {
       </button>
 
       {view.half !== "full" && !view.rotated && (
-        <p className="text-[10px] leading-relaxed text-ink-400">
-          A half pitch is taller than it is long, so on a wide screen it only fills the
-          box once rotated to vertical.
+        <p className="text-[11px] leading-relaxed text-ink-300">
+          Horizontal shows the half at the same scale as the full pitch, just re-centred.
+          Vertical zooms it to fill the board.
         </p>
       )}
     </div>

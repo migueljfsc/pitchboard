@@ -9,6 +9,7 @@
 
 import type { BoardDoc, Link, LinkStyle, Vec2 } from "./types";
 import { positionAt, type Resolved } from "./timeline";
+import { displayName } from "./players";
 
 export type LinkEdge = { a: Vec2; b: Vec2; mid: Vec2; metres: number };
 
@@ -110,7 +111,9 @@ export function createLink(
   const style: LinkStyle = options.style ?? (ordered.length === 3 ? "polygon" : "chain");
   const link: Link = {
     id: freshId(doc),
-    name: options.name ?? `Link ${doc.links.length + 1}`,
+    // Named after its members, in link order — far more use than "Link 3".
+    // Players fall back to their shirt number until they are given a name.
+    name: options.name ?? ordered.map((id) => displayName(doc, id)).join(", "),
     members: ordered,
     style,
     color: color ?? "#ffffff",

@@ -1,4 +1,13 @@
-import { ChevronLeft, ChevronRight, Eye, EyeOff, Link2, Ruler, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  EyeOff,
+  Link2,
+  Ruler,
+  Trash2,
+} from "lucide-react";
 import type { BoardDoc, Link, LinkStyle } from "@/board/types";
 import { deleteLink, moveMember, updateLink } from "@/board/links";
 import { cn } from "@/lib/utils";
@@ -49,7 +58,7 @@ export function LinkPanel({
         type="button"
         disabled={players.length < 2}
         onClick={onCreateFromSelection}
-        className="flex items-center justify-center gap-1.5 rounded-md border border-ink-600 bg-ink-800 px-2 py-1.5 text-xs text-ink-200 transition enabled:hover:border-accent enabled:hover:text-white disabled:opacity-40"
+        className="flex items-center justify-center gap-1.5 rounded-md border border-ink-600 bg-ink-800 px-2 py-1.5 text-xs text-ink-200 transition enabled:hover:border-accent enabled:hover:text-white disabled:opacity-45"
       >
         <Link2 size={13} />
         {players.length < 2 ? "Select 2+ players to link" : `Link ${players.length} players`}
@@ -103,13 +112,21 @@ function LinkRow({
         link.hidden && "opacity-50",
       )}
     >
-      <div className="flex items-center gap-1.5 px-2 py-1.5">
+      <div className="flex items-center gap-1 px-1.5 py-1.5">
+        {/* An explicit chevron, because renaming was undiscoverable behind the dot. */}
         <button
           type="button"
           onClick={onToggle}
+          aria-expanded={expanded}
+          aria-label={`${expanded ? "Close" : "Rename and restyle"} ${link.name}`}
+          title="Rename, restyle, reorder"
+          className="flex size-5 shrink-0 items-center justify-center rounded text-ink-400 transition hover:text-accent"
+        >
+          <ChevronDown size={13} className={cn("transition-transform", !expanded && "-rotate-90")} />
+        </button>
+        <span
           className="size-2.5 shrink-0 rounded-full ring-1 ring-white/25"
           style={{ background: link.color }}
-          aria-label={`Configure ${link.name}`}
         />
         <button
           type="button"
@@ -136,12 +153,15 @@ function LinkRow({
 
       {expanded && (
         <div className="flex flex-col gap-2 border-t border-ink-600 px-2 py-2">
-          <input
-            value={link.name}
-            onChange={(e) => onChange({ name: e.target.value })}
-            className="w-full rounded border border-ink-600 bg-ink-900 px-1.5 py-1 text-[11px] text-ink-200 outline-none focus:border-accent"
-            aria-label="Link name"
-          />
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] uppercase tracking-wide text-ink-400">Name</span>
+            <input
+              value={link.name}
+              onChange={(e) => onChange({ name: e.target.value })}
+              className="w-full rounded border border-ink-600 bg-ink-900 px-1.5 py-1 text-[11px] text-ink-200 outline-none transition hover:border-ink-400 focus:border-accent"
+              aria-label="Link name"
+            />
+          </label>
 
           <div className="flex gap-1">
             {STYLES.map((s) => (
@@ -151,7 +171,7 @@ function LinkRow({
                 title={s.hint}
                 onClick={() => onChange({ style: s.value })}
                 className={cn(
-                  "flex-1 rounded border px-1 py-1 text-[10px] transition",
+                  "flex-1 rounded border px-1 py-1 text-[11px] transition",
                   link.style === s.value
                     ? "border-accent text-accent"
                     : "border-ink-600 text-ink-400 hover:text-ink-200",
@@ -163,14 +183,14 @@ function LinkRow({
           </div>
 
           <div>
-            <span className="text-[10px] uppercase tracking-wide text-ink-400">
+            <span className="text-[11px] uppercase tracking-wide text-ink-400">
               Order
             </span>
             <div className="mt-1 flex flex-wrap gap-1">
               {link.members.map((id, i) => (
                 <span
                   key={id}
-                  className="flex items-center gap-0.5 rounded border border-ink-600 bg-ink-900 pl-1.5 text-[10px] text-ink-200"
+                  className="flex items-center gap-0.5 rounded border border-ink-600 bg-ink-900 pl-1.5 text-[11px] text-ink-200"
                 >
                   {numberOf(id)}
                   <button
@@ -178,7 +198,7 @@ function LinkRow({
                     aria-label={`Move ${numberOf(id)} earlier`}
                     disabled={i === 0}
                     onClick={() => onMove(i, i - 1)}
-                    className="px-0.5 text-ink-400 enabled:hover:text-accent disabled:opacity-25"
+                    className="px-0.5 text-ink-400 enabled:hover:text-accent disabled:opacity-45"
                   >
                     <ChevronLeft size={11} />
                   </button>
@@ -187,7 +207,7 @@ function LinkRow({
                     aria-label={`Move ${numberOf(id)} later`}
                     disabled={i === link.members.length - 1}
                     onClick={() => onMove(i, i + 1)}
-                    className="pr-1 text-ink-400 enabled:hover:text-accent disabled:opacity-25"
+                    className="pr-1 text-ink-400 enabled:hover:text-accent disabled:opacity-45"
                   >
                     <ChevronRight size={11} />
                   </button>
@@ -199,7 +219,7 @@ function LinkRow({
           <button
             type="button"
             onClick={onDelete}
-            className="flex items-center justify-center gap-1 rounded border border-ink-600 px-1.5 py-1 text-[10px] text-ink-400 transition hover:border-red-500/60 hover:text-red-400"
+            className="flex items-center justify-center gap-1 rounded border border-ink-600 px-1.5 py-1 text-[11px] text-ink-400 transition hover:border-red-500/60 hover:text-red-400"
           >
             <Trash2 size={11} /> Delete link
           </button>

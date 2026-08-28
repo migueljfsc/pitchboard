@@ -45,7 +45,7 @@ export function TeamControls({
           aria-label={`Name for team ${teamIndex + 1}`}
           className="min-w-0 flex-1 rounded border border-ink-600 bg-ink-900 px-2 py-1 text-xs font-medium text-ink-200 outline-none transition placeholder:text-ink-400 hover:border-ink-400 focus:border-accent focus:text-white"
         />
-        <span className="shrink-0 font-mono text-[10px] text-ink-400" title="Attacking direction">
+        <span className="shrink-0 font-mono text-[11px] text-ink-400" title="Attacking direction">
           {direction === "left" ? "→" : "←"}
         </span>
         <button
@@ -63,7 +63,7 @@ export function TeamControls({
       </div>
 
       <label className="flex flex-col gap-1.5">
-        <span className="text-[10px] uppercase tracking-wide text-ink-400">Formation</span>
+        <span className="text-[11px] uppercase tracking-wide text-ink-400">Formation</span>
         <select
           value={formation}
           onChange={(e) => onFormationChange(teamIndex, e.target.value)}

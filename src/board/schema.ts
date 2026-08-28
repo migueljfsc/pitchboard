@@ -38,6 +38,7 @@ const scene = z.object({
   carrier: z.string().nullable(),
   ballPos: vec2.optional(),
   ballPath: pathCurve.nullable().optional(),
+  travel: z.record(z.string(), z.number().int().min(0).max(60_000)).optional(),
 });
 
 const link = z.object({

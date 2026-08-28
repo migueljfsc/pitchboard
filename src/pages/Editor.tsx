@@ -11,7 +11,8 @@ import { Timeline } from "@/components/Timeline";
 import { nudgeEntities } from "@/board/interaction";
 import { createLink } from "@/board/links";
 import { concealedPlayers } from "@/board/render";
-import { sceneStartSeconds, setCarrier, setPath, totalSeconds } from "@/board/scenes";
+import { sceneStartSeconds, setCarrier, setPath, setTravel, totalSeconds } from "@/board/scenes";
+import { setPlayerLabel, setPlayerNumber } from "@/board/players";
 import {
   AWAY,
   HOME,
@@ -121,6 +122,15 @@ export function Editor() {
     setExpandedLink(next.links[next.links.length - 1]?.id ?? null);
   };
 
+  const onTravelChange = (ms: number | null) => {
+    if (editScene === undefined) return;
+    setDoc((d) => {
+      let next = d;
+      for (const id of visible) next = setTravel(next, editScene, id, ms);
+      return next;
+    });
+  };
+
   const onCarrierChange = (playerId: string | null) => {
     setDoc((d) => setCarrier(d, activeScene, playerId));
   };
@@ -212,6 +222,9 @@ export function Editor() {
             onClear={() => setSelection(new Set())}
             onCarrierChange={onCarrierChange}
             onClearPaths={onClearPaths}
+            onRename={(id, label) => setDoc((d) => setPlayerLabel(d, id, label))}
+            onRenumber={(id, n) => setDoc((d) => setPlayerNumber(d, id, n))}
+            onTravelChange={onTravelChange}
           />
         </Section>
       </aside>

@@ -7,6 +7,7 @@
  */
 
 import type { BoardDoc, Scene, Vec2 } from "./types";
+import { BALL_ID } from "./types";
 import { TOKEN_RADIUS, BALL_RADIUS } from "./pitch";
 import {
   buildArcTable,
@@ -33,6 +34,26 @@ export type Resolved = {
 };
 
 /**
+ * How long the travel into a scene actually takes.
+ *
+ * `transitionMs` is the baseline every entity uses. An entity given its own time
+ * in `travel` may take longer, and the scene stretches to fit its slowest mover —
+ * otherwise a deliberately slow run would be cut off mid-stride.
+ */
+export function sceneTravelMs(scene: Scene): number {
+  let longest = scene.transitionMs;
+  if (scene.travel) {
+    for (const ms of Object.values(scene.travel)) if (ms > longest) longest = ms;
+  }
+  return longest;
+}
+
+/** Travel time for one entity into a scene, falling back to the scene baseline. */
+export function entityTravelMs(scene: Scene, entityId: string): number {
+  return scene.travel?.[entityId] ?? scene.transitionMs;
+}
+
+/**
  * Scene 0 contributes only its hold; every later scene contributes a transition
  * then a hold. `scenes[0].transitionMs` is meaningless — there is nothing to
  * travel from — and is ignored throughout.
@@ -40,7 +61,7 @@ export type Resolved = {
 export function totalDurationMs(doc: BoardDoc): number {
   let total = doc.scenes[0]?.holdMs ?? 0;
   for (let i = 1; i < doc.scenes.length; i++) {
-    total += doc.scenes[i].transitionMs + doc.scenes[i].holdMs;
+    total += sceneTravelMs(doc.scenes[i]) + doc.scenes[i].holdMs;
   }
   return total;
 }
@@ -58,10 +79,11 @@ export function resolveAt(doc: BoardDoc, tSeconds: number): Resolved {
   let acc = scenes[0].holdMs;
   for (let i = 1; i <= last; i++) {
     const s = scenes[i];
-    if (s.transitionMs > 0 && ms < acc + s.transitionMs) {
-      return { from: scenes[i - 1], to: s, u: (ms - acc) / s.transitionMs, moving: true, index: i };
+    const travel = sceneTravelMs(s);
+    if (travel > 0 && ms < acc + travel) {
+      return { from: scenes[i - 1], to: s, u: (ms - acc) / travel, moving: true, index: i };
     }
-    acc += s.transitionMs;
+    acc += travel;
     if (ms <= acc + s.holdMs) return hold(i);
     acc += s.holdMs;
   }
@@ -109,6 +131,20 @@ function bezierFor(entityId: string, r: Resolved): Bezier | null {
   return { p0, c1: curve.c1, c2: curve.c2, p1 };
 }
 
+/**
+ * Where one entity is within the scene's travel window, 0..1.
+ *
+ * `r.u` runs over the whole window, which is as long as the slowest mover needs.
+ * An entity with a shorter time of its own finishes early and waits at its
+ * destination.
+ */
+export function progressOf(entityId: string, r: Resolved): number {
+  const window = sceneTravelMs(r.to);
+  const own = entityTravelMs(r.to, entityId);
+  if (window <= 0 || own <= 0) return 1;
+  return Math.min((r.u * window) / own, 1);
+}
+
 export function positionAt(entityId: string, r: Resolved, doc: BoardDoc): Vec2 {
   const to = r.to.positions[entityId];
   if (!r.moving) return to ?? r.from.positions[entityId] ?? centre(doc);
@@ -117,7 +153,7 @@ export function positionAt(entityId: string, r: Resolved, doc: BoardDoc): Vec2 {
   if (!from) return to ?? centre(doc);
   if (!to) return from;
 
-  const eased = easeInOutCubic(r.u);
+  const eased = easeInOutCubic(progressOf(entityId, r));
   const b = bezierFor(entityId, r);
   // Travel BY LENGTH, not by parameter, or the run speeds up and stalls.
   return b ? cubicAtDistance(b, eased, buildArcTable(b)) : lerpVec(from, to, eased);
@@ -180,8 +216,8 @@ export function ballAt(r: Resolved, doc: BoardDoc): Vec2 {
   const end = toCarrier ? gluedTo(toCarrier, r, doc) : (r.to.ballPos ?? centre(doc));
 
   // A pass is struck hard and decelerates; easing it in like a jogging player
-  // looks wrong immediately.
-  const eased = easeOutQuad(r.u);
+  // looks wrong immediately. The ball honours its own travel override too.
+  const eased = easeOutQuad(progressOf(BALL_ID, r));
   const curve = r.to.ballPath;
   if (!curve) return lerpVec(start, end, eased);
 

@@ -106,7 +106,7 @@ export function Timeline({
             )}
           >
             <span className="text-xs font-medium text-ink-200">{s.name}</span>
-            <span className="font-mono text-[10px] text-ink-400">
+            <span className="font-mono text-[11px] text-ink-400">
               {i > 0 ? `${(s.transitionMs / 1000).toFixed(1)}s → ` : ""}
               {(s.holdMs / 1000).toFixed(1)}s
             </span>
@@ -127,7 +127,7 @@ export function Timeline({
       {scene && (
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wide text-ink-400">Scene</span>
+            <span className="text-[11px] uppercase tracking-wide text-ink-400">Scene</span>
             <input
               value={scene.name}
               onChange={(e) => onDocChange(renameScene(doc, activeScene, e.target.value))}
@@ -194,7 +194,7 @@ function Duration({
 }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-[10px] uppercase tracking-wide text-ink-400">{label}</span>
+      <span className="text-[11px] uppercase tracking-wide text-ink-400">{label}</span>
       <div className="flex items-center gap-1">
         <input
           type="number"
@@ -205,7 +205,7 @@ function Duration({
           onChange={(e) => onChange(Number(e.target.value) * 1000)}
           className="w-16 rounded-md border border-ink-600 bg-ink-900 px-2 py-1 font-mono text-xs text-ink-200 outline-none focus:border-accent"
         />
-        <span className="text-[10px] text-ink-400">s</span>
+        <span className="text-[11px] text-ink-400">s</span>
       </div>
     </label>
   );
@@ -229,7 +229,7 @@ function IconButton({
       title={label}
       onClick={onClick}
       disabled={disabled}
-      className="flex size-7 items-center justify-center rounded-md border border-ink-600 text-ink-400 transition enabled:hover:border-accent enabled:hover:text-accent disabled:opacity-30"
+      className="flex size-7 items-center justify-center rounded-md border border-ink-600 text-ink-400 transition enabled:hover:border-accent enabled:hover:text-accent disabled:opacity-45"
     >
       {children}
     </button>

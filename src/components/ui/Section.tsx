@@ -29,7 +29,7 @@ export function Section({ title, badge, defaultOpen = true, children }: Props) {
         <span className="flex-1 text-[11px] font-semibold uppercase tracking-wide text-ink-200">
           {title}
         </span>
-        {badge && <span className="font-mono text-[10px] text-ink-400">{badge}</span>}
+        {badge && <span className="font-mono text-[11px] text-ink-400">{badge}</span>}
       </button>
 
       {open && <div className="px-4 pb-4">{children}</div>}

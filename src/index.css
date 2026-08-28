@@ -3,10 +3,13 @@
 @theme {
   --color-ink-900: #0b1210;
   --color-ink-800: #111a17;
-  --color-ink-700: #17231f;
-  --color-ink-600: #22322c;
-  --color-ink-400: #6b807a;
-  --color-ink-200: #c7d2ce;
+  --color-ink-700: #1c2a25;
+  /* Borders and dividers — the old value was almost invisible on ink-800. */
+  --color-ink-600: #35473f;
+  /* Muted text. Roughly 6:1 on ink-800; the previous #6b807a fell under 4.5:1. */
+  --color-ink-400: #8fa39d;
+  --color-ink-300: #b6c4bf;
+  --color-ink-200: #dde5e2;
   --color-accent: #fbbf24;
 
   --font-sans: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
