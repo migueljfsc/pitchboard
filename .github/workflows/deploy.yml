@@ -2,7 +2,8 @@ name: deploy
 
 # Builds the SPA and publishes it to GitHub Pages on every push to main.
 #
-# Pages must be enabled once by hand: Settings -> Pages -> Source: GitHub Actions.
+# `enablement: true` lets the first run turn Pages on itself, so a fresh clone of
+# this repo needs no click in Settings.
 on:
   push:
     branches: [main]
@@ -42,6 +43,8 @@ jobs:
       - run: pnpm build
 
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v4
         with:
           path: dist
