@@ -36,6 +36,8 @@ builds, and nothing in the plan contradicts the decision log.
 
 ## M1 — Scaffold and static board
 
+**Status: complete.**
+
 Goal: a real-looking pitch with two teams you can drag. No time dimension yet.
 
 ### Tasks
@@ -52,19 +54,39 @@ Goal: a real-looking pitch with two teams you can drag. No time dimension yet.
    argument from day one and ignores it; M2 fills it in without changing a signature.
 7. **`board/interaction.ts`** — viewport transforms, token hit-testing, single and multi-select,
    drag, marquee, line nudge.
-8. **`formations/index.ts`** — 4-4-2, 4-3-3, 4-2-3-1, 3-5-2, 5-3-2, 4-1-4-1 as metre coordinates
-   for both attacking directions, plus "save current as custom".
+8. **`formations/index.ts`** — presets generated from notation, for both attacking
+   directions. "Save current as custom" is still outstanding.
 9. **`components/BoardCanvas.tsx`** — canvas host, DPR handling, resize observer, pointer wiring.
 10. **Shell UI** — toolbar, team colour pickers, formation selector, inspector panel. Port the
     shadcn-style primitives from `wtc/ui/src/components/ui/`.
 
 ### Definition of done
 
-- Pick a formation, both teams populate correctly for their attacking direction
-- Drag individual players and multi-selections; line nudge shifts a whole back 4
-- Resize the window — **positions do not move relative to the pitch**
-- Pitch renders correctly at any aspect ratio, penalty arcs included
-- `pnpm lint && pnpm typecheck && pnpm test && pnpm build` clean
+- [x] Pick a formation, both teams populate correctly for their attacking direction
+- [x] Drag individual players and multi-selections; line nudge shifts a whole back 4
+- [x] Resize the window — **positions do not move relative to the pitch** (verified in the
+      browser; canvas backing store stays exactly css x dpr, so nothing is stretched)
+- [x] Pitch renders correctly at any aspect ratio, penalty arcs included
+- [x] `pnpm lint && pnpm typecheck && pnpm test && pnpm build` clean
+
+### What M1 actually shipped, beyond the task list
+
+- `createBoardDoc()` and `applyFormation()` live in `src/formations/index.ts`; there is no
+  `createEmptyDoc()` in `schema.ts` (see architecture.md).
+- `frameAt(doc, t)` in `render.ts` is the seam M2 replaces with `resolveAt` — it already takes
+  and ignores `t`, so no call site changes.
+- `src/board/recording-ctx.ts` — the proxy context the renderer tests run against.
+- **Presets are kickoff shapes.** The first draft put a 4-3-3 front line and a 4-4-2 midfield
+  both at x=61 m, so tokens rendered on top of each other on the default board. No line now
+  passes `DEPTH_MAX` (0.45), and a test asserts a minimum gap across every preset pairing —
+  currently 9.45 m at the closest, across 729 combinations.
+- **27 presets, generated from notation**, matching the eleven-a-side catalogue at
+  lineup-builder.co.uk and grouped in the picker by back-line shape. Adding a formation is
+  adding a string to `NOTATIONS`; there is no hand-written table to keep consistent. The
+  interesting rule is width: an interior three is compact in a 4-3-3 (central midfielders)
+  but wide in a 4-2-3-1 (wingers), and what separates them is whether the line ahead already
+  carries the width.
+- Still outstanding from the original M1 list: "save current as custom formation".
 
 ### Risks
 
@@ -301,6 +323,7 @@ Deliberate, revisit after M6:
   autocomplete needs on its free tier, and player photos carry redistribution risk regardless of
   source. See `decisions.md`.
 - Full drawing toolkit — pass/dribble/shot line styles, freehand pen, cones, shaded zones, text
+- Five- and seven-a-side (settled: eleven-a-side only, see D10)
 - Half-pitch, thirds, and final-third views
 - Touch support
 - Heatmaps and average-position overlays

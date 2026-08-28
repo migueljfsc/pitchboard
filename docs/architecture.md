@@ -56,6 +56,18 @@ change, and link distance metrics are already in the right unit.
 ```ts
 type Viewport = { scale: number; offsetX: number; offsetY: number }   // px per metre, px, px
 
+// What drawBoard actually receives. Canvas size is included so a single call
+// paints the surround too and yields a complete frame — the export worker relies
+// on that. Selection and hover are arguments, never read from React, which is
+// what keeps the renderer pure.
+type RenderView = Viewport & {
+  width: number; height: number
+  interactive: boolean
+  selection?: ReadonlySet<string>
+  hover?: string | null
+  marquee?: { a: Vec2; b: Vec2 } | null
+}
+
 const toScreen = (p: Vec2, v: Viewport) => ({ x: p.x * v.scale + v.offsetX,
                                               y: p.y * v.scale + v.offsetY })
 const toPitch  = (p: Vec2, v: Viewport) => ({ x: (p.x - v.offsetX) / v.scale,
@@ -107,6 +119,10 @@ not leak into the viewport, or export sizing will be wrong on retina machines.
 `src/board/types.ts` is the single source of truth for the shape; `src/board/schema.ts` derives
 the zod validator and is imported by both the app and the Worker. This mirrors the
 `cv.ts` / `site.ts` convention in the sibling projects.
+
+Documents are constructed by `createBoardDoc()` in `src/formations/index.ts` rather than by a
+factory in `schema.ts` — a new board is entirely formation-driven, and putting it there would
+make `schema.ts` depend on the presets.
 
 ```ts
 type Vec2 = { x: number; y: number }

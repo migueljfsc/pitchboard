@@ -189,7 +189,36 @@ number and surname only.
 
 ---
 
-## D10 — Stack follows `wtc/ui`, with pnpm
+## D10 — Eleven-a-side only
+
+**Decision.** The preset catalogue covers eleven-a-side football and nothing else.
+
+**Rejected — five- and seven-a-side.** lineup-builder.co.uk offers both, and the notation
+generator already parses their formations (`2-0-2` and friends parse correctly, zero lines
+dropped). What it would additionally need is a player-count control and a smaller pitch — a
+five-a-side board on a 105 x 68 pitch is nonsense. Deliberately out of scope: this is a
+tactics board for the eleven-a-side game.
+
+---
+
+## D11 — Presets generated from notation, not hand-authored
+
+**Decision.** `fromNotation("4-2-3-1")` derives lines, depths, widths, shirt numbers and
+seeded links. Adding a formation means adding a string to `NOTATIONS`.
+
+**Rejected — a hand-written table of 27 formations.** Every entry is an opportunity for a
+transcription error, and the presets drift out of consistency with each other as they are
+edited one at a time. Generation makes them uniform by construction and testable as a set —
+the suite asserts shirt numbers stay within 1-11, lines stay symmetric, no two tokens overlap
+across all 729 home/away pairings, and every formation matches its own notation.
+
+The rule worth knowing: an interior line of three is compact in a 4-3-3 (central midfielders)
+but wide in a 4-2-3-1 (wingers). What separates them is whether the line ahead already carries
+the width.
+
+---
+
+## D12 — Stack follows `wtc/ui`, with pnpm
 
 **Decision.** React 19.2 + TS 5.6 strict + Vite 8 + Tailwind v4 + shadcn-style primitives,
 matching `wtc/ui/`. pnpm rather than npm.
