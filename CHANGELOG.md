@@ -3,6 +3,18 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.3.0 (2026-08-28)
+
+### Feat
+
+- double-click a player to rename it
+- football favicon
+
+### Fix
+
+- drop back to scene 1 when playback starts
+- links follow their team's kit colour
+
 ## v0.2.0 (2026-08-28)
 
 ### Feat
