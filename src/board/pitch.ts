@@ -27,10 +27,24 @@ export const PITCH = {
   cornerRadius: 1.0,
 } as const;
 
-/** Player token radius, in metres. Hit-testing and the ball offset both use it. */
+/** Player token radius at scale 1, in metres. */
 export const TOKEN_RADIUS = 1.1;
 /** Drawn larger than a real ball (0.11 m) so it reads at board scale. */
 export const BALL_RADIUS = 0.45;
+
+export const MIN_TOKEN_SCALE = 0.5;
+export const MAX_TOKEN_SCALE = 2.5;
+
+/**
+ * Token sizing is per-document, so hit-testing, the ball's carry offset and the
+ * renderer all have to agree. These are the single source of that agreement —
+ * never multiply TOKEN_RADIUS by hand at a call site.
+ */
+export const tokenScaleOf = (doc: { tokenScale?: number }): number => doc.tokenScale ?? 1;
+export const tokenRadius = (doc: { tokenScale?: number }): number =>
+  TOKEN_RADIUS * tokenScaleOf(doc);
+export const ballRadius = (doc: { tokenScale?: number }): number =>
+  BALL_RADIUS * tokenScaleOf(doc);
 
 export type PitchTheme = {
   /** Behind and around the pitch, out to the canvas edge. */

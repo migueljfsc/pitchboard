@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BALL_GLUE, ballAt, frameAt, positionAt, resolveAt, totalDurationMs } from "./timeline";
+import { ballAt, ballGlue, frameAt, positionAt, resolveAt, totalDurationMs } from "./timeline";
 import { createBoardDoc } from "@/formations";
 import { boardDocSchema } from "./schema";
 import type { BoardDoc, Scene } from "./types";
@@ -170,7 +170,7 @@ describe("ball — a pass is a carrier change", () => {
       const r = resolveAt(doc, t);
       const player = positionAt(HOME_9, r, doc);
       const ball = ballAt(r, doc);
-      expect(Math.hypot(ball.x - player.x, ball.y - player.y)).toBeCloseTo(BALL_GLUE, 5);
+      expect(Math.hypot(ball.x - player.x, ball.y - player.y)).toBeCloseTo(ballGlue(doc), 5);
     }
   });
 
@@ -193,11 +193,35 @@ describe("ball — a pass is a carrier change", () => {
     });
     const start = ballAt(resolveAt(doc, 1.001), doc);
     const end = ballAt(resolveAt(doc, 3), doc);
-    expect(start.x).toBeCloseTo(20 + BALL_GLUE, 1);
-    expect(end.x).toBeCloseTo(60 + BALL_GLUE, 1);
+    expect(start.x).toBeCloseTo(20 + ballGlue(doc), 1);
+    expect(end.x).toBeCloseTo(60 + ballGlue(doc), 1);
   });
 
-  it("tracks a receiver who is moving during the pass, and lands without a jump", () => {
+  it("travels in a straight line even when the receiver is running (BUG-1)", () => {
+    const doc = twoScene((a, b) => {
+      carried(a, b, HOME_9, HOME_10);
+      a.positions[HOME_9] = { x: 10, y: 34 };
+      b.positions[HOME_9] = { x: 10, y: 34 }; // passer stands still
+      a.positions[HOME_10] = { x: 90, y: 10 };
+      b.positions[HOME_10] = { x: 90, y: 58 }; // receiver runs across the pitch
+    });
+
+    const start = ballAt(resolveAt(doc, 1), doc);
+    const end = ballAt(resolveAt(doc, 3), doc);
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const span = Math.hypot(dx, dy);
+
+    // Every sample must sit on the line from release point to meeting point.
+    // Re-reading the receiver's live position each frame bowed this by metres.
+    for (const t of [1.3, 1.7, 2.0, 2.4, 2.8]) {
+      const p = ballAt(resolveAt(doc, t), doc);
+      const cross = Math.abs((p.x - start.x) * dy - (p.y - start.y) * dx) / span;
+      expect(cross, `off the line at t=${t}`).toBeLessThan(0.01);
+    }
+  });
+
+  it("leads a receiver who is moving during the pass, and lands without a jump", () => {
     const doc = twoScene((a, b) => {
       carried(a, b, HOME_9, HOME_10);
       a.positions[HOME_9] = { x: 20, y: 34 };
@@ -214,7 +238,7 @@ describe("ball — a pass is a carrier change", () => {
     expect(Math.hypot(arrived.x - nearlyThere.x, arrived.y - nearlyThere.y)).toBeLessThan(0.5);
     // And it ends on the receiver's FINAL position, not where they started.
     const receiver = positionAt(HOME_10, rEnd, doc);
-    expect(Math.hypot(arrived.x - receiver.x, arrived.y - receiver.y)).toBeCloseTo(BALL_GLUE, 5);
+    expect(Math.hypot(arrived.x - receiver.x, arrived.y - receiver.y)).toBeCloseTo(ballGlue(doc), 5);
   });
 
   it("decelerates — a pass is struck hard, not eased in like a jogging player", () => {
@@ -246,7 +270,7 @@ describe("ball — a pass is a carrier change", () => {
     });
     const arrived = ballAt(resolveAt(doc, 3), doc);
     const player = positionAt(HOME_9, resolveAt(doc, 3), doc);
-    expect(Math.hypot(arrived.x - player.x, arrived.y - player.y)).toBeCloseTo(BALL_GLUE, 5);
+    expect(Math.hypot(arrived.x - player.x, arrived.y - player.y)).toBeCloseTo(ballGlue(doc), 5);
   });
 
   it("moves as an ordinary entity when never carried", () => {

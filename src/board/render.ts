@@ -17,7 +17,10 @@ import {
   BALL_RADIUS,
   DEFAULT_THEME,
   TOKEN_RADIUS,
+  ballRadius,
   drawPitch,
+  tokenRadius,
+  tokenScaleOf,
   type Ctx,
   type PitchTheme,
 } from "./pitch";
@@ -25,6 +28,7 @@ import { displayCurve, frameAt, transitionInto, type Frame } from "./timeline";
 import { linkGeometry, type LinkGeometry } from "./links";
 import {
   buildArcTable,
+  halfRange,
   cubicAt,
   cubicTangent,
   reparameterise,
@@ -57,10 +61,28 @@ export function drawBoard(
   // then work in metres from here down. One matrix covers upright and rotated.
   ctx.transform(...viewMatrix(view));
 
+  // Clip to the crop, so a half view shows half a pitch rather than the whole
+  // one nudged sideways. Without this the neighbouring half simply spills into
+  // whatever canvas width is left over.
+  if (view.half !== "full") {
+    const [x0, x1] = halfRange(view.half, doc.pitch.length);
+    const pad = 3;
+    ctx.beginPath();
+    ctx.rect(
+      view.half === "left" ? x0 - pad : x0,
+      -pad,
+      x1 - x0 + pad,
+      doc.pitch.width + pad * 2,
+    );
+    ctx.clip();
+  }
+
   drawPitch(ctx, doc.pitch, theme);
   // Links sit under the tokens so a connector never covers a shirt number.
   drawLinks(ctx, doc, frame, view.rotated);
   drawPaths(ctx, doc, frame, view);
+
+  const scale = tokenScaleOf(doc);
 
   for (const team of doc.teams) {
     if (team.hidden) continue;
@@ -71,11 +93,12 @@ export function drawBoard(
         selected: view.selection?.has(player.id) ?? false,
         hovered: view.interactive && view.hover === player.id,
         rotated: view.rotated,
+        scale,
       });
     }
   }
 
-  drawBall(ctx, frame.ball, {
+  drawBall(ctx, frame.ball, ballRadius(doc), {
     selected: view.selection?.has(BALL_ID) ?? false,
     hovered: view.interactive && view.hover === BALL_ID,
   });
@@ -192,6 +215,7 @@ function withAlpha(color: string, alpha: number): string {
  * edited. Suppressed entirely for export unless the animation is under way.
  */
 function drawPaths(ctx: Ctx, doc: BoardDoc, frame: Frame, view: RenderView): void {
+  const clear = tokenRadius(doc);
   const r = frame.resolved;
 
   // While the animation runs, show every run in flight.
@@ -200,7 +224,7 @@ function drawPaths(ctx: Ctx, doc: BoardDoc, frame: Frame, view: RenderView): voi
       if (team.hidden) continue;
       for (const player of team.players) {
         const b = displayCurve(player.id, r);
-        if (b) drawPath(ctx, b, team.color, false);
+        if (b) drawPath(ctx, b, team.color, false, clear);
       }
     }
     return;
@@ -217,12 +241,12 @@ function drawPaths(ctx: Ctx, doc: BoardDoc, frame: Frame, view: RenderView): voi
     for (const player of team.players) {
       if (!view.selection?.has(player.id)) continue;
       const b = displayCurve(player.id, edit);
-      if (b) drawPath(ctx, b, team.color, true);
+      if (b) drawPath(ctx, b, team.color, true, clear);
     }
   }
 }
 
-function drawPath(ctx: Ctx, b: Bezier, color: string, withHandles: boolean): void {
+function drawPath(ctx: Ctx, b: Bezier, color: string, withHandles: boolean, clear: number): void {
   ctx.strokeStyle = color;
   ctx.lineWidth = 0.28;
   ctx.lineCap = "round";
@@ -230,7 +254,7 @@ function drawPath(ctx: Ctx, b: Bezier, color: string, withHandles: boolean): voi
 
   // Stop short of the destination so the arrowhead is not buried in the token.
   const table = buildArcTable(b);
-  const trim = table.total > TOKEN_RADIUS * 2 ? 1 - TOKEN_RADIUS / table.total : 1;
+  const trim = table.total > clear * 2 ? 1 - clear / table.total : 1;
 
   ctx.beginPath();
   for (let i = 0; i <= PATH_STEPS; i++) {
@@ -293,7 +317,7 @@ export const HANDLE_RADIUS = 0.55;
 
 // ---------------------------------------------------------------- entities
 
-type TokenState = { selected: boolean; hovered: boolean; rotated?: boolean };
+type TokenState = { selected: boolean; hovered: boolean; rotated?: boolean; scale?: number };
 
 function drawToken(
   ctx: Ctx,
@@ -304,56 +328,62 @@ function drawToken(
   textColor: string,
   state: TokenState,
 ): void {
+  // Rings, strokes and type all scale with the token, so a bigger board is the
+  // same drawing at a larger size rather than fat tokens with tiny numbers.
+  const k = state.scale ?? 1;
+  const radius = TOKEN_RADIUS * k;
+
   // Selection and hover rings sit outside the token so they never cover the number.
   if (state.selected || state.hovered) {
     ctx.beginPath();
-    ctx.arc(p.x, p.y, TOKEN_RADIUS + 0.42, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, radius + 0.42 * k, 0, Math.PI * 2);
     ctx.strokeStyle = state.selected ? "#fbbf24" : "rgba(255,255,255,0.55)";
-    ctx.lineWidth = state.selected ? 0.26 : 0.18;
+    ctx.lineWidth = (state.selected ? 0.26 : 0.18) * k;
     ctx.stroke();
   }
 
   ctx.beginPath();
-  ctx.arc(p.x, p.y, TOKEN_RADIUS, 0, Math.PI * 2);
+  ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
   ctx.fillStyle = color;
   ctx.fill();
   ctx.strokeStyle = "rgba(0,0,0,0.45)";
-  ctx.lineWidth = 0.1;
+  ctx.lineWidth = 0.1 * k;
   ctx.stroke();
 
   // Text is anchored to the token but never turns with the board.
   upright(ctx, p, state.rotated ?? false, () => {
     ctx.fillStyle = textColor;
-    ctx.font = "600 1.25px Inter, system-ui, -apple-system, sans-serif";
+    ctx.font = `600 ${1.25 * k}px Inter, system-ui, -apple-system, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(String(number), 0, 0.05);
+    ctx.fillText(String(number), 0, 0.05 * k);
 
     if (label) {
-      ctx.font = "500 1px Inter, system-ui, -apple-system, sans-serif";
+      ctx.font = `500 ${1 * k}px Inter, system-ui, -apple-system, sans-serif`;
       ctx.textBaseline = "top";
       // A dark rim keeps the label readable over both mow stripes and white lines.
       ctx.strokeStyle = "rgba(0,0,0,0.65)";
-      ctx.lineWidth = 0.22;
+      ctx.lineWidth = 0.22 * k;
       ctx.lineJoin = "round";
-      ctx.strokeText(label, 0, TOKEN_RADIUS + 0.3);
+      ctx.strokeText(label, 0, radius + 0.3 * k);
       ctx.fillStyle = "#ffffff";
-      ctx.fillText(label, 0, TOKEN_RADIUS + 0.3);
+      ctx.fillText(label, 0, radius + 0.3 * k);
     }
   });
 }
 
-function drawBall(ctx: Ctx, p: Vec2, state: TokenState): void {
+function drawBall(ctx: Ctx, p: Vec2, radius: number, state: TokenState): void {
+  const k = radius / BALL_RADIUS;
   if (state.selected || state.hovered) {
     ctx.beginPath();
-    ctx.arc(p.x, p.y, BALL_RADIUS + 0.3, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, radius + 0.3 * k, 0, Math.PI * 2);
     ctx.strokeStyle = state.selected ? "#fbbf24" : "rgba(255,255,255,0.55)";
-    ctx.lineWidth = 0.16;
+    ctx.lineWidth = 0.16 * k;
     ctx.stroke();
   }
 
   ctx.beginPath();
-  ctx.arc(p.x, p.y, BALL_RADIUS, 0, Math.PI * 2);
+  ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
   ctx.fillStyle = "#ffffff";
   ctx.fill();
   ctx.strokeStyle = "rgba(0,0,0,0.7)";

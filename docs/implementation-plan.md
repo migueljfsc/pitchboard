@@ -342,8 +342,10 @@ Requested during M3 review and built straight away:
   moved behind an explicit chevron — it was undiscoverable behind the colour dot.
 - **Per-player travel time** (D14), so one player can cover their run faster or slower than the
   rest of the scene.
-- **Half views orient themselves** (D15). The previous behaviour re-centred the crop at the same
-  scale, which is a shift rather than a zoom.
+- **Half views clip** (D15). They were positioning the crop correctly but never clipping, so the
+  other half drew into the spare canvas width and it read as a shift. Orientation stays an
+  independent toggle.
+- **Player size**, 0.5x to 2.5x (D18), scaling the drawing and hit-testing together.
 - **Contrast pass.** Muted text was under 4.5:1 on the panel background and borders were nearly
   invisible; both were lifted, along with disabled states and the smallest type.
 - **GitHub Pages deploy** (D16), gated on the full check suite.

@@ -93,17 +93,51 @@ describe("drawBoard", () => {
     expect(turned.count("rotate")).toBe(players + labels);
   });
 
-  it("crops to a half without redrawing anything differently", () => {
+  it("clips to a half, so the other half cannot spill into spare canvas", () => {
+    const doc = createBoardDoc();
+    const full = createRecordingCtx();
+    drawBoard(full.ctx, doc, 0, view());
+    expect(full.count("clip")).toBe(0);
+
+    for (const half of ["left", "right"] as const) {
+      const r = createRecordingCtx();
+      drawBoard(
+        r.ctx,
+        doc,
+        0,
+        view({ ...fitViewport(W, H, doc.pitch.length, doc.pitch.width, { half, rotated: false }) }),
+      );
+      expect(r.count("clip"), half).toBe(1);
+
+      // The clip spans exactly one half of the length, plus padding on the
+      // outside only — the halfway line is a hard edge.
+      const rect = r.calls("rect")[0];
+      const [x, , w] = rect.slice(5, -1).split(",").map(Number);
+      expect(w, half).toBeCloseTo(doc.pitch.length / 2 + 3);
+      expect(half === "left" ? x : x + w, half).toBeCloseTo(
+        half === "left" ? -3 : doc.pitch.length + 3,
+      );
+    }
+  });
+
+  it("still draws the same geometry when cropped — only the clip is added", () => {
     const doc = createBoardDoc();
     const full = createRecordingCtx();
     const half = createRecordingCtx();
-
     drawBoard(full.ctx, doc, 0, view());
-    drawBoard(half.ctx, doc, 0, view({ ...fitViewport(W, H, doc.pitch.length, doc.pitch.width, { half: "left", rotated: false }) }));
+    drawBoard(
+      half.ctx,
+      doc,
+      0,
+      view({ ...fitViewport(W, H, doc.pitch.length, doc.pitch.width, { half: "left", rotated: false }) }),
+    );
 
-    // The crop lives entirely in the viewport; the canvas clips the rest.
-    const strip = (log: string[]) => log.filter((l) => !l.startsWith("transform("));
-    expect(strip(half.log)).toEqual(strip(full.log));
+    const strip = (log: string[]) =>
+      log.filter(
+        (l) => !l.startsWith("transform(") && !l.startsWith("clip(") && !l.startsWith("rect("),
+      );
+    // beginPath is emitted for the clip too, so allow one extra.
+    expect(strip(half.log).length).toBe(strip(full.log).length + 1);
   });
 
   it("omits a hidden team, and the links that belong to it", () => {

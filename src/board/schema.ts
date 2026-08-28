@@ -62,6 +62,7 @@ const boardDocShape = z.object({
     length: z.number().min(50).max(150),
     width: z.number().min(30).max(100),
   }),
+  tokenScale: z.number().min(0.5).max(2.5).optional(),
   teams: z.tuple([team, team]),
   scenes: z.array(scene).min(1).max(60),
   links: z.array(link).max(20),

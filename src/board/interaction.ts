@@ -12,7 +12,7 @@
 
 import type { BoardDoc, Link, PathCurve, Scene, Vec2 } from "./types";
 import { BALL_ID } from "./types";
-import { BALL_RADIUS, TOKEN_RADIUS } from "./pitch";
+import { ballRadius, tokenRadius } from "./pitch";
 import { displayCurve, transitionInto, type Frame, type Resolved } from "./timeline";
 import { linkGeometry } from "./links";
 import { HANDLE_RADIUS, concealedPlayers } from "./render";
@@ -74,15 +74,17 @@ export function dragHandle(
  * tie. A small grab margin makes tokens easier to catch than their visual radius.
  */
 export function hitTest(doc: BoardDoc, frame: Frame, p: Vec2, margin = 0.25): HitTarget {
-  if (dist(p, frame.ball) <= BALL_RADIUS + margin) {
+  if (dist(p, frame.ball) <= ballRadius(doc) + margin) {
     return { kind: "ball", id: BALL_ID };
   }
+
+  const reach = tokenRadius(doc) + margin;
 
   for (const team of doc.teams) {
     if (team.hidden) continue;
     for (const player of team.players) {
       const pos = frame.positions[player.id];
-      if (pos && dist(p, pos) <= TOKEN_RADIUS + margin) {
+      if (pos && dist(p, pos) <= reach) {
         return { kind: "token", id: player.id };
       }
     }

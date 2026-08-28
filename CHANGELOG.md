@@ -41,12 +41,26 @@ Notable changes to Pitchboard. Format loosely follows
 
 ### Changed
 
-- Choosing a half pitch now turns the board vertical, so the half fills the space instead of
-  being re-centred at the same scale.
 - Contrast lifted on muted text, borders, disabled controls and the smallest type.
 - Renaming a link sits behind an explicit chevron rather than the colour dot.
 
+- **Player size**, 0.5x to 2.5x, scaling tokens, the ball, the carry offset, shirt numbers and
+  hit-testing together. Stored on the document so exports and shared boards reproduce it.
+
+### Fixed
+
+- **BUG-1 — a pass to a moving receiver curved like a homing missile.** `ballAt` re-read the
+  receiver's live position every frame, so the target moved while the ball was in flight.
+  Endpoints are now sampled once — the release point and the meeting point — and the ball
+  travels straight while the receiver runs onto it. A regression test measures the deviation
+  from the straight line; it was 12 m, and is now under 1 cm.
+- **A half view showed the whole pitch nudged sideways.** The viewport was positioned correctly
+  but nothing was clipped, so the neighbouring half spilled into whatever canvas width was
+  spare. The renderer now clips to the crop, making the halfway line a hard edge.
+- Choosing a half no longer forces the board vertical; orientation and crop are independent
+  again.
+
 ### Known issues
 
-- A pass to a moving receiver curves rather than travelling straight — see
-  [`docs/bugs.md`](./docs/bugs.md) BUG-1.
+- The ball's carry offset can hop when a scene starts, if the carrier is moving — see
+  [`docs/bugs.md`](./docs/bugs.md) BUG-2.

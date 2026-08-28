@@ -180,7 +180,12 @@ export function Editor() {
         </div>
 
         <Section title="View" defaultOpen={false}>
-          <ViewControls view={pitchView} onChange={setPitchView} />
+          <ViewControls
+            view={pitchView}
+            onChange={setPitchView}
+            doc={doc}
+            onTokenScaleChange={(tokenScale) => setDoc((d) => ({ ...d, tokenScale }))}
+          />
         </Section>
 
         {([0, 1] as const).map((i) => (

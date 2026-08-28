@@ -109,6 +109,7 @@ export function fitViewport(
     ? {
         scale,
         rotated: true,
+        half: view.half,
         offsetX: (cw - width * scale) / 2,
         // +x attacks up the screen, so the far end of the range sits at the top.
         offsetY: (ch - along * scale) / 2 + x1 * scale,
@@ -116,6 +117,7 @@ export function fitViewport(
     : {
         scale,
         rotated: false,
+        half: view.half,
         offsetX: (cw - along * scale) / 2 - x0 * scale,
         offsetY: (ch - width * scale) / 2,
       };

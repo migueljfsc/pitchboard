@@ -4,49 +4,43 @@ Open defects, with what is understood about the cause. Fixed entries move to the
 
 ---
 
-## BUG-1 — a pass to a moving receiver curves like a homing missile
+## BUG-2 — the ball's carry offset can jump when a scene starts
 
-**Reported:** after M3, from using the board.
-**Severity:** wrong-looking output on a common case. Not a crash, not data loss.
+**Severity:** cosmetic, up to ~2.4 m, at one instant. Noticeable only if a carrier is moving.
 
 ### Symptom
 
-Give a player the ball in one scene and hand it to a different player in the next. If the
-receiver is also moving during that transition, the ball does not travel like a pass — it bends
-through the air, following the receiver around rather than being struck to a point.
+The ball sits about 1.7 m from the player carrying it, offset along their direction of travel.
+That direction is derived differently depending on what the timeline is doing:
+
+- during a **hold**, there is no motion to sample, so it falls back to which way the team
+  attacks (`facingOf`);
+- during a **transition**, it comes from the carrier's actual velocity.
+
+At the boundary between a hold and the transition that follows, the offset can therefore rotate
+instantly. If the carrier sets off perpendicular to their attacking direction, the ball hops
+around them by up to `ballGlue * sqrt(2)`.
 
 ### Cause
 
-`ballAt` in `src/board/timeline.ts` resolves BOTH ends of a pass live:
-
-```ts
-const start = fromCarrier ? gluedTo(fromCarrier, r, doc) : ...
-const end   = toCarrier   ? gluedTo(toCarrier,   r, doc) : ...
-return lerpVec(start, end, easeOutQuad(r.u));
-```
-
-Because `end` is re-evaluated every frame from the receiver's *current* interpolated position,
-the target moves while the ball is in flight and the ball tracks it. The interpolation between
-two moving anchors traces a curve, not a line.
-
-This was a deliberate choice made during M2, and it was the wrong one. It was picked to
-guarantee the ball arrives exactly on the receiver with no jump at the handoff — which it does —
-but a real pass is struck once, travels straight, and the receiver runs onto it.
+`gluedTo` in `src/board/timeline.ts` picks the direction per frame from `r.moving`, and the two
+branches disagree at the seam.
 
 ### Fix
 
-Evaluate the pass target ONCE, at the arrival instant, and hold the line:
+There is no single direction that is continuous everywhere, because a stationary player has no
+direction at all. Options, roughly in order of preference:
 
-- `end` should be the receiver's position at `u = 1` — the meeting point — not at the current `u`.
-- `start` should be the passer's position at the moment of release, likewise fixed.
-- Both endpoints still come from `positionAt`, so the receiver's own path and per-player timing
-  are respected; only the sampling instant changes.
+1. Use the travel direction into the **current** scene during its hold, so the ball keeps
+   pointing the way the player was last running. Removes the seam at the end of a transition,
+   leaves one at the start of the next.
+2. Ease the offset direction over a short window rather than switching instantly.
+3. Drop the direction entirely and always offset by `facingOf`. Simplest, and the ball then
+   trails oddly when a player runs backwards.
 
-Endpoints stay continuous, because the receiver reaches that same point at `u = 1`.
+Not urgent: it is a static placement difference at one frame, not a defect in the movement.
 
-### Do not regress
+### Noticed
 
-`src/board/timeline.test.ts` has "tracks a receiver who is moving during the pass, and lands
-without a jump". That test asserts continuity at the handoff, which the fix preserves — but its
-name and intent need updating to describe leading, not tracking. There is also a negative check
-proving the naive "aim where they started" version fails; keep that.
+While fixing BUG-1, which shared the same helper. Recorded rather than folded in, to keep that
+change focused.

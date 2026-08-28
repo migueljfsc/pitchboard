@@ -75,6 +75,12 @@ export type BoardDoc = {
   version: 1;
   name: string;
   pitch: { length: number; width: number };
+  /**
+   * Multiplier on token and ball size, default 1. Lives on the document rather
+   * than the view because it changes the artefact — an export must reproduce it,
+   * and a shared board should arrive looking as its author left it.
+   */
+  tokenScale?: number;
   teams: [Team, Team];
   /** At least one. */
   scenes: Scene[];
@@ -110,6 +116,9 @@ export type Viewport = {
   offsetX: number;
   offsetY: number;
   rotated: boolean;
+  /** Which crop is shown. The renderer clips to it, so a half is a crop rather
+   *  than the full pitch merely re-centred. */
+  half: PitchHalf;
 };
 
 /**

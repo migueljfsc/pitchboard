@@ -8,7 +8,7 @@
 
 import type { BoardDoc, Scene, Vec2 } from "./types";
 import { BALL_ID } from "./types";
-import { TOKEN_RADIUS, BALL_RADIUS } from "./pitch";
+import { ballRadius, tokenRadius, tokenScaleOf } from "./pitch";
 import {
   buildArcTable,
   cubicAtDistance,
@@ -19,7 +19,8 @@ import {
 } from "./geometry";
 
 /** Distance from a carrier's centre to the ball it is running with. */
-export const BALL_GLUE = TOKEN_RADIUS + BALL_RADIUS + 0.15;
+export const ballGlue = (doc: BoardDoc): number =>
+  tokenRadius(doc) + ballRadius(doc) + 0.15 * tokenScaleOf(doc);
 
 export type Resolved = {
   /** Scene being interpolated out of. Equal to `to` during a hold. */
@@ -185,7 +186,8 @@ function gluedTo(carrier: string, r: Resolved, doc: BoardDoc): Vec2 {
     if (len > 1e-6) dir = { x: dx / len, y: dy / len };
   }
 
-  return { x: at.x + dir.x * BALL_GLUE, y: at.y + dir.y * BALL_GLUE };
+  const glue = ballGlue(doc);
+  return { x: at.x + dir.x * glue, y: at.y + dir.y * glue };
 }
 
 /**
@@ -209,11 +211,18 @@ export function ballAt(r: Resolved, doc: BoardDoc): Vec2 {
     return toCarrier ? gluedTo(toCarrier, r, doc) : (r.to.ballPos ?? centre(doc));
   }
 
-  // Both endpoints are evaluated live, so the ball tracks a receiver who is still
-  // moving and arrives with them — no teleport at the handoff. Aiming at the
-  // receiver's scene-start position instead would land the ball 50 m adrift.
-  const start = fromCarrier ? gluedTo(fromCarrier, r, doc) : (r.from.ballPos ?? centre(doc));
-  const end = toCarrier ? gluedTo(toCarrier, r, doc) : (r.to.ballPos ?? centre(doc));
+  // Endpoints are sampled ONCE, not per frame: the release point at u=0 and the
+  // meeting point at u=1. A ball is struck once and travels straight; the
+  // receiver runs onto it. Re-reading the receiver's live position every frame
+  // made the ball bend after them like a homing missile (BUG-1).
+  //
+  // Both are still resolved through positionAt, so the receiver's own path and
+  // per-player travel time are respected — only the sampling instant is fixed.
+  // Continuity holds because the receiver reaches that same point at u=1.
+  const release: Resolved = { ...r, u: 0 };
+  const arrival: Resolved = { ...r, u: 1 };
+  const start = fromCarrier ? gluedTo(fromCarrier, release, doc) : (r.from.ballPos ?? centre(doc));
+  const end = toCarrier ? gluedTo(toCarrier, arrival, doc) : (r.to.ballPos ?? centre(doc));
 
   // A pass is struck hard and decelerates; easing it in like a jogging player
   // looks wrong immediately. The ball honours its own travel override too.

@@ -274,16 +274,23 @@ effective duration whenever an override is in play.
 
 ---
 
-## D15 — Half views orient themselves
+## D15 — A half view is a clip, and orientation stays independent
 
-**Decision.** Choosing Left or Right turns the board vertical. The orientation toggle still
-overrides afterwards.
+**Decision.** Choosing Left or Right clips the drawing to that half. Orientation is a separate
+toggle that the crop never changes.
 
-Half a pitch is 52.5 x 68 — taller than it is long. Cropping to it on a wide screen changes
-nothing: the height still constrains the fit, so the scale is identical to the full pitch and
-the half simply sits re-centred with dead space either side. That is a shift, not a zoom, and it
-is useless for the close analysis a half view exists for. Turned, the same crop fills the board
-at nearly twice the scale.
+The original complaint was that a half view "shifted the field". It did, and the reason was not
+the fit: the viewport put the half in the right place, but nothing clipped, so the other half
+simply drew into whatever canvas width was left over. `drawBoard` now clips to the crop, and the
+halfway line is a hard edge.
+
+An earlier attempt coupled the two — picking a half turned the board vertical, because half a
+pitch is 52.5 x 68 and only fills a wide board once turned. That was rejected on use: wanting to
+study one half horizontally is a reasonable thing to want, and the tool should not overrule it.
+
+The geometry still applies, and the panel says so: horizontally a half fits to the same height
+as the full pitch, with space either side. **Player size** (D18) is the answer to wanting more
+detail without turning the board.
 
 ---
 
@@ -302,7 +309,24 @@ link works on a static host; KV only earns its place for boards too large for a 
 
 ---
 
-## D17 — Stack follows `wtc/ui`, with pnpm
+## D18 — Player size lives on the document
+
+**Decision.** `BoardDoc.tokenScale`, 0.5 to 2.5, multiplying token and ball radius, the ball's
+carry offset, stroke weights, shirt numbers and hit-test reach.
+
+**Rejected — putting it in `PitchView` with the crop and rotation.** Framing is about looking
+(D12), and two people can reasonably look at one board differently. Token size is not that: it
+changes the artefact. An export has to reproduce it and a shared board should arrive looking as
+its author left it, which makes it document state.
+
+The risk this carries is drift between what is drawn and what is clickable. `tokenRadius` and
+`ballRadius` in `pitch.ts` are the single source both sides read, never a call site multiplying
+`TOKEN_RADIUS` by hand, and there are tests asserting a point outside a small token is inside a
+large one.
+
+---
+
+## D19 — Stack follows `wtc/ui`, with pnpm
 
 **Decision.** React 19.2 + TS 5.6 strict + Vite 8 + Tailwind v4 + shadcn-style primitives,
 matching `wtc/ui/`. pnpm rather than npm.
