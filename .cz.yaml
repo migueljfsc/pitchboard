@@ -1,0 +1,13 @@
+---
+commitizen:
+  name: cz_conventional_commits
+  tag_format: v$version
+  version: 0.1.0
+  version_scheme: semver
+  # Pre-1.0: a breaking change bumps the minor, not the major.
+  major_version_zero: true
+  update_changelog_on_bump: true
+  bump_message: "chore(release): bump $current_version → $new_version [skip ci]"
+  version_files:
+    - .cz.yaml:version
+    - package.json:version

@@ -1,0 +1,46 @@
+# See https://pre-commit.com. Install: pre-commit install
+#
+# The eslint/typecheck hooks below are filtered to .ts/.tsx and are skipped
+# while the repo has no source — they activate on their own once M1 lands the
+# Vite scaffold and package.json.
+default_install_hook_types:
+  - pre-commit
+  - commit-msg
+
+repos:
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v4.18.0
+    hooks:
+      - id: commitizen
+      - id: commitizen-branch
+        stages: [pre-push]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+        # wrangler.jsonc and tsconfig allow comments; the JSON parser does not.
+        exclude: \.jsonc$|^tsconfig.*\.json$
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+
+  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint
+        entry: pnpm exec eslint --fix
+        language: system
+        files: \.(ts|tsx)$
+        require_serial: true
+
+      - id: typecheck
+        name: tsc --noEmit
+        entry: pnpm typecheck
+        language: system
+        files: \.(ts|tsx)$
+        pass_filenames: false
+        require_serial: true

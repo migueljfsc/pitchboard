@@ -1,0 +1,116 @@
+# Pitchboard — animated football tactics board
+
+Working conventions for this repo. Architecture detail lives in
+[`docs/architecture.md`](docs/architecture.md), the build order in
+[`docs/implementation-plan.md`](docs/implementation-plan.md), and the reasoning behind every
+choice in [`docs/decisions.md`](docs/decisions.md).
+
+## Mission
+
+A browser tactics board where a coach draws a formation, moves players between scenes along
+curved runs, and exports the result as MP4, GIF, or PNG. Everything renders client-side; there
+is no server-side video pipeline and there will not be one.
+
+The differentiating feature is **live links** — a connector between a group of players that is
+recomputed every frame from their interpolated positions, so the shape deforms as they move
+independently. Build for that; it is what the reference tools do badly.
+
+## The two invariants
+
+Everything else is negotiable. These are not.
+
+1. **`drawBoard` is pure.** No DOM, no React, no `Date.now()`, no `Math.random()`, no
+   module-level mutable state. Given `(doc, t, view)` it emits the same pixels in any thread.
+   If the renderer needs a value, that value belongs in `BoardDoc` or `Viewport` — there is no
+   third source of truth. Breaking this breaks export fidelity, and the symptom shows up far
+   from the cause.
+
+2. **No pixels in the document.** All coordinates are pitch metres on a 105 × 68 pitch.
+   `Viewport` converts at the edges; `devicePixelRatio` lives in the canvas transform and never
+   in `Viewport.scale`. Breaking this shows up as players drifting on window resize or on a
+   retina display.
+
+## Hard decisions — do not relitigate without asking
+
+- **No canvas library.** Konva and SVG were both considered and rejected. A scene graph between
+  the code and the pixels is exactly where preview/export divergence comes from. Hit-testing is
+  hand-rolled and small.
+- **Scenes with per-transition paths**, not pure keyframes and not a pure Gantt of paths.
+- **A pass is a carrier change** (`scene.carrier`), not a separate object type.
+- **`mediabunny`**, not `mp4-muxer`/`webm-muxer` (deprecated) and not `MediaRecorder` (realtime,
+  drops frames).
+- **Immutable share snapshots.** No accounts, no edit keys, no authorisation model.
+- **OpenTofu owns durable infra; wrangler owns the deploy.** Do not add
+  `cloudflare_workers_script` to the stack.
+
+## Non-goals for v1 — do not build
+
+Real player data and autocomplete, freehand drawing tools, pass/dribble/shot line styles, cones,
+shaded zones, text annotations, half-pitch and thirds views, touch support, heatmaps, custom
+domain. All are deliberate deferrals with reasoning in `docs/decisions.md`.
+
+## Repository layout
+
+```
+docs/                     architecture, implementation plan, decisions
+src/board/                the engine — zero React, zero DOM
+  types.ts                BoardDoc — single source of truth for the schema
+  schema.ts               zod validator, shared with the Worker
+  pitch.ts                IFAB dimensions table + markings
+  geometry.ts             bezier, arc-length LUT, easing
+  timeline.ts             (doc, t) → resolved positions, incl. ball carrier
+  links.ts                connector geometry + distances
+  render.ts               drawBoard() — the one renderer
+  interaction.ts          hit-testing, drag, selection
+src/formations/           preset shapes, each seeding its own links
+src/export/               worker render loop, mediabunny, gifenc, PNG
+src/share/                localStorage, URL-hash codec, API client
+src/components/           React chrome; ui/ holds shadcn-style primitives
+worker/                   Cloudflare Worker — /api/boards + static passthrough
+infrastructure/terraform/cloudflare/    OpenTofu stack
+```
+
+`src/board/types.ts` is the canonical schema, in the same spirit as `cv.ts` in `portfolio` and
+`site.ts` in `motorcycle-journey`. Components never redefine document shape.
+
+## Engineering conventions
+
+- pnpm, Node >= 22.12. TypeScript strict.
+- React 19 + Vite 8 + Tailwind v4, following `wtc/ui/` — its ESLint config and `components/ui/`
+  primitives are directly reusable.
+- Conventional Commits, enforced by commitizen in `commit-msg` and by CI on PRs. Use `cz commit`.
+- `pre-commit install` after cloning. The eslint/typecheck hooks self-activate once `.ts` files
+  exist.
+- Tests are Vitest, engine only — no component tests. The engine is pure numerical code where
+  tests are cheap and load-bearing.
+- Match the surrounding style. Do not refactor beyond the task.
+
+## Known traps
+
+- **Arc-length reparameterisation.** A cubic bezier sampled at uniform `u` does not move at
+  uniform speed — players visibly surge and stall through curves. Build the 64-sample LUT and
+  invert it. Test numerically, not by eye.
+- **Pass endpoints must be evaluated live.** Target the receiver's *interpolated* position, not
+  their final scene position, or the ball flies to where they will be and jumps on arrival.
+- **`scenes[0].transitionMs` is meaningless** — there is nothing to travel from. Guard it in the
+  timeline maths or the first segment gets double-counted.
+- **Chains must not close.** A back 4 rendered as a closed polygon draws an edge across the
+  width of the pitch. Member order is load-bearing for chains and polygon perimeters.
+- **GIF palette shimmer.** Quantise once against the board's known colours, never per frame, or
+  the pitch greens crawl between frames.
+- **The penalty arc** is the part of a 9.15 m circle centred on the *penalty spot* that falls
+  outside the box — not an arc on the box edge.
+- **DPR double-application** looks correct on a 1× monitor and wrong everywhere else.
+
+## Definition of done, per phase
+
+See [`docs/implementation-plan.md`](docs/implementation-plan.md) — each phase carries its own
+checklist. Two checks belong in every phase regardless:
+
+- resize the window and confirm players do not move relative to the pitch
+- `pnpm lint && pnpm typecheck && pnpm test && pnpm build` clean
+
+## Git
+
+Never create branches, commits, or PRs unless explicitly asked. "Fix X" means prepare the
+change, not commit it.

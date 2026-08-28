@@ -1,0 +1,29 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # The node job (lint / typecheck / test / build) lands with the M1 scaffold —
+  # there is no package.json to run it against yet. See docs/implementation-plan.md.
+
+  commits:
+    # Conventional-commit check via commitizen, same ruleset as the release bump
+    # (cz_conventional_commits). PR-only: on main the commits are already merged.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - run: pip install commitizen
+      - name: check conventional commits
+        run: cz check --rev-range ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}

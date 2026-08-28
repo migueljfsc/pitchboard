@@ -1,0 +1,45 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+.vite/
+*.tsbuildinfo
+
+# test / coverage
+coverage/
+
+# logs
+npm-debug.log*
+pnpm-debug.log*
+
+# environment
+.env
+.env.*
+!.env.example
+
+# wrangler / Cloudflare
+.wrangler/
+.dev.vars
+
+# OpenTofu / Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+# Backend config carries the R2 state credentials — never commit it.
+backend.hcl
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
