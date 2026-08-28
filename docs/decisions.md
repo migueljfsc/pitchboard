@@ -341,6 +341,41 @@ code where tests are cheap and genuinely load-bearing. Component tests remain ou
 
 ---
 
+## D20 — Annotations: scene-ranged, static, and split across the stack
+
+**Decision.** A drawing toolkit — arrows, lines, rectangular and oval zones, freehand and text —
+stored as `BoardDoc.annotations`. Four choices inside it are load-bearing.
+
+**Scene range, stored as ids.** Each shape carries `from` and `to` scene ids, `to: null` meaning
+the end of the timeline. A zone can matter during the press and be gone once the ball is won,
+which is most of why you would shade one. Ids rather than indices so reordering a scene carries
+its drawing along; `deleteScene` prunes a dangling range back to the open end rather than
+discarding the shape, because losing a drawing to a scene deletion is the worse trade.
+
+*Rejected — one flat always-visible list.* Simpler, and unable to express the thing zones are
+for. *Rejected — `scene.annotations`.* A shape wanted throughout would be duplicated per scene
+and would multiply on every scene duplicate.
+
+**Static within a scene.** Annotations appear and disappear at scene boundaries and hold still
+in between. The players are already moving; a second thing in motion competes with them for the
+eye. Draw-on arrows would need their own progress model and are a separate decision if ever
+wanted.
+
+**Zones under, marks over.** Shaded areas are background and are drawn before the links, or they
+drown the play. Arrows, freehand and text are the coach talking over the top and are drawn above
+the ball. Hit-testing walks the same split, so a zone loses a click to a player standing on it
+and an arrow wins one.
+
+**Visibility keys off the played scene, not the selected one.** `frame.resolved.index`, so
+playback shows what the animation is at rather than what the editor has armed — the two part
+company deliberately, since starting playback drops the editor back to scene 1. A transition
+into scene *i* counts as scene *i*, matching where paths are stored.
+
+`Annotation.color` is a plain colour, unlike `Link.color` (D-less, see `linkColor`): a drawing
+belongs to whoever drew it, not to a team.
+
+---
+
 ## Invariants
 
 Two rules a future change is most likely to break. Both belong in `AGENTS.md`.

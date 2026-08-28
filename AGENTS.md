@@ -45,9 +45,11 @@ Everything else is negotiable. These are not.
 
 ## Non-goals for v1 — do not build
 
-Real player data and autocomplete, freehand drawing tools, pass/dribble/shot line styles, cones,
-shaded zones, text annotations, half-pitch and thirds views, touch support, heatmaps, custom
-domain. All are deliberate deferrals with reasoning in `docs/decisions.md`.
+Real player data and autocomplete, cones, thirds views, touch support, heatmaps, custom domain.
+All are deliberate deferrals with reasoning in `docs/decisions.md`.
+
+The drawing toolkit was one of these and is no longer — annotations shipped in M7, and half-pitch
+shipped early. See D20.
 
 ## Repository layout
 
@@ -60,6 +62,7 @@ src/board/                the engine — zero React, zero DOM
   geometry.ts             bezier, arc-length LUT, easing
   timeline.ts             (doc, t) → resolved positions, incl. ball carrier
   links.ts                connector geometry + distances
+  annotations.ts          the coach's drawing — shapes, scene ranges, hit geometry
   render.ts               drawBoard() — the one renderer
   interaction.ts          hit-testing, drag, selection
 src/formations/           preset shapes, each seeding its own links
@@ -94,6 +97,10 @@ infrastructure/terraform/cloudflare/    OpenTofu stack
   their final scene position, or the ball flies to where they will be and jumps on arrival.
 - **`scenes[0].transitionMs` is meaningless** — there is nothing to travel from. Guard it in the
   timeline maths or the first segment gets double-counted.
+- **Annotations are not links.** A link has no geometry and is recomputed every frame from its
+  members; an annotation is fixed geometry that depends on nobody. Do not merge them.
+- **An annotation's scene range is stored as scene ids**, never indices — reordering scenes must
+  carry the drawing with them. `deleteScene` prunes dangling ranges rather than dropping shapes.
 - **Chains must not close.** A back 4 rendered as a closed polygon draws an edge across the
   width of the pitch. Member order is load-bearing for chains and polygon perimeters.
 - **GIF palette shimmer.** Quantise once against the board's known colours, never per frame, or

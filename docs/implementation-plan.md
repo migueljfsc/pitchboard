@@ -361,6 +361,50 @@ Requested during M3 review and built straight away:
 
 ---
 
+## M7 — Annotations
+
+Shipped ahead of M4, out of the original order: it was a v1 non-goal, pulled forward on request.
+See D20 for the four decisions inside it.
+
+### Tasks
+
+- `Annotation` union in `types.ts`, `annotations?: Annotation[]` on `BoardDoc` — additive and
+  optional, so `version` stays `1` and existing documents parse unchanged
+- `src/board/annotations.ts` — scene ranges, stroke sampling, the dribble squiggle,
+  Ramer–Douglas–Peucker simplification, handles, pruning
+- Zone and mark passes in `drawBoard`, split either side of the tokens
+- `hitTestAnnotation` / `hitTestAnnotationHandle` in `interaction.ts`, layer-aware
+- Tool state on the canvas: a drag draws instead of marqueeing; Escape disarms
+- `DrawPanel` — tools, palette, dash convention, scene range, per-shape delete
+- zod coverage, including the invariant that a range references real scenes
+
+### Definition of done
+
+- [x] every shape draws, selects, moves, reshapes by its handles and deletes
+- [x] a zone is under the players; an arrow is over them, and each takes clicks accordingly
+- [x] a shape ranged to one scene disappears on the next, and returns when you scrub back
+- [x] deleting a scene keeps the drawing, with the range pulled back
+- [x] a document written before annotations existed still parses
+
+### Notes from the build
+
+- **Commit from the pointerup position, not from state.** Committing the draft that the
+  pointermoves happened to leave behind loses any shape whose final move never landed, which
+  reads as the tool silently not working.
+- **Focus after the event, not during it.** Placing text focuses its field from inside a
+  pointerdown handler, and the browser's own focus handling for that same event runs afterwards
+  and undoes it. `setTimeout(…, 0)` is the fix; `requestAnimationFrame` is not, because it does
+  not run at all in a background window.
+
+### Risks
+
+- **Share size.** A freehand stroke is one point per pointer event. Simplified on commit and
+  capped at 400 points by the schema, but it is still the largest thing a board can carry.
+- **Text hit-testing is approximate.** Text draws upright, so its box is not axis-aligned on a
+  rotated board; the hit-test uses a radius instead and over-grabs the corners.
+
+---
+
 ## Cross-cutting: testing
 
 Vitest, pure engine only, no component tests. This is the first JS/TS test suite in the
@@ -388,7 +432,7 @@ Deliberate, revisit after M6:
   `P106=Q937857` with `P54` for club). Every commercial API forbids the bulk-caching a fast
   autocomplete needs on its free tier, and player photos carry redistribution risk regardless of
   source. See `decisions.md`.
-- Full drawing toolkit — pass/dribble/shot line styles, freehand pen, cones, shaded zones, text
+- Cones and other pitch furniture
 - Five- and seven-a-side (settled: eleven-a-side only, see D10)
 - Thirds and final-third crops (half-pitch shipped early, see below)
 - Touch support

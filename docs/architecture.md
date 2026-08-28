@@ -163,17 +163,35 @@ type Link = {
   name: string                               // "Back 4", "Midfield 3"
   members: string[]                          // ordered — order defines chain sequence
   style: LinkStyle
-  color: string
+  color?: string                             // absent = follow the members' kit (linkColor)
   showDistances: boolean
 }
+
+type AnnotationDash = 'solid' | 'dashed' | 'wavy'   // run | pass | dribble
+
+/** Fixed geometry that depends on nobody — the opposite of a link in every respect. */
+type Annotation = {
+  id: string
+  from: string                               // scene id it first appears on
+  to: string | null                          // last scene id; null runs to the end
+  color: string
+  hidden?: boolean
+} & (
+  | { kind: 'arrow' | 'line'; a: Vec2; b: Vec2; curve?: PathCurve | null; dash: AnnotationDash }
+  | { kind: 'rect' | 'ellipse'; a: Vec2; b: Vec2 }   // a/b are the bounding box
+  | { kind: 'pen'; points: Vec2[] }                  // simplified on commit, capped at 400
+  | { kind: 'text'; at: Vec2; text: string }
+)
 
 type BoardDoc = {
   version: 1
   name: string
   pitch: { length: number; width: number }   // defaults 105 × 68
+  tokenScale?: number                        // 0.5–2.5, default 1
   teams: [Team, Team]
   scenes: Scene[]                            // at least one
   links: Link[]
+  annotations?: Annotation[]                 // absent on a board drawn before M7
 }
 ```
 
@@ -188,6 +206,7 @@ rather than crashes:
 - `carrier`, when set, references a real player id
 - `ballPos` is present exactly when `carrier === null`
 - `links[].members` reference real player ids, and `length >= 2`
+- `annotations[].from` and `.to` reference real scene ids, or `to` is null
 - `scenes[0].transitionMs` is ignored — there is nothing to travel from
 
 **Paths are stored on the scene being travelled into.** Scene *i*'s `paths[e]` describes how
@@ -348,13 +367,18 @@ Back to front. Order is fixed; hit-testing walks it in reverse.
 
 ```
 1. pitch surface + markings          (pitch.ts)
-2. links                             under players, so tokens stay legible
-3. link distance labels
-4. motion paths / arrowheads         only when moving, or when the entity is selected
-5. player tokens + numbers/labels
-6. ball                              above players — it must never be occluded
-7. selection affordances             editor only, suppressed during export
+2. annotation zones                  shaded areas are background; over the play they drown it
+3. links                             under players, so tokens stay legible
+4. link distance labels
+5. motion paths / arrowheads         only when moving, or when the entity is selected
+6. player tokens + numbers/labels
+7. ball                              above players — it must never be occluded
+8. annotation marks                  arrows, freehand, text — the coach talking over the top
+9. selection affordances             editor only, suppressed during export
 ```
+
+Annotations straddle the stack: zones at 2, everything else at 8. Hit-testing walks the same
+split, so a zone loses a click to a player standing on it and an arrow wins one.
 
 Selection handles, marquee, and hover states are gated behind `view.interactive`. Export passes
 `false`, which is the only branch in the renderer that distinguishes the two contexts — and it
@@ -381,6 +405,9 @@ Hit-testing, in reverse draw order, all in pitch metres:
 | Bezier control handle | distance to point < handle radius, only when parent selected |
 | Path | `ctx.isPointInStroke` against a widened stroke |
 | Link edge | point-to-segment distance < threshold |
+| Annotation mark | point-to-segment against the sampled stroke, above tokens |
+| Annotation zone | inside the rect, or inside the normalised ellipse, below tokens |
+| Annotation handle | distance to point, only for the selected shape — tested before everything |
 
 Selection is a `Set<entityId>`. Shift-click toggles; marquee adds everything intersecting.
 Dragging a selection applies the same delta to every member, preserving relative spacing. The

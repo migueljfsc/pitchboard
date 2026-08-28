@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { BoardDoc, PitchView } from "@/board/types";
+import type { AnnotationDash, BoardDoc, PitchView, Tool } from "@/board/types";
 import { BALL_ID, DEFAULT_PITCH_VIEW } from "@/board/types";
 import { BoardCanvas } from "@/components/BoardCanvas";
 import { TeamControls } from "@/components/TeamControls";
@@ -9,9 +9,11 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { RotateCcw } from "lucide-react";
 import { Inspector } from "@/components/Inspector";
 import { LinkPanel } from "@/components/LinkPanel";
+import { DrawPanel } from "@/components/DrawPanel";
 import { Timeline } from "@/components/Timeline";
 import { nudgeEntities } from "@/board/interaction";
 import { createLink } from "@/board/links";
+import { annotationsOf, deleteAnnotation } from "@/board/annotations";
 import { concealedPlayers } from "@/board/render";
 import { sceneStartSeconds, setCarrier, setPath, setTravel, totalSeconds } from "@/board/scenes";
 import { addPlayer, removePlayer, setPlayerLabel, setPlayerNumber } from "@/board/players";
@@ -36,6 +38,16 @@ export function Editor() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [selectionOpen, setSelectionOpen] = useState(true);
   const [focusName, setFocusName] = useState(0);
+
+  // Drawing. The tool owns what a drag on the grass does; colour and dash are
+  // the style the next shape takes, and also restyle the selected one.
+  const [tool, setTool] = useState<Tool>("select");
+  const [sticky, setSticky] = useState(false);
+  const [drawColor, setDrawColor] = useState("#f59e0b");
+  const [drawDash, setDrawDash] = useState<AnnotationDash>("solid");
+  const [annotation, setAnnotation] = useState<string | null>(null);
+  const [drawOpen, setDrawOpen] = useState(false);
+  const [focusText, setFocusText] = useState(0);
 
   const directions = useMemo<[Direction, Direction]>(() => [HOME.direction, AWAY.direction], []);
   const total = totalSeconds(doc);
@@ -144,6 +156,17 @@ export function Editor() {
     setFocusName((n) => n + 1);
   };
 
+  /**
+   * Placing text is the one tool that commits on the click that starts it, so
+   * there is nothing to type into yet. Open the panel and hand it the cursor.
+   */
+  const selectAnnotation = (id: string | null) => {
+    setAnnotation(id);
+    if (id === null) return;
+    setDrawOpen(true);
+    if (tool === "text") setFocusText((n) => n + 1);
+  };
+
   const onCreateLink = () => {
     const members = [...visible].filter((id) => id !== "ball");
     if (members.length < 2) return;
@@ -160,6 +183,8 @@ export function Editor() {
   const reset = () => {
     setDoc(createBoardDoc());
     setSelection(new Set());
+    setAnnotation(null);
+    setTool("select");
     setFormations([HOME.formation, AWAY.formation]);
     setExpandedLink(null);
     setActiveScene(0);
@@ -198,6 +223,20 @@ export function Editor() {
       // playback behind it, and Escape belongs to the dialog.
       if (confirmReset) return;
 
+      // Escape disarms a drawing tool before anything else looks at the key.
+      if (e.key === "Escape") {
+        setTool("select");
+        setAnnotation(null);
+        return;
+      }
+
+      if ((e.key === "Delete" || e.key === "Backspace") && annotation) {
+        e.preventDefault();
+        setDoc((d) => deleteAnnotation(d, annotation));
+        setAnnotation(null);
+        return;
+      }
+
       if (e.code === "Space") {
         e.preventDefault();
         setPlayback(!playing);
@@ -218,7 +257,7 @@ export function Editor() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onNudge, confirmReset, playing, setPlayback]);
+  }, [onNudge, confirmReset, playing, setPlayback, annotation]);
 
   return (
     <div className="flex h-full w-full">
@@ -254,6 +293,29 @@ export function Editor() {
             />
           </Section>
         ))}
+
+        <Section
+          title="Draw"
+          badge={annotationsOf(doc).length ? String(annotationsOf(doc).length) : undefined}
+          open={drawOpen}
+          onOpenChange={setDrawOpen}
+        >
+          <DrawPanel
+            doc={doc}
+            onDocChange={setDoc}
+            tool={tool}
+            onToolChange={setTool}
+            sticky={sticky}
+            onStickyChange={setSticky}
+            color={drawColor}
+            onColorChange={setDrawColor}
+            dash={drawDash}
+            onDashChange={setDrawDash}
+            selected={annotation}
+            onSelect={setAnnotation}
+            focusText={focusText}
+          />
+        </Section>
 
         <Section title="Links" badge={String(doc.links.length)} defaultOpen={false}>
           <LinkPanel
@@ -323,6 +385,13 @@ export function Editor() {
             onSelectionChange={setSelection}
             onDocChange={setDoc}
             onEditName={onEditName}
+            tool={tool}
+            onToolChange={setTool}
+            drawColor={drawColor}
+            drawDash={drawDash}
+            sticky={sticky}
+            annotationSelection={annotation}
+            onAnnotationSelect={selectAnnotation}
           />
         </div>
 

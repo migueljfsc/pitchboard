@@ -7,6 +7,7 @@
 
 import type { BoardDoc, PathCurve, Scene, Vec2 } from "./types";
 import { ballAt, resolveAt, totalDurationMs } from "./timeline";
+import { pruneAnnotations } from "./annotations";
 
 export const DEFAULT_TRANSITION_MS = 1500;
 export const DEFAULT_HOLD_MS = 800;
@@ -81,7 +82,9 @@ export function duplicateScene(doc: BoardDoc, index: number): BoardDoc {
 export function deleteScene(doc: BoardDoc, index: number): BoardDoc {
   if (doc.scenes.length <= 1 || !doc.scenes[index]) return doc;
   const scenes = doc.scenes.filter((_, i) => i !== index);
-  return replace(doc, scenes);
+  // Annotations reference scenes by id, so one just deleted leaves a dangling
+  // range. Pruning pulls it back rather than discarding the drawing.
+  return pruneAnnotations(replace(doc, scenes));
 }
 
 export function moveScene(doc: BoardDoc, from: number, to: number): BoardDoc {

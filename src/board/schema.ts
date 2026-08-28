@@ -51,6 +51,29 @@ const link = z.object({
   hidden: z.boolean().optional(),
 });
 
+const annotationBase = {
+  id: z.string().min(1),
+  /** Scene ids, checked against the real scene list by the refinement below. */
+  from: z.string().min(1),
+  to: z.string().min(1).nullable(),
+  color: z.string().min(1),
+  hidden: z.boolean().optional(),
+};
+
+const dash = z.enum(["solid", "dashed", "wavy"]);
+const curve = pathCurve.nullable().optional();
+
+const annotation = z.discriminatedUnion("kind", [
+  z.object({ ...annotationBase, kind: z.literal("arrow"), a: vec2, b: vec2, curve, dash }),
+  z.object({ ...annotationBase, kind: z.literal("line"), a: vec2, b: vec2, curve, dash }),
+  z.object({ ...annotationBase, kind: z.literal("rect"), a: vec2, b: vec2 }),
+  z.object({ ...annotationBase, kind: z.literal("ellipse"), a: vec2, b: vec2 }),
+  // Capped: a freehand stroke is simplified on commit, and every point of it
+  // ends up in the share URL.
+  z.object({ ...annotationBase, kind: z.literal("pen"), points: z.array(vec2).min(2).max(400) }),
+  z.object({ ...annotationBase, kind: z.literal("text"), at: vec2, text: z.string().max(120) }),
+]);
+
 /**
  * Structural schema. The cross-field invariants that make a document actually
  * renderable are applied by `boardDocSchema` below.
@@ -66,6 +89,7 @@ const boardDocShape = z.object({
   teams: z.tuple([team, team]),
   scenes: z.array(scene).min(1).max(60),
   links: z.array(link).max(20),
+  annotations: z.array(annotation).max(200).optional(),
 });
 
 export const boardDocSchema = boardDocShape.superRefine((doc, ctx) => {
@@ -117,6 +141,20 @@ export const boardDocSchema = boardDocShape.superRefine((doc, ctx) => {
             : "a scene with a carrier must not give ballPos",
         path: ["scenes", i, "ballPos"],
       });
+    }
+  });
+
+  const sceneIds = new Set(doc.scenes.map((s) => s.id));
+  doc.annotations?.forEach((a, i) => {
+    for (const key of ["from", "to"] as const) {
+      const id = a[key];
+      if (id !== null && !sceneIds.has(id)) {
+        ctx.addIssue({
+          code: "custom",
+          message: `annotation ${key} references scene ${id}, which does not exist`,
+          path: ["annotations", i, key],
+        });
+      }
     }
   });
 

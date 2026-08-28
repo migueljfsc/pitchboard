@@ -75,6 +75,52 @@ export type Link = {
   hidden?: boolean;
 };
 
+/**
+ * Annotations — the coach's drawing on top of the tactic.
+ *
+ * Unlike links they are inert: fixed geometry, no dependence on where anyone is
+ * standing. What they do have is a scene range, so a zone can matter during the
+ * press and vanish once the ball is won.
+ *
+ * `dashed` is a pass and `wavy` a dribble, following the convention every
+ * coaching diagram uses; `solid` is a plain run or a bare line.
+ */
+export type AnnotationDash = "solid" | "dashed" | "wavy";
+
+type AnnotationBase = {
+  id: string;
+  /** Scene id this first appears on. */
+  from: string;
+  /** Last scene id it appears on; null runs to the end of the timeline. */
+  to: string | null;
+  color: string;
+  /** Hidden annotations stay in the document but are not drawn. */
+  hidden?: boolean;
+};
+
+/** Two-point shapes share `a`/`b`, which keeps drag-to-create uniform. */
+type Segment = { a: Vec2; b: Vec2 };
+
+export type Annotation =
+  | (AnnotationBase & Segment & { kind: "arrow"; curve?: PathCurve | null; dash: AnnotationDash })
+  | (AnnotationBase & Segment & { kind: "line"; curve?: PathCurve | null; dash: AnnotationDash })
+  | (AnnotationBase & Segment & { kind: "rect" })
+  /** `a` and `b` are the bounding box, not centre and radii. */
+  | (AnnotationBase & Segment & { kind: "ellipse" })
+  | (AnnotationBase & { kind: "pen"; points: Vec2[] })
+  | (AnnotationBase & { kind: "text"; at: Vec2; text: string });
+
+export type AnnotationKind = Annotation["kind"];
+
+/** Shapes drawn by dragging a box or a line out from the first point. */
+export const SEGMENT_KINDS = ["arrow", "line", "rect", "ellipse"] as const;
+
+/** Shapes that carry a dash style. */
+export const DASHED_KINDS = ["arrow", "line"] as const;
+
+/** Zones sit under everything; the rest sit above the tokens. */
+export const ZONE_KINDS = ["rect", "ellipse"] as const;
+
 export type BoardDoc = {
   version: 1;
   name: string;
@@ -89,6 +135,8 @@ export type BoardDoc = {
   /** At least one. */
   scenes: Scene[];
   links: Link[];
+  /** Optional: a board drawn before annotations existed simply has none. */
+  annotations?: Annotation[];
 };
 
 /** Which part of the pitch is on screen. */
@@ -131,6 +179,9 @@ export type Viewport = {
  * Selection and hover are passed in explicitly rather than read from React, which
  * is what keeps the renderer pure and usable from the export worker.
  */
+/** The tool a pointer drag is currently bound to. */
+export type Tool = "select" | AnnotationKind;
+
 export type RenderView = Viewport & {
   /** Canvas size in CSS pixels. drawBoard paints the full surround itself so a
    *  single call yields a complete frame — the export worker depends on that. */
@@ -145,6 +196,10 @@ export type RenderView = Viewport & {
   editScene?: number;
   /** Marquee rectangle in pitch metres, while dragging one. */
   marquee?: { a: Vec2; b: Vec2 } | null;
+  /** Editor only: the annotation whose handles are showing. */
+  annotationSelection?: string | null;
+  /** Editor only: the shape currently being dragged out, not yet committed. */
+  draft?: Annotation | null;
 };
 
 /** The ball is addressed by this id wherever an entity id is expected. */

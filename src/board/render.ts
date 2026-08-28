@@ -11,7 +11,7 @@
  * and font sizes.
  */
 
-import type { BoardDoc, RenderView, Vec2 } from "./types";
+import type { Annotation, BoardDoc, RenderView, Vec2 } from "./types";
 import { BALL_ID } from "./types";
 import {
   BALL_RADIUS,
@@ -28,6 +28,19 @@ import {
 } from "./pitch";
 import { displayCurve, frameAt, transitionInto, type Frame } from "./timeline";
 import { linkColor, linkGeometry, type LinkGeometry } from "./links";
+import {
+  DASH_PATTERN,
+  HEAD_LENGTH,
+  HEAD_WIDTH,
+  MARK_WIDTH,
+  TEXT_SIZE,
+  ZONE_ALPHA,
+  annotationHandles,
+  boundsOf,
+  strokePoints,
+  visibleAt,
+  wavy,
+} from "./annotations";
 import {
   buildArcTable,
   halfRange,
@@ -81,6 +94,13 @@ export function drawBoard(
 
   drawPitch(ctx, doc.pitch, theme);
   drawTeamNames(ctx, doc, view.rotated);
+
+  // Annotations split across the stack. A shaded zone is background — it belongs
+  // under the play, or it drowns it. Arrows, freehand and text are the coach
+  // talking over the top, and go above everything.
+  const marks = annotationsFor(doc, frame, view);
+  for (const ann of marks) if (isZone(ann)) drawZone(ctx, ann);
+
   // Links sit under the tokens so a connector never covers a shirt number.
   drawLinks(ctx, doc, frame, view.rotated);
   drawPaths(ctx, doc, frame, view);
@@ -105,6 +125,13 @@ export function drawBoard(
     selected: view.selection?.has(BALL_ID) ?? false,
     hovered: view.interactive && view.hover === BALL_ID,
   });
+
+  for (const ann of marks) if (!isZone(ann)) drawMark(ctx, ann, view.rotated);
+
+  if (view.interactive && view.annotationSelection) {
+    const selected = marks.find((a) => a.id === view.annotationSelection);
+    if (selected) drawAnnotationChrome(ctx, selected);
+  }
 
   if (view.interactive && view.marquee) {
     drawMarquee(ctx, view.marquee.a, view.marquee.b);
@@ -257,6 +284,161 @@ function withAlpha(color: string, alpha: number): string {
   const n = Number.parseInt(full, 16);
   if (Number.isNaN(n)) return hex;
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
+// ---------------------------------------------------------- annotations
+
+const isZone = (ann: Annotation): boolean => ann.kind === "rect" || ann.kind === "ellipse";
+
+/**
+ * The drawing to paint this frame.
+ *
+ * Visibility is keyed off the scene being played INTO, not the scene selected in
+ * the editor — the two part company during playback, and the animation is what
+ * the viewer is watching. A transition into scene i counts as scene i, matching
+ * how paths are stored.
+ *
+ * The draft — the shape currently being dragged out — is appended on top. It is
+ * not in the document yet, so it cannot come from `visibleAt`.
+ */
+function annotationsFor(doc: BoardDoc, frame: Frame, view: RenderView): Annotation[] {
+  const list = visibleAt(doc, frame.resolved.index);
+  const draft = view.interactive ? view.draft : null;
+  if (!draft) return list;
+  return [...list.filter((a) => a.id !== draft.id), draft];
+}
+
+/** A shaded area of pitch. Translucent enough to read markings through. */
+function drawZone(ctx: Ctx, ann: Annotation): void {
+  const { x, y, w, h } = boundsOf(ann);
+  if (w <= 0 || h <= 0) return;
+
+  ctx.beginPath();
+  if (ann.kind === "ellipse") {
+    ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+  } else {
+    ctx.rect(x, y, w, h);
+  }
+
+  ctx.fillStyle = withAlpha(ann.color, ZONE_ALPHA);
+  ctx.fill();
+  ctx.lineWidth = MARK_WIDTH * 0.7;
+  ctx.strokeStyle = ann.color;
+  ctx.stroke();
+}
+
+/** Arrows, lines, freehand and text — everything drawn over the play. */
+function drawMark(ctx: Ctx, ann: Annotation, rotated: boolean): void {
+  if (ann.kind === "text") {
+    drawAnnotationText(ctx, ann.at, ann.text, ann.color, rotated);
+    return;
+  }
+
+  const raw = strokePoints(ann);
+  if (raw.length < 2) return;
+
+  const dash = ann.kind === "arrow" || ann.kind === "line" ? ann.dash : "solid";
+  const points = dash === "wavy" ? wavy(raw) : raw;
+
+  ctx.save();
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  if (dash === "dashed") ctx.setLineDash(DASH_PATTERN);
+
+  // Dark under-stroke first, for the same reason links have one: a dark colour
+  // is nearly invisible against the grass on its own.
+  strokePolyline(ctx, points, "rgba(0,0,0,0.35)", MARK_WIDTH + 0.16);
+  strokePolyline(ctx, points, ann.color, MARK_WIDTH);
+  ctx.restore();
+
+  if (ann.kind === "arrow") drawHead(ctx, points, ann.color);
+}
+
+function strokePolyline(ctx: Ctx, points: Vec2[], color: string, width: number): void {
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.stroke();
+}
+
+/**
+ * Solid triangle at the tip.
+ *
+ * Direction comes from the last vertex at least half a head-length back: the
+ * final two samples of a curve can be a fraction of a millimetre apart, and
+ * normalising that gives a head pointing anywhere at all.
+ */
+function drawHead(ctx: Ctx, points: Vec2[], color: string): void {
+  const tip = points[points.length - 1];
+  let i = points.length - 2;
+  while (i > 0 && Math.hypot(tip.x - points[i].x, tip.y - points[i].y) < HEAD_LENGTH / 2) i--;
+
+  const back = points[i];
+  const len = Math.hypot(tip.x - back.x, tip.y - back.y);
+  if (len === 0) return;
+
+  const dx = (tip.x - back.x) / len;
+  const dy = (tip.y - back.y) / len;
+  const bx = tip.x - dx * HEAD_LENGTH;
+  const by = tip.y - dy * HEAD_LENGTH;
+  const half = HEAD_WIDTH / 2;
+
+  ctx.beginPath();
+  ctx.moveTo(tip.x, tip.y);
+  ctx.lineTo(bx - dy * half, by + dx * half);
+  ctx.lineTo(bx + dy * half, by - dx * half);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 0.16;
+  ctx.strokeStyle = "rgba(0,0,0,0.35)";
+  ctx.stroke();
+}
+
+function drawAnnotationText(
+  ctx: Ctx,
+  at: Vec2,
+  text: string,
+  color: string,
+  rotated: boolean,
+): void {
+  if (!text.trim()) return;
+  upright(ctx, at, rotated, () => {
+    ctx.font = `700 ${TEXT_SIZE}px Inter, system-ui, -apple-system, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "rgba(0,0,0,0.75)";
+    ctx.lineWidth = TEXT_SIZE * 0.2;
+    ctx.strokeText(text, 0, 0);
+    ctx.fillStyle = color;
+    ctx.fillText(text, 0, 0);
+  });
+}
+
+/** Editor chrome for the selected shape: a dotted box and its grab handles. */
+function drawAnnotationChrome(ctx: Ctx, ann: Annotation): void {
+  const { x, y, w, h } = boundsOf(ann);
+
+  ctx.save();
+  ctx.setLineDash([0.7, 0.7]);
+  ctx.strokeStyle = "rgba(251,191,36,0.7)";
+  ctx.lineWidth = 0.14;
+  ctx.strokeRect(x - 0.7, y - 0.7, w + 1.4, h + 1.4);
+  ctx.restore();
+
+  for (const handle of annotationHandles(ann)) {
+    ctx.beginPath();
+    ctx.arc(handle.at.x, handle.at.y, HANDLE_RADIUS * 0.8, 0, Math.PI * 2);
+    ctx.fillStyle = "#fbbf24";
+    ctx.fill();
+    ctx.lineWidth = 0.12;
+    ctx.strokeStyle = "rgba(0,0,0,0.6)";
+    ctx.stroke();
+  }
 }
 
 // ---------------------------------------------------------------- paths

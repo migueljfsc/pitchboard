@@ -10,11 +10,20 @@
  * dragging a player never retroactively changes an earlier one.
  */
 
-import type { BoardDoc, Link, PathCurve, Scene, Vec2 } from "./types";
+import type { Annotation, BoardDoc, Link, PathCurve, Scene, Vec2 } from "./types";
 import { BALL_ID } from "./types";
 import { ballRadius, tokenRadius } from "./pitch";
 import { displayCurve, transitionInto, type Frame, type Resolved } from "./timeline";
 import { linkGeometry } from "./links";
+import {
+  MARK_WIDTH,
+  TEXT_SIZE,
+  annotationHandles,
+  boundsOf,
+  strokePoints,
+  visibleAt,
+  type AnnotationHandle,
+} from "./annotations";
 import { HANDLE_RADIUS, concealedPlayers } from "./render";
 import { clamp, distanceToSegment } from "./geometry";
 
@@ -117,6 +126,92 @@ export function hitTestLink(
     }
   }
   return null;
+}
+
+// ------------------------------------------------------------- annotations
+
+/** Which layer of the stack an annotation was drawn in. */
+export type AnnotationLayer = "mark" | "zone";
+
+export const layerOf = (ann: Annotation): AnnotationLayer =>
+  ann.kind === "rect" || ann.kind === "ellipse" ? "zone" : "mark";
+
+export type AnnotationHandleHit = { id: string; which: AnnotationHandle["which"] };
+
+/**
+ * Grab point of the selected annotation under `p`, or null.
+ *
+ * Tested before the shape itself for the same reason run handles beat tokens:
+ * a handle sits on top of what it edits, and is the smaller target.
+ */
+export function hitTestAnnotationHandle(
+  doc: BoardDoc,
+  sceneIndex: number,
+  selected: string | null,
+  p: Vec2,
+  margin = 0.35,
+): AnnotationHandleHit | null {
+  if (!selected) return null;
+  const ann = visibleAt(doc, sceneIndex).find((a) => a.id === selected);
+  if (!ann) return null;
+
+  for (const handle of annotationHandles(ann)) {
+    if (dist(p, handle.at) <= HANDLE_RADIUS + margin) return { id: ann.id, which: handle.which };
+  }
+  return null;
+}
+
+/**
+ * Topmost annotation of one layer under `p`, or null.
+ *
+ * Split by layer because annotations are split by layer when drawn: a zone lies
+ * under the players and must lose a click to them, while an arrow lies over the
+ * top and must win one. Walks each layer back to front, so the last drawn wins.
+ */
+export function hitTestAnnotation(
+  doc: BoardDoc,
+  sceneIndex: number,
+  p: Vec2,
+  layer: AnnotationLayer,
+  margin = 0.35,
+): Annotation | null {
+  const list = visibleAt(doc, sceneIndex);
+  for (let i = list.length - 1; i >= 0; i--) {
+    const ann = list[i];
+    if (layerOf(ann) !== layer) continue;
+    if (annotationCovers(ann, p, margin)) return ann;
+  }
+  return null;
+}
+
+function annotationCovers(ann: Annotation, p: Vec2, margin: number): boolean {
+  if (ann.kind === "rect" || ann.kind === "ellipse") {
+    const { x, y, w, h } = boundsOf(ann);
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+    if (ann.kind === "rect") {
+      return Math.abs(p.x - cx) <= w / 2 + margin && Math.abs(p.y - cy) <= h / 2 + margin;
+    }
+    const rx = w / 2 + margin;
+    const ry = h / 2 + margin;
+    if (rx <= 0 || ry <= 0) return false;
+    return ((p.x - cx) / rx) ** 2 + ((p.y - cy) / ry) ** 2 <= 1;
+  }
+
+  if (ann.kind === "text") {
+    // Text is drawn upright, so its box is not axis-aligned on a rotated board
+    // and a rectangle in pitch space would be wrong there. A radius covering the
+    // longer side is orientation-independent and over-grabs only the corners.
+    const reach = Math.max(TEXT_SIZE * 0.7, ann.text.length * TEXT_SIZE * 0.3);
+    return dist(p, ann.at) <= reach + margin;
+  }
+
+  const points = strokePoints(ann);
+  const reach = MARK_WIDTH / 2 + margin;
+  for (let i = 1; i < points.length; i++) {
+    if (distanceToSegment(p, points[i - 1], points[i]) <= reach) return true;
+  }
+  return false;
 }
 
 /** Player ids whose token centre falls inside the rectangle spanned by `a` and `b`. */
