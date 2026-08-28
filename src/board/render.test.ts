@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { drawBoard, TOKEN_RADIUS } from "./render";
-import { PITCH_PADDING } from "./pitch";
+import { PITCH, PITCH_PADDING, TEAM_NAME_OFFSET } from "./pitch";
 import { frameAt } from "./timeline";
 import { createRecordingCtx } from "./recording-ctx";
 import { createBoardDoc } from "@/formations";
@@ -238,8 +238,14 @@ describe("team names", () => {
     // Drawn in the translated frame, so the call itself is at the origin; the
     // placement is the preceding translate.
     const translates = r.calls("translate");
-    expect(translates.some((t) => t.startsWith("translate(-3.5,34)"))).toBe(true);
-    expect(translates.some((t) => t.startsWith("translate(108.5,34)"))).toBe(true);
+    expect(translates.some((t) => t.startsWith(`translate(${-TEAM_NAME_OFFSET},34)`))).toBe(true);
+    expect(
+      translates.some((t) => t.startsWith(`translate(${105 + TEAM_NAME_OFFSET},34)`)),
+    ).toBe(true);
+
+    // Clear of the 2 m goal, and inside the grass.
+    expect(TEAM_NAME_OFFSET).toBeGreaterThan(PITCH.goalDepth + 1);
+    expect(TEAM_NAME_OFFSET).toBeLessThan(PITCH_PADDING - 1);
   });
 
   it("omits a hidden team's name", () => {

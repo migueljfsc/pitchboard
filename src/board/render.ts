@@ -17,7 +17,7 @@ import {
   BALL_RADIUS,
   DEFAULT_THEME,
   PITCH_PADDING,
-  PITCH,
+  TEAM_NAME_OFFSET,
   TOKEN_RADIUS,
   ballRadius,
   drawPitch,
@@ -126,15 +126,12 @@ export function drawBoard(
  * them upside down.
  */
 function drawTeamNames(ctx: Ctx, doc: BoardDoc, rotated: boolean): void {
-  // Between the back of the goal and the edge of the grass.
-  const band = (PITCH_PADDING + PITCH.goalDepth) / 2;
-
   doc.teams.forEach((team, i) => {
     const name = team.name.trim();
     if (team.hidden || !name) return;
 
     const at = {
-      x: i === 0 ? -band : doc.pitch.length + band,
+      x: i === 0 ? -TEAM_NAME_OFFSET : doc.pitch.length + TEAM_NAME_OFFSET,
       y: doc.pitch.width / 2,
     };
 

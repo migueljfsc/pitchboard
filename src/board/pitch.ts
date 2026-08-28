@@ -37,7 +37,13 @@ export const BALL_RADIUS = 0.45;
  * seat a team name behind each goal. fitViewport and the half-view clip both
  * read it, so the band is never cut off.
  */
-export const PITCH_PADDING = 5;
+export const PITCH_PADDING = 6.5;
+
+/**
+ * Distance from the goal line to the centre of the team name, in metres. Clear of
+ * the 2 m goal with room to breathe, and PITCH_PADDING leaves margin beyond it.
+ */
+export const TEAM_NAME_OFFSET = 4.3;
 
 export const MIN_TOKEN_SCALE = 0.5;
 export const MAX_TOKEN_SCALE = 2.5;
