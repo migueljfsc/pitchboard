@@ -7,7 +7,12 @@ An animated football tactics board that runs in the browser. Draw a formation, m
 between scenes along curved runs, and export the result as **MP4**, **GIF**, or **PNG** —
 all client-side, no server rendering.
 
-**Live:** https://migueljfsc.github.io/pitchboard/
+**Live:** https://migueljfsc.github.io/pitchboard/ — published by
+[`deploy.yml`](.github/workflows/deploy.yml) on every push to `main`.
+
+> Pages has to be switched on once by the repo owner: **Settings → Pages → Build and
+> deployment → Source: GitHub Actions**. The workflow cannot do it — the default
+> `GITHUB_TOKEN` is refused when the Pages site does not yet exist.
 
 > **Status: in progress.** The board, animation and links are built (M1–M3). Export to MP4 /
 > GIF / PNG is next. See [`docs/implementation-plan.md`](docs/implementation-plan.md) for the
