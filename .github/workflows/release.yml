@@ -4,9 +4,9 @@ name: release
 # opens a GitHub Release. Runs after a push to main; the bump commit itself
 # carries [skip ci] (see .cz.yaml) so it cannot retrigger this.
 #
-# REQUIRES a secret named RELEASE_TOKEN: a PAT with `contents: write` and the
-# right to push to main. The built-in GITHUB_TOKEN cannot push to a protected
-# branch, and main is protected here.
+# REQUIRES a secret named CZ_TOKEN: a PAT with `contents: write` and the right to
+# push to main. The built-in GITHUB_TOKEN cannot push to a protected branch, and
+# main is protected here.
 on:
   push:
     branches: [main]
@@ -27,14 +27,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+          token: ${{ secrets.CZ_TOKEN || github.token }}
           # commitizen reads the whole history to work out the increment.
           fetch-depth: 0
 
       - id: cz
         uses: commitizen-tools/commitizen-action@0.24.0
         with:
-          github_token: ${{ secrets.RELEASE_TOKEN || github.token }}
+          github_token: ${{ secrets.CZ_TOKEN || github.token }}
           changelog_increment_filename: body.md
 
       # Only when cz actually bumped — a push with no feat/fix produces no tag.
@@ -45,7 +45,7 @@ jobs:
           bodyFile: body.md
           skipIfReleaseExists: true
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+          GITHUB_TOKEN: ${{ secrets.CZ_TOKEN || github.token }}
 
       - if: ${{ env.REVISION != '' }}
         run: echo "Released ${{ steps.cz.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"

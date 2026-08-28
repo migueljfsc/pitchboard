@@ -10,9 +10,10 @@ all client-side, no server rendering.
 **Live:** https://migueljfsc.github.io/pitchboard/ — published by
 [`deploy.yml`](.github/workflows/deploy.yml) on every push to `main`.
 
-> Pages has to be switched on once by the repo owner: **Settings → Pages → Build and
-> deployment → Source: GitHub Actions**. The workflow cannot do it — the default
-> `GITHUB_TOKEN` is refused when the Pages site does not yet exist.
+> Releases are cut by [`release.yml`](.github/workflows/release.yml): commitizen bumps the
+> version from conventional commits, updates the changelog, tags, and opens a GitHub Release.
+> It needs a `CZ_TOKEN` secret, because `main` is protected and the built-in `GITHUB_TOKEN`
+> cannot push to a protected branch.
 
 > **Status: in progress.** The board, animation and links are built (M1–M3). Export to MP4 /
 > GIF / PNG is next. See [`docs/implementation-plan.md`](docs/implementation-plan.md) for the

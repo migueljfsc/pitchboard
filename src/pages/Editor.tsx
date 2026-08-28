@@ -5,6 +5,8 @@ import { BoardCanvas } from "@/components/BoardCanvas";
 import { TeamControls } from "@/components/TeamControls";
 import { ViewControls } from "@/components/ViewControls";
 import { Section } from "@/components/ui/Section";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { RotateCcw } from "lucide-react";
 import { Inspector } from "@/components/Inspector";
 import { LinkPanel } from "@/components/LinkPanel";
 import { Timeline } from "@/components/Timeline";
@@ -31,6 +33,7 @@ export function Editor() {
   const [loop, setLoop] = useState(true);
   const [expandedLink, setExpandedLink] = useState<string | null>(null);
   const [pitchView, setPitchView] = useState<PitchView>(DEFAULT_PITCH_VIEW);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   const directions = useMemo<[Direction, Direction]>(() => [HOME.direction, AWAY.direction], []);
   const total = totalSeconds(doc);
@@ -125,6 +128,21 @@ export function Editor() {
     setExpandedLink(next.links[next.links.length - 1]?.id ?? null);
   };
 
+  /**
+   * Back to a fresh board. The view framing is left alone deliberately — how you
+   * are looking at the pitch is not one of the changes you made to it.
+   */
+  const reset = () => {
+    setDoc(createBoardDoc());
+    setSelection(new Set());
+    setFormations([HOME.formation, AWAY.formation]);
+    setExpandedLink(null);
+    setActiveScene(0);
+    setTime(0);
+    setPlaying(false);
+    setConfirmReset(false);
+  };
+
   const onTravelChange = (ms: number | null) => {
     if (editScene === undefined) return;
     setDoc((d) => {
@@ -151,6 +169,9 @@ export function Editor() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLElement && ["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName)) return;
+      // The dialog owns the keyboard while it is up — Space must not start
+      // playback behind it, and Escape belongs to the dialog.
+      if (confirmReset) return;
 
       if (e.code === "Space") {
         e.preventDefault();
@@ -172,7 +193,7 @@ export function Editor() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onNudge]);
+  }, [onNudge, confirmReset]);
 
   return (
     <div className="flex h-full w-full">
@@ -237,7 +258,27 @@ export function Editor() {
             onRemovePlayer={(id) => setDoc((d) => removePlayer(d, id))}
           />
         </Section>
+        <div className="mt-auto border-t border-ink-700 p-4">
+          <button
+            type="button"
+            onClick={() => setConfirmReset(true)}
+            className="flex w-full items-center justify-center gap-1.5 rounded-md border border-ink-600 px-2 py-1.5 text-xs text-ink-300 transition hover:border-red-500/60 hover:text-red-400"
+          >
+            <RotateCcw size={13} />
+            Reset board
+          </button>
+        </div>
       </aside>
+
+      {confirmReset && (
+        <ConfirmDialog
+          title="Reset the board?"
+          message="Every scene, run, link, player name and team setting goes back to a fresh 4-3-3 against a 4-4-2. This cannot be undone."
+          confirmLabel="Discard changes"
+          onConfirm={reset}
+          onCancel={() => setConfirmReset(false)}
+        />
+      )}
 
       <main className="flex min-w-0 flex-1 flex-col">
         <div className="min-h-0 flex-1">

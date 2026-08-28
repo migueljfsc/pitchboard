@@ -49,6 +49,9 @@ Notable changes to Pitchboard. Format loosely follows
 - Contrast lifted on muted text, borders, disabled controls and the smallest type.
 - Renaming a link sits behind an explicit chevron rather than the colour dot.
 
+- **Reset board**, behind a confirmation dialog. Clears the document, scenes, selection and
+  timeline; leaves the view framing, since how you are looking at the pitch is not one of the
+  changes you made to it.
 - **Add and remove players** per team, up to 30 a side. A new player gets the lowest free shirt
   number and a clear spot near their own goal, with a position in every scene. Removing one
   clears them from every scene, strips their runs and travel overrides, drops them from links
