@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Football. One central pentagon plus five radial seams — enough to read as
+       a ball at 16px, where real panelling turns to mush. -->
+  <circle cx="16" cy="16" r="14.6" fill="#f8fafc" stroke="#0b1210" stroke-width="1.9" />
+  <g stroke="#0b1210" stroke-width="1.9">
+    <path d="M16 8.6V2.3" />
+    <path d="M23.04 13.71 29.03 11.76" />
+    <path d="M20.35 21.99 24.06 27.09" />
+    <path d="M11.65 21.99 7.94 27.09" />
+    <path d="M8.96 13.71 2.97 11.76" />
+  </g>
+  <path d="M16 8.6 23.04 13.71 20.35 21.99H11.65L8.96 13.71Z" fill="#0b1210" />
+</svg>
