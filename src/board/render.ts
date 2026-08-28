@@ -27,7 +27,7 @@ import {
   type PitchTheme,
 } from "./pitch";
 import { displayCurve, frameAt, transitionInto, type Frame } from "./timeline";
-import { linkGeometry, type LinkGeometry } from "./links";
+import { linkColor, linkGeometry, type LinkGeometry } from "./links";
 import {
   buildArcTable,
   halfRange,
@@ -196,6 +196,7 @@ function drawLinks(ctx: Ctx, doc: BoardDoc, frame: Frame, rotated: boolean): voi
     if (link.members.every((m) => concealed.has(m))) continue;
     const g = linkGeometry(link, frame.resolved, doc);
     if (!g) continue;
+    const color = linkColor(doc, link);
 
     ctx.beginPath();
     ctx.moveTo(g.points[0].x, g.points[0].y);
@@ -203,7 +204,7 @@ function drawLinks(ctx: Ctx, doc: BoardDoc, frame: Frame, rotated: boolean): voi
     if (g.closed) ctx.closePath();
 
     if (link.style === "filled") {
-      ctx.fillStyle = withAlpha(link.color, 0.22);
+      ctx.fillStyle = withAlpha(color, 0.22);
       ctx.fill();
     }
 
@@ -215,7 +216,7 @@ function drawLinks(ctx: Ctx, doc: BoardDoc, frame: Frame, rotated: boolean): voi
     ctx.lineWidth = 0.52;
     ctx.stroke();
 
-    ctx.strokeStyle = link.color;
+    ctx.strokeStyle = color;
     ctx.lineWidth = 0.36;
     ctx.stroke();
 

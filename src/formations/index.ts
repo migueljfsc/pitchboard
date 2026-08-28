@@ -250,7 +250,7 @@ export function buildTeam(
         name: `${spec.name} — ${line.label}`,
         members: ids,
         style: line.link,
-        color: spec.color,
+        // No colour: a seeded link follows the kit it was seeded from.
         showDistances: false,
       });
     }

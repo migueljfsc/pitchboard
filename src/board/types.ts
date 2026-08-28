@@ -65,7 +65,11 @@ export type Link = {
   /** Ordered — order defines the chain sequence and the polygon perimeter. */
   members: string[];
   style: LinkStyle;
-  color: string;
+  /**
+   * Colour override. Absent means the link follows its members' kit, so
+   * recolouring a team recolours its units — see `linkColor`.
+   */
+  color?: string;
   showDistances: boolean;
   /** Hidden links stay in the document but are not drawn. */
   hidden?: boolean;

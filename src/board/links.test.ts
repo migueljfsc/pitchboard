@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  NEUTRAL_LINK_COLOR,
   area,
   createLink,
   deleteLink,
+  linkColor,
   linkGeometry,
   moveMember,
   perimeter,
@@ -203,10 +205,12 @@ describe("createLink", () => {
     expect(four.links[four.links.length - 1].style).toBe("chain");
   });
 
-  it("takes the colour of the members' team", () => {
+  it("stores no colour of its own, so the kit stays the single source", () => {
     const doc = createBoardDoc();
     const next = createLink(doc, [A, B]);
-    expect(next.links[next.links.length - 1].color).toBe(doc.teams[0].color);
+    const link = next.links[next.links.length - 1];
+    expect(link.color).toBeUndefined();
+    expect(linkColor(next, link)).toBe(doc.teams[0].color);
   });
 
   it("refuses fewer than two members", () => {
@@ -298,5 +302,55 @@ describe("seeded links from formations", () => {
 
   it("has distances off by default, so the board starts clean", () => {
     for (const l of createBoardDoc().links) expect(l.showDistances).toBe(false);
+  });
+});
+
+describe("linkColor", () => {
+  const linkOver = (members: string[], color?: string): Link => ({
+    id: "l1",
+    name: "Test",
+    members,
+    style: "chain",
+    ...(color === undefined ? {} : { color }),
+    showDistances: false,
+  });
+
+  it("takes the colour of the members' team", () => {
+    const doc = createBoardDoc();
+    expect(linkColor(doc, linkOver([A, B]))).toBe(doc.teams[0].color);
+  });
+
+  it("follows the kit when the team is recoloured", () => {
+    const doc = createBoardDoc();
+    const link = linkOver([A, B]);
+    const before = linkColor(doc, link);
+
+    doc.teams[0] = { ...doc.teams[0], color: "#123456" };
+    expect(linkColor(doc, link)).toBe("#123456");
+    expect(linkColor(doc, link)).not.toBe(before);
+  });
+
+  it("keeps an explicit colour through a kit change", () => {
+    const doc = createBoardDoc();
+    const link = linkOver([A, B], "#abcdef");
+    doc.teams[0] = { ...doc.teams[0], color: "#123456" };
+    expect(linkColor(doc, link)).toBe("#abcdef");
+  });
+
+  it("goes neutral for a link spanning both teams, which belongs to neither", () => {
+    const doc = createBoardDoc();
+    const away = doc.teams[1].players[0].id;
+    expect(linkColor(doc, linkOver([A, away]))).toBe(NEUTRAL_LINK_COLOR);
+  });
+
+  it("goes neutral when no member is on a team any more", () => {
+    const doc = createBoardDoc();
+    expect(linkColor(doc, linkOver(["ghost-1", "ghost-2"]))).toBe(NEUTRAL_LINK_COLOR);
+  });
+
+  it("leaves a colourless link valid", () => {
+    const doc = createBoardDoc();
+    doc.links = [linkOver([A, B])];
+    expect(() => boardDocSchema.parse(JSON.parse(JSON.stringify(doc)))).not.toThrow();
   });
 });

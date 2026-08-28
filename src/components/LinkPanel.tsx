@@ -9,7 +9,8 @@ import {
   Trash2,
 } from "lucide-react";
 import type { BoardDoc, Link, LinkStyle } from "@/board/types";
-import { deleteLink, moveMember, updateLink } from "@/board/links";
+import { deleteLink, linkColor, moveMember, updateLink } from "@/board/links";
+import { PALETTE } from "@/components/ui/palette";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -85,6 +86,7 @@ export function LinkPanel({
 }
 
 function LinkRow({
+  doc,
   link,
   expanded,
   numberOf,
@@ -126,7 +128,7 @@ function LinkRow({
         </button>
         <span
           className="size-2.5 shrink-0 rounded-full ring-1 ring-white/25"
-          style={{ background: link.color }}
+          style={{ background: linkColor(doc, link) }}
         />
         <button
           type="button"
@@ -189,6 +191,40 @@ function LinkRow({
                 {s.label}
               </button>
             ))}
+          </div>
+
+          <div>
+            <span className="text-[11px] uppercase tracking-wide text-ink-400">Colour</span>
+            <div className="mt-1 flex flex-wrap items-center gap-1">
+              {/* Auto is the default: the link tracks its members' kit, so
+                  recolouring the team recolours the link with it. */}
+              <button
+                type="button"
+                onClick={() => onChange({ color: undefined })}
+                title="Follow the team's kit colour"
+                className={cn(
+                  "rounded border px-1.5 py-0.5 text-[11px] transition",
+                  link.color === undefined
+                    ? "border-accent text-accent"
+                    : "border-ink-600 text-ink-400 hover:text-ink-200",
+                )}
+              >
+                Auto
+              </button>
+              {PALETTE.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  aria-label={`Set ${link.name} colour to ${c}`}
+                  onClick={() => onChange({ color: c })}
+                  className={cn(
+                    "size-4 rounded-full ring-1 transition",
+                    link.color === c ? "ring-2 ring-accent" : "ring-white/15 hover:ring-white/40",
+                  )}
+                  style={{ background: c }}
+                />
+              ))}
+            </div>
           </div>
 
           <div>

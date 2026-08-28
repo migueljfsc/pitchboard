@@ -348,3 +348,18 @@ describe("frameAt", () => {
 });
 
 const round = (n: number) => Math.round(n * 1000) / 1000;
+
+describe("link colour", () => {
+  it("strokes a seeded link in its team's kit, and follows a recolour", () => {
+    const doc = createBoardDoc();
+    // Seeded links carry no colour, so the only kit-coloured stroke at rest is
+    // theirs — a token is filled, not stroked, in its kit.
+    doc.teams[0] = { ...doc.teams[0], color: "#123456" };
+
+    const r = createRecordingCtx();
+    drawBoard(r.ctx, doc, 0, view());
+
+    expect(r.log).toContain('strokeStyle="#123456"');
+    expect(r.log).not.toContain('strokeStyle="#e11d48"');
+  });
+});

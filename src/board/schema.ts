@@ -46,7 +46,7 @@ const link = z.object({
   name: z.string().max(60),
   members: z.array(z.string().min(1)).min(2).max(11),
   style: z.enum(["chain", "polygon", "filled"]),
-  color: z.string().min(1),
+  color: z.string().min(1).optional(),
   showDistances: z.boolean(),
   hidden: z.boolean().optional(),
 });

@@ -2,6 +2,7 @@ import { Eye, EyeOff, UserPlus } from "lucide-react";
 import type { BoardDoc } from "@/board/types";
 import { FORMATIONS, FORMATION_GROUPS, type Direction } from "@/formations";
 import { MAX_SQUAD } from "@/board/players";
+import { PALETTE } from "@/components/ui/palette";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -13,8 +14,6 @@ type Props = {
   direction: Direction;
   onAddPlayer: (teamIndex: 0 | 1) => void;
 };
-
-const SWATCHES = ["#e11d48", "#2563eb", "#16a34a", "#f59e0b", "#7c3aed", "#0891b2", "#f8fafc", "#18181b"];
 
 export function TeamControls({
   doc,
@@ -95,7 +94,7 @@ export function TeamControls({
       </button>
 
       <div className="flex flex-wrap gap-1.5">
-        {SWATCHES.map((c) => (
+        {PALETTE.map((c) => (
           <button
             key={c}
             type="button"

@@ -71,6 +71,29 @@ export function area(g: LinkGeometry): number {
   return Math.abs(sum) / 2;
 }
 
+/**
+ * Colour a link is drawn in.
+ *
+ * A link is a property of a unit, not a decoration with a life of its own, so by
+ * default it takes its members' kit colour and follows it when that kit changes.
+ * `link.color` overrides that permanently. A link spanning both teams belongs to
+ * neither and falls back to neutral.
+ */
+export function linkColor(doc: BoardDoc, link: Link): string {
+  if (link.color) return link.color;
+
+  let owner: string | undefined;
+  for (const team of doc.teams) {
+    if (!team.players.some((p) => link.members.includes(p.id))) continue;
+    if (owner !== undefined) return NEUTRAL_LINK_COLOR;
+    owner = team.color;
+  }
+  return owner ?? NEUTRAL_LINK_COLOR;
+}
+
+/** For a link with no team of its own. White reads on grass at any kit colour. */
+export const NEUTRAL_LINK_COLOR = "#ffffff";
+
 // ---------------------------------------------------------------- editing
 
 const withLinks = (doc: BoardDoc, links: Link[]): BoardDoc => ({ ...doc, links });
@@ -97,7 +120,6 @@ export function createLink(
   const wanted = new Set(members);
   const ordered: string[] = [];
   const names: string[] = [];
-  let color = options.color;
 
   for (const team of doc.teams) {
     for (const player of team.players) {
@@ -106,7 +128,6 @@ export function createLink(
       // Same rule as players.displayName, inlined to keep this module free of a
       // cycle: players.ts needs pruneLinks from here.
       names.push(player.label.trim() || String(player.number));
-      color ??= team.color;
     }
   }
   if (ordered.length < 2) return doc;
@@ -119,7 +140,8 @@ export function createLink(
     name: options.name ?? names.join(", "),
     members: ordered,
     style,
-    color: color ?? "#ffffff",
+    // Left unset unless asked for: the link tracks its members' kit colour.
+    color: options.color,
     showDistances: false,
   };
   return withLinks(doc, [...doc.links, link]);
