@@ -44,6 +44,11 @@ Notable changes to Pitchboard. Format loosely follows
 - Contrast lifted on muted text, borders, disabled controls and the smallest type.
 - Renaming a link sits behind an explicit chevron rather than the colour dot.
 
+- **Add and remove players** per team, up to 30 a side. A new player gets the lowest free shirt
+  number and a clear spot near their own goal, with a position in every scene. Removing one
+  clears them from every scene, strips their runs and travel overrides, drops them from links
+  (discarding any left with fewer than two members), and hands the ball back as a loose one
+  where they were standing if they were carrying it.
 - **Team names in the grass behind the goal each side defends**, in the team's colour, running
   along the goal line. Hidden with the team, and omitted when a name is blank.
 - **Release workflow** — commitizen bumps the version from conventional commits, updates the

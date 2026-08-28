@@ -349,6 +349,9 @@ Requested during M3 review and built straight away:
 - **Team names behind the goals**, laid along the goal line so they read upright in both
   orientations. The grass padding grew to 5 m to seat them, shared as `PITCH_PADDING` between
   the fit and the half-view clip so the band is never cut off.
+- **Squad editing** — add and remove players per team. The interesting part is the cleanup:
+  removing someone has to touch every scene, both link lists and possibly the ball, or the
+  document stops validating. Every test asserts the result still parses.
 - **Release workflow** — commitizen bump, changelog, tag and GitHub Release, matching the other
   projects here. Needs a `RELEASE_TOKEN` secret: `main` is protected and the built-in
   `GITHUB_TOKEN` cannot push to it.

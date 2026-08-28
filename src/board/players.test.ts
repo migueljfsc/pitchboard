@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { displayName, setPlayerLabel, setPlayerNumber, teamOf } from "./players";
+import {
+  MAX_SQUAD,
+  addPlayer,
+  displayName,
+  removePlayer,
+  setPlayerLabel,
+  setPlayerNumber,
+  teamOf,
+} from "./players";
+import { setCarrier, setPath, setTravel } from "./scenes";
 import { createLink } from "./links";
 import { createBoardDoc } from "@/formations";
 import { boardDocSchema } from "./schema";
@@ -95,5 +104,126 @@ describe("links are named after their members", () => {
   it("still honours an explicit name", () => {
     const doc = createLink(createBoardDoc(), [A, B], { name: "Press trap" });
     expect(doc.links[doc.links.length - 1].name).toBe("Press trap");
+  });
+});
+
+describe("addPlayer", () => {
+  it("adds to the right team with the next free shirt number", () => {
+    const doc = addPlayer(createBoardDoc(), 0);
+    expect(doc.teams[0].players).toHaveLength(12);
+    expect(doc.teams[1].players).toHaveLength(11);
+    // 1-11 are worn in a starting eleven.
+    expect(doc.teams[0].players.at(-1)!.number).toBe(12);
+    expect(boardDocSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("reuses a number freed by a departure", () => {
+    let doc = createBoardDoc();
+    const seven = doc.teams[0].players.find((p) => p.number === 7)!.id;
+    doc = removePlayer(doc, seven);
+    doc = addPlayer(doc, 0);
+    expect(doc.teams[0].players.at(-1)!.number).toBe(7);
+  });
+
+  it("gives a position in EVERY scene, not just the current one", () => {
+    let doc = createBoardDoc();
+    doc = { ...doc, scenes: [doc.scenes[0], { ...structuredClone(doc.scenes[0]), id: "s2" }] };
+    doc = addPlayer(doc, 1);
+
+    const added = doc.teams[1].players.at(-1)!.id;
+    for (const scene of doc.scenes) expect(scene.positions[added]).toBeDefined();
+    expect(boardDocSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("does not drop a new player on top of anyone", () => {
+    let doc = createBoardDoc();
+    for (let i = 0; i < 6; i++) doc = addPlayer(doc, 0);
+
+    const spots = Object.values(doc.scenes[0].positions);
+    for (let i = 0; i < spots.length; i++) {
+      for (let j = i + 1; j < spots.length; j++) {
+        expect(Math.hypot(spots[i].x - spots[j].x, spots[i].y - spots[j].y)).toBeGreaterThan(2.2);
+      }
+    }
+  });
+
+  it("gives every player a unique id even after churn", () => {
+    let doc = createBoardDoc();
+    doc = removePlayer(doc, "home-3");
+    doc = addPlayer(doc, 0);
+    doc = addPlayer(doc, 0);
+    const ids = doc.teams.flatMap((t) => t.players.map((p) => p.id));
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("refuses to exceed the squad cap", () => {
+    let doc = createBoardDoc();
+    while (doc.teams[0].players.length < MAX_SQUAD) doc = addPlayer(doc, 0);
+    expect(doc.teams[0].players).toHaveLength(MAX_SQUAD);
+    expect(addPlayer(doc, 0)).toBe(doc);
+    expect(boardDocSchema.safeParse(doc).success).toBe(true);
+  });
+});
+
+describe("removePlayer", () => {
+  it("clears them from every scene", () => {
+    let doc = createBoardDoc();
+    doc = { ...doc, scenes: [doc.scenes[0], { ...structuredClone(doc.scenes[0]), id: "s2" }] };
+    doc = removePlayer(doc, A);
+
+    expect(doc.teams[0].players.some((p) => p.id === A)).toBe(false);
+    for (const scene of doc.scenes) expect(scene.positions[A]).toBeUndefined();
+    expect(boardDocSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("takes their run and travel override with them", () => {
+    let doc = createBoardDoc();
+    doc = { ...doc, scenes: [doc.scenes[0], { ...structuredClone(doc.scenes[0]), id: "s2", transitionMs: 1000 }] };
+    doc = setPath(doc, 1, A, { c1: { x: 10, y: 10 }, c2: { x: 20, y: 20 } });
+    doc = setTravel(doc, 1, A, 2000);
+
+    doc = removePlayer(doc, A);
+    expect(doc.scenes[1].paths[A]).toBeUndefined();
+    expect(doc.scenes[1].travel?.[A]).toBeUndefined();
+    expect(boardDocSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("drops the ball where a carrier was standing", () => {
+    let doc = setCarrier(createBoardDoc(), 0, A);
+    const stood = doc.scenes[0].positions[A];
+
+    doc = removePlayer(doc, A);
+    expect(doc.scenes[0].carrier).toBeNull();
+    // ballPos must exist exactly when there is no carrier, and the ball should
+    // not teleport to the centre spot.
+    expect(doc.scenes[0].ballPos).toEqual(stood);
+    expect(boardDocSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("removes them from links, and drops a link left too small", () => {
+    const doc = createBoardDoc();
+    const back = doc.links.find((l) => l.name.includes("Back 4"))!;
+    const mid = doc.links.find((l) => l.name.includes("Midfield 3"))!;
+
+    let next = removePlayer(doc, back.members[0]);
+    expect(next.links.find((l) => l.id === back.id)!.members).toHaveLength(3);
+
+    next = removePlayer(next, mid.members[0]);
+    next = removePlayer(next, mid.members[1]);
+    expect(next.links.find((l) => l.id === mid.id)).toBeUndefined();
+    expect(boardDocSchema.safeParse(next).success).toBe(true);
+  });
+
+  it("is a no-op for someone who is not there", () => {
+    const doc = createBoardDoc();
+    expect(removePlayer(doc, "ghost")).toBe(doc);
+  });
+
+  it("survives emptying a whole team", () => {
+    let doc = createBoardDoc();
+    for (const p of [...doc.teams[0].players]) doc = removePlayer(doc, p.id);
+    expect(doc.teams[0].players).toHaveLength(0);
+    expect(doc.teams[1].players).toHaveLength(11);
+    expect(boardDocSchema.safeParse(doc).success).toBe(true);
   });
 });

@@ -5,7 +5,8 @@
  * can change freely without touching positions, paths or links.
  */
 
-import type { BoardDoc, Player, Team } from "./types";
+import type { BoardDoc, Player, Scene, Team, Vec2 } from "./types";
+import { pruneLinks } from "./links";
 
 /** The name to show for a player: their label if given, otherwise their number. */
 export function displayName(doc: BoardDoc, id: string): string {
@@ -45,4 +46,124 @@ export function setPlayerLabel(doc: BoardDoc, id: string, label: string): BoardD
 export function setPlayerNumber(doc: BoardDoc, id: string, number: number): BoardDoc {
   if (!Number.isFinite(number)) return doc;
   return patchPlayer(doc, id, { number: Math.max(0, Math.min(99, Math.round(number))) });
+}
+
+// ---------------------------------------------------------------- squad size
+
+/** Matches the schema's cap. */
+export const MAX_SQUAD = 30;
+
+const allIds = (doc: BoardDoc): Set<string> =>
+  new Set(doc.teams.flatMap((t) => t.players.map((p) => p.id)));
+
+/** Lowest shirt number not already worn in this team. */
+function freshNumber(team: Team): number {
+  const worn = new Set(team.players.map((p) => p.number));
+  for (let n = 1; n <= 99; n++) if (!worn.has(n)) return n;
+  return 99;
+}
+
+/**
+ * Ids are independent of shirt numbers, which can be edited freely, so this
+ * checks every id in the document rather than deriving one from the number.
+ */
+function freshId(doc: BoardDoc, teamId: string): string {
+  const taken = allIds(doc);
+  for (let n = 1; ; n++) {
+    const id = `${teamId}-${n}`;
+    if (!taken.has(id)) return id;
+  }
+}
+
+/**
+ * Somewhere to stand that is not on top of anybody.
+ *
+ * Walks up the touchline nearest the team's own goal until it finds a gap. Falls
+ * back to the first candidate if the whole line is busy, which only happens on a
+ * board far more crowded than eleven a side.
+ */
+function freeSpot(doc: BoardDoc, teamIndex: 0 | 1): Vec2 {
+  const scene = doc.scenes[0];
+  const x = teamIndex === 0 ? 6 : doc.pitch.length - 6;
+  const occupied = Object.values(scene.positions);
+
+  for (let y = 5; y <= doc.pitch.width - 5; y += 3.5) {
+    const clear = occupied.every((p) => Math.hypot(p.x - x, p.y - y) > 3);
+    if (clear) return { x, y };
+  }
+  return { x, y: doc.pitch.width / 2 };
+}
+
+/**
+ * Add a player to a team.
+ *
+ * A position goes into EVERY scene, not just the current one — the schema
+ * requires it, and a player missing from a later scene would vanish mid-animation.
+ */
+export function addPlayer(doc: BoardDoc, teamIndex: 0 | 1): BoardDoc {
+  const team = doc.teams[teamIndex];
+  if (team.players.length >= MAX_SQUAD) return doc;
+
+  const player: Player = {
+    id: freshId(doc, team.id),
+    number: freshNumber(team),
+    label: "",
+  };
+  const at = freeSpot(doc, teamIndex);
+
+  const teams = doc.teams.slice() as [Team, Team];
+  teams[teamIndex] = { ...team, players: [...team.players, player] };
+
+  return {
+    ...doc,
+    teams,
+    scenes: doc.scenes.map((scene) => ({
+      ...scene,
+      positions: { ...scene.positions, [player.id]: { ...at } },
+    })),
+  };
+}
+
+/**
+ * Remove a player, and every trace of them.
+ *
+ * Positions, runs and travel overrides go from all scenes; links lose them and
+ * are dropped if fewer than two members remain. A scene where they were carrying
+ * the ball gets the ball back as a loose one, where they were standing — the
+ * schema requires ballPos exactly when there is no carrier.
+ */
+export function removePlayer(doc: BoardDoc, id: string): BoardDoc {
+  if (!allIds(doc).has(id)) return doc;
+
+  const teams = doc.teams.map((team) => ({
+    ...team,
+    players: team.players.filter((p) => p.id !== id),
+  })) as [Team, Team];
+
+  const scenes = doc.scenes.map((scene): Scene => {
+    const positions = { ...scene.positions };
+    const dropped = positions[id];
+    delete positions[id];
+
+    const paths = { ...scene.paths };
+    delete paths[id];
+
+    const next: Scene = { ...scene, positions, paths };
+
+    if (scene.travel) {
+      const travel = { ...scene.travel };
+      delete travel[id];
+      if (Object.keys(travel).length === 0) delete next.travel;
+      else next.travel = travel;
+    }
+
+    if (scene.carrier === id) {
+      next.carrier = null;
+      next.ballPos = dropped ?? { x: doc.pitch.length / 2, y: doc.pitch.width / 2 };
+    }
+
+    return next;
+  });
+
+  return pruneLinks({ ...doc, teams, scenes });
 }

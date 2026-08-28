@@ -1,3 +1,4 @@
+import { UserMinus } from "lucide-react";
 import type { BoardDoc } from "@/board/types";
 import { BALL_ID } from "@/board/types";
 import { displayName } from "@/board/players";
@@ -15,6 +16,7 @@ type Props = {
   onRename: (playerId: string, label: string) => void;
   onRenumber: (playerId: string, number: number) => void;
   onTravelChange: (ms: number | null) => void;
+  onRemovePlayer: (playerId: string) => void;
 };
 
 export function Inspector({
@@ -29,6 +31,7 @@ export function Inspector({
   onRename,
   onRenumber,
   onTravelChange,
+  onRemovePlayer,
 }: Props) {
   const scene = doc.scenes[activeScene];
   const nameOf = (id: string) => {
@@ -161,6 +164,17 @@ export function Inspector({
             Handing the ball to a different player in the next scene makes a pass.
           </p>
         </div>
+      )}
+
+      {player && (
+        <button
+          type="button"
+          onClick={() => onRemovePlayer(player.id)}
+          className="flex items-center justify-center gap-1.5 rounded-md border border-ink-600 px-2 py-1.5 text-xs text-ink-300 transition hover:border-red-500/60 hover:text-red-400"
+        >
+          <UserMinus size={13} />
+          Remove {displayName(doc, player.id)}
+        </button>
       )}
 
       {canEditPaths && (

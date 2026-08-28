@@ -9,7 +9,6 @@
 
 import type { BoardDoc, Link, LinkStyle, Vec2 } from "./types";
 import { positionAt, type Resolved } from "./timeline";
-import { displayName } from "./players";
 
 export type LinkEdge = { a: Vec2; b: Vec2; mid: Vec2; metres: number };
 
@@ -97,12 +96,16 @@ export function createLink(
 ): BoardDoc {
   const wanted = new Set(members);
   const ordered: string[] = [];
+  const names: string[] = [];
   let color = options.color;
 
   for (const team of doc.teams) {
     for (const player of team.players) {
       if (!wanted.has(player.id)) continue;
       ordered.push(player.id);
+      // Same rule as players.displayName, inlined to keep this module free of a
+      // cycle: players.ts needs pruneLinks from here.
+      names.push(player.label.trim() || String(player.number));
       color ??= team.color;
     }
   }
@@ -113,7 +116,7 @@ export function createLink(
     id: freshId(doc),
     // Named after its members, in link order — far more use than "Link 3".
     // Players fall back to their shirt number until they are given a name.
-    name: options.name ?? ordered.map((id) => displayName(doc, id)).join(", "),
+    name: options.name ?? names.join(", "),
     members: ordered,
     style,
     color: color ?? "#ffffff",

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BoardDoc, PitchView } from "@/board/types";
-import { DEFAULT_PITCH_VIEW } from "@/board/types";
+import { BALL_ID, DEFAULT_PITCH_VIEW } from "@/board/types";
 import { BoardCanvas } from "@/components/BoardCanvas";
 import { TeamControls } from "@/components/TeamControls";
 import { ViewControls } from "@/components/ViewControls";
@@ -12,7 +12,7 @@ import { nudgeEntities } from "@/board/interaction";
 import { createLink } from "@/board/links";
 import { concealedPlayers } from "@/board/render";
 import { sceneStartSeconds, setCarrier, setPath, setTravel, totalSeconds } from "@/board/scenes";
-import { setPlayerLabel, setPlayerNumber } from "@/board/players";
+import { addPlayer, removePlayer, setPlayerLabel, setPlayerNumber } from "@/board/players";
 import {
   AWAY,
   HOME,
@@ -40,11 +40,14 @@ export function Editor() {
 
   // Players on a hidden team drop out of the selection rather than being cleared
   // from it: a nudge must not move tokens nobody can see, but unhiding the team
-  // should give you your selection back.
+  // should give you your selection back. Players who have been deleted drop out
+  // for good.
   const visible = useMemo(() => {
     const concealed = concealedPlayers(doc);
-    if (concealed.size === 0) return selection;
-    return new Set([...selection].filter((id) => !concealed.has(id)));
+    const live = new Set(doc.teams.flatMap((t) => t.players.map((p) => p.id)));
+    live.add(BALL_ID);
+    const kept = [...selection].filter((id) => live.has(id) && !concealed.has(id));
+    return kept.length === selection.size ? selection : new Set(kept);
   }, [doc, selection]);
 
   // Playback. Driven by wall-clock delta rather than a fixed step so the animation
@@ -201,6 +204,7 @@ export function Editor() {
               formation={formations[i]}
               onFormationChange={onFormationChange}
               direction={directions[i]}
+              onAddPlayer={(index) => setDoc((d) => addPlayer(d, index))}
             />
           </Section>
         ))}
@@ -230,6 +234,7 @@ export function Editor() {
             onRename={(id, label) => setDoc((d) => setPlayerLabel(d, id, label))}
             onRenumber={(id, n) => setDoc((d) => setPlayerNumber(d, id, n))}
             onTravelChange={onTravelChange}
+            onRemovePlayer={(id) => setDoc((d) => removePlayer(d, id))}
           />
         </Section>
       </aside>
