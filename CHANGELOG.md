@@ -19,3 +19,8 @@ Notable changes to Pitchboard. Format loosely follows
   lineup-builder.co.uk, grouped in the picker by back-line shape. Presets are generated
   from their notation rather than hand-authored — `"4-2-3-1"` yields lines of 4, 2, 3 and 1
   with depth, width, shirt numbers and seeded links all derived.
+- **M2 — animation.** A timeline of scenes with per-scene travel and hold durations, playback
+  with looping, and a scrubber. Runs curve along editable bezier paths, travelled at constant
+  speed via arc-length reparameterisation. The ball attaches to a carrier and a pass is simply a
+  carrier change, tracking a receiver who is still running. Scene add, duplicate, reorder,
+  rename and delete. 134 engine tests.

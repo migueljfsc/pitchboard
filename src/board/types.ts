@@ -94,6 +94,9 @@ export type RenderView = Viewport & {
   interactive: boolean;
   selection?: ReadonlySet<string>;
   hover?: string | null;
+  /** Editor only: draw and handle-edit the run into this scene, wherever the
+   *  scrubber currently sits. Ignored on export. */
+  editScene?: number;
   /** Marquee rectangle in pitch metres, while dragging one. */
   marquee?: { a: Vec2; b: Vec2 } | null;
 };

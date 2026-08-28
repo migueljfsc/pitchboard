@@ -87,3 +87,85 @@ export function fitViewport(
     offsetY: (ch - width * scale) / 2,
   };
 }
+
+// ---------------------------------------------------------------- bezier
+
+/** A cubic curve. Endpoints come from two scenes; controls from the path. */
+export type Bezier = { p0: Vec2; c1: Vec2; c2: Vec2; p1: Vec2 };
+
+export function cubicAt(b: Bezier, u: number): Vec2 {
+  const v = 1 - u;
+  const a0 = v * v * v;
+  const a1 = 3 * v * v * u;
+  const a2 = 3 * v * u * u;
+  const a3 = u * u * u;
+  return {
+    x: a0 * b.p0.x + a1 * b.c1.x + a2 * b.c2.x + a3 * b.p1.x,
+    y: a0 * b.p0.y + a1 * b.c1.y + a2 * b.c2.y + a3 * b.p1.y,
+  };
+}
+
+/** Unit tangent at `u`. Used to point arrowheads along the curve. */
+export function cubicTangent(b: Bezier, u: number): Vec2 {
+  const v = 1 - u;
+  const d = {
+    x: 3 * v * v * (b.c1.x - b.p0.x) + 6 * v * u * (b.c2.x - b.c1.x) + 3 * u * u * (b.p1.x - b.c2.x),
+    y: 3 * v * v * (b.c1.y - b.p0.y) + 6 * v * u * (b.c2.y - b.c1.y) + 3 * u * u * (b.p1.y - b.c2.y),
+  };
+  const len = Math.hypot(d.x, d.y);
+  return len < 1e-9 ? { x: 1, y: 0 } : { x: d.x / len, y: d.y / len };
+}
+
+export const ARC_SAMPLES = 64;
+
+/** Cumulative arc length at each of ARC_SAMPLES + 1 uniform parameter steps. */
+export type ArcTable = { cumulative: number[]; total: number };
+
+export function buildArcTable(b: Bezier, samples = ARC_SAMPLES): ArcTable {
+  const cumulative = new Array<number>(samples + 1);
+  cumulative[0] = 0;
+  let prev = b.p0;
+  let run = 0;
+  for (let i = 1; i <= samples; i++) {
+    const p = cubicAt(b, i / samples);
+    run += Math.hypot(p.x - prev.x, p.y - prev.y);
+    cumulative[i] = run;
+    prev = p;
+  }
+  return { cumulative, total: run };
+}
+
+/**
+ * Invert the arc-length table: given a fraction `d` of total length, return the
+ * curve parameter `u` that travels exactly that far.
+ *
+ * This is what stops players surging and stalling through curves. Sampling a
+ * bezier at uniform `u` does NOT move at uniform speed — control points cluster
+ * parameter space near the tighter regions of the curve — and it reads as broken
+ * the first time you scrub a curved run.
+ */
+export function reparameterise(table: ArcTable, d: number): number {
+  if (table.total < 1e-9) return d;
+  const target = clamp(d, 0, 1) * table.total;
+  const c = table.cumulative;
+  const n = c.length - 1;
+
+  // Binary search for the bracketing pair, then interpolate within it.
+  let lo = 0;
+  let hi = n;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (c[mid] < target) lo = mid + 1;
+    else hi = mid;
+  }
+  if (lo === 0) return 0;
+
+  const span = c[lo] - c[lo - 1];
+  const within = span < 1e-12 ? 0 : (target - c[lo - 1]) / span;
+  return (lo - 1 + within) / n;
+}
+
+/** Point at fraction `d` along the curve BY LENGTH, not by parameter. */
+export function cubicAtDistance(b: Bezier, d: number, table = buildArcTable(b)): Vec2 {
+  return cubicAt(b, reparameterise(table, d));
+}

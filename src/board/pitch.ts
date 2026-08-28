@@ -27,6 +27,11 @@ export const PITCH = {
   cornerRadius: 1.0,
 } as const;
 
+/** Player token radius, in metres. Hit-testing and the ball offset both use it. */
+export const TOKEN_RADIUS = 1.1;
+/** Drawn larger than a real ball (0.11 m) so it reads at board scale. */
+export const BALL_RADIUS = 0.45;
+
 export type PitchTheme = {
   /** Behind and around the pitch, out to the canvas edge. */
   surround: string;

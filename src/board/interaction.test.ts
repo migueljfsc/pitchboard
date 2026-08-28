@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { applySelection, entitiesInRect, hitTest, moveEntities, nudgeEntities } from "./interaction";
-import { frameAt, TOKEN_RADIUS } from "./render";
+import { TOKEN_RADIUS } from "./render";
+import { frameAt } from "./timeline";
 import { createBoardDoc } from "@/formations";
 import { BALL_ID } from "./types";
 

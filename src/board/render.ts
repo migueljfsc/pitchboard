@@ -13,33 +13,22 @@
 
 import type { BoardDoc, RenderView, Vec2 } from "./types";
 import { BALL_ID } from "./types";
-import { DEFAULT_THEME, drawPitch, type Ctx, type PitchTheme } from "./pitch";
+import {
+  BALL_RADIUS,
+  DEFAULT_THEME,
+  TOKEN_RADIUS,
+  drawPitch,
+  type Ctx,
+  type PitchTheme,
+} from "./pitch";
+import { displayCurve, frameAt, transitionInto, type Frame } from "./timeline";
+import { buildArcTable, cubicAt, cubicTangent, reparameterise, type Bezier } from "./geometry";
 
-export const TOKEN_RADIUS = 1.1;
-export const BALL_RADIUS = 0.45;
+export { TOKEN_RADIUS, BALL_RADIUS };
+export type { Frame };
 
-/** Resolved board state at an instant — everything the renderer needs to place things. */
-export type Frame = {
-  positions: Record<string, Vec2>;
-  ball: Vec2;
-};
-
-/**
- * M1: a board is a single scene, so time is not yet meaningful.
- * M2 replaces the body with resolveAt(doc, t) from timeline.ts — the signature and
- * every caller stay as they are.
- */
-export function frameAt(doc: BoardDoc, t: number): Frame {
-  void t;
-  const scene = doc.scenes[0];
-  const carried = scene.carrier ? scene.positions[scene.carrier] : undefined;
-  return {
-    positions: scene.positions,
-    ball: carried
-      ? { x: carried.x + TOKEN_RADIUS + BALL_RADIUS, y: carried.y }
-      : (scene.ballPos ?? { x: doc.pitch.length / 2, y: doc.pitch.width / 2 }),
-  };
-}
+/** Steps used to stroke a curved path. Purely cosmetic; the maths is exact. */
+const PATH_STEPS = 24;
 
 export function drawBoard(
   ctx: Ctx,
@@ -62,6 +51,7 @@ export function drawBoard(
   ctx.scale(view.scale, view.scale);
 
   drawPitch(ctx, doc.pitch, theme);
+  drawPaths(ctx, doc, frame, view);
 
   for (const team of doc.teams) {
     for (const player of team.players) {
@@ -85,6 +75,114 @@ export function drawBoard(
 
   ctx.restore();
 }
+
+// ---------------------------------------------------------------- paths
+
+/**
+ * Motion paths for the transition into the current scene.
+ *
+ * Shown while moving, and for a selected entity even at rest so its run can be
+ * edited. Suppressed entirely for export unless the animation is under way.
+ */
+function drawPaths(ctx: Ctx, doc: BoardDoc, frame: Frame, view: RenderView): void {
+  const r = frame.resolved;
+
+  // While the animation runs, show every run in flight.
+  if (r.moving) {
+    for (const team of doc.teams) {
+      for (const player of team.players) {
+        const b = displayCurve(player.id, r);
+        if (b) drawPath(ctx, b, team.color, false);
+      }
+    }
+    return;
+  }
+
+  // At rest, the editor still shows the selected players' runs into the scene
+  // being edited, so a curve can be shaped without scrubbing to find it.
+  if (!view.interactive || view.editScene === undefined) return;
+  const edit = transitionInto(doc, view.editScene);
+  if (!edit) return;
+
+  for (const team of doc.teams) {
+    for (const player of team.players) {
+      if (!view.selection?.has(player.id)) continue;
+      const b = displayCurve(player.id, edit);
+      if (b) drawPath(ctx, b, team.color, true);
+    }
+  }
+}
+
+function drawPath(ctx: Ctx, b: Bezier, color: string, withHandles: boolean): void {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 0.28;
+  ctx.lineCap = "round";
+  ctx.globalAlpha = 0.75;
+
+  // Stop short of the destination so the arrowhead is not buried in the token.
+  const table = buildArcTable(b);
+  const trim = table.total > TOKEN_RADIUS * 2 ? 1 - TOKEN_RADIUS / table.total : 1;
+
+  ctx.beginPath();
+  for (let i = 0; i <= PATH_STEPS; i++) {
+    const p = cubicAt(b, reparameterise(table, (i / PATH_STEPS) * trim));
+    if (i === 0) ctx.moveTo(p.x, p.y);
+    else ctx.lineTo(p.x, p.y);
+  }
+  ctx.stroke();
+
+  const tip = cubicAt(b, reparameterise(table, trim));
+  drawArrowhead(ctx, tip, cubicTangent(b, reparameterise(table, trim)), color);
+  ctx.globalAlpha = 1;
+
+  if (withHandles) drawHandles(ctx, b);
+}
+
+function drawArrowhead(ctx: Ctx, tip: Vec2, dir: Vec2, color: string): void {
+  const len = 1.5;
+  const half = 0.7;
+  const nx = -dir.y;
+  const ny = dir.x;
+  const baseX = tip.x - dir.x * len;
+  const baseY = tip.y - dir.y * len;
+
+  ctx.beginPath();
+  ctx.moveTo(tip.x, tip.y);
+  ctx.lineTo(baseX + nx * half, baseY + ny * half);
+  ctx.lineTo(baseX - nx * half, baseY - ny * half);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+}
+
+/** Bezier control points, shown only while the entity is selected. */
+function drawHandles(ctx: Ctx, b: Bezier): void {
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = "rgba(251,191,36,0.5)";
+  ctx.lineWidth = 0.08;
+  ctx.setLineDash([0.4, 0.3]);
+  ctx.beginPath();
+  ctx.moveTo(b.p0.x, b.p0.y);
+  ctx.lineTo(b.c1.x, b.c1.y);
+  ctx.moveTo(b.p1.x, b.p1.y);
+  ctx.lineTo(b.c2.x, b.c2.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  for (const c of [b.c1, b.c2]) {
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, HANDLE_RADIUS, 0, Math.PI * 2);
+    ctx.fillStyle = "#fbbf24";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.6)";
+    ctx.lineWidth = 0.08;
+    ctx.stroke();
+  }
+}
+
+export const HANDLE_RADIUS = 0.55;
+
+// ---------------------------------------------------------------- entities
 
 type TokenState = { selected: boolean; hovered: boolean };
 

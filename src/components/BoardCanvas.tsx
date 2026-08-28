@@ -9,18 +9,25 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { BoardDoc, Vec2 } from "@/board/types";
 import { fitViewport, toPitch } from "@/board/geometry";
-import { drawBoard, frameAt } from "@/board/render";
+import { drawBoard } from "@/board/render";
+import { frameAt } from "@/board/timeline";
 import {
   applySelection,
+  dragHandle,
   entitiesInRect,
   hitTest,
+  hitTestHandle,
   moveEntities,
+  type HandleHit,
 } from "@/board/interaction";
+import { setPath } from "@/board/scenes";
 
 type Props = {
   doc: BoardDoc;
   t: number;
   sceneIndex: number;
+  /** Scene whose incoming runs are editable; undefined on scene 0. */
+  editScene?: number;
   selection: ReadonlySet<string>;
   onSelectionChange: (next: Set<string>) => void;
   onDocChange: (next: BoardDoc) => void;
@@ -28,6 +35,7 @@ type Props = {
 
 type Drag =
   | { kind: "move"; last: Vec2 }
+  | { kind: "handle"; hit: HandleHit }
   | { kind: "marquee"; a: Vec2; b: Vec2; additive: boolean }
   | null;
 
@@ -35,6 +43,7 @@ export function BoardCanvas({
   doc,
   t,
   sceneIndex,
+  editScene,
   selection,
   onSelectionChange,
   onDocChange,
@@ -80,9 +89,10 @@ export function BoardCanvas({
       interactive: true,
       selection,
       hover,
+      editScene,
       marquee: drag?.kind === "marquee" ? { a: drag.a, b: drag.b } : null,
     });
-  }, [doc, t, size, selection, hover, drag]);
+  }, [doc, t, size, selection, hover, drag, editScene]);
 
   const pointFrom = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>): Vec2 => {
@@ -95,9 +105,19 @@ export function BoardCanvas({
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const p = pointFrom(e);
-    const hit = hitTest(doc, frameAt(doc, t), p);
     e.currentTarget.setPointerCapture(e.pointerId);
 
+    // Control handles win over tokens: they can overlap one, and they are the
+    // smaller, more deliberate target.
+    if (editScene !== undefined) {
+      const handle = hitTestHandle(doc, editScene, selection, p);
+      if (handle) {
+        setDrag({ kind: "handle", hit: handle });
+        return;
+      }
+    }
+
+    const hit = hitTest(doc, frameAt(doc, t), p);
     if (hit) {
       // Dragging one of several selected entities moves the whole unit; grabbing
       // an unselected one selects it first.
@@ -117,6 +137,13 @@ export function BoardCanvas({
 
     if (!drag) {
       setHover(hitTest(doc, frameAt(doc, t), p)?.id ?? null);
+      return;
+    }
+
+    if (drag.kind === "handle") {
+      if (editScene === undefined) return;
+      const curve = dragHandle(doc, editScene, drag.hit, p);
+      if (curve) onDocChange(setPath(doc, editScene, drag.hit.id, curve));
       return;
     }
 
@@ -148,7 +175,14 @@ export function BoardCanvas({
       <canvas
         ref={canvasRef}
         className="block touch-none select-none"
-        style={{ cursor: drag?.kind === "move" ? "grabbing" : hover ? "grab" : "default" }}
+        style={{
+          cursor:
+            drag?.kind === "move" || drag?.kind === "handle"
+              ? "grabbing"
+              : hover
+                ? "grab"
+                : "default",
+        }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}

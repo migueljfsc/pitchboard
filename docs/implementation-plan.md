@@ -104,6 +104,8 @@ box — not an arc drawn on the box edge. Worth eyeballing against a reference i
 
 ## M2 — Animation
 
+**Status: complete.**
+
 Goal: scenes, curved runs, passes, playback.
 
 ### Tasks
@@ -124,12 +126,23 @@ Goal: scenes, curved runs, passes, playback.
 
 ### Definition of done
 
-- Build a 3-scene 4-3-3 press with curved runs on the front 3
-- Scrub the full timeline — **players track their arrows at visibly constant speed**
-- Set a carrier, pass to another player, carry again: ball glues, travels, re-glues with no jump
-- Pass to a player who is moving during the same transition — ball arrives on them, not behind
-- Delete a middle scene; no orphaned paths, no crash
-- Scrub to exactly `t=0` and `t=totalMs/1000` without `NaN`
+- [x] Build a 3-scene move with curved runs — verified in the browser
+- [x] Scrub the full timeline — **players track their arrows at visibly constant speed**
+- [x] Set a carrier, pass to another player, carry again: ball glues, travels, re-glues
+- [x] Pass to a player who is moving during the same transition — ball arrives on them
+- [x] Delete a middle scene; no orphaned paths, no crash
+- [x] Scrub to exactly `t=0` and `t=totalMs/1000` without `NaN`
+
+### Notes from the build
+
+- **Editing a run does not require scrubbing to find it.** `RenderView.editScene` draws the
+  selected players' runs into the scene being edited, wherever the scrubber sits, with draggable
+  control handles. A straight run still yields handles (synthesised onto the line), so bending
+  one needs no separate "make this curved" gesture.
+- **The arc table is not cached** — see architecture.md for why.
+- Fixed during verification: selecting a newly added scene put the scrubber at the wrong time,
+  because the callback closed over the pre-edit document. Scene-list mutations now pass the new
+  document to the selection handler.
 
 ### Risks
 

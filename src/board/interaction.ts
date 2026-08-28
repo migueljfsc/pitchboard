@@ -10,12 +10,61 @@
  * dragging a player never retroactively changes an earlier one.
  */
 
-import type { BoardDoc, Scene, Vec2 } from "./types";
+import type { BoardDoc, PathCurve, Scene, Vec2 } from "./types";
 import { BALL_ID } from "./types";
-import { BALL_RADIUS, TOKEN_RADIUS, type Frame } from "./render";
+import { BALL_RADIUS, TOKEN_RADIUS } from "./pitch";
+import { displayCurve, transitionInto, type Frame } from "./timeline";
+import { HANDLE_RADIUS } from "./render";
 import { clamp } from "./geometry";
 
 export type HitTarget = { kind: "token" | "ball"; id: string } | null;
+
+/** A bezier control point, addressed by the entity whose run it shapes. */
+export type HandleHit = { id: string; which: "c1" | "c2" };
+
+/**
+ * Topmost control handle under `p`, or null.
+ *
+ * Handles are only drawn for selected entities on the scene being edited, so
+ * hit-testing follows the same rule. They are tested BEFORE tokens: a handle can
+ * overlap a token, and it is the smaller, more deliberate target.
+ */
+export function hitTestHandle(
+  doc: BoardDoc,
+  editScene: number,
+  selection: ReadonlySet<string>,
+  p: Vec2,
+  margin = 0.3,
+): HandleHit | null {
+  const edit = transitionInto(doc, editScene);
+  if (!edit) return null;
+
+  for (const id of selection) {
+    const b = displayCurve(id, edit);
+    if (!b) continue;
+    for (const which of ["c2", "c1"] as const) {
+      if (dist(p, b[which]) <= HANDLE_RADIUS + margin) return { id, which };
+    }
+  }
+  return null;
+}
+
+/**
+ * Move one control point, materialising a real curve from the synthesised straight
+ * one if this is the first time the run has been bent.
+ */
+export function dragHandle(
+  doc: BoardDoc,
+  editScene: number,
+  hit: HandleHit,
+  to: Vec2,
+): PathCurve | null {
+  const edit = transitionInto(doc, editScene);
+  if (!edit) return null;
+  const b = displayCurve(hit.id, edit);
+  if (!b) return null;
+  return hit.which === "c1" ? { c1: to, c2: b.c2 } : { c1: b.c1, c2: to };
+}
 
 /**
  * Topmost entity under `p`, or null.

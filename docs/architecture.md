@@ -268,9 +268,16 @@ The fix: build a cumulative arc-length table, then invert it.
 ```
 
 64 samples is comfortably enough for the curve lengths a tactics board produces; the residual
-error is far below a pixel. Cache the table on the path object and invalidate whenever a control
-point moves. `src/board/geometry.ts` owns this, and it is the most heavily tested file in the
-repo.
+error is far below a pixel.
+
+**The table is deliberately not cached.** Building one is ~2,000 flops; 22 entities at 60 fps is
+under 3 MFLOP/s, which is nothing. A cache would need invalidating whenever an endpoint or a
+control point moved, and it would put mutable module state on the renderer's path — the one
+thing `drawBoard`'s purity rule forbids. Recomputing is cheaper than being wrong.
+
+`src/board/geometry.ts` owns this, and it is the most heavily tested file in the repo. The test
+that matters asserts constant speed numerically: sampled at uniform parameter the chord lengths
+vary by more than 1.5x, and after reparameterisation by less than 1.05x.
 
 ---
 
@@ -293,9 +300,10 @@ Two details that matter:
 **Pass easing is different.** Player movement uses `easeInOutCubic`; a pass uses `easeOutQuad` —
 struck hard, decelerating. A ball that eases in like a jogging player looks wrong immediately.
 
-**Endpoints are evaluated live.** A pass targets B's *interpolated* position at each frame, not
-B's final scene position, so the ball leads a moving target correctly and arrives without a jump
-at the handoff. Both endpoints of the pass come from `positionAt`, never from raw scene data.
+**Endpoints are evaluated live.** Both ends of a pass come from `positionAt`, never from raw
+scene data, so the ball tracks a receiver who is still running and arrives with them. Aiming at
+the receiver's scene-*start* position instead lands the ball tens of metres adrift and teleports
+it onto them at the handoff — there is a test for exactly that.
 
 The glued offset points along the carrier's direction of travel (falling back to a fixed
 downfield offset when stationary) so the ball sits ahead of the player and the token's number

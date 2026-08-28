@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { drawBoard, frameAt, TOKEN_RADIUS } from "./render";
+import { drawBoard, TOKEN_RADIUS } from "./render";
+import { frameAt } from "./timeline";
 import { createRecordingCtx } from "./recording-ctx";
 import { createBoardDoc } from "@/formations";
 import { fitViewport } from "./geometry";
