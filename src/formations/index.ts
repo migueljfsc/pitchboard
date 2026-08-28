@@ -13,6 +13,7 @@
  */
 
 import type { BoardDoc, Link, LinkStyle, Player, Team, Vec2 } from "@/board/types";
+import { pruneLinks } from "@/board/links";
 
 export type FormationLine = {
   /** Shown in the seeded link's name, e.g. "Back 4". */
@@ -338,12 +339,14 @@ export function applyFormation(doc: BoardDoc, teamIndex: 0 | 1, spec: TeamSpec):
     };
   });
 
-  return {
+  // pruneLinks drops any link still referencing a player who has just gone, and
+  // discards ones left with fewer than two members.
+  return pruneLinks({
     ...doc,
     teams,
     scenes,
-    links: [...doc.links.filter((l) => l.members.every((m) => otherIds.has(m))), ...built.links],
-  };
+    links: [...doc.links, ...built.links],
+  });
 }
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");

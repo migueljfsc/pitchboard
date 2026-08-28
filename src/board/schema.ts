@@ -46,6 +46,7 @@ const link = z.object({
   style: z.enum(["chain", "polygon", "filled"]),
   color: z.string().min(1),
   showDistances: z.boolean(),
+  hidden: z.boolean().optional(),
 });
 
 /**

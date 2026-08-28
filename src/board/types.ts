@@ -59,6 +59,8 @@ export type Link = {
   style: LinkStyle;
   color: string;
   showDistances: boolean;
+  /** Hidden links stay in the document but are not drawn. */
+  hidden?: boolean;
 };
 
 export type BoardDoc = {

@@ -17,6 +17,7 @@ import {
   entitiesInRect,
   hitTest,
   hitTestHandle,
+  hitTestLink,
   moveEntities,
   type HandleHit,
 } from "@/board/interaction";
@@ -117,7 +118,8 @@ export function BoardCanvas({
       }
     }
 
-    const hit = hitTest(doc, frameAt(doc, t), p);
+    const frame = frameAt(doc, t);
+    const hit = hitTest(doc, frame, p);
     if (hit) {
       // Dragging one of several selected entities moves the whole unit; grabbing
       // an unselected one selects it first.
@@ -125,6 +127,13 @@ export function BoardCanvas({
         onSelectionChange(applySelection(selection, hit, e.shiftKey));
       }
       setDrag({ kind: "move", last: p });
+      return;
+    }
+
+    // A connector runs under its players, so it is only reachable on empty grass.
+    const link = hitTestLink(doc, frame.resolved, p);
+    if (link) {
+      onSelectionChange(new Set(e.shiftKey ? [...selection, ...link.members] : link.members));
       return;
     }
 

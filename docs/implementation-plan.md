@@ -161,6 +161,8 @@ and ignore it in the UI, or the first segment gets double-counted.
 
 ## M3 — Links
 
+**Status: complete.**
+
 Goal: the headline feature.
 
 ### Tasks
@@ -178,12 +180,25 @@ Goal: the headline feature.
 
 ### Definition of done
 
-- Back 4 as a chain does **not** draw a closing edge across the pitch
-- Midfield 3 as a polygon deforms live during playback as members move independently
-- Filled style makes a press trap's area visibly collapse and expand
-- Distances update continuously through a transition and read correctly against known positions
-- Reordering members changes the chain path as expected
-- Deleting a player removes them from every link that referenced them
+- [x] Back 4 as a chain does **not** draw a closing edge across the pitch
+- [x] Midfield 3 as a polygon deforms live during playback as members move independently
+- [x] Filled style makes a press trap's area visibly collapse and expand
+- [x] Distances update continuously through a transition and read correctly
+- [x] Reordering members changes the chain path as expected
+- [x] Deleting a player removes them from every link that referenced them (`pruneLinks`)
+
+### Notes from the build
+
+- A polygon of two members degrades to a chain. Closing it would draw the same segment twice.
+- `pruneLinks` is the single place squad changes are reconciled; `applyFormation` calls it rather
+  than filtering links itself.
+- Links are hit-tested **after** tokens, so clicking a player selects the player, not the
+  connector running beneath them. Clicking a connector on open grass selects its members.
+- Distance labels are drawn upright at edge midpoints. Rotating them with the edge looks clever
+  and reads badly.
+- New members are ordered by squad order rather than click order, so a back four selected
+  right-to-left still draws as a sensible line.
+- `Link.hidden` is optional, so documents written before the visibility toggle stay valid.
 
 ### Risks
 

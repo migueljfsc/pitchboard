@@ -3,8 +3,10 @@ import type { BoardDoc } from "@/board/types";
 import { BoardCanvas } from "@/components/BoardCanvas";
 import { Toolbar } from "@/components/Toolbar";
 import { Inspector } from "@/components/Inspector";
+import { LinkPanel } from "@/components/LinkPanel";
 import { Timeline } from "@/components/Timeline";
 import { nudgeEntities } from "@/board/interaction";
+import { createLink } from "@/board/links";
 import { sceneStartSeconds, setCarrier, setPath, totalSeconds } from "@/board/scenes";
 import {
   AWAY,
@@ -22,6 +24,7 @@ export function Editor() {
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [loop, setLoop] = useState(true);
+  const [expandedLink, setExpandedLink] = useState<string | null>(null);
 
   const directions = useMemo<[Direction, Direction]>(() => [HOME.direction, AWAY.direction], []);
   const total = totalSeconds(doc);
@@ -95,6 +98,15 @@ export function Editor() {
     [selection, activeScene],
   );
 
+  const onCreateLink = () => {
+    const members = [...selection].filter((id) => id !== "ball");
+    if (members.length < 2) return;
+    const next = createLink(doc, members);
+    setDoc(next);
+    // Open the new link so its style and order are immediately adjustable.
+    setExpandedLink(next.links[next.links.length - 1]?.id ?? null);
+  };
+
   const onCarrierChange = (playerId: string | null) => {
     setDoc((d) => setCarrier(d, activeScene, playerId));
   };
@@ -150,6 +162,18 @@ export function Editor() {
           onFormationChange={onFormationChange}
           directions={directions}
         />
+
+        <div className="border-t border-ink-700 pt-4">
+          <LinkPanel
+            doc={doc}
+            onDocChange={setDoc}
+            selection={selection}
+            onSelectMembers={(members) => setSelection(new Set(members))}
+            onCreateFromSelection={onCreateLink}
+            expanded={expandedLink}
+            onExpandedChange={setExpandedLink}
+          />
+        </div>
 
         <div className="border-t border-ink-700 pt-4">
           <Inspector

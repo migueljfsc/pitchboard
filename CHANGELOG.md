@@ -24,3 +24,8 @@ Notable changes to Pitchboard. Format loosely follows
   speed via arc-length reparameterisation. The ball attaches to a carrier and a pass is simply a
   carrier change, tracking a receiver who is still running. Scene add, duplicate, reorder,
   rename and delete. 134 engine tests.
+- **M3 — links.** A connector between a group of players, recomputed every frame from their
+  interpolated positions so the shape deforms as they move independently — a midfield three
+  visibly stretches when one of them jumps to press. Chain, shape or filled per link, with
+  optional live edge distances in metres. Create from a selection, rename, recolour, reorder
+  members, hide, delete; formation presets seed their own. 165 engine tests.

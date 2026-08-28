@@ -22,6 +22,7 @@ import {
   type PitchTheme,
 } from "./pitch";
 import { displayCurve, frameAt, transitionInto, type Frame } from "./timeline";
+import { linkGeometry, type LinkGeometry } from "./links";
 import { buildArcTable, cubicAt, cubicTangent, reparameterise, type Bezier } from "./geometry";
 
 export { TOKEN_RADIUS, BALL_RADIUS };
@@ -51,6 +52,8 @@ export function drawBoard(
   ctx.scale(view.scale, view.scale);
 
   drawPitch(ctx, doc.pitch, theme);
+  // Links sit under the tokens so a connector never covers a shirt number.
+  drawLinks(ctx, doc, frame);
   drawPaths(ctx, doc, frame, view);
 
   for (const team of doc.teams) {
@@ -74,6 +77,72 @@ export function drawBoard(
   }
 
   ctx.restore();
+}
+
+// ---------------------------------------------------------------- links
+
+/**
+ * Connectors between grouped players, recomputed from their current interpolated
+ * positions so the shape deforms live as the animation runs.
+ */
+function drawLinks(ctx: Ctx, doc: BoardDoc, frame: Frame): void {
+  for (const link of doc.links) {
+    if (link.hidden) continue;
+    const g = linkGeometry(link, frame.resolved, doc);
+    if (!g) continue;
+
+    ctx.beginPath();
+    ctx.moveTo(g.points[0].x, g.points[0].y);
+    for (let i = 1; i < g.points.length; i++) ctx.lineTo(g.points[i].x, g.points[i].y);
+    if (g.closed) ctx.closePath();
+
+    if (link.style === "filled") {
+      ctx.fillStyle = withAlpha(link.color, 0.22);
+      ctx.fill();
+    }
+
+    ctx.strokeStyle = withAlpha(link.color, 0.9);
+    ctx.lineWidth = 0.22;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.stroke();
+
+    if (link.showDistances) drawDistances(ctx, g);
+  }
+}
+
+/** Edge lengths in metres, drawn upright — rotating them with the edge reads badly. */
+function drawDistances(ctx: Ctx, g: LinkGeometry): void {
+  ctx.font = "600 1.05px Inter, system-ui, -apple-system, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.lineJoin = "round";
+
+  for (const edge of g.edges) {
+    const text = `${edge.metres.toFixed(1)}m`;
+    ctx.strokeStyle = "rgba(0,0,0,0.75)";
+    ctx.lineWidth = 0.5;
+    ctx.strokeText(text, edge.mid.x, edge.mid.y);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(text, edge.mid.x, edge.mid.y);
+  }
+}
+
+/**
+ * Apply alpha to a colour. Handles the #rgb and #rrggbb the palette uses; anything
+ * else is passed through, losing the alpha but never throwing.
+ */
+function withAlpha(color: string, alpha: number): string {
+  const hex = color.trim();
+  if (!hex.startsWith("#")) return hex;
+
+  const body = hex.slice(1);
+  const full = body.length === 3 ? body.split("").map((c) => c + c).join("") : body;
+  if (full.length !== 6) return hex;
+
+  const n = Number.parseInt(full, 16);
+  if (Number.isNaN(n)) return hex;
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
 // ---------------------------------------------------------------- paths

@@ -10,12 +10,13 @@
  * dragging a player never retroactively changes an earlier one.
  */
 
-import type { BoardDoc, PathCurve, Scene, Vec2 } from "./types";
+import type { BoardDoc, Link, PathCurve, Scene, Vec2 } from "./types";
 import { BALL_ID } from "./types";
 import { BALL_RADIUS, TOKEN_RADIUS } from "./pitch";
-import { displayCurve, transitionInto, type Frame } from "./timeline";
+import { displayCurve, transitionInto, type Frame, type Resolved } from "./timeline";
+import { linkGeometry } from "./links";
 import { HANDLE_RADIUS } from "./render";
-import { clamp } from "./geometry";
+import { clamp, distanceToSegment } from "./geometry";
 
 export type HitTarget = { kind: "token" | "ball"; id: string } | null;
 
@@ -86,6 +87,30 @@ export function hitTest(doc: BoardDoc, frame: Frame, p: Vec2, margin = 0.25): Hi
     }
   }
 
+  return null;
+}
+
+/**
+ * Link whose connector passes under `p`, or null.
+ *
+ * Tested AFTER tokens: a connector runs beneath the players it joins, so clicking
+ * a player must select the player, not the line through them.
+ */
+export function hitTestLink(
+  doc: BoardDoc,
+  r: Resolved,
+  p: Vec2,
+  threshold = 0.7,
+): Link | null {
+  for (let i = doc.links.length - 1; i >= 0; i--) {
+    const link = doc.links[i];
+    if (link.hidden) continue;
+    const g = linkGeometry(link, r, doc);
+    if (!g) continue;
+    for (const edge of g.edges) {
+      if (distanceToSegment(p, edge.a, edge.b) <= threshold) return link;
+    }
+  }
   return null;
 }
 
