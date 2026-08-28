@@ -323,6 +323,22 @@ otherwise.
 
 ---
 
+## Shipped outside the milestones
+
+Requested during M3 review and built straight away:
+
+- **Free-text team names.** Already an input; it only needed to look like one.
+- **Per-team visibility**, so a board can show one side alone. Hides the team's links too, and
+  the selection filters concealed players out rather than dropping them (D13).
+- **Half-pitch view** — left, full or right — for attacking or defensive analysis. This was
+  slated for v2; it fell out of the viewport work almost free.
+- **Vertical board.** A quarter turn with the attacking direction up the screen. Text
+  counter-rotates so numbers stay upright (D12).
+- **Collapsible sidebar sections** — View, each team, Links, Selection — with badges for
+  formation, link count and selection size.
+
+---
+
 ## Cross-cutting: testing
 
 Vitest, pure engine only, no component tests. This is the first JS/TS test suite in the
@@ -352,7 +368,7 @@ Deliberate, revisit after M6:
   source. See `decisions.md`.
 - Full drawing toolkit — pass/dribble/shot line styles, freehand pen, cones, shaded zones, text
 - Five- and seven-a-side (settled: eleven-a-side only, see D10)
-- Half-pitch, thirds, and final-third views
+- Thirds and final-third crops (half-pitch shipped early, see below)
 - Touch support
 - Heatmaps and average-position overlays
 - Custom domain

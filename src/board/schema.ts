@@ -25,6 +25,7 @@ const team = z.object({
   color: z.string().min(1),
   textColor: z.string().min(1),
   players: z.array(player).max(30),
+  hidden: z.boolean().optional(),
 });
 
 const scene = z.object({

@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { BoardDoc } from "@/board/types";
+import type { BoardDoc, PitchView } from "@/board/types";
+import { DEFAULT_PITCH_VIEW } from "@/board/types";
 import { BoardCanvas } from "@/components/BoardCanvas";
-import { Toolbar } from "@/components/Toolbar";
+import { TeamControls } from "@/components/TeamControls";
+import { ViewControls } from "@/components/ViewControls";
+import { Section } from "@/components/ui/Section";
 import { Inspector } from "@/components/Inspector";
 import { LinkPanel } from "@/components/LinkPanel";
 import { Timeline } from "@/components/Timeline";
 import { nudgeEntities } from "@/board/interaction";
 import { createLink } from "@/board/links";
+import { concealedPlayers } from "@/board/render";
 import { sceneStartSeconds, setCarrier, setPath, totalSeconds } from "@/board/scenes";
 import {
   AWAY,
@@ -25,12 +29,22 @@ export function Editor() {
   const [playing, setPlaying] = useState(false);
   const [loop, setLoop] = useState(true);
   const [expandedLink, setExpandedLink] = useState<string | null>(null);
+  const [pitchView, setPitchView] = useState<PitchView>(DEFAULT_PITCH_VIEW);
 
   const directions = useMemo<[Direction, Direction]>(() => [HOME.direction, AWAY.direction], []);
   const total = totalSeconds(doc);
 
   // Scene 0 has no incoming transition, so there is no run to shape there.
   const editScene = activeScene > 0 ? activeScene : undefined;
+
+  // Players on a hidden team drop out of the selection rather than being cleared
+  // from it: a nudge must not move tokens nobody can see, but unhiding the team
+  // should give you your selection back.
+  const visible = useMemo(() => {
+    const concealed = concealedPlayers(doc);
+    if (concealed.size === 0) return selection;
+    return new Set([...selection].filter((id) => !concealed.has(id)));
+  }, [doc, selection]);
 
   // Playback. Driven by wall-clock delta rather than a fixed step so the animation
   // runs at the right speed regardless of frame rate.
@@ -92,14 +106,14 @@ export function Editor() {
 
   const onNudge = useCallback(
     (metres: number, axis: "x" | "y") => {
-      if (selection.size === 0) return;
-      setDoc((d) => nudgeEntities(d, activeScene, selection, metres, axis));
+      if (visible.size === 0) return;
+      setDoc((d) => nudgeEntities(d, activeScene, visible, metres, axis));
     },
-    [selection, activeScene],
+    [visible, activeScene],
   );
 
   const onCreateLink = () => {
-    const members = [...selection].filter((id) => id !== "ball");
+    const members = [...visible].filter((id) => id !== "ball");
     if (members.length < 2) return;
     const next = createLink(doc, members);
     setDoc(next);
@@ -115,7 +129,7 @@ export function Editor() {
     if (editScene === undefined) return;
     setDoc((d) => {
       let next = d;
-      for (const id of selection) next = setPath(next, editScene, id, null);
+      for (const id of visible) next = setPath(next, editScene, id, null);
       return next;
     });
   };
@@ -149,36 +163,49 @@ export function Editor() {
 
   return (
     <div className="flex h-full w-full">
-      <aside className="flex w-64 shrink-0 flex-col gap-6 overflow-y-auto border-r border-ink-700 bg-ink-800 p-4">
-        <div>
+      <aside className="flex w-64 shrink-0 flex-col overflow-y-auto border-r border-ink-700 bg-ink-800">
+        <div className="border-b border-ink-700 px-4 py-3">
           <h1 className="text-sm font-semibold tracking-tight text-white">Pitchboard</h1>
-          <p className="mt-0.5 text-[11px] text-ink-400">M2 — animation</p>
+          <p className="mt-0.5 text-[11px] text-ink-400">Tactics board</p>
         </div>
 
-        <Toolbar
-          doc={doc}
-          onDocChange={setDoc}
-          formations={formations}
-          onFormationChange={onFormationChange}
-          directions={directions}
-        />
+        <Section title="View" defaultOpen={false}>
+          <ViewControls view={pitchView} onChange={setPitchView} />
+        </Section>
 
-        <div className="border-t border-ink-700 pt-4">
+        {([0, 1] as const).map((i) => (
+          <Section
+            key={doc.teams[i].id}
+            title={doc.teams[i].name || `Team ${i + 1}`}
+            badge={doc.teams[i].hidden ? "hidden" : formations[i]}
+          >
+            <TeamControls
+              doc={doc}
+              teamIndex={i}
+              onDocChange={setDoc}
+              formation={formations[i]}
+              onFormationChange={onFormationChange}
+              direction={directions[i]}
+            />
+          </Section>
+        ))}
+
+        <Section title="Links" badge={String(doc.links.length)} defaultOpen={false}>
           <LinkPanel
             doc={doc}
             onDocChange={setDoc}
-            selection={selection}
+            selection={visible}
             onSelectMembers={(members) => setSelection(new Set(members))}
             onCreateFromSelection={onCreateLink}
             expanded={expandedLink}
             onExpandedChange={setExpandedLink}
           />
-        </div>
+        </Section>
 
-        <div className="border-t border-ink-700 pt-4">
+        <Section title="Selection" badge={visible.size ? String(visible.size) : undefined}>
           <Inspector
             doc={doc}
-            selection={selection}
+            selection={visible}
             activeScene={activeScene}
             canEditPaths={editScene !== undefined}
             onNudge={onNudge}
@@ -186,7 +213,7 @@ export function Editor() {
             onCarrierChange={onCarrierChange}
             onClearPaths={onClearPaths}
           />
-        </div>
+        </Section>
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col">
@@ -196,7 +223,8 @@ export function Editor() {
             t={time}
             sceneIndex={activeScene}
             editScene={editScene}
-            selection={selection}
+            pitchView={pitchView}
+            selection={visible}
             onSelectionChange={setSelection}
             onDocChange={setDoc}
           />

@@ -218,7 +218,44 @@ the width.
 
 ---
 
-## D12 — Stack follows `wtc/ui`, with pnpm
+## D12 — Framing is presentation, never document state
+
+**Decision.** `PitchView { half, rotated }` lives in editor state, not in `BoardDoc`. Both
+framings are plain affine maps folded into a single `Viewport`, so the renderer applies one
+`ctx.transform(...)` and everything downstream works in metres exactly as before.
+
+**Rejected — storing the view on the document.** Tempting, since a shared board would then
+reopen the way its author framed it. But framing is a property of *looking*, not of the tactic:
+two people can usefully view the same board differently, and baking it in would mean the export
+resolution, the crop and the rotation all became document migrations later.
+
+The test that keeps this honest compares command logs: rotating changes the transform matrix and
+nothing else, apart from text. Every geometry call is byte-identical, so rotation cannot become
+a second rendering path that drifts out of step.
+
+**Text is the exception.** The rotated matrix carries a -90 degree turn, which stood every shirt
+number on its side. `upright()` counter-rotates at each text anchor, leaving the local axes
+aligned with the screen so labels position exactly as they do on a flat board.
+
+**A half view only pays off rotated.** Half a pitch is 52.5 x 68 — taller than it is long — so on
+a wide screen the height still constrains it and cropping just adds side margin. Rotated, it
+fills the box at nearly twice the scale. The UI says so rather than leaving it puzzling.
+
+---
+
+## D13 — Teams can be hidden, and selection is derived
+
+**Decision.** `Team.hidden` removes a side from drawing, hit-testing and marquee selection, and
+takes its links with it. The editor derives a `visible` selection by filtering concealed players
+out at read time.
+
+**Rejected — clearing the selection when a team is hidden.** That needs a state sync in an
+effect, which React rightly warns about, and it loses the selection permanently. Deriving means
+a nudge can never move a token nobody can see, and unhiding the team gives the selection back.
+
+---
+
+## D14 — Stack follows `wtc/ui`, with pnpm
 
 **Decision.** React 19.2 + TS 5.6 strict + Vite 8 + Tailwind v4 + shadcn-style primitives,
 matching `wtc/ui/`. pnpm rather than npm.

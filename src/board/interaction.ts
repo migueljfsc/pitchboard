@@ -15,7 +15,7 @@ import { BALL_ID } from "./types";
 import { BALL_RADIUS, TOKEN_RADIUS } from "./pitch";
 import { displayCurve, transitionInto, type Frame, type Resolved } from "./timeline";
 import { linkGeometry } from "./links";
-import { HANDLE_RADIUS } from "./render";
+import { HANDLE_RADIUS, concealedPlayers } from "./render";
 import { clamp, distanceToSegment } from "./geometry";
 
 export type HitTarget = { kind: "token" | "ball"; id: string } | null;
@@ -79,6 +79,7 @@ export function hitTest(doc: BoardDoc, frame: Frame, p: Vec2, margin = 0.25): Hi
   }
 
   for (const team of doc.teams) {
+    if (team.hidden) continue;
     for (const player of team.players) {
       const pos = frame.positions[player.id];
       if (pos && dist(p, pos) <= TOKEN_RADIUS + margin) {
@@ -102,9 +103,11 @@ export function hitTestLink(
   p: Vec2,
   threshold = 0.7,
 ): Link | null {
+  const concealed = concealedPlayers(doc);
   for (let i = doc.links.length - 1; i >= 0; i--) {
     const link = doc.links[i];
     if (link.hidden) continue;
+    if (link.members.every((m) => concealed.has(m))) continue;
     const g = linkGeometry(link, r, doc);
     if (!g) continue;
     for (const edge of g.edges) {
@@ -123,6 +126,7 @@ export function entitiesInRect(doc: BoardDoc, frame: Frame, a: Vec2, b: Vec2): s
 
   const hits: string[] = [];
   for (const team of doc.teams) {
+    if (team.hidden) continue;
     for (const player of team.players) {
       const p = frame.positions[player.id];
       if (p && p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1) hits.push(player.id);

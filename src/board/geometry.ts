@@ -6,7 +6,8 @@
  * engine (see the trap note in AGENTS.md).
  */
 
-import type { Vec2, Viewport } from "./types";
+import type { PitchHalf, PitchView, Vec2, Viewport } from "./types";
+import { DEFAULT_PITCH_VIEW } from "./types";
 
 // ---------------------------------------------------------------- vectors
 
@@ -55,37 +56,69 @@ export const linear = (u: number): number => u;
 
 // ---------------------------------------------------------------- viewport
 
-export const toScreen = (p: Vec2, v: Viewport): Vec2 => ({
-  x: p.x * v.scale + v.offsetX,
-  y: p.y * v.scale + v.offsetY,
-});
+export const toScreen = (p: Vec2, v: Viewport): Vec2 =>
+  v.rotated
+    ? { x: p.y * v.scale + v.offsetX, y: v.offsetY - p.x * v.scale }
+    : { x: p.x * v.scale + v.offsetX, y: p.y * v.scale + v.offsetY };
 
-export const toPitch = (p: Vec2, v: Viewport): Vec2 => ({
-  x: (p.x - v.offsetX) / v.scale,
-  y: (p.y - v.offsetY) / v.scale,
-});
+export const toPitch = (p: Vec2, v: Viewport): Vec2 =>
+  v.rotated
+    ? { x: (v.offsetY - p.y) / v.scale, y: (p.x - v.offsetX) / v.scale }
+    : { x: (p.x - v.offsetX) / v.scale, y: (p.y - v.offsetY) / v.scale };
+
+/** Canvas transform matrix for a viewport, in ctx.transform argument order. */
+export type Matrix = [number, number, number, number, number, number];
+
+export const viewMatrix = (v: Viewport): Matrix =>
+  v.rotated
+    ? [0, -v.scale, v.scale, 0, v.offsetX, v.offsetY]
+    : [v.scale, 0, 0, v.scale, v.offsetX, v.offsetY];
+
+/** The metre range along the pitch length that a half-view shows. */
+export function halfRange(half: PitchHalf, length: number): [number, number] {
+  if (half === "left") return [0, length / 2];
+  if (half === "right") return [length / 2, length];
+  return [0, length];
+}
 
 /**
- * Fit a `length` x `width` pitch into a `cw` x `ch` box, centred, with `padding`
- * metres of margin on every side.
+ * Fit the visible region into a `cw` x `ch` box, centred, with `padding` metres
+ * of margin.
  *
- * Returns CSS pixels per metre plus the centring offsets. Because the result is
- * derived purely from the box size, the same document renders identically at any
- * canvas size — which is what makes export resolution a one-line change.
+ * Because the result derives purely from the box size, the same document renders
+ * identically at any canvas size — which is what makes export resolution a
+ * one-line change.
  */
 export function fitViewport(
   cw: number,
   ch: number,
   length: number,
   width: number,
+  view: PitchView = DEFAULT_PITCH_VIEW,
   padding = 3,
 ): Viewport {
-  const scale = Math.min(cw / (length + padding * 2), ch / (width + padding * 2));
-  return {
-    scale,
-    offsetX: (cw - length * scale) / 2,
-    offsetY: (ch - width * scale) / 2,
-  };
+  const [x0, x1] = halfRange(view.half, length);
+  const along = x1 - x0;
+
+  // Rotating swaps which pitch axis maps to which screen axis.
+  const contentW = view.rotated ? width : along;
+  const contentH = view.rotated ? along : width;
+  const scale = Math.min(cw / (contentW + padding * 2), ch / (contentH + padding * 2));
+
+  return view.rotated
+    ? {
+        scale,
+        rotated: true,
+        offsetX: (cw - width * scale) / 2,
+        // +x attacks up the screen, so the far end of the range sits at the top.
+        offsetY: (ch - along * scale) / 2 + x1 * scale,
+      }
+    : {
+        scale,
+        rotated: false,
+        offsetX: (cw - along * scale) / 2 - x0 * scale,
+        offsetY: (ch - width * scale) / 2,
+      };
 }
 
 // ---------------------------------------------------------------- bezier

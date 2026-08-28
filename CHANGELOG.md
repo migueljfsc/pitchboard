@@ -29,3 +29,7 @@ Notable changes to Pitchboard. Format loosely follows
   visibly stretches when one of them jumps to press. Chain, shape or filled per link, with
   optional live edge distances in metres. Create from a selection, rename, recolour, reorder
   members, hide, delete; formation presets seed their own. 165 engine tests.
+- **Board framing and sidebar.** Free-text team names; per-team visibility so one side can be
+  drawn alone; a half-pitch view (left / full / right) for attacking or defensive analysis; and
+  a vertical board with the attacking direction up the screen, text staying upright. The sidebar
+  is now collapsible sections with badges. 180 engine tests.

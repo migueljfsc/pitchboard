@@ -3,7 +3,7 @@ import { drawBoard, TOKEN_RADIUS } from "./render";
 import { frameAt } from "./timeline";
 import { createRecordingCtx } from "./recording-ctx";
 import { createBoardDoc } from "@/formations";
-import { fitViewport } from "./geometry";
+import { fitViewport, viewMatrix } from "./geometry";
 import { BALL_ID, type RenderView } from "./types";
 
 const W = 1200;
@@ -37,12 +37,92 @@ describe("drawBoard", () => {
     expect(r.calls("fillRect")[0]).toBe(`fillRect(0,0,${W},${H})`);
   });
 
-  it("applies the viewport transform then works in metres", () => {
+  it("applies the viewport as one matrix, then works in metres", () => {
     const r = createRecordingCtx();
     const v = view();
     drawBoard(r.ctx, createBoardDoc(), 0, v);
-    expect(r.log).toContain(`translate(${round(v.offsetX)},${round(v.offsetY)})`);
-    expect(r.log).toContain(`scale(${round(v.scale)},${round(v.scale)})`);
+    const [a, b, c, d, e, f] = viewMatrix(v);
+    expect(r.log).toContain(
+      `transform(${round(a)},${round(b)},${round(c)},${round(d)},${round(e)},${round(f)})`,
+    );
+  });
+
+  it("rotates via the matrix, changing no geometry — only text counter-rotates", () => {
+    const doc = createBoardDoc();
+    const flat = createRecordingCtx();
+    const turned = createRecordingCtx();
+
+    drawBoard(flat.ctx, doc, 0, view());
+    drawBoard(
+      turned.ctx,
+      doc,
+      0,
+      view({ ...fitViewport(W, H, doc.pitch.length, doc.pitch.width, { half: "full", rotated: true }) }),
+    );
+
+    // Every metre-space drawing command is byte-identical: rotation is a viewport
+    // concern, not a second rendering path to keep in step.
+    const geometry = (log: string[]) =>
+      log.filter((l) => !l.startsWith("transform(") && !l.startsWith("rotate("));
+    expect(geometry(turned.log)).toEqual(geometry(flat.log));
+    expect(turned.calls("transform")[0]).not.toBe(flat.calls("transform")[0]);
+
+    // ...except that each token's text is counter-rotated so numbers stay upright.
+    const players = doc.teams[0].players.length + doc.teams[1].players.length;
+    expect(flat.count("rotate")).toBe(0);
+    expect(turned.count("rotate")).toBe(players);
+  });
+
+  it("counter-rotates distance labels too", () => {
+    const doc = createBoardDoc();
+    doc.links = doc.links.map((l) => ({ ...l, showDistances: true }));
+    const labels = doc.links.reduce(
+      (n, l) => n + (l.style === "chain" || l.members.length < 3 ? l.members.length - 1 : l.members.length),
+      0,
+    );
+
+    const turned = createRecordingCtx();
+    drawBoard(
+      turned.ctx,
+      doc,
+      0,
+      view({ ...fitViewport(W, H, doc.pitch.length, doc.pitch.width, { half: "full", rotated: true }) }),
+    );
+
+    const players = doc.teams[0].players.length + doc.teams[1].players.length;
+    expect(turned.count("rotate")).toBe(players + labels);
+  });
+
+  it("crops to a half without redrawing anything differently", () => {
+    const doc = createBoardDoc();
+    const full = createRecordingCtx();
+    const half = createRecordingCtx();
+
+    drawBoard(full.ctx, doc, 0, view());
+    drawBoard(half.ctx, doc, 0, view({ ...fitViewport(W, H, doc.pitch.length, doc.pitch.width, { half: "left", rotated: false }) }));
+
+    // The crop lives entirely in the viewport; the canvas clips the rest.
+    const strip = (log: string[]) => log.filter((l) => !l.startsWith("transform("));
+    expect(strip(half.log)).toEqual(strip(full.log));
+  });
+
+  it("omits a hidden team, and the links that belong to it", () => {
+    const doc = createBoardDoc();
+    const shown = createRecordingCtx();
+    drawBoard(shown.ctx, doc, 0, view());
+
+    const hidden = structuredClone(doc);
+    hidden.teams[1].hidden = true;
+    const solo = createRecordingCtx();
+    drawBoard(solo.ctx, hidden, 0, view());
+
+    const tokens = (r: ReturnType<typeof createRecordingCtx>) =>
+      r.calls("arc").filter((c) => c.includes(`,${TOKEN_RADIUS},0,6.283`)).length;
+
+    expect(tokens(shown)).toBe(22);
+    expect(tokens(solo)).toBe(11);
+    // Fewer strokes overall, because the away team's seeded links go too.
+    expect(solo.count("stroke")).toBeLessThan(shown.count("stroke"));
   });
 
   it("balances save and restore", () => {

@@ -27,6 +27,8 @@ export type Team = {
   /** Number/label colour, chosen for contrast against `color`. */
   textColor: string;
   players: Player[];
+  /** Hidden teams stay in the document but are not drawn or selectable. */
+  hidden?: boolean;
 };
 
 export type Scene = {
@@ -73,13 +75,36 @@ export type BoardDoc = {
   links: Link[];
 };
 
+/** Which part of the pitch is on screen. */
+export type PitchHalf = "full" | "left" | "right";
+
+/** How the board is framed. Presentation only — it never touches the document. */
+export type PitchView = {
+  half: PitchHalf;
+  /** Quarter turn, so the pitch runs top-to-bottom with +x attacking upwards. */
+  rotated: boolean;
+};
+
+export const DEFAULT_PITCH_VIEW: PitchView = { half: "full", rotated: false };
+
 /**
  * Pitch metres -> screen pixels. `scale` is CSS pixels per metre.
+ *
+ * Both framings are plain affine maps, so one flag covers rotation:
+ *   upright:  screen = (ox + x*s,  oy + y*s)
+ *   rotated:  screen = (ox + y*s,  oy - x*s)
+ * The half-pitch crop is folded into the offsets, so nothing else needs to know
+ * about it.
  *
  * devicePixelRatio lives in the canvas transform, NEVER here — see the DPR trap
  * in AGENTS.md.
  */
-export type Viewport = { scale: number; offsetX: number; offsetY: number };
+export type Viewport = {
+  scale: number;
+  offsetX: number;
+  offsetY: number;
+  rotated: boolean;
+};
 
 /**
  * Everything drawBoard needs beyond the document and the time.

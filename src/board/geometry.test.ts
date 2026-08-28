@@ -11,6 +11,7 @@ import {
   easeInOutCubic,
   easeOutQuad,
   fitViewport,
+  halfRange,
   lerp,
   lerpVec,
   reparameterise,
@@ -96,6 +97,74 @@ describe("viewport", () => {
       expect(br.x).toBeLessThanOrEqual(w + 1e-9);
       expect(br.y).toBeLessThanOrEqual(h + 1e-9);
     }
+  });
+
+  it("round-trips when rotated", () => {
+    const v = fitViewport(1200, 800, 105, 68, { half: "full", rotated: true });
+    for (const p of [{ x: 0, y: 0 }, { x: 105, y: 68 }, { x: 37.5, y: 12.25 }]) {
+      const back = toPitch(toScreen(p, v), v);
+      expect(back.x).toBeCloseTo(p.x, 9);
+      expect(back.y).toBeCloseTo(p.y, 9);
+    }
+  });
+
+  it("rotated, puts the attacking end at the top of the screen", () => {
+    const v = fitViewport(1200, 800, 105, 68, { half: "full", rotated: true });
+    const ownGoal = toScreen({ x: 0, y: 34 }, v);
+    const farGoal = toScreen({ x: 105, y: 34 }, v);
+    // Smaller screen y is higher up, and +x is the attacking direction.
+    expect(farGoal.y).toBeLessThan(ownGoal.y);
+    // The pitch now runs top-to-bottom, so the two ends share a screen x.
+    expect(farGoal.x).toBeCloseTo(ownGoal.x);
+  });
+
+  it("rotated, fits the long axis to the taller dimension", () => {
+    const upright = fitViewport(1200, 800, 105, 68);
+    const rotated = fitViewport(1200, 800, 105, 68, { half: "full", rotated: true });
+    // A landscape box fits an upright pitch better than a rotated one.
+    expect(rotated.scale).toBeLessThan(upright.scale);
+  });
+
+  it("crops to a half and round-trips there too", () => {
+    for (const half of ["left", "right"] as const) {
+      const v = fitViewport(1200, 800, 105, 68, { half, rotated: false });
+      const back = toPitch(toScreen({ x: 52.5, y: 34 }, v), v);
+      expect(back.x).toBeCloseTo(52.5, 9);
+      expect(back.y).toBeCloseTo(34, 9);
+    }
+  });
+
+  it("gains nothing from a half view on a landscape box, but a lot when rotated", () => {
+    // A half pitch is 52.5 x 68 — taller than it is long. In a wide box the
+    // height still constrains it, so cropping upright only adds side margin.
+    // Rotated, the crop is 68 x 52.5 and genuinely fills the box.
+    const full = fitViewport(1200, 800, 105, 68);
+    const halfUpright = fitViewport(1200, 800, 105, 68, { half: "left", rotated: false });
+    expect(halfUpright.scale).toBeCloseTo(full.scale);
+
+    const fullRotated = fitViewport(1200, 800, 105, 68, { half: "full", rotated: true });
+    const halfRotated = fitViewport(1200, 800, 105, 68, { half: "left", rotated: true });
+    expect(halfRotated.scale / fullRotated.scale).toBeGreaterThan(1.8);
+  });
+
+  it("zooms a half view in on a portrait box", () => {
+    const full = fitViewport(700, 1100, 105, 68);
+    const half = fitViewport(700, 1100, 105, 68, { half: "left", rotated: false });
+    expect(half.scale).toBeGreaterThan(full.scale * 1.8);
+  });
+
+  it("puts the chosen half in the middle of the box", () => {
+    const left = fitViewport(1200, 800, 105, 68, { half: "left", rotated: false });
+    const right = fitViewport(1200, 800, 105, 68, { half: "right", rotated: false });
+    // Each half's own midpoint lands at the centre of the canvas.
+    expect(toScreen({ x: 26.25, y: 34 }, left).x).toBeCloseTo(600);
+    expect(toScreen({ x: 78.75, y: 34 }, right).x).toBeCloseTo(600);
+  });
+
+  it("halfRange covers the whole pitch or exactly one half", () => {
+    expect(halfRange("full", 105)).toEqual([0, 105]);
+    expect(halfRange("left", 105)).toEqual([0, 52.5]);
+    expect(halfRange("right", 105)).toEqual([52.5, 105]);
   });
 
   it("scales with the box, so the same doc renders identically at any size", () => {

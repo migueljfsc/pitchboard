@@ -23,7 +23,14 @@ import {
 } from "./pitch";
 import { displayCurve, frameAt, transitionInto, type Frame } from "./timeline";
 import { linkGeometry, type LinkGeometry } from "./links";
-import { buildArcTable, cubicAt, cubicTangent, reparameterise, type Bezier } from "./geometry";
+import {
+  buildArcTable,
+  cubicAt,
+  cubicTangent,
+  reparameterise,
+  viewMatrix,
+  type Bezier,
+} from "./geometry";
 
 export { TOKEN_RADIUS, BALL_RADIUS };
 export type { Frame };
@@ -47,22 +54,23 @@ export function drawBoard(
   ctx.fillRect(0, 0, view.width, view.height);
 
   // Compose with whatever transform the caller set (the editor sets a DPR scale),
-  // then work in metres from here down.
-  ctx.translate(view.offsetX, view.offsetY);
-  ctx.scale(view.scale, view.scale);
+  // then work in metres from here down. One matrix covers upright and rotated.
+  ctx.transform(...viewMatrix(view));
 
   drawPitch(ctx, doc.pitch, theme);
   // Links sit under the tokens so a connector never covers a shirt number.
-  drawLinks(ctx, doc, frame);
+  drawLinks(ctx, doc, frame, view.rotated);
   drawPaths(ctx, doc, frame, view);
 
   for (const team of doc.teams) {
+    if (team.hidden) continue;
     for (const player of team.players) {
       const p = frame.positions[player.id];
       if (!p) continue;
       drawToken(ctx, p, player.number, player.label, team.color, team.textColor, {
         selected: view.selection?.has(player.id) ?? false,
         hovered: view.interactive && view.hover === player.id,
+        rotated: view.rotated,
       });
     }
   }
@@ -79,15 +87,44 @@ export function drawBoard(
   ctx.restore();
 }
 
+/**
+ * Draw text upright regardless of board rotation.
+ *
+ * The metre-space transform carries a -90 degree turn when the pitch is vertical,
+ * which would stand every shirt number on its side. Counter-rotating leaves the
+ * local axes aligned with the screen, so `draw` can position relative to the
+ * anchor exactly as it would on an upright board.
+ */
+function upright(ctx: Ctx, at: Vec2, rotated: boolean, draw: () => void): void {
+  ctx.save();
+  ctx.translate(at.x, at.y);
+  if (rotated) ctx.rotate(Math.PI / 2);
+  draw();
+  ctx.restore();
+}
+
 // ---------------------------------------------------------------- links
+
+/** Ids of players on hidden teams. Shared by rendering and hit-testing. */
+export function concealedPlayers(doc: BoardDoc): Set<string> {
+  const out = new Set<string>();
+  for (const team of doc.teams) {
+    if (team.hidden) for (const p of team.players) out.add(p.id);
+  }
+  return out;
+}
 
 /**
  * Connectors between grouped players, recomputed from their current interpolated
  * positions so the shape deforms live as the animation runs.
  */
-function drawLinks(ctx: Ctx, doc: BoardDoc, frame: Frame): void {
+function drawLinks(ctx: Ctx, doc: BoardDoc, frame: Frame, rotated: boolean): void {
+  const concealed = concealedPlayers(doc);
+
   for (const link of doc.links) {
     if (link.hidden) continue;
+    // A link whose players are all on a hidden team goes with them.
+    if (link.members.every((m) => concealed.has(m))) continue;
     const g = linkGeometry(link, frame.resolved, doc);
     if (!g) continue;
 
@@ -107,24 +144,25 @@ function drawLinks(ctx: Ctx, doc: BoardDoc, frame: Frame): void {
     ctx.lineCap = "round";
     ctx.stroke();
 
-    if (link.showDistances) drawDistances(ctx, g);
+    if (link.showDistances) drawDistances(ctx, g, rotated);
   }
 }
 
 /** Edge lengths in metres, drawn upright — rotating them with the edge reads badly. */
-function drawDistances(ctx: Ctx, g: LinkGeometry): void {
-  ctx.font = "600 1.05px Inter, system-ui, -apple-system, sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.lineJoin = "round";
-
+function drawDistances(ctx: Ctx, g: LinkGeometry, rotated: boolean): void {
   for (const edge of g.edges) {
-    const text = `${edge.metres.toFixed(1)}m`;
-    ctx.strokeStyle = "rgba(0,0,0,0.75)";
-    ctx.lineWidth = 0.5;
-    ctx.strokeText(text, edge.mid.x, edge.mid.y);
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText(text, edge.mid.x, edge.mid.y);
+    upright(ctx, edge.mid, rotated, () => {
+      const text = `${edge.metres.toFixed(1)}m`;
+      ctx.font = "600 1.05px Inter, system-ui, -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = "rgba(0,0,0,0.75)";
+      ctx.lineWidth = 0.5;
+      ctx.strokeText(text, 0, 0);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(text, 0, 0);
+    });
   }
 }
 
@@ -159,6 +197,7 @@ function drawPaths(ctx: Ctx, doc: BoardDoc, frame: Frame, view: RenderView): voi
   // While the animation runs, show every run in flight.
   if (r.moving) {
     for (const team of doc.teams) {
+      if (team.hidden) continue;
       for (const player of team.players) {
         const b = displayCurve(player.id, r);
         if (b) drawPath(ctx, b, team.color, false);
@@ -174,6 +213,7 @@ function drawPaths(ctx: Ctx, doc: BoardDoc, frame: Frame, view: RenderView): voi
   if (!edit) return;
 
   for (const team of doc.teams) {
+    if (team.hidden) continue;
     for (const player of team.players) {
       if (!view.selection?.has(player.id)) continue;
       const b = displayCurve(player.id, edit);
@@ -253,7 +293,7 @@ export const HANDLE_RADIUS = 0.55;
 
 // ---------------------------------------------------------------- entities
 
-type TokenState = { selected: boolean; hovered: boolean };
+type TokenState = { selected: boolean; hovered: boolean; rotated?: boolean };
 
 function drawToken(
   ctx: Ctx,
@@ -281,23 +321,26 @@ function drawToken(
   ctx.lineWidth = 0.1;
   ctx.stroke();
 
-  ctx.fillStyle = textColor;
-  ctx.font = "600 1.25px Inter, system-ui, -apple-system, sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(String(number), p.x, p.y + 0.05);
+  // Text is anchored to the token but never turns with the board.
+  upright(ctx, p, state.rotated ?? false, () => {
+    ctx.fillStyle = textColor;
+    ctx.font = "600 1.25px Inter, system-ui, -apple-system, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(number), 0, 0.05);
 
-  if (label) {
-    ctx.font = "500 1px Inter, system-ui, -apple-system, sans-serif";
-    ctx.textBaseline = "top";
-    // A dark rim keeps the label readable over both mow stripes and white lines.
-    ctx.strokeStyle = "rgba(0,0,0,0.65)";
-    ctx.lineWidth = 0.22;
-    ctx.lineJoin = "round";
-    ctx.strokeText(label, p.x, p.y + TOKEN_RADIUS + 0.3);
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText(label, p.x, p.y + TOKEN_RADIUS + 0.3);
-  }
+    if (label) {
+      ctx.font = "500 1px Inter, system-ui, -apple-system, sans-serif";
+      ctx.textBaseline = "top";
+      // A dark rim keeps the label readable over both mow stripes and white lines.
+      ctx.strokeStyle = "rgba(0,0,0,0.65)";
+      ctx.lineWidth = 0.22;
+      ctx.lineJoin = "round";
+      ctx.strokeText(label, 0, TOKEN_RADIUS + 0.3);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(label, 0, TOKEN_RADIUS + 0.3);
+    }
+  });
 }
 
 function drawBall(ctx: Ctx, p: Vec2, state: TokenState): void {

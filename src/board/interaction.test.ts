@@ -35,6 +35,35 @@ describe("hitTest", () => {
   });
 });
 
+describe("hidden teams", () => {
+  const hiddenAway = (() => {
+    const d = createBoardDoc();
+    d.teams[1].hidden = true;
+    return d;
+  })();
+  const hf = frameAt(hiddenAway, 0);
+
+  it("are not hit-testable", () => {
+    const awayPlayer = hiddenAway.teams[1].players[0];
+    const at = hf.positions[awayPlayer.id];
+    expect(hitTest(hiddenAway, hf, at)).toBeNull();
+  });
+
+  it("are excluded from a marquee, so a select-all cannot move them invisibly", () => {
+    const all = entitiesInRect(hiddenAway, hf, { x: 0, y: 0 }, { x: 105, y: 68 });
+    expect(all).toHaveLength(hiddenAway.teams[0].players.length);
+    for (const id of all) expect(id.startsWith("home-")).toBe(true);
+  });
+
+  it("still hit-test normally once shown again", () => {
+    const shown = structuredClone(hiddenAway);
+    shown.teams[1].hidden = false;
+    const f = frameAt(shown, 0);
+    const awayPlayer = shown.teams[1].players[0];
+    expect(hitTest(shown, f, f.positions[awayPlayer.id])?.id).toBe(awayPlayer.id);
+  });
+});
+
 describe("entitiesInRect", () => {
   it("collects every token inside, regardless of corner order", () => {
     const all = entitiesInRect(doc, frame, { x: 0, y: 0 }, { x: 105, y: 68 });

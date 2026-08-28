@@ -7,7 +7,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { BoardDoc, Vec2 } from "@/board/types";
+import type { BoardDoc, PitchView, Vec2 } from "@/board/types";
+import { DEFAULT_PITCH_VIEW } from "@/board/types";
 import { fitViewport, toPitch } from "@/board/geometry";
 import { drawBoard } from "@/board/render";
 import { frameAt } from "@/board/timeline";
@@ -29,6 +30,7 @@ type Props = {
   sceneIndex: number;
   /** Scene whose incoming runs are editable; undefined on scene 0. */
   editScene?: number;
+  pitchView?: PitchView;
   selection: ReadonlySet<string>;
   onSelectionChange: (next: Set<string>) => void;
   onDocChange: (next: BoardDoc) => void;
@@ -45,6 +47,7 @@ export function BoardCanvas({
   t,
   sceneIndex,
   editScene,
+  pitchView = DEFAULT_PITCH_VIEW,
   selection,
   onSelectionChange,
   onDocChange,
@@ -82,7 +85,7 @@ export function BoardCanvas({
     canvas.style.height = `${size.h}px`;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const view = fitViewport(size.w, size.h, doc.pitch.length, doc.pitch.width);
+    const view = fitViewport(size.w, size.h, doc.pitch.length, doc.pitch.width, pitchView);
     drawBoard(ctx, doc, t, {
       ...view,
       width: size.w,
@@ -93,15 +96,15 @@ export function BoardCanvas({
       editScene,
       marquee: drag?.kind === "marquee" ? { a: drag.a, b: drag.b } : null,
     });
-  }, [doc, t, size, selection, hover, drag, editScene]);
+  }, [doc, t, size, selection, hover, drag, editScene, pitchView]);
 
   const pointFrom = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>): Vec2 => {
       const rect = e.currentTarget.getBoundingClientRect();
-      const view = fitViewport(rect.width, rect.height, doc.pitch.length, doc.pitch.width);
+      const view = fitViewport(rect.width, rect.height, doc.pitch.length, doc.pitch.width, pitchView);
       return toPitch({ x: e.clientX - rect.left, y: e.clientY - rect.top }, view);
     },
-    [doc.pitch.length, doc.pitch.width],
+    [doc.pitch.length, doc.pitch.width, pitchView],
   );
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
