@@ -79,6 +79,19 @@ export function Editor() {
     return () => cancelAnimationFrame(raf);
   }, [playing, loop, total]);
 
+  /**
+   * Starting playback drops the selection back to scene 1.
+   *
+   * Selecting a later scene arms its editing overlay, which draws the runs into
+   * that scene as editable curves. Left armed while the animation plays, those
+   * curves hang over every other scene as well and read as arrows belonging
+   * nowhere. Scene 1 has no incoming transition, so it arms nothing.
+   */
+  const setPlayback = useCallback((next: boolean) => {
+    setPlaying(next);
+    if (next) setActiveScene(0);
+  }, []);
+
   const selectScene = useCallback(
     // `forDoc` matters when the scene list changed in the same event: React has
     // not re-rendered yet, so `doc` here is still the previous version and the
@@ -175,7 +188,7 @@ export function Editor() {
 
       if (e.code === "Space") {
         e.preventDefault();
-        setPlaying((p) => !p);
+        setPlayback(!playing);
         return;
       }
 
@@ -193,7 +206,7 @@ export function Editor() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onNudge, confirmReset]);
+  }, [onNudge, confirmReset, playing, setPlayback]);
 
   return (
     <div className="flex h-full w-full">
@@ -302,7 +315,7 @@ export function Editor() {
           time={time}
           onTimeChange={setTime}
           playing={playing}
-          onPlayingChange={setPlaying}
+          onPlayingChange={setPlayback}
           loop={loop}
           onLoopChange={setLoop}
         />
