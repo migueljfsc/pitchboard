@@ -119,9 +119,11 @@ export function drawBoard(
  * teams[0] defends x=0 and teams[1] defends x=length — the same convention
  * facingOf uses, and how createBoardDoc lays a board out.
  *
- * The name always runs PARALLEL to the goal line, which reads bottom-to-top on a
- * horizontal board and straight across on a vertical one. That is the stadium
- * look, and it is the only orientation that fits the band behind the goal.
+ * The name always runs PARALLEL to the goal line — the only orientation that fits
+ * the band behind the goal. On a horizontal board the two are mirrored so they
+ * face each other across the pitch, like signage at either end of a ground. On a
+ * vertical board both stay upright, because mirroring there would leave one of
+ * them upside down.
  */
 function drawTeamNames(ctx: Ctx, doc: BoardDoc, rotated: boolean): void {
   // Between the back of the goal and the edge of the grass.
@@ -138,11 +140,10 @@ function drawTeamNames(ctx: Ctx, doc: BoardDoc, rotated: boolean): void {
 
     ctx.save();
     ctx.translate(at.x, at.y);
-    // The name runs along the pitch's y axis, which is the goal line. Upright
-    // that is a quarter turn anticlockwise, so it reads bottom-to-top. On a
-    // vertical board the outer matrix already turns -90 degrees, so +90 here
-    // nets to zero and the name sits straight across the goal.
-    ctx.rotate(rotated ? Math.PI / 2 : -Math.PI / 2);
+    // Vertical: the outer matrix already turns -90 degrees, so +90 nets to zero
+    // and both names sit straight across their goal.
+    // Horizontal: a quarter turn each way, mirroring the pair.
+    ctx.rotate(rotated ? Math.PI / 2 : i === 0 ? -Math.PI / 2 : Math.PI / 2);
 
     ctx.font = "700 2.1px Inter, system-ui, -apple-system, sans-serif";
     ctx.textAlign = "center";
@@ -151,7 +152,8 @@ function drawTeamNames(ctx: Ctx, doc: BoardDoc, rotated: boolean): void {
     ctx.strokeStyle = "rgba(0,0,0,0.5)";
     ctx.lineWidth = 0.5;
     ctx.strokeText(name, 0, 0);
-    ctx.fillStyle = withAlpha(team.color, 0.9);
+    // Always white: a dark kit colour disappears into the grass here.
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
     ctx.fillText(name, 0, 0);
     ctx.restore();
   });
@@ -208,10 +210,16 @@ function drawLinks(ctx: Ctx, doc: BoardDoc, frame: Frame, rotated: boolean): voi
       ctx.fill();
     }
 
-    ctx.strokeStyle = withAlpha(link.color, 0.9);
-    ctx.lineWidth = 0.22;
+    // A dark under-stroke first: a blue or black kit colour is nearly invisible
+    // against the grass on its own.
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
+    ctx.strokeStyle = "rgba(0,0,0,0.35)";
+    ctx.lineWidth = 0.52;
+    ctx.stroke();
+
+    ctx.strokeStyle = link.color;
+    ctx.lineWidth = 0.36;
     ctx.stroke();
 
     if (link.showDistances) drawDistances(ctx, g, rotated);

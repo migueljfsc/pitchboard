@@ -259,6 +259,41 @@ describe("team names", () => {
     expect(r.calls("fillText").some((c) => c.startsWith('fillText("   "'))).toBe(false);
   });
 
+  it("mirrors the two names on a flat board so they face each other", () => {
+    const r = createRecordingCtx();
+    drawBoard(r.ctx, createBoardDoc(), 0, view());
+    const turns = r.calls("rotate");
+    expect(turns).toContain(`rotate(${round(-Math.PI / 2)})`);
+    expect(turns).toContain(`rotate(${round(Math.PI / 2)})`);
+  });
+
+  it("keeps both names upright on a vertical board, where mirroring would invert one", () => {
+    const doc = createBoardDoc();
+    const r = createRecordingCtx();
+    drawBoard(
+      r.ctx,
+      doc,
+      0,
+      view({ ...fitViewport(W, H, doc.pitch.length, doc.pitch.width, { half: "full", rotated: true }) }),
+    );
+    // Both cancel the board's own turn the same way; neither flips.
+    expect(r.calls("rotate")).not.toContain(`rotate(${round(-Math.PI / 2)})`);
+  });
+
+  it("writes the name in white, not the kit colour, so a dark kit still reads", () => {
+    const doc = createBoardDoc();
+    doc.teams[0].color = "#18181b";
+    const r = createRecordingCtx();
+    drawBoard(r.ctx, doc, 0, view());
+
+    const name = r.log.findIndex((l) => l.startsWith('fillText("Home",'));
+    const fillBefore = r.log
+      .slice(0, name)
+      .reverse()
+      .find((l) => l.startsWith("fillStyle="));
+    expect(fillBefore).toBe('fillStyle="rgba(255,255,255,0.92)"');
+  });
+
   it("lays the name along the goal line in both orientations", () => {
     const doc = createBoardDoc();
     const flat = createRecordingCtx();
@@ -275,6 +310,8 @@ describe("team names", () => {
     // getting this wrong renders it sideways and clipped off the canvas.
     expect(flat.calls("rotate")).toContain(`rotate(${round(-Math.PI / 2)})`);
     expect(turned.calls("rotate")).toContain(`rotate(${round(Math.PI / 2)})`);
+    // Flat mirrors the pair, so both quarter turns appear.
+    expect(flat.calls("rotate")).toContain(`rotate(${round(Math.PI / 2)})`);
   });
 });
 

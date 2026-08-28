@@ -130,9 +130,10 @@ function LinkRow({
         />
         <button
           type="button"
-          onClick={onSelect}
+          onClick={onToggle}
+          aria-expanded={expanded}
           className="min-w-0 flex-1 truncate text-left text-xs text-ink-200 hover:text-white"
-          title={`Select the ${link.members.length} players in ${link.name}`}
+          title="Rename, restyle, reorder"
         >
           {link.name}
         </button>
@@ -153,6 +154,14 @@ function LinkRow({
 
       {expanded && (
         <div className="flex flex-col gap-2 border-t border-ink-600 px-2 py-2">
+          <button
+            type="button"
+            onClick={onSelect}
+            className="rounded border border-ink-600 bg-ink-800 px-1.5 py-1 text-[11px] text-ink-200 transition hover:border-accent hover:text-white"
+          >
+            Select {link.members.length} players
+          </button>
+
           <label className="flex flex-col gap-1">
             <span className="text-[11px] uppercase tracking-wide text-ink-400">Name</span>
             <input

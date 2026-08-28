@@ -41,6 +41,11 @@ Notable changes to Pitchboard. Format loosely follows
 
 ### Changed
 
+- The two team names are mirrored on a horizontal board so they face each other across the
+  pitch, and are always written in white — a dark kit colour vanished into the grass.
+- Link connectors are heavier and sit on a dark under-stroke, so a blue or black kit reads
+  against the pitch.
+- Clicking anywhere on a link's row opens its details; selecting its players moved inside.
 - Contrast lifted on muted text, borders, disabled controls and the smallest type.
 - Renaming a link sits behind an explicit chevron rather than the colour dot.
 
