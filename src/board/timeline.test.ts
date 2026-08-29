@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_END_HOLD_MS,
+  MAX_FLOW_SPEED,
+  MIN_FLOW_SPEED,
   MIN_FLOW_STEP_MS,
+  scenePace,
   ballAt,
   ballGlue,
   frameAt,
@@ -11,7 +14,7 @@ import {
   totalDurationMs,
 } from "./timeline";
 import { createBoardDoc } from "@/formations";
-import { sceneStartSeconds } from "./scenes";
+import { addSceneAfter, sceneStartSeconds, setScenePace } from "./scenes";
 import { boardDocSchema } from "./schema";
 import type { BoardDoc, Scene } from "./types";
 
@@ -446,5 +449,100 @@ describe("flow mode", () => {
   it("rejects a pace outside the supported range", () => {
     expect(boardDocSchema.safeParse(flowing(0)).success).toBe(false);
     expect(boardDocSchema.safeParse(flowing(99)).success).toBe(false);
+  });
+});
+
+describe("per-scene pace", () => {
+  /** Three scenes, with one player covering a known distance into each. */
+  const runs = (a: number, b: number): BoardDoc => {
+    let doc = addSceneAfter(createBoardDoc(), 0);
+    doc = addSceneAfter(doc, 1);
+    const start = doc.scenes[0].positions[HOME_9];
+    const move = (i: number, dx: number) => ({
+      ...doc.scenes[i],
+      positions: { ...doc.scenes[i].positions, [HOME_9]: { x: start.x + dx, y: start.y } },
+    });
+    doc = { ...doc, scenes: [doc.scenes[0], move(1, a), move(2, a + b)] };
+    return { ...doc, flow: { speed: 10, endHoldMs: DEFAULT_END_HOLD_MS } };
+  };
+
+  it("falls back to the board pace when a scene sets none", () => {
+    const doc = runs(20, 20);
+    expect(scenePace(doc, 1)).toBe(doc.flow!.speed);
+    expect(scenePace(doc, 2)).toBe(doc.flow!.speed);
+  });
+
+  it("lets one scene run at its own pace without touching the others", () => {
+    const base = runs(20, 20);
+    const faster = setScenePace(base, 2, 20);
+
+    const before = sceneTimings(base);
+    const after = sceneTimings(faster);
+    expect(after[1].travelMs).toBe(before[1].travelMs);
+    // Same distance at twice the pace takes half as long.
+    expect(after[2].travelMs).toBeCloseTo(before[2].travelMs / 2, 6);
+  });
+
+  it("paces each scene independently — slow, fast, slow", () => {
+    let doc = runs(20, 20);
+    doc = setScenePace(doc, 1, 10);
+    doc = setScenePace(doc, 2, 20);
+    const timing = sceneTimings(doc);
+    expect(scenePace(doc, 1)).toBe(10);
+    expect(scenePace(doc, 2)).toBe(20);
+    expect(timing[1].travelMs).toBeCloseTo(timing[2].travelMs * 2, 6);
+  });
+
+  it("clamps a pace outside the range", () => {
+    const doc = runs(20, 20);
+    expect(scenePace(setScenePace(doc, 1, 1000), 1)).toBe(MAX_FLOW_SPEED);
+    expect(scenePace(setScenePace(doc, 1, -5), 1)).toBe(MIN_FLOW_SPEED);
+  });
+
+  it("takes no pace on scene 0 — nothing travels into it", () => {
+    const doc = runs(20, 20);
+    expect(setScenePace(doc, 0, 25)).toBe(doc);
+    expect(sceneTimings(doc)[0].travelMs).toBe(0);
+  });
+
+  it("goes back to the board pace when cleared", () => {
+    const doc = setScenePace(runs(20, 20), 1, 25);
+    expect(scenePace(doc, 1)).toBe(25);
+    const cleared = setScenePace(doc, 1, null);
+    expect(cleared.scenes[1].speed).toBeUndefined();
+    expect(scenePace(cleared, 1)).toBe(cleared.flow!.speed);
+  });
+
+  it("is ignored entirely outside flow mode", () => {
+    const doc = setScenePace(runs(20, 20), 1, 25);
+    const fixed: BoardDoc = { ...doc };
+    delete fixed.flow;
+    expect(fixed.scenes[1].speed).toBe(25);
+    expect(sceneTimings(fixed)[1].travelMs).toBe(fixed.scenes[1].transitionMs);
+  });
+
+  it("carries the pace into a scene added after it", () => {
+    let doc = setScenePace(runs(20, 20), 2, 22);
+    doc = addSceneAfter(doc, 2);
+    expect(doc.scenes[3].speed).toBe(22);
+    expect(scenePace(doc, 3)).toBe(22);
+  });
+
+  it("leaves an added scene on the board pace when its neighbour has none", () => {
+    const doc = addSceneAfter(runs(20, 20), 1);
+    expect(doc.scenes[2].speed).toBeUndefined();
+    expect(scenePace(doc, 2)).toBe(doc.flow!.speed);
+  });
+
+  it("keeps a document written before per-scene pacing reading the same", () => {
+    const doc = runs(20, 20);
+    expect(doc.scenes.every((s) => s.speed === undefined)).toBe(true);
+    const paced = { ...doc, flow: { ...doc.flow!, speed: 15 } };
+    for (let i = 1; i < paced.scenes.length; i++) expect(scenePace(paced, i)).toBe(15);
+  });
+
+  it("still validates with a per-scene pace on it", () => {
+    const doc = setScenePace(runs(20, 20), 1, 18.5);
+    expect(boardDocSchema.safeParse(doc).success).toBe(true);
   });
 });

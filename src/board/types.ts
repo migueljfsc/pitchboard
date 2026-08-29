@@ -69,6 +69,13 @@ export type Scene = {
    */
   hiddenRuns?: string[];
   /**
+   * Pace for the travel INTO this scene, in metres per second, overriding
+   * `flow.speed`. Flow mode only, and meaningless on scene 0 — nothing travels
+   * into it. Absent means the board's pace, so a document written before
+   * per-scene pacing reads exactly as it did.
+   */
+  speed?: number;
+  /**
    * The ball's travel into this scene is a strike at goal rather than a pass.
    * Presentation of the same carrier change, drawn with the double line the
    * coaching convention uses.

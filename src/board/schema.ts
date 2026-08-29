@@ -43,6 +43,7 @@ const scene = z.object({
   ballPath: pathCurve.nullable().optional(),
   travel: z.record(z.string(), z.number().int().min(0).max(60_000)).optional(),
   hiddenRuns: z.array(z.string().min(1)).max(64).optional(),
+  speed: z.number().min(MIN_FLOW_SPEED).max(MAX_FLOW_SPEED).optional(),
   shot: z.boolean().optional(),
 });
 

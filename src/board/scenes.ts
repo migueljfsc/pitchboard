@@ -6,7 +6,14 @@
  */
 
 import type { BoardDoc, PathCurve, Scene, Vec2 } from "./types";
-import { ballAt, resolveAt, sceneTimings, totalDurationMs } from "./timeline";
+import {
+  MAX_FLOW_SPEED,
+  MIN_FLOW_SPEED,
+  ballAt,
+  resolveAt,
+  sceneTimings,
+  totalDurationMs,
+} from "./timeline";
 import { pruneAnnotations } from "./annotations";
 import { teamOf } from "./players";
 
@@ -92,6 +99,9 @@ export function addSceneAfter(doc: BoardDoc, index: number): BoardDoc {
     carrier: base.carrier,
     ballPos: base.ballPos ? { ...base.ballPos } : undefined,
     ballPath: null,
+    // Carry the pace forward: a scene added while working at 20 m/s should
+    // travel at 20 m/s, not snap back to the board's default.
+    ...(base.speed !== undefined ? { speed: base.speed } : {}),
   };
 
   const scenes = doc.scenes.slice();
@@ -296,6 +306,28 @@ export function canShoot(doc: BoardDoc, index: number): boolean {
 }
 
 /** Mark the ball's travel into scene `index` as a strike at goal. */
+/**
+ * Pace for the travel into scene `index`, in metres per second, or `null` to go
+ * back to the board's.
+ *
+ * Flow mode only. Scene 0 has nothing travelling into it, so it takes no pace —
+ * the panel hides the field there, the same way it hides Travel.
+ */
+export function setScenePace(doc: BoardDoc, index: number, speed: number | null): BoardDoc {
+  const scene = doc.scenes[index];
+  if (!scene || index === 0) return doc;
+
+  const next: Scene = { ...scene };
+  if (speed === null) delete next.speed;
+  else next.speed = Math.min(Math.max(speed, MIN_FLOW_SPEED), MAX_FLOW_SPEED);
+
+  if ((next.speed ?? null) === (scene.speed ?? null)) return doc;
+
+  const scenes = doc.scenes.slice();
+  scenes[index] = next;
+  return replace(doc, scenes);
+}
+
 export function setShot(doc: BoardDoc, index: number, shot: boolean): BoardDoc {
   const scene = doc.scenes[index];
   if (!scene || (scene.shot ?? false) === shot) return doc;

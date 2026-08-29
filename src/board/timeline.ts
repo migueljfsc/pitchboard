@@ -96,6 +96,18 @@ function longestMove(from: Scene, to: Scene): number {
   return longest;
 }
 
+/**
+ * The pace of the travel INTO scene `index`, in metres per second.
+ *
+ * A scene's own pace, or the board's where it has none. One place, so the
+ * timeline and the panel showing the number cannot disagree — and so a document
+ * written before per-scene pacing still resolves to the board pace everywhere.
+ */
+export function scenePace(doc: BoardDoc, index: number): number {
+  const raw = doc.scenes[index]?.speed ?? doc.flow?.speed ?? DEFAULT_FLOW_SPEED;
+  return Math.min(Math.max(raw, MIN_FLOW_SPEED), MAX_FLOW_SPEED);
+}
+
 export type SceneTiming = { travelMs: number; holdMs: number };
 
 /**
@@ -117,12 +129,14 @@ export function sceneTimings(doc: BoardDoc): SceneTiming[] {
     }));
   }
 
-  const speed = Math.min(Math.max(doc.flow.speed, MIN_FLOW_SPEED), MAX_FLOW_SPEED);
   return doc.scenes.map((scene, i) => ({
     travelMs:
       i === 0
         ? 0
-        : Math.max(MIN_FLOW_STEP_MS, (longestMove(doc.scenes[i - 1], scene) / speed) * 1000),
+        : Math.max(
+            MIN_FLOW_STEP_MS,
+            (longestMove(doc.scenes[i - 1], scene) / scenePace(doc, i)) * 1000,
+          ),
     // Nothing rests but the final frame, which is the pause before the loop.
     holdMs: i === last ? doc.flow!.endHoldMs : 0,
   }));
