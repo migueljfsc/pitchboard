@@ -3,6 +3,18 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.5.0 (2026-08-29)
+
+### Feat
+
+- board handling — JSON, undo, a drawings rail and two resets
+
+### Fix
+
+- a dribble is drawn as a dribble, not as a pass. The carrier drags
+the ball the length of their run, so distance could not tell the two
+apart — the carrier change decides it now.
+
 ## v0.4.0 (2026-08-28)
 
 ### Feat
