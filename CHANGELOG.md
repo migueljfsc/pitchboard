@@ -3,6 +3,22 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.7.0 (2026-08-29)
+
+### Feat
+
+- delete every link at once
+- changing formation keeps the squad and reseeds its links
+- autosave the board in progress
+- squad presets, saved in the browser
+- export MP4, WebM, GIF and PNG
+
+### Fix
+
+- shot rails stop inside the arrowhead
+- a shot no longer outlives the ball's travel
+- refuse a shirt number already worn in the team
+
 ## v0.6.0 (2026-08-29)
 
 ### Feat
