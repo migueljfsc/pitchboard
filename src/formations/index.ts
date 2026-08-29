@@ -13,7 +13,8 @@
  */
 
 import type { BoardDoc, Link, LinkStyle, Player, Team, Vec2 } from "@/board/types";
-import { pruneLinks } from "@/board/links";
+import { pruneLinks, replaceTeamLinks } from "@/board/links";
+import { pruneShots } from "@/board/scenes";
 
 export type FormationLine = {
   /** Shown in the seeded link's name, e.g. "Back 4". */
@@ -222,6 +223,13 @@ export type BuiltTeam = {
  * Player ids are `<teamId>-<shirt number>`, which is stable across formation
  * changes and unique across teams because team ids differ.
  */
+/** `wanted`, or the lowest shirt not already worn in this build. */
+function freeNumber(wanted: number, used: Set<number>): number {
+  if (!used.has(wanted)) return wanted;
+  for (let n = 1; n <= 99; n++) if (!used.has(n)) return n;
+  return wanted;
+}
+
 export function buildTeam(
   spec: TeamSpec,
   pitch: { length: number; width: number },
@@ -235,12 +243,20 @@ export function buildTeam(
   // sequence rather than line by line.
   let slot = 0;
 
+  // Ids are `<team>-<number>`, so two players sharing a number share an id, and
+  // the second silently overwrites the first in every scene's positions. A
+  // formation's own numbers never collide; a squad carried across a formation
+  // change can, when it is shorter than the new shape and a default lands on a
+  // number the squad already uses.
+  const used = new Set<number>();
+
   for (const line of formation.lines) {
     const ids: string[] = [];
 
     line.spread.forEach((across, i) => {
       const override = spec.squad?.[slot++];
-      const number = override?.number ?? line.numbers[i] ?? i + 1;
+      const number = freeNumber(override?.number ?? line.numbers[i] ?? i + 1, used);
+      used.add(number);
       const id = `${spec.id}-${number}`;
       ids.push(id);
 
@@ -362,13 +378,41 @@ export function applyFormation(doc: BoardDoc, teamIndex: 0 | 1, spec: TeamSpec):
     };
   });
 
+  // The old shape's units go with the old shape: a back four's chain says
+  // nothing about a back three, and keeping both would stack a stale connector
+  // under the new one. Ownership is read from the OLD team, since a squad
+  // carried across keeps its ids and the stale links would otherwise survive.
+  // Slotted in where that side's links already sat, so the draw order holds.
+  const links = replaceTeamLinks(doc, teamIndex, built.links);
+
   // pruneLinks drops any link still referencing a player who has just gone, and
-  // discards ones left with fewer than two members.
-  return pruneLinks({
-    ...doc,
-    teams,
-    scenes,
-    links: [...doc.links, ...built.links],
+  // discards ones left with fewer than two members. pruneShots does the same for
+  // a strike whose ball no longer travels — a carrier who has just been rebuilt
+  // away is nulled above, which can leave two scenes holding the ball still.
+  return pruneShots(pruneLinks({ ...doc, teams, scenes, links }));
+}
+
+/**
+ * Change one side's shape, keeping the squad that stands in it.
+ *
+ * The names and numbers are the coach's work and survive; the positions and the
+ * seeded links belong to the shape and do not. Slots pair by ORDER, so a squad
+ * deeper than the new shape loses its tail, and a shallower one takes the new
+ * shape's own numbers for the slots it does not reach.
+ *
+ * `applyFormation` stays mechanical — it does what its spec says, which is what
+ * lets a preset bring a squad of its own. This is the editor's intent, named so
+ * it can be tested without a component.
+ */
+export function changeFormation(doc: BoardDoc, teamIndex: 0 | 1, formation: string): BoardDoc {
+  const team = doc.teams[teamIndex];
+  return applyFormation(doc, teamIndex, {
+    ...(teamIndex === 0 ? HOME : AWAY),
+    name: team.name,
+    color: team.color,
+    textColor: team.textColor,
+    formation,
+    squad: team.players.map((p) => ({ number: p.number, label: p.label })),
   });
 }
 

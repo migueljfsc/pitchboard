@@ -8,12 +8,15 @@ import {
   HOME,
   applyFormation,
   buildTeam,
+  changeFormation,
   createBoardDoc,
   fromNotation,
   getFormation,
   resetPositions,
 } from ".";
 import { boardDocSchema } from "@/board/schema";
+import { setPlayerLabel, setPlayerNumber } from "@/board/players";
+import type { BoardDoc } from "@/board/types";
 import { TOKEN_RADIUS } from "@/board/render";
 
 const PITCH = { length: 105, width: 68 };
@@ -381,5 +384,93 @@ describe("resetPositions", () => {
   it("leaves a valid document", () => {
     const { doc } = moved();
     expect(boardDocSchema.safeParse(resetPositions(doc)).success).toBe(true);
+  });
+});
+
+describe("changing formation", () => {
+  /** Rename and renumber a side, the way a coach would before switching shape. */
+  function named() {
+    let doc = createBoardDoc();
+    doc.teams[0].players.forEach((p, i) => {
+      doc = setPlayerLabel(doc, p.id, `Name ${i + 1}`);
+    });
+    return doc;
+  }
+
+  const change = (doc: BoardDoc, formation: string) => changeFormation(doc, 0, formation);
+
+  it("keeps the squad's names", () => {
+    const doc = named();
+    const before = doc.teams[0].players.map((p) => p.label);
+    const after = change(doc, "3-5-2").teams[0].players.map((p) => p.label);
+    expect(after).toEqual(before);
+  });
+
+  it("keeps the squad's numbers", () => {
+    let doc = named();
+    doc = setPlayerNumber(doc, doc.teams[0].players[5].id, 77);
+    const before = doc.teams[0].players.map((p) => p.number);
+    const after = change(doc, "4-2-3-1").teams[0].players.map((p) => p.number);
+    expect(after).toEqual(before);
+  });
+
+  it("moves them, though — the shape is the point", () => {
+    const doc = named();
+    const before = { ...doc.scenes[0].positions };
+    const after = change(doc, "3-5-2").scenes[0].positions;
+    const moved = doc.teams[0].players.filter(
+      (p) => after[p.id] && before[p.id].x !== after[p.id].x,
+    );
+    expect(moved.length).toBeGreaterThan(0);
+  });
+
+  it("replaces the old shape's links rather than stacking them", () => {
+    const doc = named();
+    const ours = (d: BoardDoc) => {
+      const ids = new Set(d.teams[0].players.map((p) => p.id));
+      return d.links.filter((l) => l.members.some((m) => ids.has(m)));
+    };
+    const before = ours(doc).length;
+    const after = change(doc, "3-5-2");
+    expect(before).toBeGreaterThan(0);
+    expect(ours(after).length).toBeLessThanOrEqual(before + 1);
+    // Nothing from the old shape may survive under its old name.
+    for (const link of ours(after)) expect(link.name).not.toMatch(/Back 4/);
+  });
+
+  it("leaves the opponent's links alone", () => {
+    const doc = named();
+    const awayIds = new Set(doc.teams[1].players.map((p) => p.id));
+    const theirs = (d: BoardDoc) => d.links.filter((l) => l.members.every((m) => awayIds.has(m)));
+    expect(theirs(change(doc, "3-5-2"))).toEqual(theirs(doc));
+  });
+
+  it("does not accumulate links across repeated changes", () => {
+    let doc = named();
+    for (const f of ["3-5-2", "4-4-2", "4-3-3", "5-3-2", "4-3-3"]) doc = change(doc, f);
+    const counts = new Map<string, number>();
+    for (const l of doc.links) counts.set(l.id, (counts.get(l.id) ?? 0) + 1);
+    expect([...counts.values()].every((n) => n === 1)).toBe(true);
+    expect(doc.links.length).toBeLessThan(10);
+  });
+
+  it("never mints two players on one shirt, even from a short squad", () => {
+    // A squad shallower than the new shape leaves slots to the formation's own
+    // numbers, which can land on one the squad already uses. Ids come from the
+    // number, so a clash would silently drop a player.
+    for (const formation of FORMATIONS.map((f) => f.id)) {
+      const squad = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((number) => ({ number }));
+      const doc = applyFormation(createBoardDoc(), 0, { ...HOME, formation, squad });
+      const numbers = doc.teams[0].players.map((p) => p.number);
+      const ids = doc.teams[0].players.map((p) => p.id);
+      expect(new Set(numbers).size).toBe(numbers.length);
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(boardDocSchema.safeParse(doc).success).toBe(true);
+    }
+  });
+
+  it("still produces a valid board", () => {
+    const doc = change(named(), "3-4-3");
+    expect(boardDocSchema.safeParse(doc).success).toBe(true);
   });
 });
