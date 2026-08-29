@@ -1,21 +1,24 @@
+import { useState } from "react";
 import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Eye,
   EyeOff,
+  GripVertical,
   Link2,
   Ruler,
   Trash2,
 } from "lucide-react";
 import type { BoardDoc, Link, LinkStyle } from "@/board/types";
-import { deleteLink, linkColor, moveMember, updateLink } from "@/board/links";
+import { deleteLink, linkColor, moveLink, moveMember, updateLink } from "@/board/links";
 import { PALETTE } from "@/components/ui/palette";
+import type { Change } from "@/lib/history";
 import { cn } from "@/lib/utils";
 
 type Props = {
   doc: BoardDoc;
-  onDocChange: (next: BoardDoc) => void;
+  onDocChange: Change<BoardDoc>;
   selection: ReadonlySet<string>;
   onSelectMembers: (members: string[]) => void;
   onCreateFromSelection: () => void;
@@ -38,6 +41,13 @@ export function LinkPanel({
   expanded,
   onExpandedChange,
 }: Props) {
+  // Which row is in the air, and which GAP it would drop into — 0 is above the
+  // first row, n below the last. A gap says where the row lands; highlighting a
+  // row only says which one it lands near. Both are presentation: the reorder
+  // reaches the document on drop.
+  const [dragging, setDragging] = useState<number | null>(null);
+  const [dropAt, setDropAt] = useState<number | null>(null);
+
   const players = [...selection].filter((id) => id !== "ball");
   const numberOf = (id: string) => {
     for (const team of doc.teams) {
@@ -66,18 +76,39 @@ export function LinkPanel({
       </button>
 
       <div className="flex flex-col gap-1.5">
-        {doc.links.map((link) => (
+        {doc.links.map((link, i) => (
           <LinkRow
             key={link.id}
             doc={doc}
             link={link}
+            index={i}
+            count={doc.links.length}
+            dragging={dragging === i}
+            dropBefore={dropAt === i}
+            dropAfter={dropAt === doc.links.length && i === doc.links.length - 1}
             expanded={expanded === link.id}
             numberOf={numberOf}
             onToggle={() => onExpandedChange(expanded === link.id ? null : link.id)}
             onSelect={() => onSelectMembers(link.members)}
-            onChange={(patch) => onDocChange(updateLink(doc, link.id, patch))}
+            onChange={(patch, merge) => onDocChange(updateLink(doc, link.id, patch), merge)}
             onMove={(from, to) => onDocChange(moveMember(doc, link.id, from, to))}
             onDelete={() => onDocChange(deleteLink(doc, link.id))}
+            onReorder={(to) => onDocChange(moveLink(doc, i, to))}
+            onDragStart={() => setDragging(i)}
+            onDragOver={setDropAt}
+            onDrop={() => {
+              // The gap index counts positions in the list as it stands; once
+              // the dragged row is lifted out, everything below it shifts up.
+              if (dragging !== null && dropAt !== null) {
+                onDocChange(moveLink(doc, dragging, dropAt > dragging ? dropAt - 1 : dropAt));
+              }
+              setDragging(null);
+              setDropAt(null);
+            }}
+            onDragEnd={() => {
+              setDragging(null);
+              setDropAt(null);
+            }}
           />
         ))}
       </div>
@@ -88,6 +119,11 @@ export function LinkPanel({
 function LinkRow({
   doc,
   link,
+  index,
+  count,
+  dragging,
+  dropBefore,
+  dropAfter,
   expanded,
   numberOf,
   onToggle,
@@ -95,26 +131,83 @@ function LinkRow({
   onChange,
   onMove,
   onDelete,
+  onReorder,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
 }: {
   doc: BoardDoc;
   link: Link;
+  index: number;
+  count: number;
+  dragging: boolean;
+  dropBefore: boolean;
+  dropAfter: boolean;
   expanded: boolean;
   numberOf: (id: string) => number | string;
   onToggle: () => void;
   onSelect: () => void;
-  onChange: (patch: Partial<Omit<Link, "id">>) => void;
+  onChange: (patch: Partial<Omit<Link, "id">>, merge?: string) => void;
   onMove: (from: number, to: number) => void;
   onDelete: () => void;
+  onReorder: (to: number) => void;
+  onDragStart: () => void;
+  onDragOver: (gap: number) => void;
+  onDrop: () => void;
+  onDragEnd: () => void;
 }) {
   return (
     <div
+      onDragOver={(e) => {
+        e.preventDefault();
+        // Above the midpoint drops before this row, below it drops after.
+        const box = e.currentTarget.getBoundingClientRect();
+        onDragOver(e.clientY < box.top + box.height / 2 ? index : index + 1);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        onDrop();
+      }}
       className={cn(
-        "rounded-md border transition",
+        "relative rounded-md border transition",
         expanded ? "border-accent bg-ink-700" : "border-ink-600",
         link.hidden && "opacity-50",
+        dragging && "opacity-40",
       )}
     >
+      {/* Sits in the gap between rows, so it marks a position rather than an
+          object. Absolute, so nothing reflows while dragging over it. */}
+      {dropBefore && <DropLine className="-top-1" />}
+      {dropAfter && <DropLine className="-bottom-1" />}
+
       <div className="flex items-center gap-1 px-1.5 py-1.5">
+        {/* Document order is draw order, so this reorders the stack too. */}
+        <button
+          type="button"
+          draggable
+          onDragStart={(e) => {
+            // Firefox refuses to start a drag without payload.
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("text/plain", link.id);
+            onDragStart();
+          }}
+          onDragEnd={onDragEnd}
+          onKeyDown={(e) => {
+            const to = e.key === "ArrowUp" ? index - 1 : e.key === "ArrowDown" ? index + 1 : null;
+            if (to === null || to < 0 || to >= count) return;
+            e.preventDefault();
+            // The editor nudges the selection on arrow keys from a window
+            // listener; stopping here keeps reordering from moving players.
+            e.stopPropagation();
+            onReorder(to);
+          }}
+          aria-label={`Reorder ${link.name}`}
+          title="Drag to reorder, or focus and use the arrow keys. Later links draw on top."
+          className="flex size-4 shrink-0 cursor-grab items-center justify-center rounded text-ink-500 transition hover:text-ink-200 focus:outline-none focus-visible:text-accent active:cursor-grabbing"
+        >
+          <GripVertical size={12} />
+        </button>
         {/* An explicit chevron, because renaming was undiscoverable behind the dot. */}
         <button
           type="button"
@@ -168,7 +261,7 @@ function LinkRow({
             <span className="text-[11px] uppercase tracking-wide text-ink-400">Name</span>
             <input
               value={link.name}
-              onChange={(e) => onChange({ name: e.target.value })}
+              onChange={(e) => onChange({ name: e.target.value }, `link-name:${link.id}`)}
               className="w-full rounded border border-ink-600 bg-ink-900 px-1.5 py-1 text-[11px] text-ink-200 outline-none transition hover:border-ink-400 focus:border-accent"
               aria-label="Link name"
             />
@@ -271,6 +364,18 @@ function LinkRow({
         </div>
       )}
     </div>
+  );
+}
+
+function DropLine({ className }: { className: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "pointer-events-none absolute inset-x-0 h-0.5 rounded-full bg-accent",
+        className,
+      )}
+    />
   );
 }
 

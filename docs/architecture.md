@@ -142,6 +142,8 @@ type Team = {
   color: string          // token fill
   textColor: string      // number/label contrast colour
   players: Player[]
+  hidden?: boolean
+  formation?: string     // the preset it was built from, e.g. "4-3-3"
 }
 
 type Scene = {
@@ -154,6 +156,9 @@ type Scene = {
   carrier: string | null                     // player holding the ball, or null
   ballPos?: Vec2                             // only when carrier === null
   ballPath?: PathCurve | null                // curve for a pass or a loose-ball travel
+  travel?: Record<string, number>            // per-entity travel time, ms, overriding transitionMs
+  hiddenRuns?: string[]                      // entities whose arrow is not drawn (BALL_ID allowed)
+  shot?: boolean                             // the ball's travel in is a strike, not a pass
 }
 
 type LinkStyle = 'chain' | 'polygon' | 'filled'
@@ -180,7 +185,7 @@ type Annotation = {
   | { kind: 'arrow' | 'line'; a: Vec2; b: Vec2; curve?: PathCurve | null; dash: AnnotationDash }
   | { kind: 'rect' | 'ellipse'; a: Vec2; b: Vec2 }   // a/b are the bounding box
   | { kind: 'pen'; points: Vec2[] }                  // simplified on commit, capped at 400
-  | { kind: 'text'; at: Vec2; text: string }
+  | { kind: 'text'; at: Vec2; text: string; size?: number }   // multiplier on TEXT_SIZE, 0.4–4
 )
 
 type BoardDoc = {
@@ -208,6 +213,10 @@ rather than crashes:
 - `links[].members` reference real player ids, and `length >= 2`
 - `annotations[].from` and `.to` reference real scene ids, or `to` is null
 - `scenes[0].transitionMs` is ignored — there is nothing to travel from
+
+`Team.formation` lives in the document rather than in editor state so a board that arrives by
+import or share still knows its own shape. That is what makes a positions-only reset possible:
+without it, resetting could only reach the hard-coded defaults.
 
 **Paths are stored on the scene being travelled into.** Scene *i*'s `paths[e]` describes how
 entity *e* gets from its scene *i-1* position to its scene *i* position. Storing it on the
@@ -308,7 +317,7 @@ the model small.
 
 | `from.carrier` → `to.carrier` | Behaviour |
 |---|---|
-| `A → A` | Glued to A's interpolated position, offset ~1.2 m along A's direction of travel |
+| `A → A` | Glued to A's interpolated position, offset ~1.2 m along A's direction of travel. A dribble: the ball moves, but the movement is A's, so no ball line is drawn |
 | `A → B` | **Pass.** Travels from A's position to B's, following `to.ballPath` if drawn |
 | `A → null` | Loose. Travels from A's position to `to.ballPos` |
 | `null → B` | Collected. Travels from `from.ballPos` to B's position |
@@ -371,6 +380,7 @@ Back to front. Order is fixed; hit-testing walks it in reverse.
 3. links                             under players, so tokens stay legible
 4. link distance labels
 5. motion paths / arrowheads         only when moving, or when the entity is selected
+5b. the ball's own line              dashed for a pass, doubled for a shot; scene.hiddenRuns suppresses either
 6. player tokens + numbers/labels
 7. ball                              above players — it must never be occluded
 8. annotation marks                  arrows, freehand, text — the coach talking over the top
@@ -392,6 +402,28 @@ derived from `view.scale` so text stays proportional rather than shrinking to no
 
 ---
 
+### Undo
+
+`src/lib/history.ts` holds past/present/future snapshots of `BoardDoc` outside the document, so
+nothing about editing history reaches the schema, a share link or an export. Coalescing is by
+explicit key rather than by time — see D26.
+
+### Panels
+
+The left rail holds everything that makes a board: teams, drawing tools, links, the selection.
+The right rail is an inventory of one thing — every shape drawn, with the scenes it appears on.
+It exists because the canvas can only show the drawing for the scene it is on, so a shape ranged
+to scene 4 is both invisible and unfindable from scene 1; selecting it there jumps the scrubber
+to where it starts. It collapses to a strip, since an empty rail is 256px of pitch given away.
+
+Shapes are grouped by their **starting** scene, and each group collapses. Reordering is confined
+to one group: the group is decided by the shape's starting scene, so a row dropped into another
+group would snap straight back, and a drop that crossed groups would index the wrong rows. A
+cross-group drop is therefore a no-op rather than a move, and no drop line is drawn outside the
+group a drag began in.
+
+---
+
 ## 8. Interaction
 
 `src/board/interaction.ts`. Hand-rolled, and small — this is the cost of not using a canvas
@@ -408,6 +440,7 @@ Hit-testing, in reverse draw order, all in pitch metres:
 | Annotation mark | point-to-segment against the sampled stroke, above tokens |
 | Annotation zone | inside the rect, or inside the normalised ellipse, below tokens |
 | Annotation handle | distance to point, only for the selected shape — tested before everything |
+| Text label | radius scaled by `textSize(ann)` — the box is not axis-aligned on a rotated board |
 
 Selection is a `Set<entityId>`. Shift-click toggles; marquee adds everything intersecting.
 Dragging a selection applies the same delta to every member, preserving relative spacing. The
@@ -480,6 +513,12 @@ actually means — you are sending someone a position, not granting write access
 Three layers:
 
 1. **Work in progress** — autosaved to `localStorage`, plus explicit `.json` import/export.
+   The JSON half shipped early, in `src/share/json.ts`. It accepts two shapes, told apart by
+   `version`: a whole `BoardDoc`, and a much shorter **setup** document naming a formation, an
+   eleven and its units. A setup is built into a board and then validated *as* a board, so
+   nothing reaches the editor the schema would reject. Link members in a setup are shirt
+   numbers, resolved once the squad exists; a side that lists links replaces the ones its
+   formation seeded, and a side that says nothing keeps them.
 2. **Self-contained link** — `#d=<base64url(deflate(json))>` using the native `CompressionStream`.
    No backend, works offline, survives the API being down. Used whenever the result fits the URL
    length budget.

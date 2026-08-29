@@ -29,6 +29,14 @@ export type Team = {
   players: Player[];
   /** Hidden teams stay in the document but are not drawn or selectable. */
   hidden?: boolean;
+  /**
+   * Preset the side was built from, e.g. "4-3-3".
+   *
+   * On the document rather than in editor state so a board that arrives by
+   * import or share still knows its own shape — which is what lets positions be
+   * reset without also resetting names, links and scenes.
+   */
+  formation?: string;
 };
 
 export type Scene = {
@@ -54,6 +62,18 @@ export type Scene = {
    * rest of the scene. The scene lasts as long as its slowest mover.
    */
   travel?: Record<string, number>;
+  /**
+   * Entities whose run into this scene is drawn with no arrow. They still
+   * travel — this hides the indicator, not the movement. `BALL_ID` suppresses
+   * the pass line.
+   */
+  hiddenRuns?: string[];
+  /**
+   * The ball's travel into this scene is a strike at goal rather than a pass.
+   * Presentation of the same carrier change, drawn with the double line the
+   * coaching convention uses.
+   */
+  shot?: boolean;
 };
 
 export type LinkStyle = "chain" | "polygon" | "filled";
@@ -89,6 +109,8 @@ export type AnnotationDash = "solid" | "dashed" | "wavy";
 
 type AnnotationBase = {
   id: string;
+  /** What the coach calls it. Absent falls back to the text, then the kind. */
+  name?: string;
   /** Scene id this first appears on. */
   from: string;
   /** Last scene id it appears on; null runs to the end of the timeline. */
@@ -108,7 +130,9 @@ export type Annotation =
   /** `a` and `b` are the bounding box, not centre and radii. */
   | (AnnotationBase & Segment & { kind: "ellipse" })
   | (AnnotationBase & { kind: "pen"; points: Vec2[] })
-  | (AnnotationBase & { kind: "text"; at: Vec2; text: string });
+  /** `size` multiplies TEXT_SIZE; absent is 1, so a label sized before the
+   *  control existed keeps the size it was drawn at. */
+  | (AnnotationBase & { kind: "text"; at: Vec2; text: string; size?: number });
 
 export type AnnotationKind = Annotation["kind"];
 

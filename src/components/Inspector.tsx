@@ -10,7 +10,6 @@ type Props = {
   selection: ReadonlySet<string>;
   activeScene: number;
   canEditPaths: boolean;
-  onNudge: (metres: number, axis: "x" | "y") => void;
   onClear: () => void;
   onCarrierChange: (playerId: string | null) => void;
   onClearPaths: () => void;
@@ -18,6 +17,9 @@ type Props = {
   onRenumber: (playerId: string, number: number) => void;
   onTravelChange: (ms: number | null) => void;
   onRemovePlayer: (playerId: string) => void;
+  /** True when every selected entity has its run arrow hidden in this scene. */
+  runsHidden: boolean;
+  onRunsHiddenChange: (hidden: boolean) => void;
   /**
    * Bumped to put the cursor in the name field — a double-click on the board.
    * A counter rather than a boolean so renaming the same player twice in a row
@@ -31,7 +33,6 @@ export function Inspector({
   selection,
   activeScene,
   canEditPaths,
-  onNudge,
   onClear,
   onCarrierChange,
   onClearPaths,
@@ -39,6 +40,8 @@ export function Inspector({
   onRenumber,
   onTravelChange,
   onRemovePlayer,
+  runsHidden,
+  onRunsHiddenChange,
   focusName,
 }: Props) {
   const nameRef = useRef<HTMLInputElement>(null);
@@ -125,16 +128,6 @@ export function Inspector({
         </p>
       )}
 
-      <div className="flex flex-col gap-1.5">
-        <span className="text-[11px] uppercase tracking-wide text-ink-400">Shift line</span>
-        <div className="grid grid-cols-2 gap-1.5">
-          <SmallButton label="Deeper 5 m" onClick={() => onNudge(-5, "x")} />
-          <SmallButton label="Higher 5 m" onClick={() => onNudge(5, "x")} />
-          <SmallButton label="Left 5 m" onClick={() => onNudge(-5, "y")} />
-          <SmallButton label="Right 5 m" onClick={() => onNudge(5, "y")} />
-        </div>
-      </div>
-
       {canEditPaths && scene && (
         <div className="flex flex-col gap-1.5">
           <div className="flex items-baseline justify-between">
@@ -198,10 +191,17 @@ export function Inspector({
 
       {canEditPaths && (
         <div className="flex flex-col gap-1.5">
-          <span className="text-[11px] uppercase tracking-wide text-ink-400">Run</span>
+          <span className="text-[11px] uppercase tracking-wide text-ink-400">
+            Run — {scene?.name}
+          </span>
           <SmallButton label="Straighten" onClick={onClearPaths} />
+          <SmallButton
+            label={runsHidden ? "Show movement arrows" : "Hide movement arrows"}
+            onClick={() => onRunsHiddenChange(!runsHidden)}
+          />
           <p className="text-[11px] leading-relaxed text-ink-300">
-            Drag the amber handles on a selected player's run to curve it.
+            Drag the amber handles on a selected player's run to curve it. Hiding an arrow
+            applies to this scene only — the player still moves.
           </p>
         </div>
       )}

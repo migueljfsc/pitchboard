@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { BALL_RADIUS, TOKEN_RADIUS, ballRadius, tokenRadius, tokenScaleOf } from "./pitch";
+import {
+  BALL_RADIUS,
+  DEFAULT_TOKEN_SCALE,
+  TOKEN_RADIUS,
+  ballRadius,
+  tokenRadius,
+  tokenScaleOf,
+} from "./pitch";
 import { ballGlue, frameAt } from "./timeline";
 import { hitTest } from "./interaction";
 import { drawBoard } from "./render";
@@ -22,17 +29,22 @@ function view(doc: BoardDoc): RenderView {
 }
 
 describe("tokenScaleOf", () => {
-  it("defaults to 1 when unset, so old documents are unaffected", () => {
-    expect(tokenScaleOf(createBoardDoc())).toBe(1);
-    expect(tokenRadius(createBoardDoc())).toBe(TOKEN_RADIUS);
-    expect(ballRadius(createBoardDoc())).toBe(BALL_RADIUS);
+  it("falls back to the board default when unset", () => {
+    expect(tokenScaleOf(createBoardDoc())).toBe(DEFAULT_TOKEN_SCALE);
+    expect(tokenRadius(createBoardDoc())).toBeCloseTo(TOKEN_RADIUS * DEFAULT_TOKEN_SCALE);
+    expect(ballRadius(createBoardDoc())).toBeCloseTo(BALL_RADIUS * DEFAULT_TOKEN_SCALE);
+  });
+
+  it("takes an explicit 1x as the literal size", () => {
+    expect(tokenRadius(scaled(1))).toBe(TOKEN_RADIUS);
+    expect(ballRadius(scaled(1))).toBe(BALL_RADIUS);
   });
 
   it("scales the token, the ball and the carry offset together", () => {
     const big = scaled(2);
     expect(tokenRadius(big)).toBeCloseTo(TOKEN_RADIUS * 2);
     expect(ballRadius(big)).toBeCloseTo(BALL_RADIUS * 2);
-    expect(ballGlue(big)).toBeCloseTo(ballGlue(createBoardDoc()) * 2);
+    expect(ballGlue(big)).toBeCloseTo(ballGlue(scaled(1)) * 2);
   });
 });
 
@@ -84,11 +96,11 @@ describe("rendering", () => {
     expect(r.log.some((l) => l.startsWith('font="600 2.5px'))).toBe(true);
   });
 
-  it("leaves a scale-1 board byte-identical to one with no tokenScale at all", () => {
+  it("draws a board with no tokenScale exactly as one set to the default", () => {
     const plain = createRecordingCtx();
     const explicit = createRecordingCtx();
     drawBoard(plain.ctx, createBoardDoc(), 0, view(createBoardDoc()));
-    drawBoard(explicit.ctx, scaled(1), 0, view(scaled(1)));
+    drawBoard(explicit.ctx, scaled(DEFAULT_TOKEN_SCALE), 0, view(scaled(DEFAULT_TOKEN_SCALE)));
     expect(explicit.log).toEqual(plain.log);
   });
 });

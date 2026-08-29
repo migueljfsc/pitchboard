@@ -162,6 +162,22 @@ export function deleteLink(doc: BoardDoc, id: string): BoardDoc {
   return links.length === doc.links.length ? doc : withLinks(doc, links);
 }
 
+/**
+ * Reorder the link list itself.
+ *
+ * Document order is draw order, so this is also the z-order: a filled link moved
+ * down the list stops shading the ones above it.
+ */
+export function moveLink(doc: BoardDoc, from: number, to: number): BoardDoc {
+  const n = doc.links.length;
+  if (from === to || from < 0 || from >= n || to < 0 || to >= n) return doc;
+
+  const links = doc.links.slice();
+  const [moved] = links.splice(from, 1);
+  links.splice(to, 0, moved);
+  return withLinks(doc, links);
+}
+
 /** Member order defines the chain sequence and the polygon perimeter. */
 export function moveMember(doc: BoardDoc, id: string, from: number, to: number): BoardDoc {
   const link = doc.links.find((l) => l.id === id);

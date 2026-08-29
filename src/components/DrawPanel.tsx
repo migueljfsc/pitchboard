@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowUpRight,
   Circle,
@@ -13,13 +13,20 @@ import {
   Type,
 } from "lucide-react";
 import type { Annotation, AnnotationDash, BoardDoc, Tool } from "@/board/types";
-import { deleteAnnotation, updateAnnotation } from "@/board/annotations";
+import {
+  TEXT_SCALE_MAX,
+  TEXT_SCALE_MIN,
+  deleteAnnotation,
+  updateAnnotation,
+} from "@/board/annotations";
+import { KIND_LABEL } from "@/components/ui/kinds";
 import { PALETTE } from "@/components/ui/palette";
+import type { Change } from "@/lib/history";
 import { cn } from "@/lib/utils";
 
 type Props = {
   doc: BoardDoc;
-  onDocChange: (next: BoardDoc) => void;
+  onDocChange: Change<BoardDoc>;
   tool: Tool;
   onToolChange: (tool: Tool) => void;
   sticky: boolean;
@@ -50,14 +57,6 @@ const DASHES: { value: AnnotationDash; label: string; hint: string }[] = [
   { value: "wavy", label: "Dribble", hint: "Wavy — the dribble convention" },
 ];
 
-const KIND_LABEL: Record<Annotation["kind"], string> = {
-  arrow: "Arrow",
-  line: "Line",
-  rect: "Box",
-  ellipse: "Oval",
-  pen: "Freehand",
-  text: "Text",
-};
 
 export function DrawPanel({
   doc,
@@ -77,8 +76,8 @@ export function DrawPanel({
   const annotations = doc.annotations ?? [];
   const active = annotations.find((a) => a.id === selected) ?? null;
 
-  const patch = (id: string, fields: Partial<Annotation>) =>
-    onDocChange(updateAnnotation(doc, id, fields));
+  const patch = (id: string, fields: Partial<Annotation>, merge?: string) =>
+    onDocChange(updateAnnotation(doc, id, fields), merge);
 
   return (
     <div className="flex flex-col gap-3">
@@ -172,7 +171,7 @@ export function DrawPanel({
         <Selected
           doc={doc}
           ann={active}
-          onPatch={(fields) => patch(active.id, fields)}
+          onPatch={(fields, merge) => patch(active.id, fields, merge)}
           onDelete={() => {
             onDocChange(deleteAnnotation(doc, active.id));
             onSelect(null);
@@ -200,7 +199,7 @@ function Selected({
 }: {
   doc: BoardDoc;
   ann: Annotation;
-  onPatch: (fields: Partial<Annotation>) => void;
+  onPatch: (fields: Partial<Annotation>, merge?: string) => void;
   onDelete: () => void;
   focusText?: number;
 }) {
@@ -242,14 +241,23 @@ function Selected({
       </div>
 
       {ann.kind === "text" && (
-        <input
-          ref={textRef}
-          value={ann.text}
-          onChange={(e) => onPatch({ text: e.target.value })}
-          placeholder="Label"
-          aria-label="Label text"
-          className="w-full rounded border border-ink-600 bg-ink-900 px-1.5 py-1 text-[11px] text-ink-200 outline-none transition placeholder:text-ink-400 hover:border-ink-400 focus:border-accent"
-        />
+        <div className="flex gap-1.5">
+          <input
+            ref={textRef}
+            value={ann.text}
+            onChange={(e) => onPatch({ text: e.target.value }, `ann-text:${ann.id}`)}
+            placeholder="Label"
+            aria-label="Label text"
+            className="min-w-0 flex-1 rounded border border-ink-600 bg-ink-900 px-1.5 py-1 text-[11px] text-ink-200 outline-none transition placeholder:text-ink-400 hover:border-ink-400 focus:border-accent"
+          />
+          {/* Keyed so selecting a different label remounts the field with its
+              own value, which is what lets it hold a half-typed number. */}
+          <SizeField
+            key={ann.id}
+            value={ann.size ?? 1}
+            onChange={(size) => onPatch({ size }, `ann-size:${ann.id}`)}
+          />
+        </div>
       )}
 
       {/* Which scenes it appears on. Ids, not indices, so reordering carries it. */}
@@ -277,6 +285,41 @@ function Selected({
         <Trash2 size={11} /> Delete shape
       </button>
     </div>
+  );
+}
+
+/**
+ * Label size, as a percentage of the default.
+ *
+ * The typed value lives here rather than in the document: clamping every
+ * keystroke would turn "150" into 40 the moment the first character landed.
+ * Only a value inside the range is committed, and blur puts the field back in
+ * step with what was.
+ */
+function SizeField({ value, onChange }: { value: number; onChange: (size: number) => void }) {
+  const asText = (n: number) => String(Math.round(n * 100));
+  const [text, setText] = useState(() => asText(value));
+
+  return (
+    <label className="flex w-[4.5rem] shrink-0 items-center gap-0.5">
+      <input
+        type="number"
+        min={TEXT_SCALE_MIN * 100}
+        max={TEXT_SCALE_MAX * 100}
+        step={10}
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          const n = Number(e.target.value) / 100;
+          if (n >= TEXT_SCALE_MIN && n <= TEXT_SCALE_MAX) onChange(n);
+        }}
+        onBlur={() => setText(asText(value))}
+        aria-label="Label size"
+        title="Label size, as a percentage of the default"
+        className="w-full min-w-0 rounded border border-ink-600 bg-ink-900 px-1 py-1 font-mono text-[11px] text-ink-200 outline-none transition hover:border-ink-400 focus:border-accent"
+      />
+      <span className="text-[11px] text-ink-400">%</span>
+    </label>
   );
 }
 

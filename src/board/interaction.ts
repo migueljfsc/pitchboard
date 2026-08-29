@@ -17,10 +17,10 @@ import { displayCurve, transitionInto, type Frame, type Resolved } from "./timel
 import { linkGeometry } from "./links";
 import {
   MARK_WIDTH,
-  TEXT_SIZE,
   annotationHandles,
   boundsOf,
   strokePoints,
+  textSize,
   visibleAt,
   type AnnotationHandle,
 } from "./annotations";
@@ -202,7 +202,8 @@ function annotationCovers(ann: Annotation, p: Vec2, margin: number): boolean {
     // Text is drawn upright, so its box is not axis-aligned on a rotated board
     // and a rectangle in pitch space would be wrong there. A radius covering the
     // longer side is orientation-independent and over-grabs only the corners.
-    const reach = Math.max(TEXT_SIZE * 0.7, ann.text.length * TEXT_SIZE * 0.3);
+    const size = textSize(ann);
+    const reach = Math.max(size * 0.7, ann.text.length * size * 0.3);
     return dist(p, ann.at) <= reach + margin;
   }
 

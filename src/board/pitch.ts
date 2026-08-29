@@ -53,7 +53,16 @@ export const MAX_TOKEN_SCALE = 2.5;
  * renderer all have to agree. These are the single source of that agreement —
  * never multiply TOKEN_RADIUS by hand at a call site.
  */
-export const tokenScaleOf = (doc: { tokenScale?: number }): number => doc.tokenScale ?? 1;
+/**
+ * Size a board uses when it has not been told otherwise. Tokens at 1x are
+ * accurate to a player's footprint and too small to read a shirt number on, so
+ * the readable size is the default and 1x is available for anyone who wants the
+ * literal one.
+ */
+export const DEFAULT_TOKEN_SCALE = 1.25;
+
+export const tokenScaleOf = (doc: { tokenScale?: number }): number =>
+  doc.tokenScale ?? DEFAULT_TOKEN_SCALE;
 export const tokenRadius = (doc: { tokenScale?: number }): number =>
   TOKEN_RADIUS * tokenScaleOf(doc);
 export const ballRadius = (doc: { tokenScale?: number }): number =>

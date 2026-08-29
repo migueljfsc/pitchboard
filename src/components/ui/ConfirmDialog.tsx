@@ -32,7 +32,9 @@ export function ConfirmDialog({ title, message, confirmLabel, onConfirm, onCance
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      // Above every other modal: a confirmation is always the more urgent of
+      // the two, and it can be raised from inside one.
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
       // Only a click on the backdrop itself dismisses — not one that started
       // inside the panel and drifted out.
       onMouseDown={(e) => {

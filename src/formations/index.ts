@@ -202,6 +202,12 @@ export type TeamSpec = {
   textColor: string;
   formation: string;
   direction: Direction;
+  /**
+   * Per-slot overrides in formation order, keeper first. Used by JSON import to
+   * name and number a starting eleven without having to know which shirt the
+   * preset would otherwise have handed out.
+   */
+  squad?: { number?: number; label?: string }[];
 };
 
 export type BuiltTeam = {
@@ -225,15 +231,20 @@ export function buildTeam(
   const positions: Record<string, Vec2> = {};
   const links: Link[] = [];
 
+  // Runs across every line, so a squad override addresses the eleven in one
+  // sequence rather than line by line.
+  let slot = 0;
+
   for (const line of formation.lines) {
     const ids: string[] = [];
 
     line.spread.forEach((across, i) => {
-      const number = line.numbers[i] ?? i + 1;
+      const override = spec.squad?.[slot++];
+      const number = override?.number ?? line.numbers[i] ?? i + 1;
       const id = `${spec.id}-${number}`;
       ids.push(id);
 
-      players.push({ id, number, label: "" });
+      players.push({ id, number, label: override?.label ?? "" });
       positions[id] = {
         x: spec.direction === "left" ? line.depth * pitch.length : (1 - line.depth) * pitch.length,
         // Mirror across the width too, so the two sides are not a straight copy
@@ -255,7 +266,20 @@ export function buildTeam(
     }
   }
 
-  return { team: { id: spec.id, name: spec.name, color: spec.color, textColor: spec.textColor, players }, positions, links };
+  return {
+    // The RESOLVED id, not the requested one, so the document never records a
+    // formation that getFormation would have to fall back from.
+    team: {
+      id: spec.id,
+      name: spec.name,
+      color: spec.color,
+      textColor: spec.textColor,
+      players,
+      formation: formation.id,
+    },
+    positions,
+    links,
+  };
 }
 
 export const DEFAULT_PITCH = { length: 105, width: 68 } as const;
@@ -346,6 +370,57 @@ export function applyFormation(doc: BoardDoc, teamIndex: 0 | 1, spec: TeamSpec):
     scenes,
     links: [...doc.links, ...built.links],
   });
+}
+
+/** Which goal a side defends, by index. teams[0] attacks +x throughout. */
+export const directionOf = (teamIndex: number): Direction =>
+  teamIndex === 0 ? HOME.direction : AWAY.direction;
+
+/**
+ * Put every player back on their formation mark, in every scene.
+ *
+ * Deliberately the narrow reset: names, numbers, links, annotations, scene
+ * timings, the ball and the squad all survive — only the shape goes back to the
+ * preset. Runs are cleared with the positions, since every scene now holds the
+ * same shape and a curve between two identical points is a journey of zero
+ * length.
+ */
+export function resetPositions(doc: BoardDoc): BoardDoc {
+  const target: Record<string, Vec2> = {};
+
+  doc.teams.forEach((team, i) => {
+    const built = buildTeam(
+      {
+        id: team.id,
+        name: team.name,
+        color: team.color,
+        textColor: team.textColor,
+        formation: team.formation ?? (i === 0 ? HOME.formation : AWAY.formation),
+        direction: directionOf(i),
+      },
+      doc.pitch,
+    );
+
+    // Paired by ORDER, not by id. Renumbering a player keeps their id, so the
+    // `<team>-<number>` ids a fresh build produces need not match the squad at
+    // all. Players added by hand sit past the last slot and stay where they are.
+    team.players.forEach((player, k) => {
+      const slot = built.team.players[k];
+      if (slot) target[player.id] = built.positions[slot.id];
+    });
+  });
+
+  const scenes = doc.scenes.map((scene) => {
+    const positions = { ...scene.positions };
+    const paths = { ...scene.paths };
+    for (const [id, at] of Object.entries(target)) {
+      positions[id] = { ...at };
+      delete paths[id];
+    }
+    return { ...scene, positions, paths };
+  });
+
+  return { ...doc, scenes };
 }
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");

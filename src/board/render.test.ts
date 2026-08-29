@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { drawBoard, TOKEN_RADIUS } from "./render";
+import { drawBoard } from "./render";
+import { ballRadius, tokenRadius } from "./pitch";
 import { PITCH, PITCH_PADDING, TEAM_NAME_OFFSET } from "./pitch";
 import { frameAt } from "./timeline";
 import { createRecordingCtx } from "./recording-ctx";
 import { createBoardDoc } from "@/formations";
+import { addSceneAfter, setCarrier, setRunHidden, setShot } from "./scenes";
 import { fitViewport, viewMatrix } from "./geometry";
 import { BALL_ID, type RenderView } from "./types";
 
@@ -155,7 +157,7 @@ describe("drawBoard", () => {
     drawBoard(solo.ctx, hidden, 0, view());
 
     const tokens = (r: ReturnType<typeof createRecordingCtx>) =>
-      r.calls("arc").filter((c) => c.includes(`,${TOKEN_RADIUS},0,6.283`)).length;
+      r.calls("arc").filter((c) => c.includes(`,${tokenRadius(doc)},0,6.283`)).length;
 
     expect(tokens(shown)).toBe(22);
     expect(tokens(solo)).toBe(11);
@@ -175,7 +177,7 @@ describe("drawBoard", () => {
     drawBoard(r.ctx, doc, 0, view());
 
     const halfway = r.log.findIndex((e) => e.startsWith(`moveTo(${round(doc.pitch.length / 2)},0)`));
-    const firstToken = r.log.findIndex((e) => e.includes(`,${TOKEN_RADIUS},0,6.283`));
+    const firstToken = r.log.findIndex((e) => e.includes(`,${tokenRadius(doc)},0,6.283`));
     expect(halfway).toBeGreaterThan(-1);
     expect(firstToken).toBeGreaterThan(halfway);
   });
@@ -186,11 +188,12 @@ describe("drawBoard", () => {
     drawBoard(r.ctx, doc, 0, view());
 
     const players = doc.teams[0].players.length + doc.teams[1].players.length;
-    const tokenArcs = r.calls("arc").filter((c) => c.includes(`,${TOKEN_RADIUS},0,6.283`));
+    const tokenArcs = r.calls("arc").filter((c) => c.includes(`,${tokenRadius(doc)},0,6.283`));
     expect(tokenArcs).toHaveLength(players);
 
     const lastToken = r.log.lastIndexOf(tokenArcs[tokenArcs.length - 1]);
-    const ballArc = r.log.findIndex((e) => e.startsWith("arc(52.5,34,0.45"));
+    // Rounded the way the recorder logs numbers, or the scaled radius misses.
+    const ballArc = r.log.findIndex((e) => e.startsWith(`arc(52.5,34,${round(ballRadius(doc))},`));
     expect(ballArc).toBeGreaterThan(lastToken);
   });
 
@@ -338,7 +341,7 @@ describe("frameAt", () => {
     expect(ball.y).toBeCloseTo(at.y);
     expect(ball.x).toBeGreaterThan(at.x);
     // Clear of the token so the shirt number stays readable.
-    expect(ball.x - at.x).toBeGreaterThanOrEqual(TOKEN_RADIUS);
+    expect(ball.x - at.x).toBeGreaterThanOrEqual(tokenRadius(doc));
   });
 
   it("ignores the ball id in positions — it is derived, never stored", () => {
@@ -361,5 +364,97 @@ describe("link colour", () => {
 
     expect(r.log).toContain('strokeStyle="#123456"');
     expect(r.log).not.toContain('strokeStyle="#e11d48"');
+  });
+});
+
+/**
+ * A two-scene board mid-transition, which is when runs and the ball's own line
+ * are drawn. `t` sits inside the travel into scene 2.
+ */
+function moving(edit: (doc: ReturnType<typeof createBoardDoc>) => ReturnType<typeof createBoardDoc> = (d) => d) {
+  let doc = addSceneAfter(createBoardDoc(), 0);
+  const id = doc.teams[0].players[5].id;
+  doc = {
+    ...doc,
+    scenes: doc.scenes.map((s, i) =>
+      i === 1 ? { ...s, positions: { ...s.positions, [id]: { x: 70, y: 40 } } } : s,
+    ),
+  };
+  doc = edit(doc);
+  const r = createRecordingCtx();
+  drawBoard(r.ctx, doc, doc.scenes[0].holdMs / 1000 + 0.5, view());
+  return { doc, r, id };
+}
+
+describe("run arrows", () => {
+  // One per drawn run: drawPath fades the curve, nothing else does.
+  const runs = (r: ReturnType<typeof createRecordingCtx>) =>
+    r.log.filter((l) => l === "globalAlpha=0.75").length;
+
+  it("draws one per player in flight", () => {
+    expect(runs(moving().r)).toBe(1);
+  });
+
+  it("drops the one hidden for that scene, and no other", () => {
+    const { id } = moving();
+    expect(runs(moving((d) => setRunHidden(d, 1, id, true)).r)).toBe(0);
+    // Hidden in the scene the player is NOT travelling into: still drawn.
+    expect(runs(moving((d) => setRunHidden(d, 0, id, true)).r)).toBe(1);
+  });
+});
+
+describe("the ball's own line", () => {
+  const pass = (extra: (d: ReturnType<typeof createBoardDoc>) => ReturnType<typeof createBoardDoc> = (d) => d) =>
+    moving((doc) => {
+      const from = doc.teams[0].players[5].id;
+      const to = doc.teams[0].players[9].id;
+      return extra(setCarrier(setCarrier(doc, 0, from), 1, to));
+    });
+
+  it("dashes a pass — the convention every coaching diagram uses", () => {
+    expect(pass().r.log).toContain("setLineDash([1.4,1])");
+  });
+
+  it("is absent when the ball never leaves anyone's feet", () => {
+    expect(moving().r.log).not.toContain("setLineDash([1.4,1])");
+  });
+
+  it("goes solid and doubles up for a shot", () => {
+    const plain = pass();
+    const shot = pass((d) => setShot(d, 1, true));
+    expect(shot.r.log).not.toContain("setLineDash([1.4,1])");
+    // Two rails plus the strike burst, against the pass's single line.
+    expect(shot.r.count("stroke")).toBeGreaterThan(plain.r.count("stroke"));
+  });
+
+  it("goes when the ball's line is hidden for that scene", () => {
+    const hidden = pass((d) => setRunHidden(d, 1, BALL_ID, true));
+    expect(hidden.r.log).not.toContain("setLineDash([1.4,1])");
+  });
+
+  /**
+   * The one that was wrong: a player running with the ball carries it the whole
+   * length of their run, and that movement was being drawn as a pass.
+   */
+  it("draws nothing for a dribble — one player carrying it throughout", () => {
+    const dribble = moving((doc) => {
+      const runner = doc.teams[0].players[5].id;
+      return setCarrier(setCarrier(doc, 0, runner), 1, runner);
+    });
+    expect(dribble.doc.scenes[0].carrier).toBe(dribble.doc.scenes[1].carrier);
+    expect(dribble.r.log).not.toContain("setLineDash([1.4,1])");
+    // Not merely undashed: no ball line at all. The run arrow already says it.
+    expect(dribble.r.count("stroke")).toBe(moving().r.count("stroke"));
+  });
+
+  it("does not dash a turnover — the convention is a pass between team-mates", () => {
+    const turnover = moving((doc) => {
+      const home = doc.teams[0].players[5].id;
+      const away = doc.teams[1].players[9].id;
+      return setCarrier(setCarrier(doc, 0, home), 1, away);
+    });
+    expect(turnover.r.log).not.toContain("setLineDash([1.4,1])");
+    // Still drawn, though — the ball really did travel.
+    expect(turnover.r.count("stroke")).toBeGreaterThan(moving().r.count("stroke"));
   });
 });

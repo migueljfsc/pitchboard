@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   MARK_WIDTH,
+  TEXT_SCALE_MAX,
+  TEXT_SCALE_MIN,
+  TEXT_SIZE,
   addAnnotation,
   annotationHandles,
   boundsOf,
@@ -11,10 +14,13 @@ import {
   moveAnnotation,
   polylineLength,
   pruneAnnotations,
+  reorderAnnotation,
   sceneRange,
   simplify,
   straightCurve,
   strokePoints,
+  textExtent,
+  textSize,
   updateAnnotation,
   visibleAt,
   wavy,
@@ -402,5 +408,112 @@ describe("schema", () => {
     let doc = board();
     doc = addAnnotation(doc, arrow(doc, "no-such-scene"));
     expect(() => boardDocSchema.parse(JSON.parse(JSON.stringify(doc)))).toThrow();
+  });
+});
+
+describe("label size", () => {
+  const label = (size?: number): Extract<Annotation, { kind: "text" }> => ({
+    id: "t1",
+    kind: "text",
+    from: "scene-1",
+    to: null,
+    color: "#fff",
+    at: at(50, 34),
+    text: "press",
+    ...(size === undefined ? {} : { size }),
+  });
+
+  it("defaults to TEXT_SIZE when no size was ever set", () => {
+    expect(textSize(label())).toBe(TEXT_SIZE);
+  });
+
+  it("multiplies TEXT_SIZE, keeping the default defined in one place", () => {
+    expect(textSize(label(2))).toBe(TEXT_SIZE * 2);
+  });
+
+  it("clamps rather than trusting the value — an imported board is untrusted", () => {
+    expect(textSize(label(99))).toBe(TEXT_SIZE * TEXT_SCALE_MAX);
+    expect(textSize(label(0))).toBe(TEXT_SIZE * TEXT_SCALE_MIN);
+  });
+
+  it("grows the selection box with the label, so a big one is still grabbable", () => {
+    const small = boundsOf(label());
+    const big = boundsOf(label(3));
+    expect(big.w).toBeGreaterThan(small.w);
+    expect(big.h).toBeCloseTo(small.h * 3, 6);
+    // Centred on the anchor, which is where it is drawn.
+    expect(big.x + big.w / 2).toBeCloseTo(50, 6);
+    expect(big.y + big.h / 2).toBeCloseTo(34, 6);
+  });
+
+  it("reaches further for a hit the bigger it is", () => {
+    let doc = board();
+    const wide = { ...label(3), from: doc.scenes[0].id };
+    doc = addAnnotation(doc, wide);
+    const edge = textExtent(wide).w / 2;
+    expect(hitTestAnnotation(doc, 0, at(50 + edge * 0.5, 34), "mark")?.id).toBe("t1");
+    expect(hitTestAnnotation(doc, 0, at(50 + edge * 4, 34), "mark")).toBeNull();
+  });
+
+  it("survives a round trip through the schema", () => {
+    let doc = board();
+    doc = addAnnotation(doc, { ...label(1.6), from: doc.scenes[0].id });
+    const parsed = boardDocSchema.parse(JSON.parse(JSON.stringify(doc)));
+    expect(parsed.annotations?.[0]).toMatchObject({ kind: "text", size: 1.6 });
+  });
+
+  it("rejects a size outside the range", () => {
+    let doc = board();
+    doc = addAnnotation(doc, { ...label(99), from: doc.scenes[0].id });
+    expect(boardDocSchema.safeParse(JSON.parse(JSON.stringify(doc))).success).toBe(false);
+  });
+});
+
+describe("reorderAnnotation", () => {
+  const three = () => {
+    let doc = board();
+    for (let i = 0; i < 3; i++) doc = addAnnotation(doc, arrow(doc));
+    return doc;
+  };
+
+  it("moves a shape within the list, which is the drawing order", () => {
+    const doc = three();
+    const [a, b, c] = (doc.annotations ?? []).map((x) => x.id);
+    expect(reorderAnnotation(doc, 0, 2).annotations?.map((x) => x.id)).toEqual([b, c, a]);
+    expect(reorderAnnotation(doc, 2, 0).annotations?.map((x) => x.id)).toEqual([c, a, b]);
+  });
+
+  it("changes nothing else about the shapes", () => {
+    const doc = three();
+    expect(new Set(reorderAnnotation(doc, 2, 0).annotations)).toEqual(new Set(doc.annotations));
+  });
+
+  it("is a no-op for the same slot, an out-of-range move, or an empty board", () => {
+    const doc = three();
+    expect(reorderAnnotation(doc, 1, 1)).toBe(doc);
+    expect(reorderAnnotation(doc, -1, 0)).toBe(doc);
+    expect(reorderAnnotation(doc, 0, 9)).toBe(doc);
+    const blank = board();
+    expect(reorderAnnotation(blank, 0, 1)).toBe(blank);
+  });
+
+  it("leaves a valid document", () => {
+    expect(boardDocSchema.safeParse(reorderAnnotation(three(), 0, 2)).success).toBe(true);
+  });
+});
+
+describe("a shape's own name", () => {
+  it("round-trips through the schema", () => {
+    let doc = board();
+    doc = addAnnotation(doc, { ...arrow(doc), name: "Press trigger" });
+    const parsed = boardDocSchema.parse(JSON.parse(JSON.stringify(doc)));
+    expect(parsed.annotations?.[0].name).toBe("Press trigger");
+  });
+
+  it("is optional — a shape drawn before names existed still parses", () => {
+    let doc = board();
+    doc = addAnnotation(doc, arrow(doc));
+    expect("name" in (doc.annotations?.[0] ?? {})).toBe(false);
+    expect(boardDocSchema.safeParse(JSON.parse(JSON.stringify(doc))).success).toBe(true);
   });
 });

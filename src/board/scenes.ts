@@ -8,6 +8,7 @@
 import type { BoardDoc, PathCurve, Scene, Vec2 } from "./types";
 import { ballAt, resolveAt, totalDurationMs } from "./timeline";
 import { pruneAnnotations } from "./annotations";
+import { teamOf } from "./players";
 
 export const DEFAULT_TRANSITION_MS = 1500;
 export const DEFAULT_HOLD_MS = 800;
@@ -168,6 +169,96 @@ export function setTravel(
   const next: Scene = { ...scene };
   if (Object.keys(travel).length === 0) delete next.travel;
   else next.travel = travel;
+
+  const scenes = doc.scenes.slice();
+  scenes[index] = next;
+  return replace(doc, scenes);
+}
+
+/**
+ * Show or hide the arrow drawn for an entity's run into scene `index`.
+ *
+ * Per scene and per entity, because a run that needs explaining in one scene is
+ * clutter in the next. Movement is unaffected — this hides the indicator only.
+ * `BALL_ID` suppresses the pass line.
+ */
+export function setRunHidden(
+  doc: BoardDoc,
+  index: number,
+  entityId: string,
+  hidden: boolean,
+): BoardDoc {
+  const scene = doc.scenes[index];
+  if (!scene) return doc;
+
+  const current = scene.hiddenRuns ?? [];
+  if (current.includes(entityId) === hidden) return doc;
+  const list = hidden ? [...current, entityId] : current.filter((id) => id !== entityId);
+
+  // Drop the key once empty, so a scene with nothing hidden serialises exactly
+  // as it did before the field existed.
+  const next: Scene = { ...scene };
+  if (list.length === 0) delete next.hiddenRuns;
+  else next.hiddenRuns = list;
+
+  const scenes = doc.scenes.slice();
+  scenes[index] = next;
+  return replace(doc, scenes);
+}
+
+export function isRunHidden(scene: Scene | undefined, entityId: string): boolean {
+  return scene?.hiddenRuns?.includes(entityId) ?? false;
+}
+
+/**
+ * How the ball gets from one scene to the next.
+ *
+ * `none` covers the case that is easy to get wrong: the same player carries it
+ * throughout. The ball is glued to them, so it moves — a long way, if they run
+ * — but that movement is theirs. A dribble is not a pass and must not be drawn
+ * as one.
+ *
+ * `pass` is reserved for a change of hands between team-mates, which is what
+ * the dashed convention means. Everything else that genuinely travels — a
+ * turnover, a release, a ball collected off the floor, a shot — is `loose`.
+ */
+export type BallTravel = "none" | "pass" | "loose";
+
+export function ballTravelBetween(doc: BoardDoc, from: Scene, to: Scene): BallTravel {
+  if (from.carrier === to.carrier) {
+    if (from.carrier !== null) return "none";
+    const a = from.ballPos;
+    const b = to.ballPos;
+    return a && b && (a.x !== b.x || a.y !== b.y) ? "loose" : "none";
+  }
+
+  if (from.carrier && to.carrier) {
+    const passer = teamOf(doc, from.carrier);
+    const receiver = teamOf(doc, to.carrier);
+    return passer && receiver && passer.id === receiver.id ? "pass" : "loose";
+  }
+  return "loose";
+}
+
+/**
+ * Does the ball travel on its own into this scene? Gates the shot toggle, which
+ * would otherwise be offered on a scene where the ball never leaves anyone's
+ * feet.
+ */
+export function ballTravels(doc: BoardDoc, index: number): boolean {
+  const to = doc.scenes[index];
+  const from = doc.scenes[index - 1];
+  return !!to && !!from && ballTravelBetween(doc, from, to) !== "none";
+}
+
+/** Mark the ball's travel into scene `index` as a strike at goal. */
+export function setShot(doc: BoardDoc, index: number, shot: boolean): BoardDoc {
+  const scene = doc.scenes[index];
+  if (!scene || (scene.shot ?? false) === shot) return doc;
+
+  const next: Scene = { ...scene };
+  if (shot) next.shot = true;
+  else delete next.shot;
 
   const scenes = doc.scenes.slice();
   scenes[index] = next;

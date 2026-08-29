@@ -26,18 +26,20 @@ import {
   type Ctx,
   type PitchTheme,
 } from "./pitch";
-import { displayCurve, frameAt, transitionInto, type Frame } from "./timeline";
+import { ballAt, displayCurve, frameAt, transitionInto, type Frame, type Resolved } from "./timeline";
+import { ballTravelBetween, isRunHidden } from "./scenes";
 import { linkColor, linkGeometry, type LinkGeometry } from "./links";
 import {
   DASH_PATTERN,
   HEAD_LENGTH,
   HEAD_WIDTH,
   MARK_WIDTH,
-  TEXT_SIZE,
   ZONE_ALPHA,
   annotationHandles,
   boundsOf,
+  straightCurve,
   strokePoints,
+  textSize,
   visibleAt,
   wavy,
 } from "./annotations";
@@ -330,7 +332,7 @@ function drawZone(ctx: Ctx, ann: Annotation): void {
 /** Arrows, lines, freehand and text — everything drawn over the play. */
 function drawMark(ctx: Ctx, ann: Annotation, rotated: boolean): void {
   if (ann.kind === "text") {
-    drawAnnotationText(ctx, ann.at, ann.text, ann.color, rotated);
+    drawAnnotationText(ctx, ann, rotated);
     return;
   }
 
@@ -400,22 +402,23 @@ function drawHead(ctx: Ctx, points: Vec2[], color: string): void {
 
 function drawAnnotationText(
   ctx: Ctx,
-  at: Vec2,
-  text: string,
-  color: string,
+  ann: Extract<Annotation, { kind: "text" }>,
   rotated: boolean,
 ): void {
-  if (!text.trim()) return;
-  upright(ctx, at, rotated, () => {
-    ctx.font = `700 ${TEXT_SIZE}px Inter, system-ui, -apple-system, sans-serif`;
+  if (!ann.text.trim()) return;
+  // Every measurement scales with the label, so a bigger one is the same drawing
+  // at a larger size rather than big type in a thin outline.
+  const size = textSize(ann);
+  upright(ctx, ann.at, rotated, () => {
+    ctx.font = `700 ${size}px Inter, system-ui, -apple-system, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.lineJoin = "round";
     ctx.strokeStyle = "rgba(0,0,0,0.75)";
-    ctx.lineWidth = TEXT_SIZE * 0.2;
-    ctx.strokeText(text, 0, 0);
-    ctx.fillStyle = color;
-    ctx.fillText(text, 0, 0);
+    ctx.lineWidth = size * 0.2;
+    ctx.strokeText(ann.text, 0, 0);
+    ctx.fillStyle = ann.color;
+    ctx.fillText(ann.text, 0, 0);
   });
 }
 
@@ -455,13 +458,16 @@ function drawPaths(ctx: Ctx, doc: BoardDoc, frame: Frame, view: RenderView): voi
 
   // While the animation runs, show every run in flight.
   if (r.moving) {
+    const scene = doc.scenes[r.index];
     for (const team of doc.teams) {
       if (team.hidden) continue;
       for (const player of team.players) {
+        if (isRunHidden(scene, player.id)) continue;
         const b = displayCurve(player.id, r);
         if (b) drawPath(ctx, b, team.color, false, clear);
       }
     }
+    drawBallPath(ctx, doc, r);
     return;
   }
 
@@ -470,15 +476,117 @@ function drawPaths(ctx: Ctx, doc: BoardDoc, frame: Frame, view: RenderView): voi
   if (!view.interactive || view.editScene === undefined) return;
   const edit = transitionInto(doc, view.editScene);
   if (!edit) return;
+  const scene = doc.scenes[view.editScene];
 
   for (const team of doc.teams) {
     if (team.hidden) continue;
     for (const player of team.players) {
       if (!view.selection?.has(player.id)) continue;
+      if (isRunHidden(scene, player.id)) continue;
       const b = displayCurve(player.id, edit);
       if (b) drawPath(ctx, b, team.color, true, clear);
     }
   }
+
+  // The ball line is not gated on selection: a pass or a shot is the point of
+  // the scene, and having to select the ball to see one hides the thing being
+  // explained.
+  drawBallPath(ctx, doc, edit);
+}
+
+/** White reads over grass, both kits and the ball itself. */
+const BALL_PATH_COLOR = "#ffffff";
+const BALL_PATH_WIDTH = 0.32;
+/** Below this the ball has barely moved and a line would be noise. */
+const MIN_BALL_TRAVEL = 1.5;
+/** Half the gap between the two rails of a shot. */
+const SHOT_OFFSET = 0.26;
+
+/**
+ * The ball's own journey into a scene — the pass, or the shot.
+ *
+ * Players get an arrow per run and the ball had none, which left the one event
+ * the tactic is usually about with no indicator at all.
+ *
+ * Only drawn when the ball travels of its own accord. A player running with it
+ * carries it a long way and that is their run, not a pass — see
+ * `ballTravelBetween`. Dashed is reserved for a pass between team-mates, which
+ * is what the convention means; a turnover, a release or a loose ball is drawn
+ * solid, and a shot is the double line struck from a burst at the contact point.
+ */
+function drawBallPath(ctx: Ctx, doc: BoardDoc, r: Resolved): void {
+  if (isRunHidden(doc.scenes[r.index], BALL_ID)) return;
+
+  const travel = ballTravelBetween(doc, r.from, r.to);
+  if (travel === "none") return;
+
+  // Endpoints come from the function that actually moves the ball, sampled at
+  // both ends of the travel, so the line is the journey rather than a guess at
+  // it — carrier glue and per-entity travel included.
+  const start = ballAt({ ...r, u: 0 }, doc);
+  const end = ballAt({ ...r, u: 1 }, doc);
+  if (Math.hypot(end.x - start.x, end.y - start.y) < MIN_BALL_TRAVEL) return;
+
+  const curve = r.to.ballPath ?? straightCurve(start, end);
+  const b: Bezier = { p0: start, c1: curve.c1, c2: curve.c2, p1: end };
+
+  // Stop short of the destination so the head is not buried under the ball.
+  const clear = ballRadius(doc) * 2;
+  const table = buildArcTable(b);
+  const trim = table.total > clear * 2 ? 1 - clear / table.total : 1;
+  const points: Vec2[] = [];
+  for (let i = 0; i <= PATH_STEPS; i++) {
+    points.push(cubicAt(b, reparameterise(table, (i / PATH_STEPS) * trim)));
+  }
+
+  const shot = r.to.shot === true;
+  const rails = shot
+    ? [offsetPolyline(points, SHOT_OFFSET), offsetPolyline(points, -SHOT_OFFSET)]
+    : [points];
+
+  ctx.save();
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  if (travel === "pass" && !shot) ctx.setLineDash(DASH_PATTERN);
+  for (const rail of rails) strokePolyline(ctx, rail, "rgba(0,0,0,0.4)", BALL_PATH_WIDTH + 0.14);
+  for (const rail of rails) strokePolyline(ctx, rail, BALL_PATH_COLOR, BALL_PATH_WIDTH);
+  ctx.restore();
+
+  drawHead(ctx, points, BALL_PATH_COLOR);
+  if (shot) drawStrike(ctx, start, points[1] ?? end);
+}
+
+/** Displace a polyline sideways by a constant, perpendicular to its direction. */
+function offsetPolyline(points: Vec2[], by: number): Vec2[] {
+  return points.map((p, i) => {
+    const a = points[Math.max(0, i - 1)];
+    const c = points[Math.min(points.length - 1, i + 1)];
+    const len = Math.hypot(c.x - a.x, c.y - a.y);
+    if (len === 0) return p;
+    return { x: p.x - ((c.y - a.y) / len) * by, y: p.y + ((c.x - a.x) / len) * by };
+  });
+}
+
+/** A burst behind the contact point, so a shot reads as struck rather than rolled. */
+function drawStrike(ctx: Ctx, at: Vec2, towards: Vec2): void {
+  const angle = Math.atan2(towards.y - at.y, towards.x - at.x);
+  if (!Number.isFinite(angle)) return;
+
+  ctx.save();
+  ctx.strokeStyle = BALL_PATH_COLOR;
+  ctx.lineWidth = 0.22;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  // Fanned backwards from the direction of travel, and kept short: the ball
+  // starts a token's length ahead of whoever struck it, so a longer tick lands
+  // on their shirt.
+  for (const spread of [-1.15, 0, 1.15]) {
+    const a = angle + Math.PI + spread;
+    ctx.moveTo(at.x + Math.cos(a) * 0.5, at.y + Math.sin(a) * 0.5);
+    ctx.lineTo(at.x + Math.cos(a) * 1.15, at.y + Math.sin(a) * 1.15);
+  }
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawPath(ctx: Ctx, b: Bezier, color: string, withHandles: boolean, clear: number): void {

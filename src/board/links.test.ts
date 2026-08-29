@@ -6,6 +6,7 @@ import {
   deleteLink,
   linkColor,
   linkGeometry,
+  moveLink,
   moveMember,
   perimeter,
   pruneLinks,
@@ -356,5 +357,34 @@ describe("linkColor", () => {
     const doc = createBoardDoc();
     doc.links = [linkOver([A, B])];
     expect(() => boardDocSchema.parse(JSON.parse(JSON.stringify(doc)))).not.toThrow();
+  });
+});
+
+describe("moveLink", () => {
+  const withThree = () => {
+    const doc = createBoardDoc();
+    // Three is the smallest list where a move can land in the middle.
+    return { ...doc, links: doc.links.slice(0, 3) };
+  };
+
+  it("reorders the list, which is also the draw order", () => {
+    const doc = withThree();
+    const [a, b, c] = doc.links.map((l) => l.id);
+    expect(moveLink(doc, 0, 2).links.map((l) => l.id)).toEqual([b, c, a]);
+    expect(moveLink(doc, 2, 0).links.map((l) => l.id)).toEqual([c, a, b]);
+    expect(moveLink(doc, 0, 1).links.map((l) => l.id)).toEqual([b, a, c]);
+  });
+
+  it("changes nothing else about the links", () => {
+    const doc = withThree();
+    const moved = moveLink(doc, 2, 0);
+    expect(new Set(moved.links)).toEqual(new Set(doc.links));
+  });
+
+  it("is a no-op for a move to the same slot or out of range", () => {
+    const doc = withThree();
+    expect(moveLink(doc, 1, 1)).toBe(doc);
+    expect(moveLink(doc, -1, 0)).toBe(doc);
+    expect(moveLink(doc, 0, 9)).toBe(doc);
   });
 });

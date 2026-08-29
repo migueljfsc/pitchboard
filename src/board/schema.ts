@@ -8,6 +8,7 @@
 import { z } from "zod";
 import type { BoardDoc } from "./types";
 import { BALL_ID } from "./types";
+import { TEXT_SCALE_MAX, TEXT_SCALE_MIN } from "./annotations";
 
 const vec2 = z.object({ x: z.number().finite(), y: z.number().finite() });
 
@@ -26,6 +27,7 @@ const team = z.object({
   textColor: z.string().min(1),
   players: z.array(player).max(30),
   hidden: z.boolean().optional(),
+  formation: z.string().min(1).max(20).optional(),
 });
 
 const scene = z.object({
@@ -39,6 +41,8 @@ const scene = z.object({
   ballPos: vec2.optional(),
   ballPath: pathCurve.nullable().optional(),
   travel: z.record(z.string(), z.number().int().min(0).max(60_000)).optional(),
+  hiddenRuns: z.array(z.string().min(1)).max(64).optional(),
+  shot: z.boolean().optional(),
 });
 
 const link = z.object({
@@ -53,6 +57,7 @@ const link = z.object({
 
 const annotationBase = {
   id: z.string().min(1),
+  name: z.string().max(60).optional(),
   /** Scene ids, checked against the real scene list by the refinement below. */
   from: z.string().min(1),
   to: z.string().min(1).nullable(),
@@ -71,7 +76,13 @@ const annotation = z.discriminatedUnion("kind", [
   // Capped: a freehand stroke is simplified on commit, and every point of it
   // ends up in the share URL.
   z.object({ ...annotationBase, kind: z.literal("pen"), points: z.array(vec2).min(2).max(400) }),
-  z.object({ ...annotationBase, kind: z.literal("text"), at: vec2, text: z.string().max(120) }),
+  z.object({
+    ...annotationBase,
+    kind: z.literal("text"),
+    at: vec2,
+    text: z.string().max(120),
+    size: z.number().min(TEXT_SCALE_MIN).max(TEXT_SCALE_MAX).optional(),
+  }),
 ]);
 
 /**

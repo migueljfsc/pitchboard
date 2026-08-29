@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_HOLD_MS,
   addSceneAfter,
+  ballTravelBetween,
+  ballTravels,
+  isRunHidden,
   defaultCurve,
   deleteScene,
   duplicateScene,
@@ -10,7 +13,9 @@ import {
   sceneStartSeconds,
   setCarrier,
   setPath,
+  setRunHidden,
   setSceneTiming,
+  setShot,
   totalSeconds,
 } from "./scenes";
 import { boardDocSchema } from "./schema";
@@ -211,5 +216,127 @@ describe("every operation leaves a valid document", () => {
 
     const result = boardDocSchema.safeParse(doc);
     expect(result.success ? null : result.error.issues).toBeNull();
+  });
+});
+
+describe("setRunHidden", () => {
+  const twoScenes = () => addSceneAfter(base(), 0);
+
+  it("hides one entity's arrow in one scene, and no other", () => {
+    let doc = twoScenes();
+    doc = setRunHidden(doc, 1, HOME_9, true);
+    expect(isRunHidden(doc.scenes[1], HOME_9)).toBe(true);
+    expect(isRunHidden(doc.scenes[1], HOME_10)).toBe(false);
+    expect(isRunHidden(doc.scenes[0], HOME_9)).toBe(false);
+    expect(valid(doc)).toBe(true);
+  });
+
+  it("drops the key once nothing is hidden, so the scene serialises as before", () => {
+    let doc = twoScenes();
+    doc = setRunHidden(doc, 1, HOME_9, true);
+    doc = setRunHidden(doc, 1, HOME_9, false);
+    expect("hiddenRuns" in doc.scenes[1]).toBe(false);
+  });
+
+  it("is a no-op when the entity is already in that state", () => {
+    const doc = twoScenes();
+    expect(setRunHidden(doc, 1, HOME_9, false)).toBe(doc);
+    const hidden = setRunHidden(doc, 1, HOME_9, true);
+    expect(setRunHidden(hidden, 1, HOME_9, true)).toBe(hidden);
+  });
+
+  it("hides the ball's line under the same key", () => {
+    const doc = setRunHidden(twoScenes(), 1, "ball", true);
+    expect(isRunHidden(doc.scenes[1], "ball")).toBe(true);
+    expect(valid(doc)).toBe(true);
+  });
+});
+
+describe("ballTravels", () => {
+  it("is false with no previous scene to travel from", () => {
+    expect(ballTravels(base(), 0)).toBe(false);
+  });
+
+  it("is false while the same player carries the ball throughout", () => {
+    let doc = setCarrier(base(), 0, HOME_9);
+    doc = addSceneAfter(doc, 0);
+    expect(doc.scenes[1].carrier).toBe(HOME_9);
+    expect(ballTravels(doc, 1)).toBe(false);
+  });
+
+  it("is true for a pass — a carrier change", () => {
+    let doc = setCarrier(base(), 0, HOME_9);
+    doc = addSceneAfter(doc, 0);
+    doc = setCarrier(doc, 1, HOME_10);
+    expect(ballTravels(doc, 1)).toBe(true);
+  });
+
+  it("is true for a loose ball that rolls, and false for one that does not", () => {
+    const doc = addSceneAfter(base(), 0);
+    expect(ballTravels(doc, 1)).toBe(false);
+    const rolled = {
+      ...doc,
+      scenes: doc.scenes.map((s, i) => (i === 1 ? { ...s, ballPos: { x: 90, y: 34 } } : s)),
+    };
+    expect(ballTravels(rolled, 1)).toBe(true);
+  });
+});
+
+describe("setShot", () => {
+  it("marks and unmarks the travel into a scene, dropping the key when off", () => {
+    const doc = addSceneAfter(base(), 0);
+    const shot = setShot(doc, 1, true);
+    expect(shot.scenes[1].shot).toBe(true);
+    expect(valid(shot)).toBe(true);
+    expect("shot" in setShot(shot, 1, false).scenes[1]).toBe(false);
+  });
+
+  it("is a no-op when already in that state", () => {
+    const doc = addSceneAfter(base(), 0);
+    expect(setShot(doc, 1, false)).toBe(doc);
+  });
+});
+
+describe("ballTravelBetween", () => {
+  const AWAY_9 = "away-9";
+  const pair = (doc: BoardDoc) => ballTravelBetween(doc, doc.scenes[0], doc.scenes[1]);
+
+  it("is none for a dribble — the same player carries it throughout", () => {
+    let doc = setCarrier(base(), 0, HOME_9);
+    doc = addSceneAfter(doc, 0);
+    // The carrier runs; the ball goes with them, and that is their run.
+    doc = {
+      ...doc,
+      scenes: doc.scenes.map((s, i) =>
+        i === 1 ? { ...s, positions: { ...s.positions, [HOME_9]: { x: 80, y: 20 } } } : s,
+      ),
+    };
+    expect(pair(doc)).toBe("none");
+  });
+
+  it("is a pass between team-mates", () => {
+    let doc = setCarrier(base(), 0, HOME_9);
+    doc = addSceneAfter(doc, 0);
+    expect(pair(setCarrier(doc, 1, HOME_10))).toBe("pass");
+  });
+
+  it("is loose when the ball changes team — a turnover is not a pass", () => {
+    let doc = setCarrier(base(), 0, HOME_9);
+    doc = addSceneAfter(doc, 0);
+    expect(pair(setCarrier(doc, 1, AWAY_9))).toBe("loose");
+  });
+
+  it("is loose when released, and loose when collected", () => {
+    let doc = setCarrier(base(), 0, HOME_9);
+    doc = addSceneAfter(doc, 0);
+    expect(pair(setCarrier(doc, 1, null))).toBe("loose");
+
+    let collected = addSceneAfter(base(), 0);
+    collected = setCarrier(collected, 1, HOME_9);
+    expect(pair(collected)).toBe("loose");
+  });
+
+  it("is none for a loose ball nobody has moved", () => {
+    expect(pair(addSceneAfter(base(), 0))).toBe("none");
   });
 });

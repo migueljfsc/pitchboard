@@ -324,6 +324,12 @@ The risk this carries is drift between what is drawn and what is clickable. `tok
 `TOKEN_RADIUS` by hand, and there are tests asserting a point outside a small token is inside a
 large one.
 
+**The default is `DEFAULT_TOKEN_SCALE`, 1.25, not 1.** A token at 1x is about a player's actual
+footprint and too small to read a shirt number on at any sensible board size — accurate and
+useless. The readable size is the default and 1x stays available for anyone who wants the
+literal one. Absent means "whatever the default is", defined once in `pitch.ts`, so a document
+that never set the field follows it rather than pinning an old value.
+
 ---
 
 ## D19 — Stack follows `wtc/ui`, with pnpm
@@ -389,6 +395,134 @@ how those players relate, and the tool should not be making it unprompted.
 
 *Rejected — keep the size rule.* It is right often enough to feel clever and wrong often enough
 to need undoing, which is the worst combination for a default.
+
+---
+
+## D22 — The formation lives on the team, and there are two resets
+
+**Decision.** `Team.formation` is part of `BoardDoc`. "Reset board" starts a fresh board keeping
+only the two formations; "Reset positions" puts every player back on their formation mark in
+every scene, keeping names, numbers, links, drawings, the ball and the scene list.
+
+The formation was editor state, which made both resets impossible to write honestly: the wide
+one could only reach the hard-coded 4-3-3 against 4-4-2 whatever you had picked, and the narrow
+one had nothing to reset *to*. It also meant an imported or shared board arrived not knowing its
+own shape. Putting it in the document fixes all three, and costs one optional string.
+
+**Slots are paired by ORDER, not by id.** `buildTeam` mints ids as `<team>-<number>`, but
+renumbering a player keeps their id — so after any renumber the ids a fresh build produces no
+longer match the squad. `resetPositions` walks `team.players` and the freshly built players
+together by index. Players added by hand sit past the last slot and are left where they are.
+
+**Positions reset clears the runs it flattens.** Every scene ends up holding the same shape, so
+a curve between two identical points describes a journey of zero length — the same reasoning
+`addSceneAfter` already used.
+
+*Rejected — reset the current scene only.* Offered, and turned down: this is the general reset.
+A per-scene version can come later.
+
+---
+
+## D23 — Two JSON shapes, one importer
+
+**Decision.** `src/share/json.ts` accepts either a whole `BoardDoc` or a short **setup**
+document, told apart by the presence of `version`. Both go through zod; a setup is built into a
+board and then validated as one.
+
+They answer different questions. A whole board is what you send someone so they open your play
+exactly as you left it — every scene, run, link and drawing. A setup is what you would actually
+sit down and type: a formation, eleven names and numbers, and the units you want linked. Making
+one file format serve both would mean either a verbose thing nobody hand-writes or a lossy thing
+that cannot carry a play.
+
+Inside the setup form:
+
+- **Players are listed in formation order, keeper first.** Matching by shirt number instead
+  would require knowing which numbers the preset hands out before you can name anyone.
+- **Link members ARE shirt numbers**, resolved after the squad exists — the only stable handle a
+  human has on a player.
+- **A side that lists links replaces its seeded ones; a side that says nothing keeps them.**
+- **No `direction`.** teams[0] attacks +x throughout the renderer — the team names behind each
+  goal, the ball's resting offset — so a file flipping it would break more than it buys.
+
+Import replaces the whole board behind a confirmation. There is no autosave and no undo yet, so
+it is the one destructive action a stray paste could trigger.
+
+---
+
+## D24 — A shot is a scene flag, not a shape
+
+**Decision.** `Scene.shot` marks the ball's travel into that scene as a strike. The renderer
+draws the ball's journey as a dashed line for a pass and a doubled solid line with a burst at
+the contact point for a shot.
+
+Players each got an arrow for their run and the ball got nothing, which left the one event a
+tactic is usually about with no indicator at all. The line is drawn from `ballAt` sampled at
+both ends of the travel, so it is the journey rather than an approximation of it — carrier glue,
+`ballPath` and per-entity travel all included for free.
+
+*Rejected — a "shot" annotation.* A drawing that happens to sit near the ball is not connected
+to it: move the pass and the shot stays behind. This follows the same logic as D-ball — a pass
+is a carrier change, not an object — so a shot is a property of that change.
+
+*Rejected — a fourth `AnnotationDash`.* Same objection, plus it would let you draw a shot that
+no ball takes.
+
+**What gets a line, and which one, comes from the carrier change** — `ballTravelBetween`, not
+from how far the ball moved. A carrier running with it drags it the length of their run, so
+distance drew every dribble as a pass. Same carrier throughout is a dribble and gets no line at
+all; the run arrow already says it. Dashed is reserved for a change of hands between team-mates,
+which is what the convention means. A turnover, a release or a ball collected off the floor is
+drawn solid — it travelled, but calling it a pass would be a claim about the play that is not
+true.
+
+---
+
+## D25 — Run arrows hide per scene, per player
+
+**Decision.** `Scene.hiddenRuns` lists entities whose arrow is not drawn for the travel into
+that scene. Movement is unaffected — this hides the indicator, not the motion. `BALL_ID` is a
+valid entry and suppresses the pass or shot line.
+
+A scene where ten players shuffle two metres and one makes the run that matters is unreadable
+with eleven arrows on it. Per scene because a run worth explaining in one scene is clutter in
+the next; per player because which one matters changes scene by scene.
+
+*Rejected — a global "show arrows" toggle.* Correct nowhere: you either lose the arrow you
+wanted or keep the ten you did not.
+
+---
+
+## D26 — Undo is a stack of snapshots, coalesced by gesture
+
+**Decision.** `useHistory` in `src/lib/history.ts` keeps whole `BoardDoc` snapshots, past and
+future, capped at 60. Undo/redo sit in the sidebar header and on ⌘/Ctrl+Z and ⌘⇧Z / Ctrl+Y.
+
+**Snapshots, not inverse operations.** Every function in `src/board/` already returns a new
+document sharing everything it did not touch, so an entry costs a pointer, not a copy. The
+alternative — an undo implementation per operation — is a second thing to keep in step with the
+operations themselves, and it goes wrong silently.
+
+**Coalescing is the whole problem.** A drag emits a document per `pointermove`; stepping back
+through those one at a time is not undo, it is rewind. So `set(next, merge?)` takes an optional
+key, and consecutive changes sharing one replace the top of the stack instead of pushing onto
+it. `BoardCanvas` bumps a gesture counter on every `pointerdown` and tags that drag's writes with
+it; text fields pass a key per field, so a typed name is one step. A change with no key always
+pushes, and an undefined key never merges with another undefined one.
+
+*Rejected — coalescing on a timer.* It merges two deliberate quick clicks and splits one slow
+drag, and it makes what undo does depend on how fast you were moving.
+
+**The document only.** Not the selection, the framing, the armed tool or the open panels. Those
+are how you are looking at the board, not changes to it, and rewinding them is its own surprise.
+Undo can shorten the scene list under the selected scene, so the selected index is clamped where
+it is read rather than synced back into state.
+
+**Reset and import are undoable**, like anything else. An accidental reset is exactly when undo
+earns its keep.
+
+The stack maths is pure and lives outside the hook, because this project tests the engine and
+not components.
 
 ---
 

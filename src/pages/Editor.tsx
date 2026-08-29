@@ -6,37 +6,70 @@ import { TeamControls } from "@/components/TeamControls";
 import { ViewControls } from "@/components/ViewControls";
 import { Section } from "@/components/ui/Section";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { RotateCcw } from "lucide-react";
+import {
+  FileJson,
+  PanelRightClose,
+  PanelRightOpen,
+  Redo2,
+  RotateCcw,
+  Undo2,
+  Users,
+} from "lucide-react";
 import { Inspector } from "@/components/Inspector";
+import { DrawingsPanel } from "@/components/DrawingsPanel";
+import { JsonDialog } from "@/components/JsonDialog";
 import { LinkPanel } from "@/components/LinkPanel";
 import { DrawPanel } from "@/components/DrawPanel";
 import { Timeline } from "@/components/Timeline";
 import { nudgeEntities } from "@/board/interaction";
+import { useHistory } from "@/lib/history";
+import { cn } from "@/lib/utils";
 import { createLink } from "@/board/links";
-import { annotationsOf, deleteAnnotation } from "@/board/annotations";
+import { annotationsOf, deleteAnnotation, sceneRange } from "@/board/annotations";
 import { concealedPlayers } from "@/board/render";
-import { sceneStartSeconds, setCarrier, setPath, setTravel, totalSeconds } from "@/board/scenes";
+import {
+  isRunHidden,
+  sceneStartSeconds,
+  setCarrier,
+  setPath,
+  setRunHidden,
+  setTravel,
+  totalSeconds,
+} from "@/board/scenes";
 import { addPlayer, removePlayer, setPlayerLabel, setPlayerNumber } from "@/board/players";
 import {
   AWAY,
   HOME,
   applyFormation,
   createBoardDoc,
+  resetPositions,
   type Direction,
 } from "@/formations";
 
+/** What a confirmation is currently guarding. */
+type Pending =
+  | { kind: "reset" }
+  | { kind: "positions" }
+  | { kind: "import"; doc: BoardDoc };
+
 export function Editor() {
-  const [doc, setDoc] = useState<BoardDoc>(() => createBoardDoc());
+  // The document is the only undoable thing. How you are looking at the board —
+  // the framing, the selection, which panel is open — is not an edit, and
+  // rewinding it would be its own kind of surprise.
+  const { state: doc, set: setDoc, undo, redo, canUndo, canRedo } = useHistory<BoardDoc>(
+    createBoardDoc,
+  );
   const [selection, setSelection] = useState<ReadonlySet<string>>(() => new Set());
-  const [formations, setFormations] = useState<[string, string]>([HOME.formation, AWAY.formation]);
-  const [activeScene, setActiveScene] = useState(0);
+  const [chosenScene, setActiveScene] = useState(0);
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [loop, setLoop] = useState(true);
   const [expandedLink, setExpandedLink] = useState<string | null>(null);
   const [pitchView, setPitchView] = useState<PitchView>(DEFAULT_PITCH_VIEW);
-  const [confirmReset, setConfirmReset] = useState(false);
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [jsonOpen, setJsonOpen] = useState(false);
   const [selectionOpen, setSelectionOpen] = useState(true);
+  const [drawingsOpen, setDrawingsOpen] = useState(false);
   const [focusName, setFocusName] = useState(0);
 
   // Drawing. The tool owns what a drag on the grass does; colour and dash are
@@ -51,6 +84,15 @@ export function Editor() {
 
   const directions = useMemo<[Direction, Direction]>(() => [HOME.direction, AWAY.direction], []);
   const total = totalSeconds(doc);
+
+  // The scene list can shrink under the selection — undo, redo, import, reset
+  // and deleting a scene all do it. Clamped where it is read rather than synced
+  // back into state, so there is no render where the index is out of range.
+  const activeScene = Math.min(chosenScene, doc.scenes.length - 1);
+
+  // The chosen formation lives on the team, not in this component, so a board
+  // that arrives by import still knows its own shape.
+  const formationOf = (i: 0 | 1) => doc.teams[i].formation ?? (i === 0 ? HOME : AWAY).formation;
 
   // Scene 0 has no incoming transition, so there is no run to shape there.
   const editScene = activeScene > 0 ? activeScene : undefined;
@@ -99,7 +141,8 @@ export function Editor() {
    * Selecting a later scene arms its editing overlay, which draws the runs into
    * that scene as editable curves. Left armed while the animation plays, those
    * curves hang over every other scene as well and read as arrows belonging
-   * nowhere. Scene 1 has no incoming transition, so it arms nothing.
+   * nowhere. Scene 1 has no incoming transition, so it arms nothing. The scene
+   * strip shows where the playhead has actually reached.
    */
   const setPlayback = useCallback((next: boolean) => {
     setPlaying(next);
@@ -130,20 +173,17 @@ export function Editor() {
         formation,
       }),
     );
-    setFormations((f) => {
-      const next = f.slice() as [string, string];
-      next[teamIndex] = formation;
-      return next;
-    });
     setSelection(new Set());
   };
 
   const onNudge = useCallback(
     (metres: number, axis: "x" | "y") => {
       if (visible.size === 0) return;
-      setDoc((d) => nudgeEntities(d, activeScene, visible, metres, axis));
+      // Held arrow keys collapse into one undo step per direction, the same way
+      // a drag does.
+      setDoc(nudgeEntities(doc, activeScene, visible, metres, axis), `nudge:${axis}:${metres}`);
     },
-    [visible, activeScene],
+    [doc, visible, activeScene, setDoc],
   );
 
   /**
@@ -167,6 +207,22 @@ export function Editor() {
     if (tool === "text") setFocusText((n) => n + 1);
   };
 
+  /**
+   * Select a shape from the list on the right.
+   *
+   * The board only ever draws the scene it is on, so selecting one ranged
+   * elsewhere would put handles on something invisible. Jump to where it starts
+   * instead — the list is for finding shapes, not just for ticking them off.
+   */
+  const revealAnnotation = (id: string | null) => {
+    setAnnotation(id);
+    if (id === null) return;
+    const ann = annotationsOf(doc).find((a) => a.id === id);
+    if (!ann) return;
+    const [start, end] = sceneRange(doc, ann);
+    if (activeScene < start || activeScene > end) selectScene(start);
+  };
+
   const onCreateLink = () => {
     const members = [...visible].filter((id) => id !== "ball");
     if (members.length < 2) return;
@@ -176,52 +232,98 @@ export function Editor() {
     setExpandedLink(next.links[next.links.length - 1]?.id ?? null);
   };
 
-  /**
-   * Back to a fresh board. The view framing is left alone deliberately — how you
-   * are looking at the pitch is not one of the changes you made to it.
-   */
-  const reset = () => {
-    setDoc(createBoardDoc());
+  /** Everything a fresh board needs the editor to forget. */
+  const clearEditorState = () => {
     setSelection(new Set());
     setAnnotation(null);
     setTool("select");
-    setFormations([HOME.formation, AWAY.formation]);
     setExpandedLink(null);
     setActiveScene(0);
     setTime(0);
     setPlaying(false);
-    setConfirmReset(false);
+    setPending(null);
+  };
+
+  /**
+   * The wide reset: a fresh board, keeping only the two formations. The view
+   * framing is left alone deliberately — how you are looking at the pitch is not
+   * one of the changes you made to it.
+   */
+  const reset = () => {
+    setDoc(
+      createBoardDoc(
+        { ...HOME, formation: formationOf(0) },
+        { ...AWAY, formation: formationOf(1) },
+      ),
+    );
+    clearEditorState();
+  };
+
+  /** The narrow one: back to the formation marks, keeping everything else. */
+  const restoreShape = () => {
+    setDoc(resetPositions(doc));
+    setPending(null);
+  };
+
+  const importDoc = (next: BoardDoc) => {
+    setDoc(next);
+    clearEditorState();
+    setJsonOpen(false);
   };
 
   const onTravelChange = (ms: number | null) => {
     if (editScene === undefined) return;
-    setDoc((d) => {
-      let next = d;
-      for (const id of visible) next = setTravel(next, editScene, id, ms);
-      return next;
-    });
+    let next = doc;
+    for (const id of visible) next = setTravel(next, editScene, id, ms);
+    setDoc(next, `travel:${editScene}`);
   };
 
   const onCarrierChange = (playerId: string | null) => {
-    setDoc((d) => setCarrier(d, activeScene, playerId));
+    setDoc(setCarrier(doc, activeScene, playerId));
   };
 
   const onClearPaths = () => {
     if (editScene === undefined) return;
-    setDoc((d) => {
-      let next = d;
-      for (const id of visible) next = setPath(next, editScene, id, null);
-      return next;
-    });
+    let next = doc;
+    for (const id of visible) next = setPath(next, editScene, id, null);
+    setDoc(next);
+  };
+
+  // Every selected entity, or the toggle would read as "hide" while half of them
+  // already are.
+  const runsHidden =
+    editScene !== undefined &&
+    visible.size > 0 &&
+    [...visible].every((id) => isRunHidden(doc.scenes[editScene], id));
+
+  const onRunsHiddenChange = (hidden: boolean) => {
+    if (editScene === undefined) return;
+    let next = doc;
+    for (const id of visible) next = setRunHidden(next, editScene, id, hidden);
+    setDoc(next);
   };
 
   // Arrow keys nudge the selection: 1 m, or 5 m with shift. Space toggles playback.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // Ahead of the text-field guard: in a field on this page the text IS the
+      // document, so undo should mean the board's history, not the input's.
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        redo();
+        return;
+      }
+
       if (e.target instanceof HTMLElement && ["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName)) return;
-      // The dialog owns the keyboard while it is up — Space must not start
+      // A dialog owns the keyboard while it is up — Space must not start
       // playback behind it, and Escape belongs to the dialog.
-      if (confirmReset) return;
+      if (pending || jsonOpen) return;
 
       // Escape disarms a drawing tool before anything else looks at the key.
       if (e.key === "Escape") {
@@ -232,7 +334,7 @@ export function Editor() {
 
       if ((e.key === "Delete" || e.key === "Backspace") && annotation) {
         e.preventDefault();
-        setDoc((d) => deleteAnnotation(d, annotation));
+        setDoc(deleteAnnotation(doc, annotation));
         setAnnotation(null);
         return;
       }
@@ -257,42 +359,92 @@ export function Editor() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onNudge, confirmReset, playing, setPlayback, annotation]);
+  }, [onNudge, pending, jsonOpen, playing, setPlayback, annotation, doc, setDoc, undo, redo]);
 
   return (
     <div className="flex h-full w-full">
       <aside className="flex w-64 shrink-0 flex-col overflow-y-auto border-r border-ink-700 bg-ink-800">
-        <div className="border-b border-ink-700 px-4 py-3">
-          <h1 className="text-sm font-semibold tracking-tight text-white">Pitchboard</h1>
-          <p className="mt-0.5 text-[11px] text-ink-400">Tactics board</p>
+        <div className="flex items-center gap-2 border-b border-ink-700 px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-sm font-semibold tracking-tight text-white">Pitchboard</h1>
+            <p className="mt-0.5 text-[11px] text-ink-400">Tactics board</p>
+          </div>
+          <HistoryButton
+            label="Undo"
+            hint={`Undo (${modifier}Z)`}
+            disabled={!canUndo}
+            onClick={undo}
+          >
+            <Undo2 size={14} />
+          </HistoryButton>
+          <HistoryButton
+            label="Redo"
+            hint={`Redo (${modifier}⇧Z)`}
+            disabled={!canRedo}
+            onClick={redo}
+          >
+            <Redo2 size={14} />
+          </HistoryButton>
         </div>
+
+        <Section title="Board" defaultOpen={false}>
+          <div className="flex flex-col gap-3">
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] uppercase tracking-wide text-ink-400">Name</span>
+              <input
+                value={doc.name}
+                onChange={(e) => setDoc({ ...doc, name: e.target.value }, "board-name")}
+                placeholder="Untitled board"
+                className="w-full rounded border border-ink-600 bg-ink-900 px-2 py-1 text-xs text-ink-200 outline-none transition placeholder:text-ink-400 hover:border-ink-400 focus:border-accent"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => setJsonOpen(true)}
+              className="flex items-center justify-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
+            >
+              <FileJson size={13} />
+              Import / export JSON
+            </button>
+            <p className="text-[11px] leading-relaxed text-ink-300">
+              Send someone the whole board and they open your play. A short setup file names a
+              formation, an eleven and its units.
+            </p>
+          </div>
+        </Section>
 
         <Section title="View" defaultOpen={false}>
           <ViewControls
             view={pitchView}
             onChange={setPitchView}
             doc={doc}
-            onTokenScaleChange={(tokenScale) => setDoc((d) => ({ ...d, tokenScale }))}
+            onTokenScaleChange={(tokenScale) => setDoc({ ...doc, tokenScale }, "token-scale")}
           />
         </Section>
 
-        {([0, 1] as const).map((i) => (
-          <Section
-            key={doc.teams[i].id}
-            title={doc.teams[i].name || `Team ${i + 1}`}
-            badge={doc.teams[i].hidden ? "hidden" : formations[i]}
-          >
-            <TeamControls
-              doc={doc}
-              teamIndex={i}
-              onDocChange={setDoc}
-              formation={formations[i]}
-              onFormationChange={onFormationChange}
-              direction={directions[i]}
-              onAddPlayer={(index) => setDoc((d) => addPlayer(d, index))}
-            />
-          </Section>
-        ))}
+        {/* Both sides in one place: they are set up together and read against
+            each other, and two identical panels stacked was twice the chrome
+            for the same job. */}
+        <Section title="Formations" badge={`${formationOf(0)} v ${formationOf(1)}`}>
+          <div className="flex flex-col gap-4">
+            {([0, 1] as const).map((i) => (
+              <div
+                key={doc.teams[i].id}
+                className={cn(i === 1 && "border-t border-ink-700 pt-4")}
+              >
+                <TeamControls
+                  doc={doc}
+                  teamIndex={i}
+                  onDocChange={setDoc}
+                  formation={formationOf(i)}
+                  onFormationChange={onFormationChange}
+                  direction={directions[i]}
+                  onAddPlayer={(index) => setDoc(addPlayer(doc, index))}
+                />
+              </div>
+            ))}
+          </div>
+        </Section>
 
         <Section
           title="Draw"
@@ -340,21 +492,32 @@ export function Editor() {
             selection={visible}
             activeScene={activeScene}
             canEditPaths={editScene !== undefined}
-            onNudge={onNudge}
             onClear={() => setSelection(new Set())}
             onCarrierChange={onCarrierChange}
             onClearPaths={onClearPaths}
-            onRename={(id, label) => setDoc((d) => setPlayerLabel(d, id, label))}
-            onRenumber={(id, n) => setDoc((d) => setPlayerNumber(d, id, n))}
+            onRename={(id, label) => setDoc(setPlayerLabel(doc, id, label), `label:${id}`)}
+            onRenumber={(id, n) => setDoc(setPlayerNumber(doc, id, n), `number:${id}`)}
             onTravelChange={onTravelChange}
-            onRemovePlayer={(id) => setDoc((d) => removePlayer(d, id))}
+            onRemovePlayer={(id) => setDoc(removePlayer(doc, id))}
+            runsHidden={runsHidden}
+            onRunsHiddenChange={onRunsHiddenChange}
             focusName={focusName}
           />
         </Section>
-        <div className="mt-auto border-t border-ink-700 p-4">
+        <div className="mt-auto flex flex-col gap-1.5 border-t border-ink-700 p-4">
+          {/* Two resets, because they answer different questions: one puts the
+              shape back, the other starts again. */}
           <button
             type="button"
-            onClick={() => setConfirmReset(true)}
+            onClick={() => setPending({ kind: "positions" })}
+            className="flex w-full items-center justify-center gap-1.5 rounded-md border border-ink-600 px-2 py-1.5 text-xs text-ink-300 transition hover:border-accent hover:text-white"
+          >
+            <Users size={13} />
+            Reset positions
+          </button>
+          <button
+            type="button"
+            onClick={() => setPending({ kind: "reset" })}
             className="flex w-full items-center justify-center gap-1.5 rounded-md border border-ink-600 px-2 py-1.5 text-xs text-ink-300 transition hover:border-red-500/60 hover:text-red-400"
           >
             <RotateCcw size={13} />
@@ -363,13 +526,42 @@ export function Editor() {
         </div>
       </aside>
 
-      {confirmReset && (
+      {pending?.kind === "reset" && (
         <ConfirmDialog
           title="Reset the board?"
-          message="Every scene, run, link, player name and team setting goes back to a fresh 4-3-3 against a 4-4-2. This cannot be undone."
+          message={`Every scene, run, link, drawing, player name and team setting goes back to a fresh ${formationOf(0)} against a ${formationOf(1)}. This cannot be undone.`}
           confirmLabel="Discard changes"
           onConfirm={reset}
-          onCancel={() => setConfirmReset(false)}
+          onCancel={() => setPending(null)}
+        />
+      )}
+
+      {pending?.kind === "positions" && (
+        <ConfirmDialog
+          title="Reset every position?"
+          message={`Both teams go back to their formation marks in every scene, and the runs between them are cleared. Names, numbers, links, drawings, the ball and the scene list are kept. This cannot be undone.`}
+          confirmLabel="Reset positions"
+          onConfirm={restoreShape}
+          onCancel={() => setPending(null)}
+        />
+      )}
+
+      {pending?.kind === "import" && (
+        <ConfirmDialog
+          title="Replace this board?"
+          message={`"${pending.doc.name}" will replace everything on the board — scenes, runs, links and drawings. This cannot be undone.`}
+          confirmLabel="Replace board"
+          onConfirm={() => importDoc(pending.doc)}
+          onCancel={() => setPending(null)}
+        />
+      )}
+
+      {jsonOpen && (
+        <JsonDialog
+          doc={doc}
+          onImport={(next) => setPending({ kind: "import", doc: next })}
+          onClose={() => setJsonOpen(false)}
+          blocked={pending !== null}
         />
       )}
 
@@ -408,6 +600,90 @@ export function Editor() {
           onLoopChange={setLoop}
         />
       </main>
+
+      {/* Everything drawn, and where it appears. Collapsed by default — an empty
+          rail is 256px of pitch given away for nothing. */}
+      <aside
+        className={cn(
+          "flex shrink-0 flex-col overflow-y-auto border-l border-ink-700 bg-ink-800 transition-[width]",
+          drawingsOpen ? "w-64" : "w-9",
+        )}
+      >
+        <button
+          type="button"
+          onClick={() => setDrawingsOpen(!drawingsOpen)}
+          aria-expanded={drawingsOpen}
+          title={drawingsOpen ? "Hide the drawing list" : "Show everything drawn"}
+          className={cn(
+            "flex shrink-0 items-center gap-1.5 py-2.5 text-ink-300 transition hover:bg-ink-700/40 hover:text-white",
+            drawingsOpen ? "px-3" : "flex-col px-2",
+          )}
+        >
+          {drawingsOpen ? <PanelRightClose size={14} /> : <PanelRightOpen size={14} />}
+          {drawingsOpen ? (
+            <>
+              <span className="flex-1 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-200">
+                Drawn
+              </span>
+              <span className="font-mono text-[11px] text-ink-400">{annotationsOf(doc).length}</span>
+            </>
+          ) : (
+            annotationsOf(doc).length > 0 && (
+              <span className="font-mono text-[11px] text-ink-400">
+                {annotationsOf(doc).length}
+              </span>
+            )
+          )}
+        </button>
+
+        {drawingsOpen && (
+          <div className="border-t border-ink-700">
+            <DrawingsPanel
+              doc={doc}
+              onDocChange={setDoc}
+              sceneIndex={activeScene}
+              selected={annotation}
+              onSelect={revealAnnotation}
+            />
+          </div>
+        )}
+      </aside>
     </div>
+  );
+}
+
+/**
+ * Shown in the shortcut hints. Read once from the platform rather than per
+ * render — it cannot change while the page is open.
+ */
+const modifier =
+  typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
+    ? "\u2318"
+    : "Ctrl+";
+
+function HistoryButton({
+  label,
+  hint,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  hint: string;
+  disabled: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={hint}
+      disabled={disabled}
+      onClick={onClick}
+      className="flex size-7 shrink-0 items-center justify-center rounded-md border border-ink-600 text-ink-300 transition enabled:hover:border-accent enabled:hover:text-white disabled:opacity-35"
+    >
+      {children}
+    </button>
   );
 }

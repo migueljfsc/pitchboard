@@ -1,19 +1,34 @@
-import { Pause, Play, Plus, Copy, Trash2, ChevronLeft, ChevronRight, Repeat } from "lucide-react";
+import { useEffect, useRef } from "react";
+import {
+  Pause,
+  Play,
+  Plus,
+  Copy,
+  Crosshair,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
+  Repeat,
+} from "lucide-react";
 import type { BoardDoc } from "@/board/types";
 import {
   addSceneAfter,
+  ballTravels,
   deleteScene,
   duplicateScene,
   moveScene,
   renameScene,
   setSceneTiming,
+  setShot,
   totalSeconds,
 } from "@/board/scenes";
+import { resolveAt } from "@/board/timeline";
+import type { Change } from "@/lib/history";
 import { cn } from "@/lib/utils";
 
 type Props = {
   doc: BoardDoc;
-  onDocChange: (next: BoardDoc) => void;
+  onDocChange: Change<BoardDoc>;
   activeScene: number;
   /** `doc` is passed when the change accompanies an edit, because the caller's
    *  own state has not updated yet and timings must be read from the new list. */
@@ -40,6 +55,20 @@ export function Timeline({
 }: Props) {
   const total = totalSeconds(doc);
   const scene = doc.scenes[activeScene];
+
+  // Where the playhead actually is, which parts company with the selected scene
+  // the moment playback starts — starting play drops the selection back to
+  // scene 1 so no editing overlay hangs over the animation.
+  const live = resolveAt(doc, time);
+  const liveRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    // Only while playing: yanking the strip around under someone scrubbing by
+    // hand would fight them for it.
+    if (playing) liveRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [live.index, playing]);
+
+  const canShoot = ballTravels(doc, activeScene);
 
   const mutate = (next: BoardDoc, index = activeScene) => {
     onDocChange(next);
@@ -93,25 +122,45 @@ export function Timeline({
 
       {/* Scene strip */}
       <div className="flex items-stretch gap-2 overflow-x-auto pb-1">
-        {doc.scenes.map((s, i) => (
-          <button
-            key={s.id}
-            type="button"
-            onClick={() => onActiveSceneChange(i)}
-            className={cn(
-              "flex min-w-28 shrink-0 flex-col items-start gap-0.5 rounded-md border px-2.5 py-1.5 text-left transition",
-              i === activeScene
-                ? "border-accent bg-ink-700"
-                : "border-ink-600 hover:border-ink-400",
-            )}
-          >
-            <span className="text-xs font-medium text-ink-200">{s.name}</span>
-            <span className="font-mono text-[11px] text-ink-400">
-              {i > 0 ? `${(s.transitionMs / 1000).toFixed(1)}s → ` : ""}
-              {(s.holdMs / 1000).toFixed(1)}s
-            </span>
-          </button>
-        ))}
+        {doc.scenes.map((s, i) => {
+          const isLive = i === live.index;
+          // Filling while travelling in, full once the scene is held.
+          const progress = !isLive ? 0 : live.moving ? live.u * 100 : 100;
+
+          return (
+            <button
+              key={s.id}
+              ref={isLive ? liveRef : undefined}
+              type="button"
+              onClick={() => onActiveSceneChange(i)}
+              aria-current={isLive ? "true" : undefined}
+              className={cn(
+                "flex min-w-28 shrink-0 flex-col items-start gap-0.5 rounded-md border px-2.5 py-1.5 text-left transition",
+                i === activeScene
+                  ? "border-accent bg-ink-700"
+                  : "border-ink-600 hover:border-ink-400",
+                // The playhead is its own signal, so a scene can be selected,
+                // playing, or both without the two states blurring together.
+                isLive && i !== activeScene && "border-accent/50 bg-accent/5",
+              )}
+            >
+              <span className={cn("text-xs font-medium", isLive ? "text-white" : "text-ink-200")}>
+                {s.name}
+              </span>
+              <span className="font-mono text-[11px] text-ink-400">
+                {i > 0 ? `${(s.transitionMs / 1000).toFixed(1)}s → ` : ""}
+                {(s.holdMs / 1000).toFixed(1)}s
+                {s.shot && <span className="ml-1 text-accent">shot</span>}
+              </span>
+              <span className="mt-1 h-0.5 w-full overflow-hidden rounded-full bg-ink-600/70">
+                <span
+                  className="block h-full rounded-full bg-accent"
+                  style={{ width: `${progress}%` }}
+                />
+              </span>
+            </button>
+          );
+        })}
 
         <button
           type="button"
@@ -130,7 +179,9 @@ export function Timeline({
             <span className="text-[11px] uppercase tracking-wide text-ink-400">Scene</span>
             <input
               value={scene.name}
-              onChange={(e) => onDocChange(renameScene(doc, activeScene, e.target.value))}
+              onChange={(e) =>
+                onDocChange(renameScene(doc, activeScene, e.target.value), `scene-name:${scene.id}`)
+              }
               className="w-32 rounded-md border border-ink-600 bg-ink-900 px-2 py-1 text-xs text-ink-200 outline-none focus:border-accent"
             />
           </label>
@@ -147,6 +198,32 @@ export function Timeline({
             value={scene.holdMs}
             onChange={(v) => onDocChange(setSceneTiming(doc, activeScene, { holdMs: v }))}
           />
+
+          {activeScene > 0 && (
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] uppercase tracking-wide text-ink-400">Ball</span>
+              <button
+                type="button"
+                disabled={!canShoot}
+                aria-pressed={scene.shot ?? false}
+                onClick={() => onDocChange(setShot(doc, activeScene, !scene.shot))}
+                title={
+                  canShoot
+                    ? "Draw the ball's travel into this scene as a strike rather than a pass"
+                    : "The ball does not travel into this scene — release it or pass it first"
+                }
+                className={cn(
+                  "flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition disabled:opacity-45",
+                  scene.shot
+                    ? "border-accent text-accent"
+                    : "border-ink-600 text-ink-300 enabled:hover:border-ink-400 enabled:hover:text-white",
+                )}
+              >
+                <Crosshair size={13} />
+                Shot
+              </button>
+            </label>
+          )}
 
           <div className="ml-auto flex items-center gap-1.5">
             <IconButton

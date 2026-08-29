@@ -3,12 +3,14 @@ import type { BoardDoc } from "@/board/types";
 import { FORMATIONS, FORMATION_GROUPS, type Direction } from "@/formations";
 import { MAX_SQUAD } from "@/board/players";
 import { PALETTE } from "@/components/ui/palette";
+import { contrastOn } from "@/lib/color";
+import type { Change } from "@/lib/history";
 import { cn } from "@/lib/utils";
 
 type Props = {
   doc: BoardDoc;
   teamIndex: 0 | 1;
-  onDocChange: (next: BoardDoc) => void;
+  onDocChange: Change<BoardDoc>;
   formation: string;
   onFormationChange: (teamIndex: 0 | 1, formation: string) => void;
   direction: Direction;
@@ -26,10 +28,12 @@ export function TeamControls({
 }: Props) {
   const team = doc.teams[teamIndex];
 
-  const patch = (fields: Partial<BoardDoc["teams"][0]>) => {
+  // `merge` collapses a burst of keystrokes into one undo step; the colour
+  // swatches pass nothing, so each is a step of its own.
+  const patch = (fields: Partial<BoardDoc["teams"][0]>, merge?: string) => {
     const teams = doc.teams.slice() as BoardDoc["teams"];
     teams[teamIndex] = { ...teams[teamIndex], ...fields };
-    onDocChange({ ...doc, teams });
+    onDocChange({ ...doc, teams }, merge);
   };
 
   return (
@@ -42,7 +46,7 @@ export function TeamControls({
         {/* Free text: name the sides whatever the tactic calls for. */}
         <input
           value={team.name}
-          onChange={(e) => patch({ name: e.target.value })}
+          onChange={(e) => patch({ name: e.target.value }, `team-name:${team.id}`)}
           placeholder="Team name"
           aria-label={`Name for team ${teamIndex + 1}`}
           className="min-w-0 flex-1 rounded border border-ink-600 bg-ink-900 px-2 py-1 text-xs font-medium text-ink-200 outline-none transition placeholder:text-ink-400 hover:border-ink-400 focus:border-accent focus:text-white"
@@ -110,12 +114,4 @@ export function TeamControls({
       </div>
     </div>
   );
-}
-
-/** Cheap relative-luminance pick so numbers stay readable on any kit colour. */
-function contrastOn(hex: string): string {
-  const n = hex.replace("#", "");
-  const [r, g, b] = [0, 2, 4].map((i) => parseInt(n.slice(i, i + 2), 16) / 255);
-  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return lum > 0.6 ? "#0b1210" : "#ffffff";
 }

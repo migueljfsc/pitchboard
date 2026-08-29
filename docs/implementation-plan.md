@@ -255,8 +255,8 @@ Goal: a link you can send someone.
 
 ### Tasks
 
-1. **`share/local.ts`** — `localStorage` autosave with debounce, restore on load, `.json`
-   import/export.
+1. **`share/local.ts`** — `localStorage` autosave with debounce, restore on load. The `.json`
+   import/export half shipped early in M8 as `share/json.ts`; only the autosave is left.
 2. **`share/urlcodec.ts`** — `#d=<base64url(deflate(json))>` via native `CompressionStream`,
    with a length budget check.
 3. **`share/api.ts`** — client for the Worker endpoints.
@@ -403,6 +403,72 @@ See D20 for the four decisions inside it.
   capped at 400 points by the schema, but it is still the largest thing a board can carry.
 - **Text hit-testing is approximate.** Text draws upright, so its box is not axis-aligned on a
   rotated board; the hit-test uses a radius instead and over-grabs the corners.
+
+---
+
+## M8 — Board handling
+
+A batch of editor work landed together, out of milestone order. Decisions in D22–D25.
+
+### Tasks
+
+- **Link rows reorder by drag**, with an arrow-key fallback on the grip. Document order is draw
+  order, so this is the z-order too (`moveLink`).
+- **Two resets.** `Team.formation` moves into the document; "Reset board" keeps the chosen
+  formations, "Reset positions" keeps everything except the shape (`resetPositions`).
+- **JSON in and out** — `src/share/json.ts` plus `JsonDialog`. Whole board or short setup file,
+  one importer, confirmation before replacing the board.
+- **The ball's own line** — dashed for a pass, doubled with a strike burst for a shot, gated on
+  the new `Scene.shot`.
+- **The playhead in the scene strip** — the playing scene is tinted and carries a progress bar,
+  separately from the selected one, and scrolls itself into view during playback.
+- **Per-label text size** — `size` on a text annotation, a multiplier on `TEXT_SIZE`, with the
+  selection box and the hit-test scaling with it.
+- **`Scene.hiddenRuns`** — arrows off per scene, per player, from the Selection panel.
+- **A drawings rail on the right** — every shape, its scene range, visibility and delete, plus
+  drag reordering (`reorderAnnotation`). Collapsed to a 36px strip by default.
+- **Shapes can be named** (`Annotation.name`), renamed in place from the rail. Focusing the
+  field is the same act as selecting, so there is no separate click to reach the board.
+- **Undo/redo** — `useHistory`, snapshots coalesced by gesture key. See D26.
+- **One Formations panel** instead of a section per side. They are set up together and read
+  against each other; two identical panels stacked was twice the chrome for the same job.
+- **Player size defaults to 1.25x** (D18). Tokens at 1x are accurate and unreadable.
+- **The drawing rail groups by starting scene**, each group collapsing, with a collapse-all and
+  a dot marking a collapsed group that holds the selection. Reordering stays within a group.
+- **Reorder shows the gap, not the row.** Dragging a link or a shape draws a line in the gap it
+  would land in — highlighting a neighbouring row leaves you guessing above or below.
+- **"Shift line" removed** from the Selection panel. Four buttons for something a drag already
+  does, on every selection whether or not it was a line.
+
+### Definition of done
+
+- [x] dragging a link row reorders the list and the drawing stack
+- [x] reset offers both shapes, and the wide one honours the formations on screen
+- [x] a board exports, re-imports and comes back deep-equal; a setup file builds a board
+- [x] a pass draws a dashed line, a shot a doubled one, and hiding it removes both
+- [x] the scene strip shows where the playhead is while the selection stays on scene 1
+- [x] a resized label stays clickable and survives a schema round trip
+- [x] a hidden run arrow disappears in that scene only, and the player still moves
+- [x] the rail lists every shape with its range, and selecting one ranged elsewhere goes there
+- [x] a whole drag undoes in one step, as does a typed name — including from inside the field
+
+### Notes from the build
+
+- **Pair formation slots by order, not by id.** Renumbering a player keeps their id, so the
+  `<team>-<number>` ids a fresh `buildTeam` produces need not match the squad at all.
+- **The setup form lists players in formation order**, keeper first. Matching by shirt number
+  would mean knowing which numbers the preset hands out before you could name anyone.
+- **"The ball moved" is not "the ball travelled".** A carrier running with it drags it the
+  whole length of their run, so distance alone drew every dribble as a pass. What matters is
+  whether the ball changed hands, and to whom — `ballTravelBetween`.
+- **A grouped list makes a bad reorder invisible.** Dropping a row on another group's row moved
+  the right shape to the wrong index, and the regrouping hid it: the list looked untouched. The
+  drop handler has to check the drag started in the group it is running for.
+- **Undo needs to know where a gesture ends.** Without a merge key a single drag lands 40
+  entries on the stack, and undo becomes a frame-by-frame rewind.
+- **A typed size field cannot clamp on every keystroke.** Clamping "150" as it is typed turns it
+  into 40 at the first character; the field holds its own text and only commits a value inside
+  the range.
 
 ---
 

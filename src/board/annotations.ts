@@ -20,7 +20,7 @@ import type {
   Scene,
   Vec2,
 } from "./types";
-import { cubicAt, distanceToSegment, type Bezier } from "./geometry";
+import { clamp, cubicAt, distanceToSegment, type Bezier } from "./geometry";
 
 /** Stroke width in metres, so it scales with the pitch at any export size. */
 export const MARK_WIDTH = 0.42;
@@ -29,8 +29,11 @@ export const HEAD_LENGTH = 2.2;
 export const HEAD_WIDTH = 1.5;
 /** Fill opacity for a zone. Light enough to read markings and shirts through. */
 export const ZONE_ALPHA = 0.22;
-/** Text height in metres. About a token and a half. */
+/** Text height in metres, at the default size. About a token and a half. */
 export const TEXT_SIZE = 3.2;
+/** Bounds on a label's own size multiplier. */
+export const TEXT_SCALE_MIN = 0.4;
+export const TEXT_SCALE_MAX = 4;
 /** Samples along a curved arrow. Matches the run curves' resolution. */
 export const CURVE_SAMPLES = 32;
 /** Dribble squiggle, in metres. */
@@ -178,10 +181,38 @@ export function polylineLength(points: Vec2[]): number {
   return total;
 }
 
+type TextAnnotation = Extract<Annotation, { kind: "text" }>;
+
+/**
+ * Height of a label in metres. `size` is a multiplier on TEXT_SIZE so the
+ * default stays defined in exactly one place, and clamped here rather than
+ * trusted: an imported document is untrusted input.
+ */
+export function textSize(ann: TextAnnotation): number {
+  return TEXT_SIZE * clamp(ann.size ?? 1, TEXT_SCALE_MIN, TEXT_SCALE_MAX);
+}
+
+/**
+ * Rough extent of a label, without measuring it.
+ *
+ * The renderer is pure and gets no ctx here, so width is estimated from the
+ * character count. Only the selection box and the hit-test use it, and both are
+ * forgiving — a fraction of a metre out either way costs nothing.
+ */
+export function textExtent(ann: TextAnnotation): { w: number; h: number } {
+  const size = textSize(ann);
+  return { w: Math.max(size * 0.7, ann.text.length * size * 0.55), h: size };
+}
+
 /** Corners of a two-point shape, normalised so a backwards drag still works. */
 export function boundsOf(ann: Annotation): { x: number; y: number; w: number; h: number } {
+  if (ann.kind === "text") {
+    // Drawn centred on `at`, so the box straddles it.
+    const { w, h } = textExtent(ann);
+    return { x: ann.at.x - w / 2, y: ann.at.y - h / 2, w, h };
+  }
   if (!isSegment(ann)) {
-    const points = ann.kind === "pen" ? ann.points : [ann.at];
+    const points = ann.points;
     const xs = points.map((p) => p.x);
     const ys = points.map((p) => p.y);
     const x = Math.min(...xs);
@@ -288,6 +319,24 @@ export function updateAnnotation(
   const next = list.slice();
   // The patch never changes `kind`, so the union member is preserved.
   next[i] = { ...next[i], ...patch } as Annotation;
+  return withAnnotations(doc, next);
+}
+
+/**
+ * Move a shape within the list, which is the drawing order.
+ *
+ * Only decides ties inside a layer: zones are painted before the players and
+ * marks after them whatever the order, so moving a zone past an arrow changes
+ * nothing. See D20.
+ */
+export function reorderAnnotation(doc: BoardDoc, from: number, to: number): BoardDoc {
+  const list = annotationsOf(doc);
+  const n = list.length;
+  if (from === to || from < 0 || from >= n || to < 0 || to >= n) return doc;
+
+  const next = list.slice();
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
   return withAnnotations(doc, next);
 }
 

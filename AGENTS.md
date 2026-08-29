@@ -101,6 +101,18 @@ infrastructure/terraform/cloudflare/    OpenTofu stack
   members; an annotation is fixed geometry that depends on nobody. Do not merge them.
 - **An annotation's scene range is stored as scene ids**, never indices — reordering scenes must
   carry the drawing with them. `deleteScene` prunes dangling ranges rather than dropping shapes.
+- **Formation slots pair by ORDER, not by id.** `buildTeam` mints `<team>-<number>` ids, but
+  renumbering a player keeps their id — so after a renumber those ids no longer match the squad.
+  Anything mapping a fresh build onto an existing team walks both lists by index.
+- **A dribble is not a pass.** The ball is glued to its carrier, so it moves as far as they
+  run. Anything deciding what the ball *did* must read the carrier change (`ballTravelBetween`),
+  never the distance the ball covered.
+- **The ball's line is sampled from `ballAt`, not guessed.** Endpoints come from the function
+  that actually moves the ball, at `u=0` and `u=1`, so carrier glue and travel overrides are
+  included rather than reimplemented.
+- **A drag emits a document per `pointermove`.** Anything recording document history has to be
+  told where the gesture ends, or one drag becomes forty undo steps — hence the merge key in
+  `useHistory`. See D26.
 - **Chains must not close.** A back 4 rendered as a closed polygon draws an edge across the
   width of the pitch. Member order is load-bearing for chains and polygon perimeters.
 - **GIF palette shimmer.** Quantise once against the board's known colours, never per frame, or

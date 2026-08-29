@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Annotation, BoardDoc, PitchView, Tool, Vec2 } from "@/board/types";
+import type { Change } from "@/lib/history";
 import { BALL_ID, DEFAULT_PITCH_VIEW } from "@/board/types";
 import { fitViewport, toPitch } from "@/board/geometry";
 import { drawBoard } from "@/board/render";
@@ -45,7 +46,7 @@ type Props = {
   pitchView?: PitchView;
   selection: ReadonlySet<string>;
   onSelectionChange: (next: Set<string>) => void;
-  onDocChange: (next: BoardDoc) => void;
+  onDocChange: Change<BoardDoc>;
   /** A double-click on a player asks to rename it. The ball has no name. */
   onEditName?: (playerId: string) => void;
   /** What a drag on empty grass does. "select" is marquee; anything else draws. */
@@ -148,7 +149,18 @@ export function BoardCanvas({
   /** Scene the annotations are keyed to — the one being played into. */
   const annotationScene = () => frameAt(doc, t).resolved.index;
 
+  /**
+   * Undo key for the drag in progress.
+   *
+   * A drag writes a document per pointermove; tagging them all with one key
+   * collapses the whole gesture into a single undo step. Bumped on every
+   * pointerdown so the next drag is a step of its own.
+   */
+  const gesture = useRef(0);
+  const dragKey = () => `drag-${gesture.current}`;
+
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    gesture.current += 1;
     const p = pointFrom(e);
     e.currentTarget.setPointerCapture(e.pointerId);
 
@@ -261,14 +273,14 @@ export function BoardCanvas({
     if (drag.kind === "handle") {
       if (editScene === undefined) return;
       const curve = dragHandle(doc, editScene, drag.hit, p);
-      if (curve) onDocChange(setPath(doc, editScene, drag.hit.id, curve));
+      if (curve) onDocChange(setPath(doc, editScene, drag.hit.id, curve), dragKey());
       return;
     }
 
     if (drag.kind === "move") {
       const delta = { x: p.x - drag.last.x, y: p.y - drag.last.y };
       if (delta.x !== 0 || delta.y !== 0) {
-        onDocChange(moveEntities(doc, sceneIndex, selection, delta));
+        onDocChange(moveEntities(doc, sceneIndex, selection, delta), dragKey());
         setDrag({ kind: "move", last: p });
       }
       return;
@@ -277,7 +289,7 @@ export function BoardCanvas({
     if (drag.kind === "ann-move") {
       const delta = { x: p.x - drag.last.x, y: p.y - drag.last.y };
       if (delta.x !== 0 || delta.y !== 0) {
-        onDocChange(moveAnnotation(doc, drag.id, delta));
+        onDocChange(moveAnnotation(doc, drag.id, delta), dragKey());
         setDrag({ kind: "ann-move", id: drag.id, last: p });
       }
       return;
@@ -286,7 +298,10 @@ export function BoardCanvas({
     if (drag.kind === "ann-handle") {
       const ann = (doc.annotations ?? []).find((a) => a.id === drag.hit.id);
       if (!ann) return;
-      onDocChange(updateAnnotation(doc, ann.id, dragAnnotationHandle(ann, drag.hit.which, p)));
+      onDocChange(
+        updateAnnotation(doc, ann.id, dragAnnotationHandle(ann, drag.hit.which, p)),
+        dragKey(),
+      );
       return;
     }
 

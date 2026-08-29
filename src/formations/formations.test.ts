@@ -11,6 +11,7 @@ import {
   createBoardDoc,
   fromNotation,
   getFormation,
+  resetPositions,
 } from ".";
 import { boardDocSchema } from "@/board/schema";
 import { TOKEN_RADIUS } from "@/board/render";
@@ -251,5 +252,134 @@ describe("applyFormation", () => {
     // No link may reference a player that no longer exists.
     const ids = new Set(next.teams.flatMap((t) => t.players.map((p) => p.id)));
     for (const l of next.links) for (const m of l.members) expect(ids.has(m)).toBe(true);
+  });
+});
+
+describe("team.formation", () => {
+  it("is recorded on the built team, so a board knows its own shape", () => {
+    expect(createBoardDoc().teams[0].formation).toBe(HOME.formation);
+    expect(createBoardDoc().teams[1].formation).toBe(AWAY.formation);
+  });
+
+  it("records the RESOLVED preset, never one getFormation would fall back from", () => {
+    const built = buildTeam({ ...HOME, formation: "not-a-formation" }, PITCH);
+    expect(built.team.formation).toBe(getFormation("not-a-formation").id);
+  });
+
+  it("follows a formation change", () => {
+    const doc = applyFormation(createBoardDoc(), 0, { ...HOME, formation: "3-5-2" });
+    expect(doc.teams[0].formation).toBe("3-5-2");
+    expect(doc.teams[1].formation).toBe(AWAY.formation);
+  });
+});
+
+describe("squad overrides", () => {
+  it("numbers and names the eleven in formation order, keeper first", () => {
+    const built = buildTeam(
+      { ...HOME, squad: [{ number: 31, label: "Ederson" }, { label: "Walker" }] },
+      PITCH,
+    );
+    expect(built.team.players[0]).toEqual({ id: "home-31", number: 31, label: "Ederson" });
+    expect(built.team.players[1].label).toBe("Walker");
+    // A slot left out keeps the number the preset would have given it.
+    expect(built.team.players[1].number).toBe(
+      buildTeam(HOME, PITCH).team.players[1].number,
+    );
+  });
+
+  it("leaves slots past the end of the list alone", () => {
+    const plain = buildTeam(HOME, PITCH);
+    const built = buildTeam({ ...HOME, squad: [{ number: 31 }] }, PITCH);
+    expect(built.team.players.slice(1)).toEqual(plain.team.players.slice(1));
+  });
+
+  it("seeds links against the overridden numbers", () => {
+    const built = buildTeam({ ...HOME, squad: [{}, { number: 77 }] }, PITCH);
+    expect(built.links[0].members[0]).toBe("home-77");
+  });
+});
+
+describe("resetPositions", () => {
+  const moved = () => {
+    const doc = createBoardDoc();
+    const id = doc.teams[0].players[5].id;
+    return {
+      id,
+      doc: {
+        ...doc,
+        scenes: doc.scenes.map((s) => ({
+          ...s,
+          positions: { ...s.positions, [id]: { x: 90, y: 5 } },
+          paths: { [id]: { c1: { x: 40, y: 40 }, c2: { x: 60, y: 20 } } },
+        })),
+      },
+    };
+  };
+
+  it("puts a moved player back on their formation mark", () => {
+    const { id, doc } = moved();
+    const back = resetPositions(doc);
+    expect(back.scenes[0].positions[id]).toEqual(createBoardDoc().scenes[0].positions[id]);
+  });
+
+  it("keeps names, numbers, links, the ball and the scene list", () => {
+    const { doc } = moved();
+    const named = {
+      ...doc,
+      teams: [
+        { ...doc.teams[0], players: doc.teams[0].players.map((p) => ({ ...p, label: "Kept" })) },
+        doc.teams[1],
+      ] as typeof doc.teams,
+    };
+    const back = resetPositions(named);
+    expect(back.teams[0].players.every((p) => p.label === "Kept")).toBe(true);
+    expect(back.links).toEqual(named.links);
+    expect(back.scenes).toHaveLength(named.scenes.length);
+    expect(back.scenes[0].ballPos).toEqual(named.scenes[0].ballPos);
+  });
+
+  it("clears the runs it flattens — every scene now holds the same shape", () => {
+    const { doc } = moved();
+    expect(resetPositions(doc).scenes[0].paths).toEqual({});
+  });
+
+  it("pairs slots by ORDER, so a renumbered player still goes home", () => {
+    const { id, doc } = moved();
+    const renumbered = {
+      ...doc,
+      teams: [
+        {
+          ...doc.teams[0],
+          players: doc.teams[0].players.map((p) => (p.id === id ? { ...p, number: 88 } : p)),
+        },
+        doc.teams[1],
+      ] as typeof doc.teams,
+    };
+    // The id still says `home-<old number>`; only the slot's position matters.
+    expect(resetPositions(renumbered).scenes[0].positions[id]).toEqual(
+      createBoardDoc().scenes[0].positions[id],
+    );
+  });
+
+  it("leaves a hand-added player, who has no formation mark, where they are", () => {
+    const doc = createBoardDoc();
+    const extra = { id: "home-99", number: 99, label: "Sub" };
+    const grown = {
+      ...doc,
+      teams: [
+        { ...doc.teams[0], players: [...doc.teams[0].players, extra] },
+        doc.teams[1],
+      ] as typeof doc.teams,
+      scenes: doc.scenes.map((s) => ({
+        ...s,
+        positions: { ...s.positions, [extra.id]: { x: 3, y: 3 } },
+      })),
+    };
+    expect(resetPositions(grown).scenes[0].positions[extra.id]).toEqual({ x: 3, y: 3 });
+  });
+
+  it("leaves a valid document", () => {
+    const { doc } = moved();
+    expect(boardDocSchema.safeParse(resetPositions(doc)).success).toBe(true);
   });
 });
