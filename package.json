@@ -20,7 +20,9 @@
   "dependencies": {
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
+    "gifenc": "^1.0.3",
     "lucide-react": "^1.25.0",
+    "mediabunny": "^1.55.3",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "tailwind-merge": "^3.6.0",

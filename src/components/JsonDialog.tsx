@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, Copy, Download, FileUp, X } from "lucide-react";
 import type { BoardDoc } from "@/board/types";
 import { SETUP_EXAMPLE, fromJson, toJson, toSetupJson } from "@/share/json";
-import { cn } from "@/lib/utils";
+import { cn, slug } from "@/lib/utils";
 
 type Props = {
   doc: BoardDoc;
@@ -269,6 +269,3 @@ function Action({
     </button>
   );
 }
-
-const slug = (name: string) =>
-  name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "board";
