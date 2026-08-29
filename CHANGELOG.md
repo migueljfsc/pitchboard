@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.10.0 (2026-08-29)
+
+### Feat
+
+- 3D view, kit patterns, and English/Portuguese
+
 ## v0.9.0 (2026-08-29)
 
 ### Feat
