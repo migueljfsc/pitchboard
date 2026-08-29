@@ -3,6 +3,17 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.8.0 (2026-08-29)
+
+### Feat
+
+- a pace per scene in seamless playback
+
+### Fix
+
+- clear a finished export when the settings change
+- numeric fields can be cleared while typing
+
 ## v0.7.0 (2026-08-29)
 
 ### Feat
