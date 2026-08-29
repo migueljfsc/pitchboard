@@ -3,6 +3,21 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.6.0 (2026-08-29)
+
+### Feat
+
+- seamless playback — one pace, no cuts between scenes
+
+### Fix
+
+- a player now tracks the cursor while flow is on. Flow timings are
+derived from the positions, so an edit retimed the animation and left
+the scrubber mid-transition, where the board draws interpolated
+positions and the playback arrows. Every change re-pins the scrubber to
+the selected scene, and a scene boundary now tolerates the rounding of a
+seconds/milliseconds round trip.
+
 ## v0.5.0 (2026-08-29)
 
 ### Feat
