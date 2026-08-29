@@ -33,6 +33,7 @@ import {
   sceneTimings,
   scenePace,
 } from "@/board/timeline";
+import { useI18n } from "@/i18n/context";
 import type { Change } from "@/lib/history";
 import { cn } from "@/lib/utils";
 
@@ -63,6 +64,7 @@ export function Timeline({
   loop,
   onLoopChange,
 }: Props) {
+  const { t } = useI18n();
   const total = totalSeconds(doc);
   const scene = doc.scenes[activeScene];
 
@@ -98,7 +100,7 @@ export function Timeline({
         <button
           type="button"
           onClick={() => onPlayingChange(!playing)}
-          aria-label={playing ? "Pause" : "Play"}
+          aria-label={t(playing ? "viewer.pause" : "viewer.play")}
           className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-ink-900 transition hover:brightness-110"
         >
           {playing ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" className="ml-0.5" />}
@@ -107,7 +109,7 @@ export function Timeline({
         <button
           type="button"
           onClick={() => onLoopChange(!loop)}
-          aria-label="Loop"
+          aria-label={t("viewer.loop")}
           aria-pressed={loop}
           className={cn(
             "flex size-8 shrink-0 items-center justify-center rounded-md border transition",
@@ -122,12 +124,12 @@ export function Timeline({
         <button
           type="button"
           onClick={() => onDocChange(flow ? withoutFlow(doc) : withFlow(doc))}
-          aria-label="Seamless flow"
+          aria-label={t("timeline.flow")}
           aria-pressed={!!flow}
           title={
             flow
-              ? "Back to per-scene travel and hold times"
-              : "One continuous movement: nothing held between scenes, and each scene lasting as long as its longest run needs"
+              ? t("timeline.flow.off")
+              : t("timeline.flow.on")
           }
           className={cn(
             "flex size-8 shrink-0 items-center justify-center rounded-md border transition",
@@ -148,7 +150,7 @@ export function Timeline({
             onTimeChange(Number(e.target.value));
           }}
           className="h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-ink-600 accent-accent"
-          aria-label="Scrub timeline"
+          aria-label={t("timeline.scrub")}
         />
 
         <span className="w-20 shrink-0 text-right font-mono text-[11px] tabular-nums text-ink-400">
@@ -186,7 +188,7 @@ export function Timeline({
               <span className="font-mono text-[11px] text-ink-400">
                 {i > 0 ? `${(timing[i].travelMs / 1000).toFixed(1)}s` : ""}
                 {timing[i].holdMs > 0 && `${i > 0 ? " → " : ""}${(timing[i].holdMs / 1000).toFixed(1)}s`}
-                {s.shot && <span className="ml-1 text-accent">shot</span>}
+                {s.shot && <span className="ml-1 text-accent">{t("timeline.shotMark")}</span>}
               </span>
               <span className="mt-1 h-0.5 w-full overflow-hidden rounded-full bg-ink-600/70">
                 <span
@@ -200,8 +202,8 @@ export function Timeline({
 
         <button
           type="button"
-          onClick={() => mutate(addSceneAfter(doc, activeScene), activeScene + 1)}
-          aria-label="Add scene"
+          onClick={() => mutate(addSceneAfter(doc, activeScene, t("doc.scene", { n: doc.scenes.length + 1 })), activeScene + 1)}
+          aria-label={t("timeline.addScene")}
           className="flex w-9 shrink-0 items-center justify-center rounded-md border border-dashed border-ink-600 text-ink-400 transition hover:border-accent hover:text-accent"
         >
           <Plus size={15} />
@@ -212,7 +214,7 @@ export function Timeline({
       {scene && (
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] uppercase tracking-wide text-ink-400">Scene</span>
+            <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("timeline.scene")}</span>
             <input
               value={scene.name}
               onChange={(e) =>
@@ -227,8 +229,8 @@ export function Timeline({
               {activeScene > 0 && (
                 <NumberField
                   key={scene.id}
-                  label="Pace"
-                  title="Metres per second for the run into this scene. Each scene keeps its own, and a scene added after it inherits the same pace."
+                  label={t("timeline.pace")}
+                  title={t("timeline.pace.title")}
                   value={scenePace(doc, activeScene)}
                   min={MIN_FLOW_SPEED}
                   max={MAX_FLOW_SPEED}
@@ -240,7 +242,7 @@ export function Timeline({
                 />
               )}
               <Duration
-                label="End hold"
+                label={t("timeline.endHold")}
                 value={flow.endHoldMs}
                 onChange={(v) => setFlow({ ...flow, endHoldMs: Math.round(v) }, "flow-hold")}
               />
@@ -249,13 +251,13 @@ export function Timeline({
             <>
               {activeScene > 0 && (
                 <Duration
-                  label="Travel"
+                  label={t("timeline.travel")}
                   value={scene.transitionMs}
                   onChange={(v) => onDocChange(setSceneTiming(doc, activeScene, { transitionMs: v }))}
                 />
               )}
               <Duration
-                label="Hold"
+                label={t("timeline.hold")}
                 value={scene.holdMs}
                 onChange={(v) => onDocChange(setSceneTiming(doc, activeScene, { holdMs: v }))}
               />
@@ -264,16 +266,14 @@ export function Timeline({
 
           {activeScene > 0 && (
             <label className="flex flex-col gap-1">
-              <span className="text-[11px] uppercase tracking-wide text-ink-400">Ball</span>
+              <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("timeline.ball")}</span>
               <button
                 type="button"
                 disabled={!canShoot}
                 aria-pressed={scene.shot ?? false}
                 onClick={() => onDocChange(setShot(doc, activeScene, !scene.shot))}
                 title={
-                  canShoot
-                    ? "Draw the ball's travel into this scene as a strike rather than a pass"
-                    : "Only a loose ball can be a strike — release it, or play it to an opponent"
+                  canShoot ? t("timeline.shot.can") : t("timeline.shot.cannot")
                 }
                 className={cn(
                   "flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition disabled:opacity-45",
@@ -283,34 +283,37 @@ export function Timeline({
                 )}
               >
                 <Crosshair size={13} />
-                Shot
+                {t("timeline.shot")}
               </button>
             </label>
           )}
 
           <div className="ml-auto flex items-center gap-1.5">
             <IconButton
-              label="Move scene earlier"
+              label={t("timeline.moveEarlier")}
               disabled={activeScene === 0}
               onClick={() => mutate(moveScene(doc, activeScene, activeScene - 1), activeScene - 1)}
             >
               <ChevronLeft size={14} />
             </IconButton>
             <IconButton
-              label="Move scene later"
+              label={t("timeline.moveLater")}
               disabled={activeScene === doc.scenes.length - 1}
               onClick={() => mutate(moveScene(doc, activeScene, activeScene + 1), activeScene + 1)}
             >
               <ChevronRight size={14} />
             </IconButton>
             <IconButton
-              label="Duplicate scene"
-              onClick={() => mutate(duplicateScene(doc, activeScene), activeScene + 1)}
+              label={t("timeline.duplicate")}
+              onClick={() => mutate(
+                  duplicateScene(doc, activeScene, t("doc.sceneCopy", { name: scene.name })),
+                  activeScene + 1,
+                )}
             >
               <Copy size={14} />
             </IconButton>
             <IconButton
-              label="Delete scene"
+              label={t("timeline.deleteScene")}
               disabled={doc.scenes.length <= 1}
               onClick={() => mutate(deleteScene(doc, activeScene), Math.max(0, activeScene - 1))}
             >

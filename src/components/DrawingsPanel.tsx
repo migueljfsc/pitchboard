@@ -8,9 +8,11 @@ import {
   sceneRange,
   updateAnnotation,
 } from "@/board/annotations";
-import { KIND_ICON, KIND_LABEL, describeAnnotation } from "@/components/ui/kinds";
+import { KIND_ICON, KIND_KEY, describeAnnotation } from "@/components/ui/kinds";
 import type { Change } from "@/lib/history";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/i18n/context";
+import type { I18n } from "@/i18n/context";
 
 type Props = {
   doc: BoardDoc;
@@ -40,6 +42,8 @@ type Lift = { group: number; pos: number; docIndex: number };
  * its span is written on the row.
  */
 export function DrawingsPanel({ doc, onDocChange, sceneIndex, selected, onSelect }: Props) {
+  const i18n = useI18n();
+  const { t, tn } = i18n;
   const [thisScene, setThisScene] = useState(false);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const [lift, setLift] = useState<Lift | null>(null);
@@ -93,8 +97,7 @@ export function DrawingsPanel({ doc, onDocChange, sceneIndex, selected, onSelect
   if (all.length === 0) {
     return (
       <p className="p-4 text-[11px] leading-relaxed text-ink-300">
-        Nothing drawn yet. Pick a tool in the Draw panel and drag on the pitch — arrows, zones,
-        freehand and labels all land here.
+        {t("drawn.empty")}
       </p>
     );
   }
@@ -113,16 +116,18 @@ export function DrawingsPanel({ doc, onDocChange, sceneIndex, selected, onSelect
               : "border-ink-600 text-ink-400 hover:border-ink-400 hover:text-ink-200",
           )}
         >
-          {thisScene ? `On ${doc.scenes[sceneIndex]?.name ?? "this scene"}` : "All scenes"}
+          {thisScene
+            ? t("drawn.onScene", { scene: doc.scenes[sceneIndex]?.name ?? t("drawn.thisScene") })
+            : t("drawn.allScenes")}
         </button>
         {groups.length > 1 && (
           <button
             type="button"
             onClick={() => setCollapsed(anyOpen ? new Set(groups.map((g) => g.scene.id)) : new Set())}
-            title={anyOpen ? "Collapse every scene" : "Expand every scene"}
+            title={t(anyOpen ? "drawn.collapseAll" : "drawn.expandAll")}
             className="shrink-0 rounded border border-ink-600 px-1.5 py-1 text-[11px] text-ink-400 transition hover:border-ink-400 hover:text-ink-200"
           >
-            {anyOpen ? "Collapse" : "Expand"}
+            {t(anyOpen ? "drawn.collapse" : "drawn.expand")}
           </button>
         )}
       </div>
@@ -153,12 +158,13 @@ export function DrawingsPanel({ doc, onDocChange, sceneIndex, selected, onSelect
           }}
           onSelect={onSelect}
           onDocChange={onDocChange}
+          i18n={i18n}
         />
       ))}
 
       {groups.length === 0 && (
         <p className="text-[11px] leading-relaxed text-ink-300">
-          Nothing on this scene. {all.length} shape{all.length === 1 ? "" : "s"} elsewhere.
+          {tn("drawn.noneHere", all.length)}
         </p>
       )}
     </div>
@@ -182,6 +188,7 @@ function SceneGroup({
   onDragEnd,
   onSelect,
   onDocChange,
+  i18n,
 }: {
   doc: BoardDoc;
   scene: Scene;
@@ -199,6 +206,7 @@ function SceneGroup({
   onDragEnd: () => void;
   onSelect: (id: string | null) => void;
   onDocChange: Change<BoardDoc>;
+  i18n: I18n;
 }) {
   const holdsSelection = rows.some((r) => r.ann.id === selected);
 
@@ -254,6 +262,7 @@ function SceneGroup({
             onDragOver={onDragOver}
             onDrop={onDrop}
             onDragEnd={onDragEnd}
+            i18n={i18n}
           />
         ))}
     </div>
@@ -279,6 +288,7 @@ function Row({
   onDragOver,
   onDrop,
   onDragEnd,
+  i18n,
 }: {
   doc: BoardDoc;
   ann: Annotation;
@@ -298,12 +308,14 @@ function Row({
   onDragOver: (pos: number) => void;
   onDrop: () => void;
   onDragEnd: () => void;
+  i18n: I18n;
 }) {
+  const { t, tn } = i18n;
   const Icon = KIND_ICON[ann.kind];
-  const label = describeAnnotation(ann);
+  const label = describeAnnotation(ann, t);
   // The placeholder shows what the row would be called with no name of its own,
   // so clearing the field reads as reverting rather than as breaking it.
-  const fallback = ann.kind === "text" && ann.text.trim() ? ann.text.trim() : KIND_LABEL[ann.kind];
+  const fallback = ann.kind === "text" && ann.text.trim() ? ann.text.trim() : t(KIND_KEY[ann.kind]);
 
   return (
     <div
@@ -349,8 +361,8 @@ function Row({
             e.stopPropagation();
             onReorder(to);
           }}
-          aria-label={`Reorder ${label}`}
-          title="Drag to reorder within this scene — later shapes draw on top"
+          aria-label={t("drawn.reorder", { label })}
+          title={t("drawn.reorder.title")}
           className="flex size-4 shrink-0 cursor-grab items-center justify-center rounded text-ink-500 transition hover:text-ink-200 focus:outline-none focus-visible:text-accent active:cursor-grabbing"
         >
           <GripVertical size={12} />
@@ -365,19 +377,19 @@ function Row({
           placeholder={fallback}
           onFocus={onFocus}
           onChange={(e) => onPatch({ name: e.target.value || undefined }, `ann-name:${ann.id}`)}
-          aria-label={`Name for ${label}`}
-          title={here ? "Rename — click also selects it" : "Rename — click also jumps to it"}
+          aria-label={t("drawn.nameLabel", { label })}
+          title={t(here ? "drawn.rename.here" : "drawn.rename.away")}
           className="min-w-0 flex-1 truncate rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-ink-200 outline-none transition placeholder:text-ink-300 hover:border-ink-600 focus:border-accent focus:text-white"
         />
 
         <Tiny
-          label={ann.hidden ? "Show shape" : "Hide shape"}
+          label={t(ann.hidden ? "drawn.showShape" : "drawn.hideShape")}
           active={!ann.hidden}
           onClick={() => onPatch({ hidden: !ann.hidden })}
         >
           {ann.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
         </Tiny>
-        <Tiny label={`Delete ${label}`} onClick={onDelete}>
+        <Tiny label={t("drawn.delete", { label })} onClick={onDelete}>
           <Trash2 size={12} />
         </Tiny>
       </div>
@@ -385,21 +397,21 @@ function Row({
       {/* Ids, not indices, so reordering scenes carries the shape along. */}
       <div className="flex items-center gap-1 px-1.5 pb-1.5">
         <SceneSelect
-          label="from"
+          title={t("drawn.visibleFrom")}
           doc={doc}
           value={ann.from}
           onChange={(id) => id && onPatch({ from: id })}
         />
         <span className="shrink-0 text-[11px] text-ink-500">→</span>
         <SceneSelect
-          label="to"
+          title={t("drawn.visibleTo")}
           doc={doc}
           value={ann.to}
           allowEnd
           onChange={(id) => onPatch({ to: id })}
         />
         <span className="ml-auto shrink-0 font-mono text-[11px] text-ink-500">
-          {range[0] === range[1] ? `1 scene` : `${range[1] - range[0] + 1} scenes`}
+          {tn("drawn.span", range[1] - range[0] + 1)}
         </span>
       </div>
     </div>
@@ -419,27 +431,28 @@ function DropLine({ className }: { className: string }) {
 }
 
 function SceneSelect({
-  label,
+  title,
   doc,
   value,
   allowEnd,
   onChange,
 }: {
-  label: string;
+  title: string;
   doc: BoardDoc;
   value: string | null;
   allowEnd?: boolean;
   onChange: (id: string | null) => void;
 }) {
+  const { t } = useI18n();
   return (
     <select
       value={value ?? ""}
-      aria-label={`Visible ${label}`}
-      title={`Visible ${label}`}
+      aria-label={title}
+      title={title}
       onChange={(e) => onChange(e.target.value || null)}
       className="min-w-0 flex-1 rounded border border-ink-600 bg-ink-900 px-1 py-0.5 text-[11px] text-ink-300 outline-none focus:border-accent"
     >
-      {allowEnd && <option value="">End</option>}
+      {allowEnd && <option value="">{t("drawn.end")}</option>}
       {doc.scenes.map((s) => (
         <option key={s.id} value={s.id}>
           {s.name}

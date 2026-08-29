@@ -24,6 +24,7 @@ import {
   teamToSetup,
 } from "./json";
 import { browserStore, keyFor, read, write, type Store } from "./storage";
+import { msg, type Message } from "@/i18n/core";
 
 export const PRESETS_KEY = keyFor("squads");
 
@@ -132,7 +133,7 @@ export const deletePreset = (list: PresetLibrary, id: string): PresetLibrary =>
 
 // ------------------------------------------------------------------ applying
 
-export type ApplyOutcome = { ok: true; doc: BoardDoc } | { ok: false; error: string };
+export type ApplyOutcome = { ok: true; doc: BoardDoc } | { ok: false; error: Message };
 
 /**
  * Put a preset onto one side of the board.
@@ -153,6 +154,7 @@ export function applyPreset(
     name: preset.name ?? base.name,
     color: preset.color ?? base.color,
     textColor: preset.textColor ?? base.textColor,
+    pattern: preset.pattern ?? base.pattern,
     formation: preset.formation ?? base.formation,
     squad: preset.players,
   };
@@ -164,31 +166,35 @@ export function applyPreset(
     // Only reachable from a hand-edited library — the app never saves one — but
     // silently renumbering someone's squad is a worse answer than saying so.
     if (duplicateNumber(preset.players)) {
-      throw new SetupError("Two players in this squad share a shirt number.");
+      throw new SetupError(msg("preset.duplicateNumber"));
     }
     if (preset.formation && built.formation !== preset.formation) {
-      throw new SetupError(`"${preset.formation}" is not a formation Pitchboard knows.`);
+      throw new SetupError(msg("preset.unknownFormation", { formation: preset.formation }));
     }
     // buildTeam fills the formation's slots and ignores anything past them, so a
     // squad saved deeper than the shape would silently lose its tail.
     if (preset.players && preset.players.length > built.players.length) {
       throw new SetupError(
-        `${preset.players.length} players saved but ${built.formation} has ${built.players.length} places.`,
+        msg("preset.tooManyPlayers", {
+          saved: preset.players.length,
+          formation: built.formation ?? "",
+          places: built.players.length,
+        }),
       );
     }
 
     if (preset.links) {
-      const resolved = resolveTeamLinks(built, preset.links, `"${preset.label}"`);
+      const resolved = resolveTeamLinks(built, preset.links, { kind: "preset", label: preset.label });
       next = { ...next, links: replaceTeamLinks(next, teamIndex, resolved) };
     }
 
     const parsed = boardDocSchema.safeParse(next);
-    if (!parsed.success) throw new SetupError("That preset does not describe a valid team.");
+    if (!parsed.success) throw new SetupError(msg("preset.invalid"));
     return { ok: true, doc: parsed.data as BoardDoc };
   } catch (e) {
     return {
       ok: false,
-      error: e instanceof SetupError ? e.message : "Could not apply that preset.",
+      error: e instanceof SetupError ? e.info : msg("preset.failed"),
     };
   }
 }

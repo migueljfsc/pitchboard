@@ -11,6 +11,7 @@ import type { Annotation, BoardDoc, PitchView, Tool, Vec2 } from "@/board/types"
 import type { Change } from "@/lib/history";
 import { BALL_ID, DEFAULT_PITCH_VIEW } from "@/board/types";
 import { fitViewport, toPitch } from "@/board/geometry";
+import { framingOf } from "@/board/projection";
 import { drawBoard } from "@/board/render";
 import { frameAt } from "@/board/timeline";
 import {
@@ -96,6 +97,17 @@ export function BoardCanvas({
   onAnnotationSelect,
   interactive = true,
 }: Props) {
+  /**
+   * The angled view is presentation only — the board is edited flat (D34).
+   *
+   * One gate covers it, because the renderer already drops every piece of editor
+   * chrome for `interactive: false` and the pointer handlers hang off the same
+   * flag. Dragging a player through a perspective map would work, but the grab
+   * margins stop matching what you see: a metre near the camera is a lot more
+   * pixels than a metre at the far touchline.
+   */
+  const live = interactive && !pitchView.tilt;
+
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -129,12 +141,14 @@ export function BoardCanvas({
     canvas.style.height = `${size.h}px`;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const view = fitViewport(size.w, size.h, doc.pitch.length, doc.pitch.width, pitchView);
+    const framing = framingOf(pitchView);
+    const view = fitViewport(size.w, size.h, doc.pitch.length, doc.pitch.width, framing);
     drawBoard(ctx, doc, t, {
       ...view,
       width: size.w,
       height: size.h,
-      interactive,
+      interactive: live,
+      tilt: framing.tilt,
       selection,
       hover,
       editScene,
@@ -152,7 +166,7 @@ export function BoardCanvas({
     editScene,
     pitchView,
     annotationSelection,
-    interactive,
+    live,
   ]);
 
   const pointFrom = useCallback(
@@ -419,7 +433,7 @@ export function BoardCanvas({
         ref={canvasRef}
         className="block touch-none select-none"
         style={{
-          cursor: !interactive
+          cursor: !live
             ? "default"
             : tool !== "select"
               ? "crosshair"
@@ -429,11 +443,11 @@ export function BoardCanvas({
                   ? "grab"
                   : "default",
         }}
-        onPointerDown={interactive ? onPointerDown : undefined}
-        onPointerMove={interactive ? onPointerMove : undefined}
-        onPointerUp={interactive ? onPointerUp : undefined}
+        onPointerDown={live ? onPointerDown : undefined}
+        onPointerMove={live ? onPointerMove : undefined}
+        onPointerUp={live ? onPointerUp : undefined}
         onPointerLeave={() => setHover(null)}
-        onDoubleClick={interactive ? onDoubleClick : undefined}
+        onDoubleClick={live ? onDoubleClick : undefined}
       />
     </div>
   );

@@ -5,17 +5,26 @@ import { addSceneAfter, setCarrier } from "@/board/scenes";
 import { createLink } from "@/board/links";
 import { AWAY, HOME, createBoardDoc } from "@/formations";
 import type { BoardDoc } from "@/board/types";
+import { say } from "@/i18n/core";
+import { en } from "@/i18n/en";
 
 const ok = (text: string): BoardDoc => {
   const outcome = fromJson(text);
-  if (!outcome.ok) throw new Error(outcome.error);
+  if (!outcome.ok) throw new Error(outcome.error.key);
   return outcome.doc;
 };
 
+/**
+ * The rejection, in English.
+ *
+ * Resolved through the dictionary rather than asserted as a key, so these keep
+ * checking the sentence a person actually reads — and now also check that the
+ * key was handed the variables it names.
+ */
 const failure = (text: string): string => {
   const outcome = fromJson(text);
   if (outcome.ok) throw new Error("expected a rejection");
-  return outcome.error;
+  return say(en, outcome.error);
 };
 
 /** A board with something in every field worth losing. */

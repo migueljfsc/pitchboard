@@ -26,6 +26,7 @@ const team = z.object({
   name: z.string().min(1).max(60),
   color: z.string().min(1),
   textColor: z.string().min(1),
+  pattern: z.enum(["solid", "vertical", "horizontal"]).optional(),
   players: z.array(player).max(30),
   hidden: z.boolean().optional(),
   formation: z.string().min(1).max(20).optional(),

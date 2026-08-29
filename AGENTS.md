@@ -63,6 +63,7 @@ src/board/                the engine — zero React, zero DOM
   timeline.ts             (doc, t) → resolved positions, incl. ball carrier
   links.ts                connector geometry + distances
   annotations.ts          the coach's drawing — shapes, scene ranges, hit geometry
+  projection.ts           the 3D view — one fixed camera, and the ground warp
   render.ts               drawBoard() — the one renderer
   interaction.ts          hit-testing, drag, selection
 src/formations/           preset shapes, each seeding its own links
@@ -73,6 +74,8 @@ src/share/                localStorage, URL-hash codec, API client
   json.ts                 board and setup files in and out; owns setupTeamSchema
   presets.ts              named one-team squad presets, built on setupTeamSchema
   local.ts                autosave of the board in progress
+src/i18n/                 EN and PT; en.ts is the source of truth for the keys
+  core.ts                 pure runtime — the engine imports only `Message` from here
 src/App.tsx               picks Viewer or Editor from the hash; no router
 src/pages/Viewer.tsx      read-only playback of a shared board, with fork
 src/board/migrate.ts      version dispatch, run before validation on every load
@@ -172,6 +175,50 @@ infrastructure/terraform/cloudflare/    OpenTofu stack
   hand-edited in devtools. Validate it and discard what fails; never repair it (D31).
 - **A stored preset names players by shirt number, never by id.** Ids are minted per board and a
   renumbered player keeps theirs, so an id in a file means nothing later (D30).
+- **Perspective cannot be a canvas transform.** `ctx.transform` is affine; a trapezoid is not.
+  That is why the 3D view warps a flat ground layer instead of setting a matrix, and why nothing
+  in `pitch.ts` had to learn about the camera (D34).
+- **In 3D, metre space lands on the grass.** Anything new drawn inside the ground layer takes the
+  perspective — which is usually right. Anything that must stay upright and unsquashed has to be
+  added to the billboard pass explicitly; it will not get there by itself. Tokens, the ball and
+  text annotations are the current list.
+- **A billboard's axes are the screen's, not the pitch's.** Inside `billboard()` one unit is still
+  a metre, but +y is down the frame however the board is oriented underneath. That is what makes a
+  token a circle rather than an ellipse — and it means a pitch-space offset copied into there
+  points somewhere else.
+- **Tilt implies a vertical board**, so `framingOf` forces it and the rotation control is disabled
+  rather than left to disagree. Export follows: `boardAspect` returns the projected aspect, which
+  for a full pitch is very nearly square (D34).
+- **The goals are the only thing with a height**, and `project(sx, sy, up)` is the only way to get
+  one. They are depth-sorted by being drawn at either end of the billboard pass — far goal before,
+  near goal after — which is exact only because no player is ever outside the goal lines.
+- **A goal with height eats the space behind it**, so the 3D view seats team names further out
+  than the flat board does (`TEAM_NAME_OFFSET_3D`). The net's back edge reaches ~2.5 m up-screen
+  from the goal line and the flat 4.3 m draws the name straight through it.
+- **Tilt is never written to `PitchView.rotated`.** `framingOf` applies it at render time instead,
+  so the flat orientation survives a trip through 3D. Setting it on the toggle would work and would
+  quietly lose what the user had (D36).
+- **The share link's framing rides BESIDE the payload**, in `v=`, never inside `BoardDoc` — no
+  migration, and every link published before it still opens. The crop is the sharer's and the
+  viewer cannot change it; rotation and 3D are the viewer's own (D35).
+- **Anything added to `Team` must be carried through `TeamSpec`, at every site that builds one.**
+  `buildTeam` mints the whole team object, so whatever the spec does not name is dropped — the same
+  trap as the squad and the links (D32, D37). There are THREE builders and missing one fails
+  quietly, in only that path: `changeFormation`, the setup importer in `json.ts`, and `applyPreset`.
+  Kit pattern shipped having missed the third, so a preset stored it and lost it on the way back in.
+- **A pure module must not return prose.** `migrate`, `urlcodec`, `json` and `presets` return a
+  `Message` — a key and its variables — because none of their callers agree on a language (D38).
+  Adding a `throw new SetupError("some sentence")` puts English back into a module with no user.
+- **Never assemble a sentence from fragments.** Anything with a variable in it is a whole key with
+  a placeholder. Prepending a translated "Team 1: " to a translated remainder bakes English word
+  order into every other language — which is why `resolveTeamLinks` takes a discriminator and picks
+  between four whole keys rather than gluing two together.
+- **`en.ts` declares the keys; `pt.ts` must answer all of them** or it does not compile. What the
+  types cannot check is inside the strings, so `i18n.test.ts` compares `{placeholders}` across
+  locales — a renamed variable typechecks and then renders `{name}` to a user.
+- **A document does not change language when the reader does.** Boards keep the names they were
+  given; only a NEW one is seeded from the active locale, through the labels `createBoardDoc` and
+  the scene helpers accept. Locale itself is presentation and never enters `BoardDoc` (D38).
 - **DPR double-application** looks correct on a 1× monitor and wrong everywhere else.
 
 ## Definition of done, per phase

@@ -11,12 +11,16 @@
  * overhead when the payload is going into a URL.
  */
 
-import type { BoardDoc } from "@/board/types";
+import type { BoardDoc, PitchHalf, PitchView } from "@/board/types";
 import { boardDocSchema } from "@/board/schema";
 import { migrate } from "@/board/migrate";
+import { msg, type Message } from "@/i18n/core";
 
 /** The hash parameter a shared board travels in. */
 export const HASH_KEY = "d";
+
+/** The hash parameter the sharer's framing travels in. */
+export const VIEW_KEY = "v";
 
 /**
  * Encoded characters beyond which a link stops being reliably shareable.
@@ -29,7 +33,7 @@ export const HASH_KEY = "d";
  */
 export const URL_BUDGET = 8000;
 
-export type DecodeOutcome = { ok: true; doc: BoardDoc } | { ok: false; error: string };
+export type DecodeOutcome = { ok: true; doc: BoardDoc } | { ok: false; error: Message };
 
 // ------------------------------------------------------------------ base64url
 
@@ -100,14 +104,14 @@ export async function decodeBoard(payload: string): Promise<DecodeOutcome> {
   try {
     json = await inflate(fromBase64Url(payload));
   } catch {
-    return { ok: false, error: "That link is damaged — it may have been cut short in transit." };
+    return { ok: false, error: msg("link.damaged") };
   }
 
   let raw: unknown;
   try {
     raw = JSON.parse(json);
   } catch {
-    return { ok: false, error: "That link does not contain a board." };
+    return { ok: false, error: msg("link.notABoard") };
   }
 
   const migrated = migrate(raw);
@@ -116,8 +120,49 @@ export async function decodeBoard(payload: string): Promise<DecodeOutcome> {
   const parsed = boardDocSchema.safeParse(migrated.doc);
   return parsed.success
     ? { ok: true, doc: parsed.data as BoardDoc }
-    : { ok: false, error: "That link contains a board this version cannot read." };
+    : { ok: false, error: msg("link.unreadable") };
 }
+
+// --------------------------------------------------------------- the framing
+
+/**
+ * The sharer's framing, as a handful of characters beside the payload.
+ *
+ * Deliberately NOT inside the compressed document. Framing is presentation and
+ * has no business in `BoardDoc` (D12 and the second invariant both say so), and
+ * keeping it out means no schema change, no migration step, and every link
+ * published before this still opens — it simply has no `v` and falls back.
+ *
+ * One letter for the crop, then flags: "f", "lv", "fv3".
+ */
+const HALF_CODE: Record<PitchHalf, string> = { full: "f", left: "l", right: "r" };
+
+export function encodeView(view: PitchView): string {
+  return HALF_CODE[view.half] + (view.rotated ? "v" : "") + (view.tilt ? "3" : "");
+}
+
+/**
+ * Read a framing back, or null if there is nothing usable.
+ *
+ * As untrusted as the payload beside it — anyone can edit the characters after
+ * the `#`. Anything that is not exactly a framing is discarded rather than
+ * repaired, and the viewer falls back to its default.
+ */
+export function decodeView(text: string | null): PitchView | null {
+  if (!text) return null;
+
+  const entry = (Object.entries(HALF_CODE) as [PitchHalf, string][]).find(
+    ([, code]) => code === text[0],
+  );
+  if (!entry) return null;
+
+  const flags = text.slice(1);
+  if (!/^[v3]*$/.test(flags)) return null;
+
+  return { half: entry[0], rotated: flags.includes("v"), tilt: flags.includes("3") };
+}
+
+// -------------------------------------------------------------------- the hash
 
 /** The payload carried by a location hash, or null when there is none. */
 export function readHash(hash: string): string | null {
@@ -126,10 +171,19 @@ export function readHash(hash: string): string | null {
   return payload && payload.length > 0 ? payload : null;
 }
 
+/** The framing carried by a location hash, or null when there is none. */
+export function readView(hash: string): PitchView | null {
+  return decodeView(new URLSearchParams(hash.replace(/^#/, "")).get(VIEW_KEY));
+}
+
 /** A shareable URL for `payload`, built from the page's own address. */
-export function shareUrl(href: string, payload: string): string {
+export function shareUrl(href: string, payload: string, view?: PitchView): string {
   const url = new URL(href);
-  url.hash = `${HASH_KEY}=${payload}`;
+  // The payload is base64url, so it carries no separator of its own and can go
+  // in raw — encoding it would inflate a link that is already budgeted.
+  url.hash = view
+    ? `${HASH_KEY}=${payload}&${VIEW_KEY}=${encodeView(view)}`
+    : `${HASH_KEY}=${payload}`;
   return url.toString();
 }
 

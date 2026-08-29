@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import type { BoardDoc } from "@/board/types";
 import { Editor } from "@/pages/Editor";
 import { Viewer } from "@/pages/Viewer";
-import { decodeBoard, readHash, withoutHash, type DecodeOutcome } from "@/share/urlcodec";
+import { decodeBoard, readHash, readView, withoutHash, type DecodeOutcome } from "@/share/urlcodec";
+import { useI18n } from "@/i18n/context";
 
 /**
  * Chooses what the address is asking for.
@@ -21,6 +22,7 @@ import { decodeBoard, readHash, withoutHash, type DecodeOutcome } from "@/share/
  * to grant — the whole of D7's authorisation model.
  */
 export function App() {
+  const { t, tm } = useI18n();
   const [hash, setHash] = useState(() => window.location.hash);
   const [forked, setForked] = useState<BoardDoc | null>(null);
   /** The last decode, tagged with the payload it came from. */
@@ -55,18 +57,18 @@ export function App() {
     setHash("");
   };
 
-  if (payload && !outcome) return <Splash>Opening the shared board…</Splash>;
+  if (payload && !outcome) return <Splash>{t("app.opening")}</Splash>;
 
   if (outcome && !outcome.ok) {
     return (
       <Splash tone="bad">
-        {outcome.error}
+        {tm(outcome.error)}
         <button
           type="button"
           onClick={clearHash}
           className="mt-4 block rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-ink-900 transition hover:brightness-110"
         >
-          Start a new board
+          {t("app.newBoard")}
         </button>
       </Splash>
     );
@@ -75,7 +77,11 @@ export function App() {
   if (outcome?.ok) {
     return (
       <Viewer
+        // Remounted per link, so pasting a second one into an open tab picks up
+        // its framing instead of keeping the first link's initial state.
+        key={payload}
         doc={outcome.doc}
+        initialView={readView(hash) ?? undefined}
         onFork={() => {
           setForked(outcome.doc);
           clearHash();

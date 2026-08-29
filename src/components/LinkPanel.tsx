@@ -15,6 +15,9 @@ import { deleteLink, linkColor, moveLink, moveMember, updateLink } from "@/board
 import { PALETTE } from "@/components/ui/palette";
 import type { Change } from "@/lib/history";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/i18n/context";
+import type { I18n } from "@/i18n/context";
+import type { MessageKey } from "@/i18n/core";
 
 type Props = {
   doc: BoardDoc;
@@ -28,10 +31,10 @@ type Props = {
   onExpandedChange: (id: string | null) => void;
 };
 
-const STYLES: { value: LinkStyle; label: string; hint: string }[] = [
-  { value: "chain", label: "Chain", hint: "Open line — a back four must not close on itself" },
-  { value: "polygon", label: "Shape", hint: "Closed outline" },
-  { value: "filled", label: "Filled", hint: "Closed and shaded — shows the area collapse" },
+const STYLES: { value: LinkStyle }[] = [
+  { value: "chain" },
+  { value: "polygon" },
+  { value: "filled" },
 ];
 
 export function LinkPanel({
@@ -48,6 +51,8 @@ export function LinkPanel({
   // first row, n below the last. A gap says where the row lands; highlighting a
   // row only says which one it lands near. Both are presentation: the reorder
   // reaches the document on drop.
+  const i18n = useI18n();
+  const { t } = i18n;
   const [dragging, setDragging] = useState<number | null>(null);
   const [dropAt, setDropAt] = useState<number | null>(null);
 
@@ -64,17 +69,17 @@ export function LinkPanel({
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <span className="text-[11px] uppercase tracking-wide text-ink-400">
-          Links ({doc.links.length})
+          {t("links.count", { n: doc.links.length })}
         </span>
         {doc.links.length > 0 && (
           <button
             type="button"
             onClick={onClearAll}
-            title="Delete every link on the board"
+            title={t("links.deleteAll.title")}
             className="flex items-center gap-1 rounded px-1 py-0.5 text-[11px] text-ink-400 transition hover:text-red-400"
           >
             <Trash2 size={11} />
-            Delete all
+            {t("links.deleteAll")}
           </button>
         )}
       </div>
@@ -86,7 +91,7 @@ export function LinkPanel({
         className="flex items-center justify-center gap-1.5 rounded-md border border-ink-600 bg-ink-800 px-2 py-1.5 text-xs text-ink-200 transition enabled:hover:border-accent enabled:hover:text-white disabled:opacity-45"
       >
         <Link2 size={13} />
-        {players.length < 2 ? "Select 2+ players to link" : `Link ${players.length} players`}
+        {players.length < 2 ? t("links.needTwo") : t("links.linkPlayers", { n: players.length })}
       </button>
 
       <div className="flex flex-col gap-1.5">
@@ -119,6 +124,7 @@ export function LinkPanel({
               setDragging(null);
               setDropAt(null);
             }}
+            i18n={i18n}
             onDragEnd={() => {
               setDragging(null);
               setDropAt(null);
@@ -150,6 +156,7 @@ function LinkRow({
   onDragOver,
   onDrop,
   onDragEnd,
+  i18n,
 }: {
   doc: BoardDoc;
   link: Link;
@@ -170,7 +177,9 @@ function LinkRow({
   onDragOver: (gap: number) => void;
   onDrop: () => void;
   onDragEnd: () => void;
+  i18n: I18n;
 }) {
+  const { t } = i18n;
   return (
     <div
       onDragOver={(e) => {
@@ -216,8 +225,8 @@ function LinkRow({
             e.stopPropagation();
             onReorder(to);
           }}
-          aria-label={`Reorder ${link.name}`}
-          title="Drag to reorder, or focus and use the arrow keys. Later links draw on top."
+          aria-label={t("links.reorder", { name: link.name })}
+          title={t("links.reorder.title")}
           className="flex size-4 shrink-0 cursor-grab items-center justify-center rounded text-ink-500 transition hover:text-ink-200 focus:outline-none focus-visible:text-accent active:cursor-grabbing"
         >
           <GripVertical size={12} />
@@ -227,8 +236,8 @@ function LinkRow({
           type="button"
           onClick={onToggle}
           aria-expanded={expanded}
-          aria-label={`${expanded ? "Close" : "Rename and restyle"} ${link.name}`}
-          title="Rename, restyle, reorder"
+          aria-label={t(expanded ? "links.collapseRow" : "links.expandRow", { name: link.name })}
+          title={t("links.edit.title")}
           className="flex size-5 shrink-0 items-center justify-center rounded text-ink-400 transition hover:text-accent"
         >
           <ChevronDown size={13} className={cn("transition-transform", !expanded && "-rotate-90")} />
@@ -242,19 +251,19 @@ function LinkRow({
           onClick={onToggle}
           aria-expanded={expanded}
           className="min-w-0 flex-1 truncate text-left text-xs text-ink-200 hover:text-white"
-          title="Rename, restyle, reorder"
+          title={t("links.edit.title")}
         >
           {link.name}
         </button>
         <Tiny
-          label={link.showDistances ? "Hide distances" : "Show distances"}
+          label={t(link.showDistances ? "links.hideDistances" : "links.showDistances")}
           active={link.showDistances}
           onClick={() => onChange({ showDistances: !link.showDistances })}
         >
           <Ruler size={12} />
         </Tiny>
         <Tiny
-          label={link.hidden ? "Show link" : "Hide link"}
+          label={t(link.hidden ? "links.show" : "links.hide")}
           onClick={() => onChange({ hidden: !link.hidden })}
         >
           {link.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
@@ -268,16 +277,16 @@ function LinkRow({
             onClick={onSelect}
             className="rounded border border-ink-600 bg-ink-800 px-1.5 py-1 text-[11px] text-ink-200 transition hover:border-accent hover:text-white"
           >
-            Select {link.members.length} players
+            {t("links.selectMembers", { n: link.members.length })}
           </button>
 
           <label className="flex flex-col gap-1">
-            <span className="text-[11px] uppercase tracking-wide text-ink-400">Name</span>
+            <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("links.name")}</span>
             <input
               value={link.name}
               onChange={(e) => onChange({ name: e.target.value }, `link-name:${link.id}`)}
               className="w-full rounded border border-ink-600 bg-ink-900 px-1.5 py-1 text-[11px] text-ink-200 outline-none transition hover:border-ink-400 focus:border-accent"
-              aria-label="Link name"
+              aria-label={t("links.name.label")}
             />
           </label>
 
@@ -286,7 +295,7 @@ function LinkRow({
               <button
                 key={s.value}
                 type="button"
-                title={s.hint}
+                title={t(`links.style.${s.value}.hint` as MessageKey)}
                 onClick={() => onChange({ style: s.value })}
                 className={cn(
                   "flex-1 rounded border px-1 py-1 text-[11px] transition",
@@ -295,20 +304,20 @@ function LinkRow({
                     : "border-ink-600 text-ink-400 hover:text-ink-200",
                 )}
               >
-                {s.label}
+                {t(`links.style.${s.value}` as MessageKey)}
               </button>
             ))}
           </div>
 
           <div>
-            <span className="text-[11px] uppercase tracking-wide text-ink-400">Colour</span>
+            <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("links.colour")}</span>
             <div className="mt-1 flex flex-wrap items-center gap-1">
               {/* Auto is the default: the link tracks its members' kit, so
                   recolouring the team recolours the link with it. */}
               <button
                 type="button"
                 onClick={() => onChange({ color: undefined })}
-                title="Follow the team's kit colour"
+                title={t("links.auto.title")}
                 className={cn(
                   "rounded border px-1.5 py-0.5 text-[11px] transition",
                   link.color === undefined
@@ -316,13 +325,13 @@ function LinkRow({
                     : "border-ink-600 text-ink-400 hover:text-ink-200",
                 )}
               >
-                Auto
+                {t("links.auto")}
               </button>
               {PALETTE.map((c) => (
                 <button
                   key={c}
                   type="button"
-                  aria-label={`Set ${link.name} colour to ${c}`}
+                  aria-label={t("links.colorAria", { name: link.name, color: c })}
                   onClick={() => onChange({ color: c })}
                   className={cn(
                     "size-4 rounded-full ring-1 transition",
@@ -336,7 +345,7 @@ function LinkRow({
 
           <div>
             <span className="text-[11px] uppercase tracking-wide text-ink-400">
-              Order
+              {t("links.order")}
             </span>
             <div className="mt-1 flex flex-wrap gap-1">
               {link.members.map((id, i) => (
@@ -347,7 +356,7 @@ function LinkRow({
                   {numberOf(id)}
                   <button
                     type="button"
-                    aria-label={`Move ${numberOf(id)} earlier`}
+                    aria-label={t("links.moveEarlier", { number: numberOf(id) })}
                     disabled={i === 0}
                     onClick={() => onMove(i, i - 1)}
                     className="px-0.5 text-ink-400 enabled:hover:text-accent disabled:opacity-45"
@@ -356,7 +365,7 @@ function LinkRow({
                   </button>
                   <button
                     type="button"
-                    aria-label={`Move ${numberOf(id)} later`}
+                    aria-label={t("links.moveLater", { number: numberOf(id) })}
                     disabled={i === link.members.length - 1}
                     onClick={() => onMove(i, i + 1)}
                     className="pr-1 text-ink-400 enabled:hover:text-accent disabled:opacity-45"
@@ -373,7 +382,7 @@ function LinkRow({
             onClick={onDelete}
             className="flex items-center justify-center gap-1 rounded border border-ink-600 px-1.5 py-1 text-[11px] text-ink-400 transition hover:border-red-500/60 hover:text-red-400"
           >
-            <Trash2 size={11} /> Delete link
+            <Trash2 size={11} /> {t("links.delete")}
           </button>
         </div>
       )}

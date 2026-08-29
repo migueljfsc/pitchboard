@@ -5,6 +5,8 @@ import { addPlayer, setPlayerLabel, setPlayerNumber } from "@/board/players";
 import { createLink } from "@/board/links";
 import { addSceneAfter } from "@/board/scenes";
 import { memoryStore } from "./storage";
+import { say } from "@/i18n/core";
+import { en } from "@/i18n/en";
 import {
   MAX_PRESETS,
   PRESETS_KEY,
@@ -64,11 +66,51 @@ describe("presetFrom", () => {
   });
 });
 
+describe("the kit", () => {
+  /**
+   * The kit is part of a squad — two sides in similar colours are the reason
+   * patterns exist, so a preset that forgot one would hand back the ambiguity it
+   * was saved to resolve.
+   */
+  it("survives a save and an apply", () => {
+    const base = namedBoard();
+    const doc = {
+      ...base,
+      teams: [{ ...base.teams[0], pattern: "vertical" as const }, base.teams[1]],
+    } as typeof base;
+
+    const preset = presetFrom(doc, 0, []);
+    expect(preset.pattern).toBe("vertical");
+
+    const out = applyPreset(createBoardDoc(), 0, preset);
+    if (!out.ok) throw new Error(out.error.key);
+    expect(out.doc.teams[0].pattern).toBe("vertical");
+    expect(out.doc.teams[1].pattern).toBeUndefined();
+  });
+
+  it("is left off a preset saved from a plain kit, and applies as solid", () => {
+    const preset = presetFrom(namedBoard(), 0, []);
+    expect(preset.pattern).toBeUndefined();
+
+    const base = createBoardDoc();
+    const striped = {
+      ...base,
+      teams: [{ ...base.teams[0], pattern: "horizontal" as const }, base.teams[1]],
+    } as typeof base;
+
+    // Same rule the colour follows: a preset states the kit, it does not inherit
+    // whatever the side it lands on happened to be wearing.
+    const out = applyPreset(striped, 0, preset);
+    if (!out.ok) throw new Error(out.error.key);
+    expect(out.doc.teams[0].pattern).toBeUndefined();
+  });
+});
+
 describe("applyPreset", () => {
   it("restores names and numbers onto a fresh board", () => {
     const preset = presetFrom(namedBoard(), 0, []);
     const outcome = applyPreset(createBoardDoc(), 0, preset);
-    if (!outcome.ok) throw new Error(outcome.error);
+    if (!outcome.ok) throw new Error(outcome.error.key);
     expect(outcome.doc.teams[0].players.map((p) => p.label)).toEqual(
       preset.players?.map((p) => p.label),
     );
@@ -79,14 +121,14 @@ describe("applyPreset", () => {
     const doc = createBoardDoc();
     const preset = presetFrom(namedBoard(), 0, []);
     const outcome = applyPreset(doc, 0, preset);
-    if (!outcome.ok) throw new Error(outcome.error);
+    if (!outcome.ok) throw new Error(outcome.error.key);
     expect(outcome.doc.teams[1]).toEqual(doc.teams[1]);
   });
 
   it("applies to either side", () => {
     const preset = presetFrom(namedBoard(), 0, []);
     const outcome = applyPreset(createBoardDoc(), 1, preset);
-    if (!outcome.ok) throw new Error(outcome.error);
+    if (!outcome.ok) throw new Error(outcome.error.key);
     expect(outcome.doc.teams[1].players.map((p) => p.label)).toEqual(
       preset.players?.map((p) => p.label),
     );
@@ -101,7 +143,7 @@ describe("applyPreset", () => {
     const before = doc.scenes.map((s) => ({ ...s.positions }));
 
     const outcome = applyPreset(doc, 0, presetFrom(namedBoard(), 0, []));
-    if (!outcome.ok) throw new Error(outcome.error);
+    if (!outcome.ok) throw new Error(outcome.error.key);
 
     expect(outcome.doc.scenes).toHaveLength(3);
     outcome.doc.scenes.forEach((scene, i) => {
@@ -113,7 +155,7 @@ describe("applyPreset", () => {
 
   it("always returns a document the schema accepts", () => {
     const outcome = applyPreset(createBoardDoc(), 0, presetFrom(namedBoard(), 0, []));
-    if (!outcome.ok) throw new Error(outcome.error);
+    if (!outcome.ok) throw new Error(outcome.error.key);
     expect(boardDocSchema.safeParse(outcome.doc).success).toBe(true);
   });
 
@@ -121,7 +163,7 @@ describe("applyPreset", () => {
     const preset = { ...presetFrom(namedBoard(), 0, []), formation: "9-9-9" };
     const outcome = applyPreset(createBoardDoc(), 0, preset);
     expect(outcome.ok).toBe(false);
-    if (!outcome.ok) expect(outcome.error).toContain("9-9-9");
+    if (!outcome.ok) expect(say(en, outcome.error)).toContain("9-9-9");
   });
 
   it("refuses a squad deeper than the formation rather than dropping the tail", () => {
@@ -133,7 +175,7 @@ describe("applyPreset", () => {
 
     const outcome = applyPreset(createBoardDoc(), 0, preset);
     expect(outcome.ok).toBe(false);
-    if (!outcome.ok) expect(outcome.error).toContain("13 players saved");
+    if (!outcome.ok) expect(say(en, outcome.error)).toContain("13 players saved");
   });
 
   it("reports a link naming a number nobody wears", () => {
@@ -141,7 +183,7 @@ describe("applyPreset", () => {
     const preset = { ...base, links: [{ members: [98, 99] }] };
     const outcome = applyPreset(createBoardDoc(), 0, preset);
     expect(outcome.ok).toBe(false);
-    if (!outcome.ok) expect(outcome.error).toContain("98");
+    if (!outcome.ok) expect(say(en, outcome.error)).toContain("98");
   });
 
   it("survives a round trip through a renumbered squad", () => {
@@ -151,7 +193,7 @@ describe("applyPreset", () => {
     doc = setPlayerNumber(doc, doc.teams[0].players[3].id, 77);
     const preset = presetFrom(doc, 0, []);
     const outcome = applyPreset(createBoardDoc(), 0, preset);
-    if (!outcome.ok) throw new Error(outcome.error);
+    if (!outcome.ok) throw new Error(outcome.error.key);
     expect(outcome.doc.teams[0].players.map((p) => p.number)).toEqual(
       doc.teams[0].players.map((p) => p.number),
     );
@@ -160,7 +202,7 @@ describe("applyPreset", () => {
   it("round-trips a board that already had the preset applied", () => {
     const preset = presetFrom(namedBoard(), 0, []);
     const once = applyPreset(createBoardDoc(), 0, preset);
-    if (!once.ok) throw new Error(once.error);
+    if (!once.ok) throw new Error(once.error.key);
     const again = presetFrom(once.doc, 0, []);
     expect(again.players).toEqual(preset.players);
     expect(again.links).toEqual(preset.links);

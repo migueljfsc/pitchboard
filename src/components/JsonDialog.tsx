@@ -3,6 +3,8 @@ import { Check, Copy, Download, FileUp, X } from "lucide-react";
 import type { BoardDoc } from "@/board/types";
 import { SETUP_EXAMPLE, fromJson, toJson, toSetupJson } from "@/share/json";
 import { cn, slug } from "@/lib/utils";
+import { useI18n } from "@/i18n/context";
+import { msg, type Message } from "@/i18n/core";
 
 type Props = {
   doc: BoardDoc;
@@ -26,10 +28,11 @@ type Shape = "board" | "setup";
  * reaches the editor.
  */
 export function JsonDialog({ doc, onImport, onClose, blocked }: Props) {
+  const { t, tm } = useI18n();
   const [tab, setTab] = useState<Tab>("export");
   const [shape, setShape] = useState<Shape>("board");
   const [text, setText] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Message | null>(null);
   const [copied, setCopied] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -56,7 +59,7 @@ export function JsonDialog({ doc, onImport, onClose, blocked }: Props) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
-      setError("The browser refused clipboard access — select the text and copy it by hand.");
+      setError(msg("json.clipboard"));
     }
   };
 
@@ -101,11 +104,11 @@ export function JsonDialog({ doc, onImport, onClose, blocked }: Props) {
       >
         <div className="flex items-center gap-3 border-b border-ink-700 px-4 py-3">
           <h2 id="json-title" className="text-sm font-semibold text-white">
-            Board JSON
+            {t("json.title")}
           </h2>
           <div className="flex gap-1">
             <Toggle active={tab === "export"} onClick={() => setTab("export")}>
-              Export
+              {t("json.export")}
             </Toggle>
             <Toggle
               active={tab === "import"}
@@ -114,13 +117,13 @@ export function JsonDialog({ doc, onImport, onClose, blocked }: Props) {
                 setError(null);
               }}
             >
-              Import
+              {t("json.import")}
             </Toggle>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t("json.close")}
             className="ml-auto flex size-6 items-center justify-center rounded text-ink-400 transition hover:text-white"
           >
             <X size={15} />
@@ -132,23 +135,21 @@ export function JsonDialog({ doc, onImport, onClose, blocked }: Props) {
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex gap-1">
                 <Toggle active={shape === "board"} onClick={() => setShape("board")}>
-                  Whole board
+                  {t("json.wholeBoard")}
                 </Toggle>
                 <Toggle active={shape === "setup"} onClick={() => setShape("setup")}>
-                  Setup only
+                  {t("json.setupOnly")}
                 </Toggle>
               </div>
               <span className="text-[11px] text-ink-400">
-                {shape === "board"
-                  ? "Every scene, run, link and drawing — the play as you left it."
-                  : "Formation, names, numbers and units. No scenes."}
+                {t(shape === "board" ? "json.wholeBoard.hint" : "json.setupOnly.hint")}
               </span>
             </div>
 
             <textarea
               readOnly
               value={payload}
-              aria-label="Board JSON"
+              aria-label={t("json.payload.label")}
               onFocus={(e) => e.currentTarget.select()}
               className="min-h-0 flex-1 resize-none rounded border border-ink-600 bg-ink-900 p-2 font-mono text-[11px] leading-relaxed text-ink-300 outline-none"
               rows={16}
@@ -156,18 +157,17 @@ export function JsonDialog({ doc, onImport, onClose, blocked }: Props) {
 
             <div className="flex justify-end gap-2">
               <Action onClick={copy} icon={copied ? Check : Copy}>
-                {copied ? "Copied" : "Copy"}
+                {t(copied ? "json.copied" : "json.copy")}
               </Action>
               <Action onClick={download} icon={Download} primary>
-                Download
+                {t("json.download")}
               </Action>
             </div>
           </div>
         ) : (
           <div className="flex min-h-0 flex-col gap-3 p-4">
             <p className="text-[11px] leading-relaxed text-ink-300">
-              Paste a whole board, or a setup naming the formation, the eleven and its units.
-              Players are listed in formation order, keeper first; a link names shirt numbers.
+              {t("json.import.hint")}
             </p>
 
             <textarea
@@ -177,14 +177,14 @@ export function JsonDialog({ doc, onImport, onClose, blocked }: Props) {
                 setError(null);
               }}
               placeholder={SETUP_EXAMPLE}
-              aria-label="JSON to import"
+              aria-label={t("json.import.label")}
               className="min-h-0 flex-1 resize-none rounded border border-ink-600 bg-ink-900 p-2 font-mono text-[11px] leading-relaxed text-ink-200 outline-none transition placeholder:text-ink-500 focus:border-accent"
               rows={16}
             />
 
             {error && (
               <p role="alert" className="rounded border border-red-500/50 bg-red-500/10 px-2 py-1.5 text-[11px] text-red-300">
-                {error}
+                {tm(error)}
               </p>
             )}
 
@@ -197,13 +197,13 @@ export function JsonDialog({ doc, onImport, onClose, blocked }: Props) {
                 onChange={(e) => void load(e.target.files?.[0])}
               />
               <Action onClick={() => fileRef.current?.click()} icon={FileUp}>
-                Load a file
+                {t("json.loadFile")}
               </Action>
               <Action onClick={() => setText(SETUP_EXAMPLE)} icon={Copy}>
-                Use the example
+                {t("json.useExample")}
               </Action>
               <Action onClick={submit} icon={Check} primary disabled={!text.trim()}>
-                Replace board
+                {t("json.replaceBoard")}
               </Action>
             </div>
           </div>

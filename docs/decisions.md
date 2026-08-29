@@ -782,6 +782,228 @@ so the fallback shows it in a selectable field instead.
 
 ---
 
+## D34 — The 3D view is a homography and two passes, not a third dimension
+
+The board is drawn from above. A slight camera angle is the single thing that most separates a
+tactics animation from a diagram, and the reference — Football Manager's analysis view — turns
+out to be cheaper to reach than it looks, because the pitch in it is still flat.
+
+**Measured, not eyeballed.** Pulling the markings out of a reference frame gives the far goal
+line, the halfway line and the near goal line at 60, 548.5 and 1121 pixels. Fitting a camera
+through those three says the near half of the pitch is ~17% taller on screen than the far half,
+while the length as a whole is compressed to ~73% of its orthographic size. That is a big tilt on
+a long lens — about 43 degrees, from roughly eight half-lengths back — and the two numbers do
+separate jobs: the angle controls foreshortening, the distance controls taper. `TILT` and
+`CAMERA_DISTANCE` in `board/projection.ts` are those two numbers, and `projection.test.ts` pins
+the ratios they produce so nobody "improves" one without noticing what it did to the look.
+
+**Most of the depth cue is light, not perspective.** A 17% taper is nearly nothing. What sells the
+angle in the reference is the mow stripes, the fall-off toward the far end, the darkened corners
+and the contact shadow under each token. Those are gradients and an ellipse, and they do more work
+than the warp does. Worth knowing before anyone concludes the projection is wrong because it does
+not look dramatic enough on its own.
+
+**Two passes, because a tilted board is two kinds of thing.** The GROUND lies on the grass and
+takes the perspective: markings, zones, links, runs, the coach's arrows. It is drawn flat and
+top-down into a layer of its own, by the existing renderer, entirely unmodified — then warped as
+one image. The BILLBOARDS stand up off it and do not: players, the ball, text. Those are projected
+point by point and drawn upright at a depth-derived size.
+
+That split is what keeps this small. `drawPitch` never learned about perspective; the six `arc()`
+calls in it still draw circles, and the warp turns them into the ellipses they should be. Line
+widths taper because the whole layer scales. And `billboard()` is `upright()` one level out —
+there, text refuses to turn with a rotated board; here, a token refuses to lie down on a tilted
+one.
+
+The warp is horizontal `drawImage` strips rather than a triangle mesh, because the camera is level
+and only pitched: a source row maps to a destination row, scaled about the centre, with no shear
+and no rotation. Axis-aligned blits have no clip edges, so there are no seams to hide.
+
+*Rejected — a CSS 3D transform on the canvas.* Free in the preview and worthless everywhere else.
+The whole raster tilts, so shirt numbers lie down on the grass; the far end rasterises at the flat
+resolution and blurs; and the export worker has no CSS, so preview and export diverge — the exact
+failure D2 rejected a scene graph over.
+
+*Rejected — WebGL.* A second renderer is a second source of pixel truth, which is the same
+objection, worse.
+
+*Rejected — projecting every draw call.* The honest version of "add perspective to the renderer":
+flatten every arc to a polyline, replace every metre-valued `lineWidth` with a tapered ribbon,
+sample every bezier. It is most of `render.ts` and all of `pitch.ts` rewritten at the paint layer,
+to arrive at a picture the warp already produces.
+
+**View only.** Editing stays flat. Dragging through a perspective map would work — the inverse is
+exact and hit-testing is all in metres — but the grab margins stop matching what you see, because
+a metre near the camera is a lot more pixels than a metre at the far touchline. So tilt gates the
+pointer handlers with the same flag the exporter uses.
+
+**Tilt implies a vertical board.** The angle exists to put you behind one goal looking at the
+other, and `teams[0]` defends x=0, which is the bottom of a rotated board — so home is at the
+near end and the rotation control goes away rather than silently disagreeing. Export follows the
+preview, which means `boardAspect` has to know: a tilted full pitch is very nearly square, and
+sizing an export off the flat aspect would band every frame with dead surround.
+
+**Arrows ride the grass; text does not.** On the flat board every mark is drawn over the players,
+because it is the coach talking over the top. On a tilted one a mark that ignores the perspective
+reads as a sticker on the lens, so shapes go into the ground layer and take the warp. Text is the
+exception, and stays a billboard over the players — squashed type is unreadable, and a label is
+the one annotation nobody pictures painted onto turf.
+
+**The goals are the only thing with a height.** Everything else on the board lies on the grass or
+is a billboard standing on it; a goal is an object with eight corners, and it is the one place the
+projection needs a third coordinate. That turns out to be the same camera with one more term —
+height brings a point closer AND lifts it up the frame, which is a single divisor and a `sin(TILT)`
+away from the ground case. So `project` takes an optional `up` in metres and reduces exactly to
+what it already did at zero.
+
+The net is four planar panels drawn as a grid. Because the panels are planar and a homography maps
+straight lines to straight lines, every strand is two projected endpoints rather than a sampled
+curve — the perspective comes out right for nothing.
+
+Depth ordering them needs no z-buffer. The camera is behind the home goal, so the far goal is
+behind every player and the near one is in front of all of them — the whole board is seen through
+the home net. Drawing the two at either end of the billboard pass is therefore a complete sort,
+and it stays complete because no player is ever outside the goal lines.
+
+*A knock-on worth knowing.* A goal with height eats the space behind it. The net's back edge lands
+about 2.5 m up-screen from the goal line, and the flat board's 4.3 m team-name offset puts the type
+straight through it, so the 3D view seats the names further out. There is roughly a metre of room
+before `PITCH_PADDING` runs out and a name leaves the grass entirely.
+
+*The cost, stated plainly.* The ground layer is a canvas allocated per frame, capped at 4096 px an
+edge. Keeping it between calls would be faster and would be module-level mutable state, which the
+first invariant forbids. If video export ever feels the allocation, the fix is to pass a scratch
+surface in, not to cache one here.
+
+*Not built — stands and dugouts.* Deliberately. They are set dressing outside the touchline that
+tells a coach nothing, and the depth cue is already carried by the shading.
+
+---
+
+## D35 — The crop travels with the link; how you look at it does not
+
+D12 said framing belongs to whoever is looking, and that was too broad. Sharing a board cropped to
+the final third and having it open as a full pitch loses the point being made — the crop is part of
+what was being shown, not part of how someone chose to look at it.
+
+So the split is finer than D12 drew it. The **crop** is the sharer's: it rides in the link and the
+viewer has no control for it at all. **Rotation and 3D** stay the viewer's, because those are
+genuinely about looking — a phone wants the board vertical whatever the sharer had. The link seeds
+all three; only the crop is then locked.
+
+**Beside the payload, not inside it.** The framing goes in a second hash parameter, `v=fv3`: one
+letter for the crop and flags for the rest. Putting it in `BoardDoc` would have meant a schema
+change, a migration step and pixels-adjacent presentation state in the document, which the second
+invariant exists to prevent. Beside it, there is nothing to migrate and every link published before
+this still opens — it simply carries no `v` and the viewer falls back to its default.
+
+It is read with the same suspicion as the payload it sits next to. Anyone can edit the characters
+after the `#`, so anything that is not exactly a framing is discarded rather than repaired (D31).
+
+*A consequence worth stating.* The viewer is remounted per link. Pasting a second link into a tab
+that already has one open would otherwise keep the first link's framing, because initial state is
+only initial once — the same class of bug as reading the hash once at mount (D33).
+
+---
+
+## D36 — Tilt is rendered, not written
+
+The 3D view is always vertical (D34), and the obvious implementation is for the toggle to set
+`rotated: true`. That silently destroys the flat orientation: turn 3D on from a horizontal board,
+turn it off again, and the board is now vertical with nothing to say why.
+
+So tilt never writes rotation. `framingOf` applies it at the point of rendering, and
+`PitchView.rotated` goes on meaning what the user last chose for the flat board. The rotation
+control is disabled while tilted and reads from the rendered framing rather than the stored one, so
+it says "Vertical" — true of what is on screen — without that being what is stored.
+
+The general rule this is an instance of: a derived constraint belongs at the point of use, not
+written back into the state it constrains. Writing it back is lossy, and the loss shows up later,
+somewhere else.
+
+---
+
+## D37 — A kit is a colour and a pattern
+
+Two teams in similar colours are hard to tell apart at token size, and the palette only has so many
+distinguishable entries. Vertical stripes and hoops cost one optional field and separate two reds
+better than a third red would.
+
+**Screen-oriented, like the shirt number.** "Vertical" means vertical in the frame, whatever the
+board is doing underneath — a stripe that turned with the board would read as vertical on one
+framing and horizontal on another. Same reasoning as `upright`, and it falls out of reusing it.
+
+**The number needs a rim.** A two-digit number is nearly as wide as the token, so there is no solid
+middle to sit it on; it crosses the stripes whatever they are, and `textColor` is chosen for
+contrast against the kit colour, not against white. It gets the same dark outline the player label
+already wears over mow stripes. Only when striped — a plain kit draws exactly what it always did,
+down to the number of canvas paths.
+
+**Optional, so nothing had to be migrated.** Absent means solid, which is every board written
+before this. Zod strips unknown keys, so a board carrying a pattern into an older build renders
+solid rather than failing to open.
+
+It has to be carried explicitly through `TeamSpec`, because `buildTeam` mints the whole team object
+and drops anything not on the spec — the same trap that loses a squad or a set of links on a
+formation change (D32). There are three places that build a spec, and this shipped having missed
+one: a preset saved the pattern and `applyPreset` dropped it, so it came back solid. The failure is
+quiet and confined to a single path, which is what makes it worth naming rather than trusting
+anyone to remember. `changeFormation`, the setup importer, `applyPreset`.
+
+---
+
+## D38 — English and Portuguese, and the engine speaks neither
+
+**Hand-rolled, no dependency.** Around 260 strings, one interpolation form and one plural rule.
+i18next would have been more machinery than the thing it manages, and this repo has already
+declined a router and a canvas library on the same grounds. `core.ts` is about eighty lines.
+
+**`en.ts` is the source of truth for what keys exist**, and `pt.ts` is typed as a `Dictionary`
+derived from it. A key added to one and forgotten in the other does not compile. That is worth
+more than it sounds: the failure it prevents is a word of English appearing in the middle of a
+Portuguese sentence, which nobody notices until a user does.
+
+What the types cannot see is inside the strings, so a test compares the `{placeholders}` of every
+key across every locale. A variable renamed on one side and not the other typechecks perfectly and
+renders `{name}` to somebody's face.
+
+**The engine returns keys, not sentences.** `migrate`, `urlcodec`, `json` and `presets` are pure
+and are reached from the app, the export worker and every import path; none of them agree on a
+language, and a pure function has no business knowing one. So a failure is now a `Message` — a key
+and its variables — and the words are chosen where they are shown.
+
+That was the larger half of the work and it is a better shape regardless. User-facing prose was
+sitting in modules that have no user, and `SetupError` carrying a key rather than a sentence is the
+same discipline as `drawBoard` taking a `RenderView` rather than reading React state.
+
+*The one honest gap.* Zod's own validation messages are English and come from the library. The
+detail stays technical and the sentence around it is translated: "That file is not a board
+Pitchboard can read: {detail}". Better than hiding the detail, and better than pretending a path
+like `teams.0.players.3.number` needs translating.
+
+**No sentence is assembled from fragments.** Anything with a variable in it is a whole sentence
+with a placeholder, because word order is not portable. `resolveTeamLinks` used to prepend
+"Team 1: " to a message; it now takes a discriminator and picks between four whole keys, two for a
+team and two for a preset. Four strings instead of two, and no English word order baked into
+Portuguese.
+
+**A document is data; it does not change language when the reader does.** Existing boards keep
+whatever they were named. But a board CREATED in Portuguese is seeded in Portuguese — Casa, Fora,
+Cena 1 — so `createBoardDoc` and the scene helpers take their labels from the caller and fall back
+to English. That keeps the engine usable, and testable, with no translator in sight.
+
+**Locale is presentation, like the framing.** It never enters `BoardDoc`, never rides a share link,
+and is not undoable. It persists through the ordinary storage layer, so it inherits both of that
+layer's rules: nothing throws, and what comes back is validated rather than trusted (D31). A
+hand-edited locale falls back to the browser's preference, matched on the base tag so pt-PT and
+pt-BR both land on Portuguese — a Brazilian reader gets European Portuguese, which is the right
+failure when the alternative is English.
+
+*Rejected — a language dropdown.* With exactly two languages a select hides half the choice behind
+a click. `EN | PT` reads as a state you can see. It grows into a dropdown at three.
+
+---
+
 ## Invariants
 
 Two rules a future change is most likely to break. Both belong in `AGENTS.md`.

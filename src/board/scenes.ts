@@ -85,13 +85,15 @@ function freshId(doc: BoardDoc): string {
  * Paths are cleared: the new scene is where the previous one already was, so any
  * inherited curve would describe a journey of zero length.
  */
-export function addSceneAfter(doc: BoardDoc, index: number): BoardDoc {
+/** `name` lets the caller name the scene in the reader’s language; the English
+ *  fallback keeps the engine usable, and testable, without one. */
+export function addSceneAfter(doc: BoardDoc, index: number, name?: string): BoardDoc {
   const base = doc.scenes[index];
   if (!base) return doc;
 
   const scene: Scene = {
     id: freshId(doc),
-    name: `Scene ${doc.scenes.length + 1}`,
+    name: name ?? `Scene ${doc.scenes.length + 1}`,
     transitionMs: DEFAULT_TRANSITION_MS,
     holdMs: DEFAULT_HOLD_MS,
     positions: { ...base.positions },
@@ -110,14 +112,14 @@ export function addSceneAfter(doc: BoardDoc, index: number): BoardDoc {
 }
 
 /** Copy a scene wholesale, paths included — useful for a repeated movement. */
-export function duplicateScene(doc: BoardDoc, index: number): BoardDoc {
+export function duplicateScene(doc: BoardDoc, index: number, name?: string): BoardDoc {
   const base = doc.scenes[index];
   if (!base) return doc;
 
   const scene: Scene = {
     ...structuredClone(base),
     id: freshId(doc),
-    name: `${base.name} copy`,
+    name: name ?? `${base.name} copy`,
     transitionMs: base.transitionMs || DEFAULT_TRANSITION_MS,
   };
 

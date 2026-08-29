@@ -22,6 +22,8 @@ import {
   type ExportPhase,
   type VideoFormat,
 } from "@/export/types";
+import { useI18n } from "@/i18n/context";
+import type { MessageKey } from "@/i18n/core";
 import { cn, slug } from "@/lib/utils";
 
 type Props = {
@@ -42,17 +44,18 @@ const LABEL: Record<ExportFormat, string> = {
   png: "PNG",
 };
 
-const BLURB: Record<ExportFormat, string> = {
-  mp4: "H.264. Plays everywhere — QuickTime, VLC, a browser, a phone.",
-  webm: "VP9. Smaller than MP4 at the same quality; not every player takes it.",
-  gif: "Loops on its own and pastes into a chat. One palette, so no shimmer.",
-  png: "The frame the scrubber is on, at full resolution.",
+/** Message keys, not words — this component's own `t` is a timestamp. */
+const BLURB: Record<ExportFormat, MessageKey> = {
+  mp4: "export.blurb.mp4",
+  webm: "export.blurb.webm",
+  gif: "export.blurb.gif",
+  png: "export.blurb.png",
 };
 
-const PHASE: Record<ExportPhase, string> = {
-  palette: "Building the palette",
-  render: "Rendering",
-  finalise: "Writing the file",
+const PHASE: Record<ExportPhase, MessageKey> = {
+  palette: "export.phase.palette",
+  render: "export.phase.render",
+  finalise: "export.phase.finalise",
 };
 
 /**
@@ -62,6 +65,9 @@ const PHASE: Record<ExportPhase, string> = {
  * dropping nothing, and leaving the UI alive. A PNG is one frame and stays here.
  */
 export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
+  // `t` is already taken here — it is the frame a PNG exports — so the
+  // translator keeps its full name rather than shadowing the time.
+  const i18n = useI18n();
   const [format, setFormat] = useState<ExportFormat>("mp4");
   // A GIF wants a different size from a video, and one clamped list would mean
   // picking GIF then MP4 again silently exported at GIF's size. Two, so each
@@ -220,12 +226,12 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
       >
         <div className="flex items-center gap-3 border-b border-ink-700 px-4 py-3">
           <h2 id="export-title" className="text-sm font-semibold text-white">
-            Export
+            {i18n.t("export.title")}
           </h2>
           <button
             type="button"
             onClick={close}
-            aria-label="Close"
+            aria-label={i18n.t("export.close")}
             className="ml-auto flex size-6 items-center justify-center rounded text-ink-400 transition hover:text-white"
           >
             <X size={15} />
@@ -233,7 +239,7 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
         </div>
 
         <div className="flex flex-col gap-4 p-4">
-          <Field label="Format">
+          <Field label={i18n.t("export.format")}>
             <div className="flex flex-wrap gap-1">
               {(["mp4", "webm", "gif", "png"] as const).map((f) => (
                 <Choice key={f} active={format === f} onClick={() => chooseFormat(f)}>
@@ -241,18 +247,22 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
                 </Choice>
               ))}
             </div>
-            <p className="mt-1.5 text-[11px] leading-relaxed text-ink-300">{BLURB[format]}</p>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-ink-300">{i18n.t(BLURB[format])}</p>
             {unavailable && (
               <p className="mt-1.5 text-[11px] leading-relaxed text-amber-300">
-                This browser cannot encode {LABEL[format]} at {size.width}×{size.height}
+                {i18n.t("export.unavailable", {
+                  format: LABEL[format],
+                  width: size.width,
+                  height: size.height,
+                })}
                 {encodable && encodable.length > 0
-                  ? ` — try ${LABEL[encodable[0]]}, a smaller size, or a GIF.`
-                  : " — try a smaller size, or a GIF."}
+                  ? i18n.t("export.unavailable.try", { alternative: LABEL[encodable[0]] })
+                  : i18n.t("export.unavailable.smaller")}
               </p>
             )}
           </Field>
 
-          <Field label={format === "png" ? "Size" : "Resolution"}>
+          <Field label={i18n.t(format === "png" ? "export.size" : "export.resolution")}>
             <div className="flex flex-wrap gap-1">
               {sizes.map((r) => (
                 <Choice
@@ -270,7 +280,7 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
           </Field>
 
           {format !== "png" && (
-            <Field label="Frame rate">
+            <Field label={i18n.t("export.frameRate")}>
               <div className="flex flex-wrap gap-1">
                 {FPS_OPTIONS[format].map((r) => (
                   <Choice
@@ -289,7 +299,7 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
           )}
 
           {(format === "mp4" || format === "webm") && (
-            <Field label="Bitrate">
+            <Field label={i18n.t("export.bitrate")}>
               <div className="flex flex-wrap gap-1">
                 {BITRATES.map((r) => (
                   <Choice
@@ -311,13 +321,13 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
               same exportSize the worker uses, so this is a statement rather than
               an estimate. */}
           <dl className="grid grid-cols-3 gap-x-3 gap-y-1.5 rounded border border-ink-700 bg-ink-900 px-3 py-2.5 font-mono text-[11px]">
-            <Stat label="Size">
+            <Stat label={i18n.t("export.size")}>
               {size.width}×{size.height}
             </Stat>
-            <Stat label={format === "png" ? "Frame" : "Frames"}>
+            <Stat label={i18n.t(format === "png" ? "export.frame" : "export.frames")}>
               {format === "png" ? `${t.toFixed(2)}s` : frames}
             </Stat>
-            <Stat label="Length">{format === "png" ? "—" : `${duration.toFixed(1)}s`}</Stat>
+            <Stat label={i18n.t("export.length")}>{format === "png" ? "—" : `${duration.toFixed(1)}s`}</Stat>
           </dl>
 
           {error && (
@@ -337,7 +347,7 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
                 onClick={() => file.current && download(file.current)}
                 className="ml-auto text-accent transition hover:brightness-110"
               >
-                Download again
+                {i18n.t("export.again")}
               </button>
             </div>
           )}
@@ -346,7 +356,7 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2 text-[11px] text-ink-300">
                 <Loader2 size={13} className="animate-spin text-accent" />
-                <span>{PHASE[job.phase]}</span>
+                <span>{i18n.t(PHASE[job.phase])}</span>
                 {format !== "png" && (
                   <span className="ml-auto font-mono">{Math.round(job.fraction * 100)}%</span>
                 )}
@@ -365,7 +375,7 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
                 disabled={format === "png"}
                 className="self-end rounded-md border border-ink-600 px-3 py-1.5 text-xs text-ink-200 transition enabled:hover:border-ink-400 enabled:hover:text-white disabled:opacity-45"
               >
-                Cancel
+                {i18n.t("export.cancel")}
               </button>
             </div>
           ) : (
@@ -376,7 +386,7 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
               className="flex items-center justify-center gap-1.5 rounded-md bg-accent px-3 py-2 text-xs font-medium text-ink-900 transition enabled:hover:brightness-110 disabled:opacity-45"
             >
               {format === "png" ? <ImageIcon size={13} /> : <Film size={13} />}
-              Export {LABEL[format]}
+              {i18n.t("export.run", { format: LABEL[format] })}
             </button>
           )}
         </div>

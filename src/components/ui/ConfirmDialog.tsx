@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useI18n } from "@/i18n/context";
 
 type Props = {
   title: string;
@@ -16,6 +17,7 @@ type Props = {
  * it by hand.
  */
 export function ConfirmDialog({ title, message, confirmLabel, onConfirm, onCancel }: Props) {
+  const { t } = useI18n();
   const confirmRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -61,7 +63,7 @@ export function ConfirmDialog({ title, message, confirmLabel, onConfirm, onCance
             onClick={onCancel}
             className="rounded-md border border-ink-600 px-3 py-1.5 text-xs text-ink-200 transition hover:border-ink-400 hover:text-white"
           >
-            Cancel
+            {t("confirm.cancel")}
           </button>
           <button
             ref={confirmRef}

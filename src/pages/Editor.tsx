@@ -42,6 +42,9 @@ import {
   type SquadPreset,
 } from "@/share/presets";
 import { cn } from "@/lib/utils";
+import { LocaleSwitch } from "@/components/LocaleSwitch";
+import { useI18n } from "@/i18n/context";
+import type { Message } from "@/i18n/core";
 import { clearLinks, createLink } from "@/board/links";
 import { annotationsOf, deleteAnnotation, sceneRange } from "@/board/annotations";
 import { concealedPlayers } from "@/board/render";
@@ -81,6 +84,14 @@ type Props = {
 };
 
 export function Editor({ initialDoc }: Props = {}) {
+  const { t, tn, tm } = useI18n();
+
+  // A board is seeded in whatever language it is made in, and keeps those names
+  // afterwards. The document is data: it does not change language when the
+  // reader does, any more than a team renamed by hand would.
+  const homeSpec = () => ({ ...HOME, name: t("doc.home") });
+  const awaySpec = () => ({ ...AWAY, name: t("doc.away") });
+  const seedLabels = () => ({ board: t("doc.board"), scene: t("doc.scene", { n: 1 }) });
   // The document is the only undoable thing. How you are looking at the board —
   // the framing, the selection, which panel is open — is not an edit, and
   // rewinding it would be its own kind of surprise.
@@ -94,7 +105,9 @@ export function Editor({ initialDoc }: Props = {}) {
     // Reopen on whatever was last being worked on. A stored board that no
     // longer validates is discarded by loadBoard, so a bad autosave costs a
     // fresh board rather than a broken one.
-  } = useHistory<BoardDoc>(() => initialDoc ?? loadBoard() ?? createBoardDoc());
+  } = useHistory<BoardDoc>(
+    () => initialDoc ?? loadBoard() ?? createBoardDoc(homeSpec(), awaySpec(), undefined, seedLabels()),
+  );
   const [selection, setSelection] = useState<ReadonlySet<string>>(() => new Set());
   const [chosenScene, setActiveScene] = useState(0);
   const [time, setTime] = useState(0);
@@ -113,7 +126,7 @@ export function Editor({ initialDoc }: Props = {}) {
   // from, not part of what the board IS. Nothing about them is undoable, and
   // none of it reaches an export or a share link.
   const [presets, setPresets] = useState<PresetLibrary>(() => loadPresets());
-  const [presetError, setPresetError] = useState<string | null>(null);
+  const [presetError, setPresetError] = useState<Message | null>(null);
 
   // Drawing. The tool owns what a drag on the grass does; colour and dash are
   // the style the next shape takes, and also restyle the selected one.
@@ -369,8 +382,10 @@ export function Editor({ initialDoc }: Props = {}) {
   const reset = () => {
     setDoc(
       createBoardDoc(
-        { ...HOME, formation: formationOf(0) },
-        { ...AWAY, formation: formationOf(1) },
+        { ...homeSpec(), formation: formationOf(0) },
+        { ...awaySpec(), formation: formationOf(1) },
+        undefined,
+        seedLabels(),
       ),
     );
     clearEditorState();
@@ -497,348 +512,349 @@ export function Editor({ initialDoc }: Props = {}) {
   ]);
 
   return (
-    <div className="flex h-full w-full">
-      <aside className="flex w-64 shrink-0 flex-col overflow-y-auto border-r border-ink-700 bg-ink-800">
-        <div className="flex items-center gap-2 border-b border-ink-700 px-4 py-3">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-sm font-semibold tracking-tight text-white">Pitchboard</h1>
-            <p className="mt-0.5 text-[11px] text-ink-400">Tactics board</p>
-          </div>
+    <div className="flex h-full w-full flex-col">
+      {/* The board itself — what it is called, and every way it leaves the app.
+          A top bar rather than a sidebar section because none of it is editing:
+          it is the same handful of actions whatever you are doing below, and
+          hunting for them behind a collapsed panel was the wrong trade. */}
+      <header className="flex shrink-0 items-center gap-2 border-b border-ink-700 bg-ink-800 px-4 py-2">
+        <h1 className="shrink-0 text-sm font-semibold tracking-tight text-white">{t("app.name")}</h1>
+
+        <input
+          value={doc.name}
+          onChange={(e) => setDoc({ ...doc, name: e.target.value }, "board-name")}
+          placeholder={t("bar.name.placeholder")}
+          aria-label={t("bar.name.label")}
+          className="w-56 shrink rounded border border-transparent bg-transparent px-2 py-1 text-xs text-ink-200 outline-none transition placeholder:text-ink-400 hover:border-ink-600 focus:border-accent focus:bg-ink-900"
+        />
+
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           <HistoryButton
-            label="Undo"
-            hint={`Undo (${modifier}Z)`}
+            label={t("history.undo")}
+            hint={t("history.undo.hint", { keys: `${modifier}Z` })}
             disabled={!canUndo}
             onClick={undo}
           >
             <Undo2 size={14} />
           </HistoryButton>
           <HistoryButton
-            label="Redo"
-            hint={`Redo (${modifier}⇧Z)`}
+            label={t("history.redo")}
+            hint={t("history.redo.hint", { keys: `${modifier}⇧Z` })}
             disabled={!canRedo}
             onClick={redo}
           >
             <Redo2 size={14} />
           </HistoryButton>
-        </div>
 
-        <Section title="Board" defaultOpen={false}>
-          <div className="flex flex-col gap-3">
-            <label className="flex flex-col gap-1">
-              <span className="text-[11px] uppercase tracking-wide text-ink-400">Name</span>
-              <input
-                value={doc.name}
-                onChange={(e) => setDoc({ ...doc, name: e.target.value }, "board-name")}
-                placeholder="Untitled board"
-                className="w-full rounded border border-ink-600 bg-ink-900 px-2 py-1 text-xs text-ink-200 outline-none transition placeholder:text-ink-400 hover:border-ink-400 focus:border-accent"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() => setJsonOpen(true)}
-              className="flex items-center justify-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
-            >
-              <FileJson size={13} />
-              Import / export JSON
-            </button>
-            <p className="text-[11px] leading-relaxed text-ink-300">
-              Send someone the whole board and they open your play. A short setup file names a
-              formation, an eleven and its units.
-            </p>
-            <button
-              type="button"
-              onClick={() => setExportOpen(true)}
-              className="flex items-center justify-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
-            >
-              <Download size={13} />
-              Export video or image
-            </button>
-            <p className="text-[11px] leading-relaxed text-ink-300">
-              MP4, WebM or GIF of the whole animation, or a PNG of the frame on screen. Exported
-              at the framing you are looking at.
-            </p>
-            <SharePanel doc={doc} />
-          </div>
-        </Section>
+          <span className="mx-1 h-5 w-px bg-ink-600" />
 
-        <Section title="View" defaultOpen={false}>
-          <ViewControls
-            view={pitchView}
-            onChange={setPitchView}
-            doc={doc}
-            onTokenScaleChange={(tokenScale) => setDoc({ ...doc, tokenScale }, "token-scale")}
-          />
-        </Section>
-
-        {/* Both sides in one place: they are set up together and read against
-            each other, and two identical panels stacked was twice the chrome
-            for the same job. */}
-        <Section title="Formations" badge={`${formationOf(0)} v ${formationOf(1)}`}>
-          <div className="flex flex-col gap-4">
-            {([0, 1] as const).map((i) => (
-              <div
-                key={doc.teams[i].id}
-                className={cn(i === 1 && "border-t border-ink-700 pt-4")}
-              >
-                <TeamControls
-                  doc={doc}
-                  teamIndex={i}
-                  onDocChange={setDoc}
-                  formation={formationOf(i)}
-                  onFormationChange={onFormationChange}
-                  direction={directions[i]}
-                  onAddPlayer={(index) => setDoc(addPlayer(doc, index))}
-                  presets={presets}
-                  onSavePreset={onSavePreset}
-                  onApplyPreset={onApplyPreset}
-                  onRenamePreset={(id, label) => commitPresets(renamePreset(presets, id, label))}
-                  onDeletePreset={(id) => commitPresets(deletePreset(presets, id))}
-                />
-              </div>
-            ))}
-            {presetError && (
-              <p
-                role="alert"
-                className="rounded border border-red-500/50 bg-red-500/10 px-2 py-1.5 text-[11px] leading-relaxed text-red-300"
-              >
-                {presetError}
-              </p>
-            )}
-          </div>
-        </Section>
-
-        <Section
-          title="Draw"
-          badge={annotationsOf(doc).length ? String(annotationsOf(doc).length) : undefined}
-          open={drawOpen}
-          onOpenChange={setDrawOpen}
-        >
-          <DrawPanel
-            doc={doc}
-            onDocChange={setDoc}
-            tool={tool}
-            onToolChange={setTool}
-            sticky={sticky}
-            onStickyChange={setSticky}
-            color={drawColor}
-            onColorChange={setDrawColor}
-            dash={drawDash}
-            onDashChange={setDrawDash}
-            selected={annotation}
-            onSelect={setAnnotation}
-            focusText={focusText}
-          />
-        </Section>
-
-        <Section title="Links" badge={String(doc.links.length)} defaultOpen={false}>
-          <LinkPanel
-            doc={doc}
-            onDocChange={setDoc}
-            selection={visible}
-            onSelectMembers={(members) => setSelection(new Set(members))}
-            onCreateFromSelection={onCreateLink}
-            onClearAll={() => setPending({ kind: "links" })}
-            expanded={expandedLink}
-            onExpandedChange={setExpandedLink}
-          />
-        </Section>
-
-        <Section
-          title="Selection"
-          badge={visible.size ? String(visible.size) : undefined}
-          open={selectionOpen}
-          onOpenChange={setSelectionOpen}
-        >
-          <Inspector
-            doc={doc}
-            selection={visible}
-            activeScene={activeScene}
-            canEditPaths={editScene !== undefined}
-            onClear={() => setSelection(new Set())}
-            onCarrierChange={onCarrierChange}
-            onClearPaths={onClearPaths}
-            onRename={(id, label) => setDoc(setPlayerLabel(doc, id, label), `label:${id}`)}
-            onRenumber={(id, n) => setDoc(setPlayerNumber(doc, id, n), `number:${id}`)}
-            onTravelChange={onTravelChange}
-            onRemovePlayer={(id) => setDoc(removePlayer(doc, id))}
-            runsHidden={runsHidden}
-            onRunsHiddenChange={onRunsHiddenChange}
-            focusName={focusName}
-          />
-        </Section>
-        <div className="mt-auto flex flex-col gap-1.5 border-t border-ink-700 p-4">
-          {/* Two resets, because they answer different questions: one puts the
-              shape back, the other starts again. */}
           <button
             type="button"
-            onClick={() => setPending({ kind: "positions" })}
-            className="flex w-full items-center justify-center gap-1.5 rounded-md border border-ink-600 px-2 py-1.5 text-xs text-ink-300 transition hover:border-accent hover:text-white"
+            onClick={() => setJsonOpen(true)}
+            title={t("bar.json.title")}
+            className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
           >
-            <Users size={13} />
-            Reset positions
+            <FileJson size={13} />
+            {t("bar.json")}
           </button>
           <button
             type="button"
-            onClick={() => setPending({ kind: "reset" })}
-            className="flex w-full items-center justify-center gap-1.5 rounded-md border border-ink-600 px-2 py-1.5 text-xs text-ink-300 transition hover:border-red-500/60 hover:text-red-400"
+            onClick={() => setExportOpen(true)}
+            title={t("bar.export.title")}
+            className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
           >
-            <RotateCcw size={13} />
-            Reset board
+            <Download size={13} />
+            {t("bar.export")}
           </button>
+          <SharePanel doc={doc} view={pitchView} />
+
+          <span className="mx-1 h-5 w-px bg-ink-600" />
+
+          <LocaleSwitch />
         </div>
-      </aside>
+      </header>
 
-      {pending?.kind === "reset" && (
-        <ConfirmDialog
-          title="Reset the board?"
-          message={`Every scene, run, link, drawing, player name and team setting goes back to a fresh ${formationOf(0)} against a ${formationOf(1)}. Undo brings the board back.`}
-          confirmLabel="Discard changes"
-          onConfirm={reset}
-          onCancel={() => setPending(null)}
-        />
-      )}
+      <div className="flex min-h-0 flex-1">
+        <aside className="flex w-64 shrink-0 flex-col overflow-y-auto border-r border-ink-700 bg-ink-800">
+          <Section title={t("section.view")} defaultOpen={false}>
+            <ViewControls
+              view={pitchView}
+              onChange={setPitchView}
+              doc={doc}
+              onTokenScaleChange={(tokenScale) => setDoc({ ...doc, tokenScale }, "token-scale")}
+            />
+          </Section>
 
-      {pending?.kind === "positions" && (
-        <ConfirmDialog
-          title="Reset every position?"
-          message={`Both teams go back to their formation marks in every scene, and the runs between them are cleared. Names, numbers, links, drawings, the ball and the scene list are kept. Undo brings the positions back.`}
-          confirmLabel="Reset positions"
-          onConfirm={restoreShape}
-          onCancel={() => setPending(null)}
-        />
-      )}
+          {/* Both sides in one place: they are set up together and read against
+              each other, and two identical panels stacked was twice the chrome
+              for the same job. */}
+          <Section title={t("section.formations")} badge={`${formationOf(0)} v ${formationOf(1)}`}>
+            <div className="flex flex-col gap-4">
+              {([0, 1] as const).map((i) => (
+                <div
+                  key={doc.teams[i].id}
+                  className={cn(i === 1 && "border-t border-ink-700 pt-4")}
+                >
+                  <TeamControls
+                    doc={doc}
+                    teamIndex={i}
+                    onDocChange={setDoc}
+                    formation={formationOf(i)}
+                    onFormationChange={onFormationChange}
+                    direction={directions[i]}
+                    onAddPlayer={(index) => setDoc(addPlayer(doc, index))}
+                    presets={presets}
+                    onSavePreset={onSavePreset}
+                    onApplyPreset={onApplyPreset}
+                    onRenamePreset={(id, label) => commitPresets(renamePreset(presets, id, label))}
+                    onDeletePreset={(id) => commitPresets(deletePreset(presets, id))}
+                  />
+                </div>
+              ))}
+              {presetError && (
+                <p
+                  role="alert"
+                  className="rounded border border-red-500/50 bg-red-500/10 px-2 py-1.5 text-[11px] leading-relaxed text-red-300"
+                >
+                  {tm(presetError)}
+                </p>
+              )}
+            </div>
+          </Section>
 
-      {pending?.kind === "links" && (
-        <ConfirmDialog
-          title={`Delete all ${doc.links.length} links?`}
-          message="Every connector on the board goes, on both teams, along with the names, styles and colours given to them. The players stay where they are. Undo brings them back."
-          confirmLabel="Delete all links"
-          onConfirm={dropLinks}
-          onCancel={() => setPending(null)}
-        />
-      )}
-
-      {pending?.kind === "preset" && (
-        <ConfirmDialog
-          title={`Replace "${pending.replacing.label}"?`}
-          message={`A ${pending.replacing.formation} squad is already saved under that name. Its players, numbers, kit and units are replaced by the ones on the board. Saved squads are not part of the board, so this is not on the undo stack.`}
-          confirmLabel="Replace squad"
-          onConfirm={() => replacePreset(pending.preset, pending.replacing)}
-          onCancel={() => setPending(null)}
-        />
-      )}
-
-      {pending?.kind === "import" && (
-        <ConfirmDialog
-          title="Replace this board?"
-          message={`"${pending.doc.name}" will replace everything on the board — scenes, runs, links and drawings. Undo brings the old board back.`}
-          confirmLabel="Replace board"
-          onConfirm={() => importDoc(pending.doc)}
-          onCancel={() => setPending(null)}
-        />
-      )}
-
-      {jsonOpen && (
-        <JsonDialog
-          doc={doc}
-          onImport={(next) => setPending({ kind: "import", doc: next })}
-          onClose={() => setJsonOpen(false)}
-          blocked={pending !== null}
-        />
-      )}
-
-      {exportOpen && (
-        <ExportDialog
-          doc={doc}
-          t={time}
-          pitchView={pitchView}
-          onClose={() => setExportOpen(false)}
-        />
-      )}
-
-      <main className="flex min-w-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1">
-          <BoardCanvas
-            doc={doc}
-            t={time}
-            sceneIndex={activeScene}
-            editScene={editScene}
-            pitchView={pitchView}
-            selection={visible}
-            onSelectionChange={setSelection}
-            onDocChange={setDoc}
-            onEditName={onEditName}
-            tool={tool}
-            onToolChange={setTool}
-            drawColor={drawColor}
-            drawDash={drawDash}
-            sticky={sticky}
-            annotationSelection={annotation}
-            onAnnotationSelect={selectAnnotation}
-          />
-        </div>
-
-        <Timeline
-          doc={doc}
-          onDocChange={setDoc}
-          activeScene={activeScene}
-          onActiveSceneChange={selectScene}
-          time={time}
-          onTimeChange={setTime}
-          playing={playing}
-          onPlayingChange={setPlayback}
-          loop={loop}
-          onLoopChange={setLoop}
-        />
-      </main>
-
-      {/* Everything drawn, and where it appears. Collapsed by default — an empty
-          rail is 256px of pitch given away for nothing. */}
-      <aside
-        className={cn(
-          "flex shrink-0 flex-col overflow-y-auto border-l border-ink-700 bg-ink-800 transition-[width]",
-          drawingsOpen ? "w-64" : "w-9",
-        )}
-      >
-        <button
-          type="button"
-          onClick={() => setDrawingsOpen(!drawingsOpen)}
-          aria-expanded={drawingsOpen}
-          title={drawingsOpen ? "Hide the drawing list" : "Show everything drawn"}
-          className={cn(
-            "flex shrink-0 items-center gap-1.5 py-2.5 text-ink-300 transition hover:bg-ink-700/40 hover:text-white",
-            drawingsOpen ? "px-3" : "flex-col px-2",
-          )}
-        >
-          {drawingsOpen ? <PanelRightClose size={14} /> : <PanelRightOpen size={14} />}
-          {drawingsOpen ? (
-            <>
-              <span className="flex-1 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-200">
-                Drawn
-              </span>
-              <span className="font-mono text-[11px] text-ink-400">{annotationsOf(doc).length}</span>
-            </>
-          ) : (
-            annotationsOf(doc).length > 0 && (
-              <span className="font-mono text-[11px] text-ink-400">
-                {annotationsOf(doc).length}
-              </span>
-            )
-          )}
-        </button>
-
-        {drawingsOpen && (
-          <div className="border-t border-ink-700">
-            <DrawingsPanel
+          <Section
+            title={t("section.draw")}
+            badge={annotationsOf(doc).length ? String(annotationsOf(doc).length) : undefined}
+            open={drawOpen}
+            onOpenChange={setDrawOpen}
+          >
+            <DrawPanel
               doc={doc}
               onDocChange={setDoc}
-              sceneIndex={activeScene}
+              tool={tool}
+              onToolChange={setTool}
+              sticky={sticky}
+              onStickyChange={setSticky}
+              color={drawColor}
+              onColorChange={setDrawColor}
+              dash={drawDash}
+              onDashChange={setDrawDash}
               selected={annotation}
-              onSelect={revealAnnotation}
+              onSelect={setAnnotation}
+              focusText={focusText}
+            />
+          </Section>
+
+          <Section title={t("section.links")} badge={String(doc.links.length)} defaultOpen={false}>
+            <LinkPanel
+              doc={doc}
+              onDocChange={setDoc}
+              selection={visible}
+              onSelectMembers={(members) => setSelection(new Set(members))}
+              onCreateFromSelection={onCreateLink}
+              onClearAll={() => setPending({ kind: "links" })}
+              expanded={expandedLink}
+              onExpandedChange={setExpandedLink}
+            />
+          </Section>
+
+          <Section
+            title={t("section.selection")}
+            badge={visible.size ? String(visible.size) : undefined}
+            open={selectionOpen}
+            onOpenChange={setSelectionOpen}
+          >
+            <Inspector
+              doc={doc}
+              selection={visible}
+              activeScene={activeScene}
+              canEditPaths={editScene !== undefined}
+              onClear={() => setSelection(new Set())}
+              onCarrierChange={onCarrierChange}
+              onClearPaths={onClearPaths}
+              onRename={(id, label) => setDoc(setPlayerLabel(doc, id, label), `label:${id}`)}
+              onRenumber={(id, n) => setDoc(setPlayerNumber(doc, id, n), `number:${id}`)}
+              onTravelChange={onTravelChange}
+              onRemovePlayer={(id) => setDoc(removePlayer(doc, id))}
+              runsHidden={runsHidden}
+              onRunsHiddenChange={onRunsHiddenChange}
+              focusName={focusName}
+            />
+          </Section>
+          <div className="mt-auto flex flex-col gap-1.5 border-t border-ink-700 p-4">
+            {/* Two resets, because they answer different questions: one puts the
+                shape back, the other starts again. */}
+            <button
+              type="button"
+              onClick={() => setPending({ kind: "positions" })}
+              className="flex w-full items-center justify-center gap-1.5 rounded-md border border-ink-600 px-2 py-1.5 text-xs text-ink-300 transition hover:border-accent hover:text-white"
+            >
+              <Users size={13} />
+              {t("reset.positions")}
+            </button>
+            <button
+              type="button"
+              onClick={() => setPending({ kind: "reset" })}
+              className="flex w-full items-center justify-center gap-1.5 rounded-md border border-ink-600 px-2 py-1.5 text-xs text-ink-300 transition hover:border-red-500/60 hover:text-red-400"
+            >
+              <RotateCcw size={13} />
+              {t("reset.board")}
+            </button>
+          </div>
+        </aside>
+
+        {pending?.kind === "reset" && (
+          <ConfirmDialog
+            title={t("confirm.reset.title")}
+            message={t("confirm.reset.message", { home: formationOf(0), away: formationOf(1) })}
+            confirmLabel={t("confirm.reset.action")}
+            onConfirm={reset}
+            onCancel={() => setPending(null)}
+          />
+        )}
+
+        {pending?.kind === "positions" && (
+          <ConfirmDialog
+            title={t("confirm.positions.title")}
+            message={t("confirm.positions.message")}
+            confirmLabel={t("confirm.positions.action")}
+            onConfirm={restoreShape}
+            onCancel={() => setPending(null)}
+          />
+        )}
+
+        {pending?.kind === "links" && (
+          <ConfirmDialog
+            title={tn("confirm.links.title", doc.links.length)}
+            message={t("confirm.links.message")}
+            confirmLabel={t("confirm.links.action")}
+            onConfirm={dropLinks}
+            onCancel={() => setPending(null)}
+          />
+        )}
+
+        {pending?.kind === "preset" && (
+          <ConfirmDialog
+            title={t("confirm.preset.title", { label: pending.replacing.label })}
+            message={t("confirm.preset.message", { formation: pending.replacing.formation ?? "" })}
+            confirmLabel={t("confirm.preset.action")}
+            onConfirm={() => replacePreset(pending.preset, pending.replacing)}
+            onCancel={() => setPending(null)}
+          />
+        )}
+
+        {pending?.kind === "import" && (
+          <ConfirmDialog
+            title={t("confirm.import.title")}
+            message={t("confirm.import.message", { name: pending.doc.name })}
+            confirmLabel={t("confirm.import.action")}
+            onConfirm={() => importDoc(pending.doc)}
+            onCancel={() => setPending(null)}
+          />
+        )}
+
+        {jsonOpen && (
+          <JsonDialog
+            doc={doc}
+            onImport={(next) => setPending({ kind: "import", doc: next })}
+            onClose={() => setJsonOpen(false)}
+            blocked={pending !== null}
+          />
+        )}
+
+        {exportOpen && (
+          <ExportDialog
+            doc={doc}
+            t={time}
+            pitchView={pitchView}
+            onClose={() => setExportOpen(false)}
+          />
+        )}
+
+        <main className="flex min-w-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1">
+            <BoardCanvas
+              doc={doc}
+              t={time}
+              sceneIndex={activeScene}
+              editScene={editScene}
+              pitchView={pitchView}
+              selection={visible}
+              onSelectionChange={setSelection}
+              onDocChange={setDoc}
+              onEditName={onEditName}
+              tool={tool}
+              onToolChange={setTool}
+              drawColor={drawColor}
+              drawDash={drawDash}
+              sticky={sticky}
+              annotationSelection={annotation}
+              onAnnotationSelect={selectAnnotation}
             />
           </div>
-        )}
-      </aside>
+
+          <Timeline
+            doc={doc}
+            onDocChange={setDoc}
+            activeScene={activeScene}
+            onActiveSceneChange={selectScene}
+            time={time}
+            onTimeChange={setTime}
+            playing={playing}
+            onPlayingChange={setPlayback}
+            loop={loop}
+            onLoopChange={setLoop}
+          />
+        </main>
+
+        {/* Everything drawn, and where it appears. Collapsed by default — an empty
+            rail is 256px of pitch given away for nothing. */}
+        <aside
+          className={cn(
+            "flex shrink-0 flex-col overflow-y-auto border-l border-ink-700 bg-ink-800 transition-[width]",
+            drawingsOpen ? "w-64" : "w-9",
+          )}
+        >
+          <button
+            type="button"
+            onClick={() => setDrawingsOpen(!drawingsOpen)}
+            aria-expanded={drawingsOpen}
+            title={drawingsOpen ? t("section.drawn.hide") : t("section.drawn.show")}
+            className={cn(
+              "flex shrink-0 items-center gap-1.5 py-2.5 text-ink-300 transition hover:bg-ink-700/40 hover:text-white",
+              drawingsOpen ? "px-3" : "flex-col px-2",
+            )}
+          >
+            {drawingsOpen ? <PanelRightClose size={14} /> : <PanelRightOpen size={14} />}
+            {drawingsOpen ? (
+              <>
+                <span className="flex-1 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-200">
+                  {t("section.drawn")}
+                </span>
+                <span className="font-mono text-[11px] text-ink-400">{annotationsOf(doc).length}</span>
+              </>
+            ) : (
+              annotationsOf(doc).length > 0 && (
+                <span className="font-mono text-[11px] text-ink-400">
+                  {annotationsOf(doc).length}
+                </span>
+              )
+            )}
+          </button>
+
+          {drawingsOpen && (
+            <div className="border-t border-ink-700">
+              <DrawingsPanel
+                doc={doc}
+                onDocChange={setDoc}
+                sceneIndex={activeScene}
+                selected={annotation}
+                onSelect={revealAnnotation}
+              />
+            </div>
+          )}
+        </aside>
+      </div>
     </div>
   );
 }

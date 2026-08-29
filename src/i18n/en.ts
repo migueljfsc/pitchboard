@@ -1,0 +1,398 @@
+/**
+ * English copy, and the source of truth for what keys exist.
+ *
+ * `pt.ts` is typed as `Dictionary`, which is derived from this object — so a key
+ * added here and forgotten there is a compile error rather than a word of
+ * English surfacing mid-sentence.
+ *
+ * Conventions:
+ *   - Keys are grouped by where the string appears, not by what it says.
+ *   - `{name}` placeholders are filled by `translate`; the variable names are
+ *     part of the contract and must match in every locale.
+ *   - A `.one` / `.other` pair is a plural, reached through `plural()`.
+ *
+ * Word order is NOT part of the contract. A sentence assembled from fragments in
+ * English order is the one thing that reliably fails to translate, so anything
+ * with a variable in it is a whole sentence with a placeholder in it.
+ */
+
+export const en = {
+  // ------------------------------------------------------------------- app
+  "app.name": "Pitchboard",
+  "app.opening": "Opening the shared board…",
+  "app.newBoard": "Start a new board",
+  "app.locale": "Language",
+
+  // --------------------------------------------------------------- top bar
+  "bar.name.label": "Board name",
+  "bar.name.placeholder": "Untitled board",
+  "bar.json": "JSON",
+  "bar.json.title":
+    "Import / export JSON. Send someone the whole board and they open your play. A short setup file names a formation, an eleven and its units.",
+  "bar.export": "Export",
+  "bar.export.title":
+    "MP4, WebM or GIF of the whole animation, or a PNG of the frame on screen. Exported at the framing you are looking at.",
+
+  "history.undo": "Undo",
+  "history.redo": "Redo",
+  "history.undo.hint": "Undo ({keys})",
+  "history.redo.hint": "Redo ({keys})",
+
+  // -------------------------------------------------------------- sections
+  "section.view": "View",
+  "section.formations": "Formations",
+  "section.draw": "Draw",
+  "section.links": "Links",
+  "section.selection": "Selection",
+  "section.drawn": "Drawn",
+  "section.drawn.show": "Show everything drawn",
+  "section.drawn.hide": "Hide the drawing list",
+
+  // ------------------------------------------------------------------ view
+  "view.left": "Left",
+  "view.full": "Full",
+  "view.right": "Right",
+  "view.vertical": "Vertical",
+  "view.horizontal": "Horizontal",
+  "view.flat": "Flat",
+  "view.3d": "3D",
+  "view.playerSize": "Player size",
+  "view.halfHint":
+    "Half a pitch is taller than it is long, so horizontally it fits to the same height as the full board with space either side. Vertical fills the board instead.",
+
+  // ------------------------------------------------------------------ team
+  "team.namePlaceholder": "Team name",
+  "team.nameLabel": "Name for team {n}",
+  "team.direction": "Attacking direction",
+  "team.show": "Show this team",
+  "team.hide": "Hide this team",
+  "team.showAria": "Show {team}",
+  "team.hideAria": "Hide {team}",
+  "team.formation": "Formation",
+  "team.addPlayer": "Add player ({n})",
+  "team.colorAria": "Set {team} colour to {color}",
+  "team.patternAria": "{pattern} kit for {team}",
+
+  "pattern.solid": "Solid",
+  "pattern.vertical": "Vertical stripes",
+  "pattern.horizontal": "Hooped",
+
+  // ----------------------------------------------------------------- reset
+  "reset.positions": "Reset positions",
+  "reset.board": "Reset board",
+
+  // ---------------------------------------------------------------- share
+  "share.copy": "Share link",
+  "share.copied": "Link copied",
+  "share.title":
+    "The whole board travels in the link, so it never expires. Whoever opens it watches a read-only copy, framed as you have it now, and can fork their own.",
+  "share.failed": "This browser could not compress the board.",
+  "share.long": "{chars} chars — too long to paste safely",
+  "share.long.title":
+    "This link is {chars} characters, past the {budget} that survives most chat apps and mail. Anything that cuts it short produces a link that opens as damaged rather than as an error. Freehand drawing is almost always the cause — export the JSON instead, or simplify the drawing.",
+  "share.anyway": "Anyway",
+  "share.manual": "The browser would not reach the clipboard — copy the link by hand.",
+
+  // -------------------------------------------------------------- confirms
+  "confirm.reset.title": "Reset the board?",
+  "confirm.reset.message":
+    "Every scene, run, link, drawing, player name and team setting goes back to a fresh {home} against a {away}. Undo brings the board back.",
+  "confirm.reset.action": "Discard changes",
+
+  "confirm.positions.title": "Reset every position?",
+  "confirm.positions.message":
+    "Both teams go back to their formation marks in every scene, and the runs between them are cleared. Names, numbers, links, drawings, the ball and the scene list are kept. Undo brings the positions back.",
+  "confirm.positions.action": "Reset positions",
+
+  "confirm.links.title.one": "Delete the link?",
+  "confirm.links.title.other": "Delete all {count} links?",
+  "confirm.links.message":
+    "Every connector on the board goes, on both teams, along with the names, styles and colours given to them. The players stay where they are. Undo brings them back.",
+  "confirm.links.action": "Delete all links",
+
+  "confirm.preset.title": "Replace “{label}”?",
+  "confirm.preset.message":
+    "A {formation} squad is already saved under that name. Its players, numbers, kit and units are replaced by the ones on the board. Saved squads are not part of the board, so this is not on the undo stack.",
+  "confirm.preset.action": "Replace squad",
+
+  "confirm.import.title": "Replace this board?",
+  "confirm.import.message":
+    "“{name}” will replace everything on the board — scenes, runs, links and drawings. Undo brings the old board back.",
+  "confirm.import.action": "Replace board",
+
+  "confirm.cancel": "Cancel",
+
+  // ----------------------------------------------------------- JSON dialog
+  "json.title": "Board JSON",
+  "json.export": "Export",
+  "json.import": "Import",
+  "json.close": "Close",
+  "json.wholeBoard": "Whole board",
+  "json.setupOnly": "Setup only",
+  "json.wholeBoard.hint": "Every scene, run, link and drawing — the play as you left it.",
+  "json.setupOnly.hint": "Formation, names, numbers and units. No scenes.",
+  "json.payload.label": "Board JSON",
+  "json.copy": "Copy",
+  "json.copied": "Copied",
+  "json.download": "Download",
+  "json.import.hint":
+    "Paste a whole board, or a setup naming the formation, the eleven and its units. Players are listed in formation order, keeper first; a link names shirt numbers.",
+  "json.import.label": "JSON to import",
+  "json.loadFile": "Load a file",
+  "json.useExample": "Use the example",
+  "json.clipboard": "The browser refused clipboard access — select the text and copy it by hand.",
+  "json.replaceBoard": "Replace board",
+
+  // --------------------------------------------------- seeded document text
+  // What a NEW board is called. Existing boards keep whatever they were named:
+  // a document is data, and data does not change language when the reader does.
+  "doc.board": "Untitled board",
+  "doc.scene": "Scene {n}",
+  "doc.sceneCopy": "{name} copy",
+  "doc.home": "Home",
+  "doc.away": "Away",
+
+  // -------------------------------------------------------------- timeline
+  "timeline.scrub": "Scrub timeline",
+  "timeline.flow": "Seamless flow",
+  "timeline.flow.on":
+    "One continuous movement: nothing held between scenes, and each scene lasting as long as its longest run needs",
+  "timeline.flow.off": "Back to per-scene travel and hold times",
+  "timeline.addScene": "Add scene",
+  "timeline.scene": "Scene",
+  "timeline.pace": "Pace",
+  "timeline.pace.title":
+    "Metres per second for the run into this scene. Each scene keeps its own, and a scene added after it inherits the same pace.",
+  "timeline.endHold": "End hold",
+  "timeline.travel": "Travel",
+  "timeline.hold": "Hold",
+  "timeline.ball": "Ball",
+  "timeline.shot": "Shot",
+  "timeline.shotMark": "shot",
+  "timeline.shot.can": "Draw the ball’s travel into this scene as a strike rather than a pass",
+  "timeline.shot.cannot":
+    "Only a loose ball can be a strike — release it, or play it to an opponent",
+  "timeline.moveEarlier": "Move scene earlier",
+  "timeline.moveLater": "Move scene later",
+  "timeline.duplicate": "Duplicate scene",
+  "timeline.deleteScene": "Delete scene",
+
+  // ------------------------------------------------------------- inspector
+  "inspect.empty":
+    "Click a player to select, double-click to rename. Shift-click to add, or drag on empty grass to marquee. Arrow keys nudge; hold shift for 5 m. Space plays.",
+  "inspect.selected": "{count} selected",
+  "inspect.clear": "clear",
+  "inspect.travelTime": "Travel time",
+  "inspect.matchScene": "match scene",
+  "inspect.travel.default": "s — scene default",
+  "inspect.travel.unit": "s",
+  "inspect.travel.hint":
+    "Shorter than the scene means this player arrives early and waits. Longer stretches the whole scene, which now runs for {seconds} s.",
+  "inspect.travel.reset": "Use the scene default",
+  "inspect.ball": "Ball — {scene}",
+  "inspect.ball.release": "Release the ball",
+  "inspect.ball.give": "Give ball to {who}",
+  "inspect.ball.hint": "Handing the ball to a different player in the next scene makes a pass.",
+  "inspect.ballName": "Ball",
+  "inspect.remove": "Remove {who}",
+  "inspect.run": "Run — {scene}",
+  "inspect.straighten": "Straighten",
+  "inspect.showRuns": "Show movement arrows",
+  "inspect.hideRuns": "Hide movement arrows",
+  "inspect.run.hint":
+    "Drag the amber handles on a selected player’s run to curve it. Hiding an arrow applies to this scene only — the player still moves.",
+  "inspect.name": "Name",
+  "inspect.number": "No.",
+  "inspect.playerPlaceholder": "Player {number}",
+  "inspect.clash": "{who} already wears {number} for this side.",
+
+  // ----------------------------------------------------------------- export
+  "export.title": "Export",
+  "export.close": "Close",
+  "export.format": "Format",
+  "export.resolution": "Resolution",
+  "export.size": "Size",
+  "export.frame": "Frame",
+  "export.frames": "Frames",
+  "export.length": "Length",
+  "export.frameRate": "Frame rate",
+  "export.bitrate": "Bitrate",
+  "export.run": "Export {format}",
+  "export.again": "Download again",
+  "export.cancel": "Cancel",
+  "export.blurb.mp4": "H.264. Plays everywhere — QuickTime, VLC, a browser, a phone.",
+  "export.blurb.webm": "VP9. Smaller than MP4 at the same quality; not every player takes it.",
+  "export.blurb.gif": "Loops on its own and pastes into a chat. One palette, so no shimmer.",
+  "export.blurb.png": "The frame the scrubber is on, at full resolution.",
+  "export.phase.palette": "Building the palette",
+  "export.phase.render": "Rendering",
+  "export.phase.finalise": "Writing the file",
+  "export.unavailable": "This browser cannot encode {format} at {width}×{height}",
+  "export.unavailable.try": " — try {alternative}, a smaller size, or a GIF.",
+  "export.unavailable.smaller": " — try a smaller size, or a GIF.",
+
+  // ------------------------------------------------------------ draw panel
+  "draw.tool.select": "Select",
+  "draw.tool.select.hint": "Select and move (Esc)",
+  "draw.tool.arrow": "Arrow",
+  "draw.tool.arrow.hint": "Drag an arrow — a run, pass or shot",
+  "draw.tool.line": "Line",
+  "draw.tool.line.hint": "Drag a line with no head",
+  "draw.tool.rect": "Box",
+  "draw.tool.rect.hint": "Drag a rectangular zone",
+  "draw.tool.ellipse": "Oval",
+  "draw.tool.ellipse.hint": "Drag an oval zone",
+  "draw.tool.pen": "Pen",
+  "draw.tool.pen.hint": "Draw freehand",
+  "draw.tool.text": "Text",
+  "draw.tool.text.hint": "Click to place a label",
+  "draw.keep": "Keep",
+  "draw.keep.aria": "Keep the tool armed",
+  "draw.keep.title": "Stay in the tool after drawing, for several shapes in a row",
+  "draw.colorAria": "Draw in {color}",
+  "draw.dash.solid": "Run",
+  "draw.dash.solid.hint": "Solid — a run or a plain line",
+  "draw.dash.dashed": "Pass",
+  "draw.dash.dashed.hint": "Dashed — the pass convention",
+  "draw.dash.wavy": "Dribble",
+  "draw.dash.wavy.hint": "Wavy — the dribble convention",
+  "draw.hint.select": "{n} drawn. Click one to restyle it, or pick a tool above.",
+  "draw.hint.drawing": "Drag on the pitch to draw. Esc goes back to select.",
+  "draw.selected": "{kind} selected",
+  "draw.show": "Show",
+  "draw.hide": "Hide",
+  "draw.showThis": "Show this shape",
+  "draw.hideThis": "Hide this shape",
+  "draw.label.placeholder": "Label",
+  "draw.label.aria": "Label text",
+  "draw.size.aria": "Label size",
+  "draw.size.title": "Label size, as a percentage of the default",
+  "draw.from": "From",
+  "draw.to": "To",
+  "draw.delete": "Delete shape",
+
+  // ---------------------------------------------------------------- shapes
+  "kind.arrow": "Arrow",
+  "kind.line": "Line",
+  "kind.rect": "Box",
+  "kind.ellipse": "Oval",
+  "kind.pen": "Freehand",
+  "kind.text": "Text",
+
+  // ----------------------------------------------------------- drawn list
+  "drawn.empty":
+    "Nothing drawn yet. Pick a tool in the Draw panel and drag on the pitch — arrows, zones, freehand and labels all land here.",
+  "drawn.onScene": "On {scene}",
+  "drawn.thisScene": "this scene",
+  "drawn.allScenes": "All scenes",
+  "drawn.collapse": "Collapse",
+  "drawn.expand": "Expand",
+  "drawn.collapseAll": "Collapse every scene",
+  "drawn.expandAll": "Expand every scene",
+  "drawn.noneHere.one": "Nothing on this scene. {count} shape elsewhere.",
+  "drawn.noneHere.other": "Nothing on this scene. {count} shapes elsewhere.",
+  "drawn.reorder": "Reorder {label}",
+  "drawn.reorder.title": "Drag to reorder within this scene — later shapes draw on top",
+  "drawn.nameLabel": "Name for {label}",
+  "drawn.rename.here": "Rename — click also selects it",
+  "drawn.rename.away": "Rename — click also jumps to it",
+  "drawn.showShape": "Show shape",
+  "drawn.hideShape": "Hide shape",
+  "drawn.delete": "Delete {label}",
+  "drawn.visibleFrom": "Visible from",
+  "drawn.visibleTo": "Visible to",
+  "drawn.end": "End",
+  "drawn.span.one": "1 scene",
+  "drawn.span.other": "{count} scenes",
+
+  // ----------------------------------------------------------------- links
+  "links.count": "Links ({n})",
+  "links.deleteAll": "Delete all",
+  "links.deleteAll.title": "Delete every link on the board",
+  "links.needTwo": "Select 2+ players to link",
+  "links.linkPlayers": "Link {n} players",
+  "links.style.chain": "Chain",
+  "links.style.polygon": "Shape",
+  "links.style.filled": "Filled",
+  "links.style.chain.hint": "Open line — a back four must not close on itself",
+  "links.style.polygon.hint": "Closed outline",
+  "links.style.filled.hint": "Closed and shaded — shows the area collapse",
+  "links.reorder": "Reorder {name}",
+  "links.reorder.title": "Drag to reorder, or focus and use the arrow keys. Later links draw on top.",
+  "links.expandRow": "Rename and restyle {name}",
+  "links.collapseRow": "Close {name}",
+  "links.edit.title": "Rename, restyle, reorder",
+  "links.showDistances": "Show distances",
+  "links.hideDistances": "Hide distances",
+  "links.show": "Show link",
+  "links.hide": "Hide link",
+  "links.selectMembers": "Select {n} players",
+  "links.name": "Name",
+  "links.name.label": "Link name",
+  "links.colour": "Colour",
+  "links.auto": "Auto",
+  "links.auto.title": "Follow the team’s kit colour",
+  "links.colorAria": "Set {name} colour to {color}",
+  "links.order": "Order",
+  "links.moveEarlier": "Move {number} earlier",
+  "links.moveLater": "Move {number} later",
+  "links.delete": "Delete link",
+
+  // ---------------------------------------------------------- squad presets
+  "preset.label": "Squad preset",
+  "preset.manage": "Manage saved squads",
+  "preset.manage.title": "Rename or delete saved squads",
+  "preset.namePlaceholder": "Name this squad",
+  "preset.nameLabel": "Name for the saved squad",
+  "preset.save": "Save squad",
+  "preset.saveAs": "Save {team} as a squad preset",
+  "preset.load": "Load a squad…",
+  "preset.none": "No squads saved yet",
+  "preset.loadInto": "Load a saved squad into {team}",
+  "preset.rename": "Name of saved squad {label}",
+  "preset.delete": "Delete squad {label}",
+  "preset.defaultName": "Squad",
+
+  // ------------------------------------------------------- engine messages
+  // Returned by pure modules as keys, resolved by whoever is showing them.
+  "migrate.notABoard": "That is not a Pitchboard board.",
+  "migrate.noVersion": "That board has no version, so it cannot be read.",
+  "migrate.tooNew":
+    "That board was made by a newer version of Pitchboard (v{version}). Update the page and try again.",
+  "migrate.noStep": "No way to read a v{version} board in this build.",
+
+  "link.damaged": "That link is damaged — it may have been cut short in transit.",
+  "link.notABoard": "That link does not contain a board.",
+  "link.unreadable": "That link contains a board this version cannot read.",
+
+  "import.tooLarge": "Too large — the limit is {kb} KB.",
+  "import.notJson": "That is not valid JSON.",
+  "import.invalid": "That file is not a board Pitchboard can read: {detail}",
+  "import.failed": "Could not build a board from that setup.",
+  "import.team.unknownFormation": "Team {n}: “{formation}” is not a formation Pitchboard knows.",
+  "import.team.tooManyPlayers":
+    "Team {n}: {listed} players listed but {formation} has {places} places.",
+  "import.team.duplicateNumber": "Team {n}: two players share a shirt number.",
+  "import.link.missing.team": "Team {n}: no player wears {number}, so it cannot be linked.",
+  "import.link.missing.preset": "“{label}”: no player wears {number}, so it cannot be linked.",
+  "import.link.duplicate.team": "Team {n}: a link names the same player twice.",
+  "import.link.duplicate.preset": "“{label}”: a link names the same player twice.",
+
+  "preset.duplicateNumber": "Two players in this squad share a shirt number.",
+  "preset.unknownFormation": "“{formation}” is not a formation Pitchboard knows.",
+  "preset.tooManyPlayers": "{saved} players saved but {formation} has {places} places.",
+  "preset.invalid": "That preset does not describe a valid team.",
+  "preset.failed": "Could not apply that preset.",
+
+  // ---------------------------------------------------------------- viewer
+  "viewer.shared": "Shared board",
+  "viewer.fork": "Fork to edit",
+  "viewer.scenes.one": "1 scene",
+  "viewer.scenes.other": "{count} scenes",
+  "viewer.play": "Play",
+  "viewer.pause": "Pause",
+  "viewer.loop": "Loop",
+  "viewer.loop.on": "Loop",
+  "viewer.loop.off": "Stop at the end",
+  "viewer.scrub": "Scrub",
+} as const;

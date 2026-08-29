@@ -5,6 +5,7 @@ import { BALL_ID } from "@/board/types";
 import { displayName, shirtClash } from "@/board/players";
 import { entityTravelMs, sceneTravelMs } from "@/board/timeline";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/i18n/context";
 
 type Props = {
   doc: BoardDoc;
@@ -45,6 +46,7 @@ export function Inspector({
   onRunsHiddenChange,
   focusName,
 }: Props) {
+  const { t } = useI18n();
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -57,7 +59,7 @@ export function Inspector({
 
   const scene = doc.scenes[activeScene];
   const nameOf = (id: string) => {
-    if (id === BALL_ID) return "Ball";
+    if (id === BALL_ID) return t("inspect.ballName");
     for (const team of doc.teams) {
       const p = team.players.find((x) => x.id === id);
       if (p) return `${team.name} ${displayName(doc, id)}`;
@@ -68,8 +70,7 @@ export function Inspector({
   if (selection.size === 0) {
     return (
       <p className="text-[11px] leading-relaxed text-ink-300">
-        Click a player to select, double-click to rename. Shift-click to add, or drag on
-        empty grass to marquee. Arrow keys nudge; hold shift for 5&nbsp;m. Space plays.
+        {t("inspect.empty")}
       </p>
     );
   }
@@ -88,14 +89,14 @@ export function Inspector({
     <div className="flex flex-col gap-3.5">
       <div className="flex items-center justify-between">
         <span className="text-[11px] uppercase tracking-wide text-ink-400">
-          {selection.size} selected
+          {t("inspect.selected", { count: selection.size })}
         </span>
         <button
           type="button"
           onClick={onClear}
           className="text-[11px] text-ink-300 underline-offset-2 hover:text-white hover:underline"
         >
-          clear
+          {t("inspect.clear")}
         </button>
       </div>
 
@@ -119,14 +120,14 @@ export function Inspector({
       {canEditPaths && scene && !doc.flow && (
         <div className="flex flex-col gap-1.5">
           <div className="flex items-baseline justify-between">
-            <span className="text-[11px] uppercase tracking-wide text-ink-400">Travel time</span>
+            <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("inspect.travelTime")}</span>
             {overridden && (
               <button
                 type="button"
                 onClick={() => onTravelChange(null)}
                 className="text-[11px] text-ink-300 underline-offset-2 hover:text-white hover:underline"
               >
-                match scene
+                {t("inspect.matchScene")}
               </button>
             )}
           </div>
@@ -141,12 +142,11 @@ export function Inspector({
               className="w-16 rounded border border-ink-600 bg-ink-900 px-2 py-1 font-mono text-xs text-ink-200 outline-none transition hover:border-ink-400 focus:border-accent"
             />
             <span className="text-[11px] text-ink-400">
-              s{overridden ? "" : ` — scene default`}
+              {t(overridden ? "inspect.travel.unit" : "inspect.travel.default")}
             </span>
           </div>
           <p className="text-[11px] leading-relaxed text-ink-300">
-            Shorter than the scene means this player arrives early and waits. Longer stretches
-            the whole scene, which now runs for {(sceneTravelMs(scene) / 1000).toFixed(1)}&nbsp;s.
+            {t("inspect.travel.hint", { seconds: (sceneTravelMs(scene) / 1000).toFixed(1) })}
           </p>
         </div>
       )}
@@ -154,14 +154,14 @@ export function Inspector({
       {only && (
         <div className="flex flex-col gap-1.5">
           <span className="text-[11px] uppercase tracking-wide text-ink-400">
-            Ball — {scene?.name}
+            {t("inspect.ball", { scene: scene?.name ?? "" })}
           </span>
           <SmallButton
-            label={carries ? "Release the ball" : `Give ball to ${nameOf(only)}`}
+            label={carries ? t("inspect.ball.release") : t("inspect.ball.give", { who: nameOf(only) })}
             onClick={() => onCarrierChange(carries ? null : only)}
           />
           <p className="text-[11px] leading-relaxed text-ink-300">
-            Handing the ball to a different player in the next scene makes a pass.
+            {t("inspect.ball.hint")}
           </p>
         </div>
       )}
@@ -173,23 +173,22 @@ export function Inspector({
           className="flex items-center justify-center gap-1.5 rounded-md border border-ink-600 px-2 py-1.5 text-xs text-ink-300 transition hover:border-red-500/60 hover:text-red-400"
         >
           <UserMinus size={13} />
-          Remove {displayName(doc, player.id)}
+          {t("inspect.remove", { who: displayName(doc, player.id) })}
         </button>
       )}
 
       {canEditPaths && (
         <div className="flex flex-col gap-1.5">
           <span className="text-[11px] uppercase tracking-wide text-ink-400">
-            Run — {scene?.name}
+            {t("inspect.run", { scene: scene?.name ?? "" })}
           </span>
-          <SmallButton label="Straighten" onClick={onClearPaths} />
+          <SmallButton label={t("inspect.straighten")} onClick={onClearPaths} />
           <SmallButton
-            label={runsHidden ? "Show movement arrows" : "Hide movement arrows"}
+            label={t(runsHidden ? "inspect.showRuns" : "inspect.hideRuns")}
             onClick={() => onRunsHiddenChange(!runsHidden)}
           />
           <p className="text-[11px] leading-relaxed text-ink-300">
-            Drag the amber handles on a selected player's run to curve it. Hiding an arrow
-            applies to this scene only — the player still moves.
+            {t("inspect.run.hint")}
           </p>
         </div>
       )}
@@ -220,6 +219,7 @@ function IdentityFields({
   onRenumber: (playerId: string, number: number) => void;
 }) {
   /** null while the field is showing the committed number rather than a draft. */
+  const { t } = useI18n();
   const [draft, setDraft] = useState<string | null>(null);
   const text = draft ?? String(player.number);
 
@@ -231,17 +231,17 @@ function IdentityFields({
     <div className="flex flex-col gap-1.5">
       <div className="flex gap-1.5">
         <label className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="text-[11px] uppercase tracking-wide text-ink-400">Name</span>
+          <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("inspect.name")}</span>
           <input
             ref={nameRef}
             value={player.label}
             onChange={(e) => onRename(player.id, e.target.value)}
-            placeholder={`Player ${player.number}`}
+            placeholder={t("inspect.playerPlaceholder", { number: player.number })}
             className="w-full rounded border border-ink-600 bg-ink-900 px-2 py-1 text-xs text-ink-200 outline-none transition placeholder:text-ink-400 hover:border-ink-400 focus:border-accent"
           />
         </label>
         <label className="flex w-14 shrink-0 flex-col gap-1">
-          <span className="text-[11px] uppercase tracking-wide text-ink-400">No.</span>
+          <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("inspect.number")}</span>
           <input
             type="number"
             min={0}
@@ -274,8 +274,10 @@ function IdentityFields({
 
       {clash && (
         <p role="alert" className="text-[11px] leading-relaxed text-red-300">
-          {clash.label.trim() || `Player ${clash.number}`} already wears {clash.number} for this
-          team.
+          {t("inspect.clash", {
+            who: clash.label.trim() || t("inspect.playerPlaceholder", { number: clash.number }),
+            number: clash.number,
+          })}
         </p>
       )}
     </div>

@@ -19,10 +19,12 @@ import {
   deleteAnnotation,
   updateAnnotation,
 } from "@/board/annotations";
-import { KIND_LABEL } from "@/components/ui/kinds";
+import { KIND_KEY } from "@/components/ui/kinds";
 import { PALETTE } from "@/components/ui/palette";
 import type { Change } from "@/lib/history";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/i18n/context";
+import type { MessageKey } from "@/i18n/core";
 
 type Props = {
   doc: BoardDoc;
@@ -41,20 +43,20 @@ type Props = {
   focusText?: number;
 };
 
-const TOOLS: { value: Tool; label: string; icon: typeof Minus; hint: string }[] = [
-  { value: "select", label: "Select", icon: MousePointer2, hint: "Select and move (Esc)" },
-  { value: "arrow", label: "Arrow", icon: ArrowUpRight, hint: "Drag an arrow — a run, pass or shot" },
-  { value: "line", label: "Line", icon: Minus, hint: "Drag a line with no head" },
-  { value: "rect", label: "Box", icon: Square, hint: "Drag a rectangular zone" },
-  { value: "ellipse", label: "Oval", icon: Circle, hint: "Drag an oval zone" },
-  { value: "pen", label: "Pen", icon: Pencil, hint: "Draw freehand" },
-  { value: "text", label: "Text", icon: Type, hint: "Click to place a label" },
+const TOOLS: { value: Tool; icon: typeof Minus; key: string }[] = [
+  { value: "select", icon: MousePointer2, key: "select" },
+  { value: "arrow", icon: ArrowUpRight, key: "arrow" },
+  { value: "line", icon: Minus, key: "line" },
+  { value: "rect", icon: Square, key: "rect" },
+  { value: "ellipse", icon: Circle, key: "ellipse" },
+  { value: "pen", icon: Pencil, key: "pen" },
+  { value: "text", icon: Type, key: "text" },
 ];
 
-const DASHES: { value: AnnotationDash; label: string; hint: string }[] = [
-  { value: "solid", label: "Run", hint: "Solid — a run or a plain line" },
-  { value: "dashed", label: "Pass", hint: "Dashed — the pass convention" },
-  { value: "wavy", label: "Dribble", hint: "Wavy — the dribble convention" },
+const DASHES: { value: AnnotationDash; key: string }[] = [
+  { value: "solid", key: "solid" },
+  { value: "dashed", key: "dashed" },
+  { value: "wavy", key: "wavy" },
 ];
 
 
@@ -73,6 +75,7 @@ export function DrawPanel({
   onSelect,
   focusText,
 }: Props) {
+  const { t } = useI18n();
   const annotations = doc.annotations ?? [];
   const active = annotations.find((a) => a.id === selected) ?? null;
 
@@ -82,29 +85,29 @@ export function DrawPanel({
   return (
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-4 gap-1">
-        {TOOLS.map((t) => (
+        {TOOLS.map((item) => (
           <button
-            key={t.value}
+            key={item.value}
             type="button"
-            title={t.hint}
-            aria-label={t.hint}
-            aria-pressed={tool === t.value}
-            onClick={() => onToolChange(t.value)}
+            title={t(`draw.tool.${item.key}.hint` as MessageKey)}
+            aria-label={t(`draw.tool.${item.key}.hint` as MessageKey)}
+            aria-pressed={tool === item.value}
+            onClick={() => onToolChange(item.value)}
             className={cn(
               "flex flex-col items-center gap-0.5 rounded-md border px-1 py-1.5 text-[10px] transition",
-              tool === t.value
+              tool === item.value
                 ? "border-accent bg-ink-700 text-accent"
                 : "border-ink-600 text-ink-300 hover:border-ink-400 hover:text-white",
             )}
           >
-            <t.icon size={14} />
-            {t.label}
+            <item.icon size={14} />
+            {t(`draw.tool.${item.key}` as MessageKey)}
           </button>
         ))}
         <button
           type="button"
-          title="Stay in the tool after drawing, for several shapes in a row"
-          aria-label="Keep the tool armed"
+          title={t("draw.keep.title")}
+          aria-label={t("draw.keep.aria")}
           aria-pressed={sticky}
           onClick={() => onStickyChange(!sticky)}
           className={cn(
@@ -115,7 +118,7 @@ export function DrawPanel({
           )}
         >
           <Pin size={14} />
-          Keep
+          {t("draw.keep")}
         </button>
       </div>
 
@@ -125,7 +128,7 @@ export function DrawPanel({
           <button
             key={c}
             type="button"
-            aria-label={`Draw in ${c}`}
+            aria-label={t("draw.colorAria", { color: c })}
             onClick={() => {
               onColorChange(c);
               if (active) patch(active.id, { color: c });
@@ -146,7 +149,7 @@ export function DrawPanel({
           <button
             key={d.value}
             type="button"
-            title={d.hint}
+            title={t(`draw.dash.${d.key}.hint` as MessageKey)}
             onClick={() => {
               onDashChange(d.value);
               if (active && (active.kind === "arrow" || active.kind === "line")) {
@@ -162,7 +165,7 @@ export function DrawPanel({
                 : "border-ink-600 text-ink-400 hover:text-ink-200",
             )}
           >
-            {d.label}
+            {t(`draw.dash.${d.key}` as MessageKey)}
           </button>
         ))}
       </div>
@@ -181,8 +184,8 @@ export function DrawPanel({
       ) : (
         <p className="text-[11px] leading-relaxed text-ink-300">
           {tool === "select"
-            ? `${annotations.length} drawn. Click one to restyle it, or pick a tool above.`
-            : "Drag on the pitch to draw. Esc goes back to select."}
+            ? t("draw.hint.select", { n: annotations.length })
+            : t("draw.hint.drawing")}
         </p>
       )}
     </div>
@@ -203,6 +206,7 @@ function Selected({
   onDelete: () => void;
   focusText?: number;
 }) {
+  const { t } = useI18n();
   const textRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -224,12 +228,12 @@ function Selected({
     <div className="flex flex-col gap-2 rounded-md border border-accent bg-ink-700 p-2">
       <div className="flex items-center justify-between">
         <span className="text-[11px] uppercase tracking-wide text-ink-300">
-          {KIND_LABEL[ann.kind]} selected
+          {t("draw.selected", { kind: t(KIND_KEY[ann.kind]) })}
         </span>
         <button
           type="button"
-          aria-label={ann.hidden ? "Show" : "Hide"}
-          title={ann.hidden ? "Show this shape" : "Hide this shape"}
+          aria-label={t(ann.hidden ? "draw.show" : "draw.hide")}
+          title={t(ann.hidden ? "draw.showThis" : "draw.hideThis")}
           onClick={() => onPatch({ hidden: !ann.hidden })}
           className={cn(
             "flex size-5 items-center justify-center rounded transition",
@@ -246,8 +250,8 @@ function Selected({
             ref={textRef}
             value={ann.text}
             onChange={(e) => onPatch({ text: e.target.value }, `ann-text:${ann.id}`)}
-            placeholder="Label"
-            aria-label="Label text"
+            placeholder={t("draw.label.placeholder")}
+            aria-label={t("draw.label.aria")}
             className="min-w-0 flex-1 rounded border border-ink-600 bg-ink-900 px-1.5 py-1 text-[11px] text-ink-200 outline-none transition placeholder:text-ink-400 hover:border-ink-400 focus:border-accent"
           />
           {/* Keyed so selecting a different label remounts the field with its
@@ -263,13 +267,13 @@ function Selected({
       {/* Which scenes it appears on. Ids, not indices, so reordering carries it. */}
       <div className="flex items-center gap-1">
         <SceneSelect
-          label="From"
+          label={t("draw.from")}
           doc={doc}
           value={ann.from}
           onChange={(id) => id && onPatch({ from: id })}
         />
         <SceneSelect
-          label="To"
+          label={t("draw.to")}
           doc={doc}
           value={ann.to}
           allowEnd
@@ -282,7 +286,7 @@ function Selected({
         onClick={onDelete}
         className="flex items-center justify-center gap-1 rounded border border-ink-600 px-1.5 py-1 text-[11px] text-ink-400 transition hover:border-red-500/60 hover:text-red-400"
       >
-        <Trash2 size={11} /> Delete shape
+        <Trash2 size={11} /> {t("draw.delete")}
       </button>
     </div>
   );
@@ -297,6 +301,7 @@ function Selected({
  * step with what was.
  */
 function SizeField({ value, onChange }: { value: number; onChange: (size: number) => void }) {
+  const { t } = useI18n();
   const asText = (n: number) => String(Math.round(n * 100));
   const [text, setText] = useState(() => asText(value));
 
@@ -314,8 +319,8 @@ function SizeField({ value, onChange }: { value: number; onChange: (size: number
           if (n >= TEXT_SCALE_MIN && n <= TEXT_SCALE_MAX) onChange(n);
         }}
         onBlur={() => setText(asText(value))}
-        aria-label="Label size"
-        title="Label size, as a percentage of the default"
+        aria-label={t("draw.size.aria")}
+        title={t("draw.size.title")}
         className="w-full min-w-0 rounded border border-ink-600 bg-ink-900 px-1 py-1 font-mono text-[11px] text-ink-200 outline-none transition hover:border-ink-400 focus:border-accent"
       />
       <span className="text-[11px] text-ink-400">%</span>
@@ -336,6 +341,7 @@ function SceneSelect({
   allowEnd?: boolean;
   onChange: (id: string | null) => void;
 }) {
+  const { t } = useI18n();
   return (
     <label className="flex min-w-0 flex-1 flex-col gap-1">
       <span className="text-[11px] uppercase tracking-wide text-ink-400">{label}</span>
@@ -344,7 +350,7 @@ function SceneSelect({
         onChange={(e) => onChange(e.target.value || null)}
         className="w-full rounded border border-ink-600 bg-ink-900 px-1 py-1 text-[11px] text-ink-200 outline-none focus:border-accent"
       >
-        {allowEnd && <option value="">End</option>}
+        {allowEnd && <option value="">{t("drawn.end")}</option>}
         {doc.scenes.map((s) => (
           <option key={s.id} value={s.id}>
             {s.name}

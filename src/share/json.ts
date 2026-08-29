@@ -19,6 +19,7 @@ import { migrate } from "@/board/migrate";
 import { replaceTeamLinks } from "@/board/links";
 import { AWAY, DEFAULT_FORMATION, HOME, createBoardDoc, type TeamSpec } from "@/formations";
 import { contrastOn } from "@/lib/color";
+import { msg, type Message } from "@/i18n/core";
 
 /**
  * Cap on an imported file, well above any real board and well below anything
@@ -52,6 +53,7 @@ export function teamToSetup(doc: BoardDoc, index: 0 | 1): SetupTeam {
     name: team.name,
     color: team.color,
     textColor: team.textColor,
+    ...(team.pattern ? { pattern: team.pattern } : {}),
     formation: team.formation ?? DEFAULT_FORMATION,
     players: team.players.map((p) =>
       p.label ? { number: p.number, label: p.label } : { number: p.number },
@@ -99,6 +101,7 @@ export const setupTeamSchema = z.object({
   name: z.string().min(1).max(60).optional(),
   color: z.string().min(1).optional(),
   textColor: z.string().min(1).optional(),
+  pattern: z.enum(["solid", "vertical", "horizontal"]).optional(),
   formation: z.string().min(1).max(20).optional(),
   /** In formation order, keeper first. Shorter than the XI leaves the rest as the preset had them. */
   players: z.array(setupPlayerSchema).max(30).optional(),
@@ -122,21 +125,45 @@ export type SetupLink = z.infer<typeof setupLinkSchema>;
 
 export type ImportOutcome =
   | { ok: true; doc: BoardDoc; kind: "board" | "setup" }
-  | { ok: false; error: string };
+  | { ok: false; error: Message };
 
-/** A setup that parsed but cannot describe a real board. */
-export class SetupError extends Error {}
+/**
+ * A setup that parsed but cannot describe a real board.
+ *
+ * Carries a message KEY rather than a sentence. This module is pure and is
+ * reached from the import panel, the preset library and the share link, none of
+ * which agree on a language — so the words are chosen where they are shown.
+ */
+export class SetupError extends Error {
+  readonly info: Message;
+
+  constructor(info: Message) {
+    // The key doubles as the developer-facing message, so a stack trace in the
+    // console still says which failure this was.
+    super(info.key);
+    this.info = info;
+  }
+}
+
+/**
+ * Which side of an import a link failure came from.
+ *
+ * A discriminator rather than a ready-made "Team 1:" prefix, because a sentence
+ * glued together from an English-ordered fragment and a translated remainder is
+ * the one thing that reliably fails to translate.
+ */
+export type LinkSource = { kind: "team"; n: number } | { kind: "preset"; label: string };
 
 export function fromJson(text: string): ImportOutcome {
   if (text.length > MAX_IMPORT_CHARS) {
-    return { ok: false, error: `Too large — the limit is ${MAX_IMPORT_CHARS / 1000} KB.` };
+    return { ok: false, error: msg("import.tooLarge", { kb: MAX_IMPORT_CHARS / 1000 }) };
   }
 
   let raw: unknown;
   try {
     raw = JSON.parse(text);
   } catch {
-    return { ok: false, error: "That is not valid JSON." };
+    return { ok: false, error: msg("import.notJson") };
   }
 
   // `version` is the discriminator. A file that declares one but fails the board
@@ -146,23 +173,23 @@ export function fromJson(text: string): ImportOutcome {
     // Migrated before validation: a file saved by an older build is a board we
     // can still open, not a board we reject.
     const migrated = migrate(raw);
-    if (!migrated.ok) return { ok: false, error: migrated.error };
+    if (!migrated.ok) return migrated;
 
     const parsed = boardDocSchema.safeParse(migrated.doc);
     return parsed.success
       ? { ok: true, kind: "board", doc: parsed.data as BoardDoc }
-      : { ok: false, error: describe(parsed.error) };
+      : { ok: false, error: invalid(parsed.error) };
   }
 
   const parsed = setupSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, error: describe(parsed.error) };
+  if (!parsed.success) return { ok: false, error: invalid(parsed.error) };
 
   try {
     return { ok: true, kind: "setup", doc: docFromSetup(parsed.data) };
   } catch (e) {
     return {
       ok: false,
-      error: e instanceof SetupError ? e.message : "Could not build a board from that setup.",
+      error: e instanceof SetupError ? e.info : msg("import.failed"),
     };
   }
 }
@@ -180,6 +207,7 @@ function docFromSetup(setup: Setup): BoardDoc {
       // Follow the kit unless told otherwise, so a file that gives only a colour
       // still has readable shirt numbers.
       textColor: t.textColor ?? (t.color ? contrastOn(color) : base.textColor),
+      pattern: t.pattern ?? base.pattern,
       formation: t.formation ?? base.formation,
       squad: t.players,
     };
@@ -190,11 +218,16 @@ function docFromSetup(setup: Setup): BoardDoc {
   setup.teams.forEach((t, i) => {
     const built = doc.teams[i];
     if (t.formation && built.formation !== t.formation) {
-      throw new SetupError(`Team ${i + 1}: "${t.formation}" is not a formation Pitchboard knows.`);
+      throw new SetupError(msg("import.team.unknownFormation", { n: i + 1, formation: t.formation }));
     }
     if (t.players && t.players.length > built.players.length) {
       throw new SetupError(
-        `Team ${i + 1}: ${t.players.length} players listed but ${built.formation} has ${built.players.length} places.`,
+        msg("import.team.tooManyPlayers", {
+          n: i + 1,
+          listed: t.players.length,
+          formation: built.formation ?? "",
+          places: built.players.length,
+        }),
       );
     }
     // Checked against what the FILE says, not against what came out of the
@@ -203,13 +236,13 @@ function docFromSetup(setup: Setup): BoardDoc {
     // person typed the same one twice. Reject what was written wrong; resolve
     // what was left to us.
     if (duplicateNumber(t.players)) {
-      throw new SetupError(`Team ${i + 1}: two players share a shirt number.`);
+      throw new SetupError(msg("import.team.duplicateNumber", { n: i + 1 }));
     }
   });
 
   const links = resolveLinks(doc, setup);
   const parsed = boardDocSchema.safeParse({ ...doc, name: setup.name ?? doc.name, links });
-  if (!parsed.success) throw new SetupError(describe(parsed.error));
+  if (!parsed.success) throw new SetupError(invalid(parsed.error));
   return parsed.data as BoardDoc;
 }
 
@@ -223,17 +256,23 @@ function docFromSetup(setup: Setup): BoardDoc {
  * Throws `SetupError` naming `where` — "Team 1", or the preset — so the message
  * says which side could not be resolved.
  */
-export function resolveTeamLinks(team: Team, links: SetupLink[], where: string): Link[] {
+export function resolveTeamLinks(team: Team, links: SetupLink[], where: LinkSource): Link[] {
   const byNumber = new Map(team.players.map((p) => [p.number, p.id]));
+
+  /** The same failure, worded for whichever side of the import asked. */
+  const failure = (what: "missing" | "duplicate", vars: Record<string, string | number> = {}) =>
+    where.kind === "team"
+      ? msg(`import.link.${what}.team`, { n: where.n, ...vars })
+      : msg(`import.link.${what}.preset`, { label: where.label, ...vars });
 
   return links.map((link, k) => {
     const members = link.members.map((n) => {
       const id = byNumber.get(n);
-      if (!id) throw new SetupError(`${where}: no player wears ${n}, so it cannot be linked.`);
+      if (!id) throw new SetupError(failure("missing", { number: n }));
       return id;
     });
     if (new Set(members).size !== members.length) {
-      throw new SetupError(`${where}: a link names the same player twice.`);
+      throw new SetupError(failure("duplicate"));
     }
     return {
       id: `${team.id}-link-${k + 1}`,
@@ -255,7 +294,7 @@ function resolveLinks(doc: BoardDoc, setup: Setup) {
   setup.teams.forEach((t, i) => {
     if (!t.links) return;
     const index = i as 0 | 1;
-    const resolved = resolveTeamLinks(next.teams[index], t.links, `Team ${i + 1}`);
+    const resolved = resolveTeamLinks(next.teams[index], t.links, { kind: "team", n: i + 1 });
     next = { ...next, links: replaceTeamLinks(next, index, resolved) };
   });
   return next.links;
@@ -271,6 +310,18 @@ export function duplicateNumber(players?: { number?: number }[]): boolean {
 
 const numberFor = (team: BoardDoc["teams"][0], id: string): string =>
   String(team.players.find((p) => p.id === id)?.number ?? "?");
+
+/**
+ * The first few zod issues, wrapped in a sentence that IS translated.
+ *
+ * Zod's own messages are English and come from the library, so the detail stays
+ * technical while the frame around it does not. Honest, and better than either
+ * hiding the detail or pretending a path like `teams.0.players.3.number` needs
+ * translating at all.
+ */
+function invalid(error: z.ZodError): Message {
+  return msg("import.invalid", { detail: describe(error) });
+}
 
 /** The first few zod issues, as one line a coach can act on. */
 function describe(error: z.ZodError): string {

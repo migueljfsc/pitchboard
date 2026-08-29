@@ -473,4 +473,18 @@ describe("changing formation", () => {
     const doc = change(named(), "3-4-3");
     expect(boardDocSchema.safeParse(doc).success).toBe(true);
   });
+
+  /**
+   * buildTeam mints the whole team object, so anything not carried on the spec is
+   * silently dropped — the same trap that loses a squad or a set of links.
+   */
+  it("keeps the kit pattern across a formation change", () => {
+    const base = named();
+    const teams = base.teams.slice() as BoardDoc["teams"];
+    teams[0] = { ...teams[0], pattern: "vertical" };
+
+    const doc = change({ ...base, teams }, "3-4-3");
+    expect(doc.teams[0].pattern).toBe("vertical");
+    expect(doc.teams[1].pattern).toBeUndefined();
+  });
 });

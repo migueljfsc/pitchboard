@@ -1,10 +1,16 @@
 import { useState } from "react";
 import { Check, Link2, TriangleAlert } from "lucide-react";
-import type { BoardDoc } from "@/board/types";
+import type { BoardDoc, PitchView } from "@/board/types";
 import { URL_BUDGET, encodeBoard, shareUrl, withinBudget, withoutHash } from "@/share/urlcodec";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/i18n/context";
 
-type Props = { doc: BoardDoc };
+type Props = {
+  doc: BoardDoc;
+  /** The framing on screen. It travels with the link so a recipient opens the
+   *  board cropped the way it was being shown (D35). */
+  view: PitchView;
+};
 
 type State =
   | { kind: "idle" }
@@ -13,7 +19,7 @@ type State =
   /** The clipboard refused, so the link is offered to be copied by hand. */
   | { kind: "manual"; url: string }
   /** No link was produced at all, so there is nothing to fall back to. */
-  | { kind: "failed"; message: string };
+  | { kind: "failed" };
 
 /**
  * The self-contained share link.
@@ -24,7 +30,8 @@ type State =
  * board heavy with freehand makes a link some chat clients will truncate, and a
  * truncated link fails silently at the far end.
  */
-export function SharePanel({ doc }: Props) {
+export function SharePanel({ doc, view }: Props) {
+  const { t } = useI18n();
   const [state, setState] = useState<State>({ kind: "idle" });
 
   const copy = async () => {
@@ -32,9 +39,9 @@ export function SharePanel({ doc }: Props) {
     let payload: string;
     try {
       payload = await encodeBoard(doc);
-      url = shareUrl(withoutHash(window.location.href), payload);
+      url = shareUrl(withoutHash(window.location.href), payload, view);
     } catch {
-      setState({ kind: "failed", message: "This browser could not compress the board." });
+      setState({ kind: "failed" });
       return;
     }
 
@@ -64,67 +71,75 @@ export function SharePanel({ doc }: Props) {
     }
   };
 
+  /**
+   * The panel lives in the top bar, which is a fixed-height row: anything it has
+   * to say hangs beneath the button rather than growing the bar. Copying is the
+   * ordinary path and says nothing at all, so the dropdown is rare.
+   */
   return (
-    <>
+    <div className="relative shrink-0">
       <button
         type="button"
         onClick={() => void copy()}
+        title={t("share.title")}
         className={cn(
-          "flex items-center justify-center gap-1.5 rounded-md border bg-ink-900 px-2 py-1.5 text-xs transition",
+          "flex items-center gap-1.5 rounded-md border bg-ink-900 px-2.5 py-1.5 text-xs transition",
           state.kind === "copied"
             ? "border-accent text-accent"
             : "border-ink-600 text-ink-200 hover:border-accent hover:text-white",
         )}
       >
         {state.kind === "copied" ? <Check size={13} /> : <Link2 size={13} />}
-        {state.kind === "copied" ? "Link copied" : "Copy share link"}
+        {t(state.kind === "copied" ? "share.copied" : "share.copy")}
       </button>
 
-      {state.kind === "long" && (
-        <div
-          className="flex items-center gap-1.5 rounded border border-amber-500/50 bg-amber-500/10 px-2 py-1.5"
-          title={`This link is ${state.chars.toLocaleString()} characters, past the ${URL_BUDGET.toLocaleString()} that survives most chat apps and mail. Anything that cuts it short produces a link that opens as damaged rather than as an error. Freehand drawing is almost always the cause — export the JSON instead, or simplify the drawing.`}
-        >
-          <TriangleAlert size={13} className="shrink-0 text-amber-300" />
-          <span className="text-[11px] leading-tight text-amber-200">
-            {state.chars.toLocaleString()} chars — too long to paste safely
-          </span>
-          <button
-            type="button"
-            onClick={() => void put(state.url, state.chars)}
-            className="ml-auto shrink-0 text-[11px] text-amber-200 underline underline-offset-2 hover:text-white"
-          >
-            Anyway
-          </button>
+      {(state.kind === "long" || state.kind === "failed" || state.kind === "manual") && (
+        <div className="absolute right-0 top-full z-40 mt-1.5 flex w-80 flex-col gap-1.5 rounded-md border border-ink-600 bg-ink-800 p-2 shadow-lg shadow-black/40">
+          {state.kind === "long" && (
+            <div
+              className="flex items-center gap-1.5 rounded border border-amber-500/50 bg-amber-500/10 px-2 py-1.5"
+              title={t("share.long.title", {
+                chars: state.chars.toLocaleString(),
+                budget: URL_BUDGET.toLocaleString(),
+              })}
+            >
+              <TriangleAlert size={13} className="shrink-0 text-amber-300" />
+              <span className="text-[11px] leading-tight text-amber-200">
+                {t("share.long", { chars: state.chars.toLocaleString() })}
+              </span>
+              <button
+                type="button"
+                onClick={() => void put(state.url, state.chars)}
+                className="ml-auto shrink-0 text-[11px] text-amber-200 underline underline-offset-2 hover:text-white"
+              >
+                {t("share.anyway")}
+              </button>
+            </div>
+          )}
+
+          {state.kind === "failed" && (
+            <p role="alert" className="text-[11px] leading-relaxed text-red-300">
+              {t("share.failed")}
+            </p>
+          )}
+
+          {state.kind === "manual" && (
+            <div className="flex flex-col gap-1">
+              <p role="alert" className="text-[11px] leading-relaxed text-amber-200">
+                {t("share.manual")}
+              </p>
+              <input
+                readOnly
+                value={state.url}
+                aria-label={t("share.copy")}
+                onFocus={(e) => e.currentTarget.select()}
+                ref={(el) => el?.select()}
+                className="w-full rounded border border-ink-600 bg-ink-900 px-2 py-1 font-mono text-[11px] text-ink-200 outline-none focus:border-accent"
+              />
+            </div>
+          )}
         </div>
       )}
-
-      {state.kind === "failed" && (
-        <p role="alert" className="text-[11px] leading-relaxed text-red-300">
-          {state.message}
-        </p>
-      )}
-
-      {state.kind === "manual" && (
-        <div className="flex flex-col gap-1">
-          <p role="alert" className="text-[11px] leading-relaxed text-amber-200">
-            The browser would not reach the clipboard — copy the link by hand.
-          </p>
-          <input
-            readOnly
-            value={state.url}
-            aria-label="Share link"
-            onFocus={(e) => e.currentTarget.select()}
-            ref={(el) => el?.select()}
-            className="w-full rounded border border-ink-600 bg-ink-900 px-2 py-1 font-mono text-[11px] text-ink-200 outline-none focus:border-accent"
-          />
-        </div>
-      )}
-
-      <p className="text-[11px] leading-relaxed text-ink-300">
-        The whole board travels in the link, so it never expires. Whoever opens it watches a
-        read-only copy and can fork their own.
-      </p>
-    </>
+    </div>
   );
 }

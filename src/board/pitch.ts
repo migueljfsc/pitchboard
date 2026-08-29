@@ -16,6 +16,8 @@ export const PITCH = {
   goalWidth: 7.32,
   /** Drawn behind the goal line, not part of the playing area. */
   goalDepth: 2.0,
+  /** Only the 3D view has anywhere to put this; the flat board draws a footprint. */
+  goalHeight: 2.44,
   sixYardDepth: 5.5,
   sixYardWidth: 18.32,
   penaltyDepth: 16.5,

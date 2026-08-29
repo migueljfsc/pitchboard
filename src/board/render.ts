@@ -11,11 +11,20 @@
  * and font sizes.
  */
 
-import type { Annotation, BoardDoc, RenderView, Vec2 } from "./types";
+import type {
+  Annotation,
+  BoardDoc,
+  PitchHalf,
+  RenderView,
+  TeamPattern,
+  Vec2,
+  Viewport,
+} from "./types";
 import { BALL_ID } from "./types";
 import {
   BALL_RADIUS,
   DEFAULT_THEME,
+  PITCH,
   PITCH_PADDING,
   TEAM_NAME_OFFSET,
   TOKEN_RADIUS,
@@ -46,13 +55,23 @@ import {
 import {
   buildArcTable,
   clamp,
+  fitViewport,
   halfRange,
   cubicAt,
   cubicTangent,
   reparameterise,
+  toScreen,
   viewMatrix,
   type Bezier,
 } from "./geometry";
+import {
+  GROUND_SQUASH,
+  drawDepthShading,
+  projectionFor,
+  warpGround,
+  type Projected,
+  type Projection,
+} from "./projection";
 
 export { TOKEN_RADIUS, BALL_RADIUS };
 export type { Frame };
@@ -75,25 +94,21 @@ export function drawBoard(
   ctx.fillStyle = theme.surround;
   ctx.fillRect(0, 0, view.width, view.height);
 
+  // The angled camera is a different composition of the same drawing, so it
+  // branches here rather than threading a flag through every call below. It needs
+  // an OffscreenCanvas for the ground layer; without one, fall back to the flat
+  // board rather than failing to draw a frame at all.
+  if (view.tilt && typeof OffscreenCanvas !== "undefined") {
+    drawTilted(ctx, doc, frame, view, theme);
+    ctx.restore();
+    return;
+  }
+
   // Compose with whatever transform the caller set (the editor sets a DPR scale),
   // then work in metres from here down. One matrix covers upright and rotated.
   ctx.transform(...viewMatrix(view));
 
-  // Clip to the crop, so a half view shows half a pitch rather than the whole
-  // one nudged sideways. Without this the neighbouring half simply spills into
-  // whatever canvas width is left over.
-  if (view.half !== "full") {
-    const [x0, x1] = halfRange(view.half, doc.pitch.length);
-    const pad = PITCH_PADDING;
-    ctx.beginPath();
-    ctx.rect(
-      view.half === "left" ? x0 - pad : x0,
-      -pad,
-      x1 - x0 + pad,
-      doc.pitch.width + pad * 2,
-    );
-    ctx.clip();
-  }
+  clipToHalf(ctx, doc, view.half);
 
   drawPitch(ctx, doc.pitch, theme);
   drawTeamNames(ctx, doc, view.rotated);
@@ -120,6 +135,7 @@ export function drawBoard(
         hovered: view.interactive && view.hover === player.id,
         rotated: view.rotated,
         scale,
+        pattern: team.pattern,
       });
     }
   }
@@ -144,6 +160,406 @@ export function drawBoard(
 }
 
 /**
+ * Clip to the crop, so a half view shows half a pitch rather than the whole one
+ * nudged sideways. Without this the neighbouring half simply spills into whatever
+ * canvas width is left over.
+ *
+ * Assumes the metre-space transform is already applied.
+ */
+function clipToHalf(ctx: Ctx, doc: BoardDoc, half: PitchHalf): void {
+  if (half === "full") return;
+
+  const [x0, x1] = halfRange(half, doc.pitch.length);
+  const pad = PITCH_PADDING;
+  ctx.beginPath();
+  ctx.rect(half === "left" ? x0 - pad : x0, -pad, x1 - x0 + pad, doc.pitch.width + pad * 2);
+  ctx.clip();
+}
+
+// ------------------------------------------------------------- the 3D view
+
+/**
+ * The same board, through the angled camera — see board/projection.ts.
+ *
+ * Two passes, because a tilted board is two different kinds of thing:
+ *
+ *   the GROUND, which lies on the grass and takes the perspective — markings,
+ *   zones, links, runs, the coach's arrows. Drawn flat and top-down into a layer
+ *   of its own by the ordinary code above, then warped as one image. Nothing in
+ *   `drawPitch` or the annotation drawing had to learn about perspective, and the
+ *   line widths taper for free because the whole layer is scaled.
+ *
+ *   the BILLBOARDS, which stand up off it and do not — players, the ball, text.
+ *   Projected point by point and drawn upright at a depth-derived size. This is
+ *   `upright` one level out: there, text refuses to turn with a rotated board;
+ *   here, a token refuses to lie down on a tilted one.
+ */
+function drawTilted(
+  ctx: Ctx,
+  doc: BoardDoc,
+  frame: Frame,
+  view: RenderView,
+  theme: PitchTheme,
+): void {
+  const [x0, x1] = halfRange(view.half, doc.pitch.length);
+  const across = doc.pitch.width + PITCH_PADDING * 2;
+  const along = x1 - x0 + PITCH_PADDING * 2;
+
+  // The caller's transform carries the device pixel ratio, and the ground layer is
+  // a real canvas that has to be allocated in device pixels. Reading it back here
+  // is the only way to keep DPR out of RenderView, where it would become a second
+  // source of truth for the same number.
+  const m = ctx.getTransform();
+  const proj = projectionFor(across, along, view.width, view.height, Math.hypot(m.a, m.b) || 1);
+
+  const ground = new OffscreenCanvas(proj.sourceW, proj.sourceH);
+  const gctx = ground.getContext("2d");
+  if (!gctx) return;
+
+  // The layer is exactly the content rect, so fitViewport seats it corner to
+  // corner with no letterbox — the trapezoid IS the board, and the surround
+  // already painted underneath shows everywhere the trapezoid is not.
+  const groundView = fitViewport(proj.sourceW, proj.sourceH, doc.pitch.length, doc.pitch.width, {
+    half: view.half,
+    rotated: true,
+  });
+  gctx.setTransform(...viewMatrix(groundView));
+  clipToHalf(gctx, doc, view.half);
+
+  const marks = annotationsFor(doc, frame, view);
+
+  drawPitch(gctx, doc.pitch, theme);
+  drawTeamNames(gctx, doc, true, TEAM_NAME_OFFSET_3D);
+  for (const ann of marks) if (isZone(ann)) drawZone(gctx, ann);
+  drawLinks(gctx, doc, frame, true);
+  drawPaths(gctx, doc, frame, view);
+
+  // Arrows and freehand ride the grass here, rather than floating over the players
+  // as they do on the flat board. A mark that ignores the perspective reads as a
+  // sticker on the lens. Text is the exception, below — squashed type is simply
+  // unreadable, and a label is the one annotation nobody imagines painted on turf.
+  for (const ann of marks) if (!isZone(ann) && ann.kind !== "text") drawMark(gctx, ann, true);
+
+  warpGround(ctx, ground, proj);
+  drawDepthShading(ctx, proj);
+
+  // The crop has to be applied twice. The ground layer took it in metre space like
+  // the flat board does, but billboards are drawn straight onto the destination and
+  // would otherwise ignore it — leaving the far half's players standing in the
+  // surround above a half-pitch view.
+  ctx.save();
+  clipToProjectedHalf(ctx, doc, view.half, groundView, proj);
+  drawGoal(ctx, doc, groundView, proj, -1, theme);
+  drawBillboards(ctx, doc, frame, view, proj, groundView, marks);
+  drawGoal(ctx, doc, groundView, proj, 1, theme);
+  ctx.restore();
+}
+
+/**
+ * The crop, as the camera sees it.
+ *
+ * A trapezoid rather than a rectangle, and only four corners are needed to get
+ * there: the crop is axis-aligned in metre space, and the projection maps straight
+ * lines to straight lines.
+ */
+function clipToProjectedHalf(
+  ctx: Ctx,
+  doc: BoardDoc,
+  half: PitchHalf,
+  groundView: Viewport,
+  proj: Projection,
+): void {
+  if (half === "full") return;
+
+  const [x0, x1] = halfRange(half, doc.pitch.length);
+  const pad = PITCH_PADDING;
+  const near = half === "left" ? x0 - pad : x0;
+  const far = near + (x1 - x0 + pad);
+
+  const corners: Vec2[] = [
+    { x: near, y: -pad },
+    { x: near, y: doc.pitch.width + pad },
+    { x: far, y: doc.pitch.width + pad },
+    { x: far, y: -pad },
+  ];
+
+  ctx.beginPath();
+  corners.forEach((corner, i) => {
+    const p = projectPitch(corner, groundView, proj);
+    if (i === 0) ctx.moveTo(p.x, p.y);
+    else ctx.lineTo(p.x, p.y);
+  });
+  ctx.closePath();
+  ctx.clip();
+}
+
+/** Where a pitch position lands on screen once the camera has had it. */
+function projectPitch(p: Vec2, groundView: Viewport, proj: Projection): Projected {
+  const s = toScreen(p, groundView);
+  return proj.project(s.x, s.y);
+}
+
+// ----------------------------------------------------------------- the goals
+
+/** A pitch position with a height above it, in metres. */
+type Vec3 = Vec2 & { up: number };
+
+/** Net mesh, in metres. A real net is far finer than anything that reads here. */
+const NET_MESH = 0.62;
+
+/**
+ * Post and crossbar thickness, in metres. Real ones are 12 cm, but the frame has
+ * to carry the shape of the goal against its own netting, so it is drawn heavier.
+ */
+const FRAME_WIDTH = 0.18;
+
+/** How far the back of the net drops below the crossbar, as a fraction of it. */
+const NET_DROP = 0.62;
+
+/**
+ * Where a team's name sits behind its goal in the 3D view, in metres.
+ *
+ * Further out than on the flat board, because the goal now has a height and eats
+ * the space. The net's back edge lands about 2.5 m up-screen from the goal line —
+ * `goalDepth * cos(TILT)` back, plus the dropped top lifted by `sin(TILT)` — and
+ * the flat 4.3 m puts the type straight through it. There is about a metre of room
+ * to play with before PITCH_PADDING runs out and the name leaves the grass.
+ */
+const TEAM_NAME_OFFSET_3D = 5.0;
+
+/**
+ * A goal, with height — the only thing on the board that is genuinely 3D.
+ *
+ * It cannot come from the ground layer, because the ground layer is a picture of
+ * the pitch and a goal stands up off it. So the eight corners are projected
+ * individually, with `up` in metres, and the panels between them drawn as netting.
+ *
+ * Depth order is the reason this is a function taking one end at a time rather
+ * than a loop drawing both. The far goal is behind every player on the pitch and
+ * the near one is in front of all of them — the camera is behind the home goal, so
+ * the whole board is seen THROUGH that net. Drawing them at the two extremes of
+ * the billboard pass is a complete depth sort, since no player is ever outside the
+ * goal lines.
+ */
+function drawGoal(
+  ctx: Ctx,
+  doc: BoardDoc,
+  groundView: Viewport,
+  proj: Projection,
+  dir: 1 | -1,
+  theme: PitchTheme,
+): void {
+  const P = PITCH;
+  const line = dir === 1 ? 0 : doc.pitch.length;
+  const back = line - dir * P.goalDepth;
+  const cy = doc.pitch.width / 2;
+  const near = cy - P.goalWidth / 2;
+  const far = cy + P.goalWidth / 2;
+  const high = P.goalHeight;
+  const low = P.goalHeight * NET_DROP;
+
+  const at = (p: Vec3): Projected => {
+    const s = toScreen(p, groundView);
+    return proj.project(s.x, s.y, p.up);
+  };
+  const v3 = (x: number, y: number, up: number): Vec3 => ({ x, y, up });
+
+  // Netting first, then the frame over the top of it.
+  const panels: [Vec3, Vec3, Vec3, Vec3][] = [
+    // Back.
+    [v3(back, near, 0), v3(back, far, 0), v3(back, far, low), v3(back, near, low)],
+    // Sides, which the drop makes trapezoids rather than rectangles.
+    [v3(line, near, 0), v3(back, near, 0), v3(back, near, low), v3(line, near, high)],
+    [v3(line, far, 0), v3(back, far, 0), v3(back, far, low), v3(line, far, high)],
+    // Roof.
+    [v3(line, near, high), v3(back, near, low), v3(back, far, low), v3(line, far, high)],
+  ];
+  for (const panel of panels) drawNetPanel(ctx, at, panel);
+
+  const bar = (a: Vec3, b: Vec3, color: string) => {
+    const pa = at(a);
+    const pb = at(b);
+    ctx.beginPath();
+    ctx.moveTo(pa.x, pa.y);
+    ctx.lineTo(pb.x, pb.y);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(1, (FRAME_WIDTH * (pa.scale + pb.scale)) / 2);
+    ctx.lineCap = "round";
+    ctx.stroke();
+  };
+
+  // The back of the frame is the net's support, not the goal, so it stays quiet.
+  const support = "rgba(255,255,255,0.32)";
+  bar(v3(back, near, 0), v3(back, near, low), support);
+  bar(v3(back, far, 0), v3(back, far, low), support);
+  bar(v3(back, near, low), v3(back, far, low), support);
+  bar(v3(line, near, high), v3(back, near, low), support);
+  bar(v3(line, far, high), v3(back, far, low), support);
+
+  // Posts and crossbar last: they are the part anyone is actually looking at.
+  bar(v3(line, near, 0), v3(line, near, high), theme.line);
+  bar(v3(line, far, 0), v3(line, far, high), theme.line);
+  bar(v3(line, near, high), v3(line, far, high), theme.line);
+}
+
+/**
+ * One flat panel of netting, as a grid between four corners.
+ *
+ * The corners run round the panel, so `u` follows the first edge and `v` the
+ * second. Every panel here is planar, and the projection maps straight lines to
+ * straight lines, so a strand is two projected endpoints rather than a sampled
+ * curve — the perspective comes out right for free.
+ */
+function drawNetPanel(
+  ctx: Ctx,
+  at: (p: Vec3) => Projected,
+  [c00, c10, c11, c01]: [Vec3, Vec3, Vec3, Vec3],
+): void {
+  const mix = (a: Vec3, b: Vec3, t: number): Vec3 => ({
+    x: a.x + (b.x - a.x) * t,
+    y: a.y + (b.y - a.y) * t,
+    up: a.up + (b.up - a.up) * t,
+  });
+  const point = (u: number, v: number): Vec3 =>
+    mix(mix(c00, c10, u), mix(c01, c11, u), v);
+
+  const span = (a: Vec3, b: Vec3) => Math.hypot(b.x - a.x, b.y - a.y, b.up - a.up);
+  const steps = (a: Vec3, b: Vec3, c: Vec3, e: Vec3) =>
+    Math.max(2, Math.round((span(a, b) + span(c, e)) / 2 / NET_MESH));
+  const cols = steps(c00, c10, c01, c11);
+  const rows = steps(c00, c01, c10, c11);
+
+  // A translucent fill under the strands, so the net reads as fabric rather than
+  // as a wireframe floating over the grass.
+  ctx.beginPath();
+  for (const [i, corner] of [c00, c10, c11, c01].entries()) {
+    const p = at(corner);
+    if (i === 0) ctx.moveTo(p.x, p.y);
+    else ctx.lineTo(p.x, p.y);
+  }
+  ctx.closePath();
+  ctx.fillStyle = "rgba(255,255,255,0.05)";
+  ctx.fill();
+
+  ctx.beginPath();
+  for (let i = 0; i <= cols; i++) {
+    const a = at(point(i / cols, 0));
+    const b = at(point(i / cols, 1));
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+  }
+  for (let j = 0; j <= rows; j++) {
+    const a = at(point(0, j / rows));
+    const b = at(point(1, j / rows));
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+  }
+  ctx.strokeStyle = "rgba(255,255,255,0.17)";
+  ctx.lineWidth = Math.max(0.5, FRAME_WIDTH * 0.3 * at(point(0.5, 0.5)).scale);
+  ctx.stroke();
+}
+
+/**
+ * Draw in metres, anchored to a projected point and never turned.
+ *
+ * Inside `draw` one unit is one metre and the axes are the SCREEN's, not the
+ * pitch's — so +y is down the frame whatever the board is doing underneath. That
+ * is what makes a token a circle rather than the ellipse the ground would give it,
+ * and it is why the existing entity drawing can be reused here unchanged.
+ */
+function billboard(ctx: Ctx, anchor: Vec2, at: Projected, draw: () => void): void {
+  ctx.save();
+  ctx.translate(at.x, at.y);
+  ctx.scale(at.scale, at.scale);
+  ctx.translate(-anchor.x, -anchor.y);
+  draw();
+  ctx.restore();
+}
+
+/**
+ * Contact shadow under a billboard.
+ *
+ * Squashed by cos(TILT), because it is the one part of a token that really does
+ * lie on the ground. Without it the players read as floating above the pitch
+ * rather than standing on it — which, with a taper this mild, is most of what
+ * sells the angle.
+ */
+function drawGroundShadow(ctx: Ctx, p: Vec2, radius: number): void {
+  ctx.save();
+  ctx.translate(p.x, p.y + radius * 0.18);
+  ctx.scale(1, GROUND_SQUASH);
+  ctx.beginPath();
+  ctx.arc(0, 0, radius * 1.12, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(0,0,0,0.34)";
+  ctx.fill();
+  ctx.restore();
+}
+
+/** Players, the ball and text labels — everything that stands up off the grass. */
+function drawBillboards(
+  ctx: Ctx,
+  doc: BoardDoc,
+  frame: Frame,
+  view: RenderView,
+  proj: Projection,
+  groundView: Viewport,
+  marks: Annotation[],
+): void {
+  const scale = tokenScaleOf(doc);
+  const standing: { at: Projected; draw: () => void }[] = [];
+
+  for (const team of doc.teams) {
+    if (team.hidden) continue;
+    for (const player of team.players) {
+      const p = frame.positions[player.id];
+      if (!p) continue;
+      const at = projectPitch(p, groundView, proj);
+      standing.push({
+        at,
+        draw: () =>
+          billboard(ctx, p, at, () => {
+            drawGroundShadow(ctx, p, TOKEN_RADIUS * scale);
+            drawToken(ctx, p, player.number, player.label, team.color, team.textColor, {
+              selected: view.selection?.has(player.id) ?? false,
+              hovered: view.interactive && view.hover === player.id,
+              rotated: false,
+              scale,
+              pattern: team.pattern,
+            });
+          }),
+      });
+    }
+  }
+
+  const ball = frame.ball;
+  const ballR = ballRadius(doc);
+  const ballAtScreen = projectPitch(ball, groundView, proj);
+  standing.push({
+    at: ballAtScreen,
+    draw: () =>
+      billboard(ctx, ball, ballAtScreen, () => {
+        drawGroundShadow(ctx, ball, ballR);
+        drawBall(ctx, ball, ballR, {
+          selected: view.selection?.has(BALL_ID) ?? false,
+          hovered: view.interactive && view.hover === BALL_ID,
+        });
+      }),
+  });
+
+  // Nearest last. A billboard standing on the grass has to cover the one behind
+  // it, and draw order is the only depth test there is.
+  standing.sort((a, b) => a.at.y - b.at.y);
+  for (const item of standing) item.draw();
+
+  // Text over the top of the players, as it is on the flat board.
+  for (const ann of marks) {
+    if (ann.kind !== "text") continue;
+    const at = projectPitch(ann.at, groundView, proj);
+    billboard(ctx, ann.at, at, () => drawAnnotationText(ctx, ann, false));
+  }
+}
+
+/**
  * Each team's name in the grass behind the goal it defends.
  *
  * teams[0] defends x=0 and teams[1] defends x=length — the same convention
@@ -155,13 +571,18 @@ export function drawBoard(
  * vertical board both stay upright, because mirroring there would leave one of
  * them upside down.
  */
-function drawTeamNames(ctx: Ctx, doc: BoardDoc, rotated: boolean): void {
+function drawTeamNames(
+  ctx: Ctx,
+  doc: BoardDoc,
+  rotated: boolean,
+  offset = TEAM_NAME_OFFSET,
+): void {
   doc.teams.forEach((team, i) => {
     const name = team.name.trim();
     if (team.hidden || !name) return;
 
     const at = {
-      x: i === 0 ? -TEAM_NAME_OFFSET : doc.pitch.length + TEAM_NAME_OFFSET,
+      x: i === 0 ? -offset : doc.pitch.length + offset,
       y: doc.pitch.width / 2,
     };
 
@@ -683,7 +1104,55 @@ export const HANDLE_RADIUS = 0.55;
 
 // ---------------------------------------------------------------- entities
 
-type TokenState = { selected: boolean; hovered: boolean; rotated?: boolean; scale?: number };
+type TokenState = {
+  selected: boolean;
+  hovered: boolean;
+  rotated?: boolean;
+  scale?: number;
+  /** Kit pattern. Document data rather than view state, but it rides here to
+   *  keep drawToken from growing an eighth positional argument. */
+  pattern?: TeamPattern;
+};
+
+/**
+ * Bands across the token's diameter, alternating from the edge inwards.
+ *
+ * Five gives colour-white-colour-white-colour: two stripes, symmetric, with the
+ * kit colour still holding the middle where the shirt number sits. Four would put
+ * a seam down the centre of the number and seven is mush at this size.
+ */
+const STRIPE_BANDS = 5;
+
+const STRIPE_COLOR = "rgba(255,255,255,0.92)";
+
+const isStriped = (state: TokenState): boolean =>
+  state.pattern !== undefined && state.pattern !== "solid";
+
+/**
+ * Kit stripes, clipped to the token.
+ *
+ * Inside `upright`, so they follow the screen exactly as the shirt number does.
+ * A stripe is there to tell two sides apart at a glance, and one that turned with
+ * the board would read as vertical on one framing and horizontal on another.
+ */
+function drawStripes(ctx: Ctx, p: Vec2, radius: number, state: TokenState): void {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+  ctx.clip();
+
+  upright(ctx, p, state.rotated ?? false, () => {
+    const band = (radius * 2) / STRIPE_BANDS;
+    ctx.fillStyle = STRIPE_COLOR;
+    for (let i = 1; i < STRIPE_BANDS; i += 2) {
+      const at = -radius + i * band;
+      if (state.pattern === "vertical") ctx.fillRect(at, -radius, band, radius * 2);
+      else ctx.fillRect(-radius, at, radius * 2, band);
+    }
+  });
+
+  ctx.restore();
+}
 
 function drawToken(
   ctx: Ctx,
@@ -712,16 +1181,39 @@ function drawToken(
   ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
   ctx.fillStyle = color;
   ctx.fill();
+
+  // Stripes go between the fill and the rim, so the rim stays a clean circle over
+  // the ends of the bands rather than being cut by them. Clipping to the token
+  // replaces the current path, so the circle has to be laid down again — which is
+  // why a plain kit skips both and draws exactly what it always did.
+  if (isStriped(state)) {
+    drawStripes(ctx, p, radius, state);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+  }
+
   ctx.strokeStyle = "rgba(0,0,0,0.45)";
   ctx.lineWidth = 0.1 * k;
   ctx.stroke();
 
   // Text is anchored to the token but never turns with the board.
   upright(ctx, p, state.rotated ?? false, () => {
-    ctx.fillStyle = textColor;
     ctx.font = `600 ${1.25 * k}px Inter, system-ui, -apple-system, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
+
+    // A two-digit number is nearly as wide as the token, so there is no solid
+    // middle to sit it on — it crosses the stripes whatever they are. The same
+    // dark rim the label wears over mow stripes is what keeps it readable, and a
+    // plain kit does not need it.
+    if (isStriped(state)) {
+      ctx.strokeStyle = "rgba(0,0,0,0.7)";
+      ctx.lineWidth = 0.26 * k;
+      ctx.lineJoin = "round";
+      ctx.strokeText(String(number), 0, 0.05 * k);
+    }
+
+    ctx.fillStyle = textColor;
     ctx.fillText(String(number), 0, 0.05 * k);
 
     if (label) {

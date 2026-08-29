@@ -12,7 +12,7 @@
  * rather than overlapping around the halfway line.
  */
 
-import type { BoardDoc, Link, LinkStyle, Player, Team, Vec2 } from "@/board/types";
+import type { BoardDoc, Link, LinkStyle, Player, Team, TeamPattern, Vec2 } from "@/board/types";
 import { pruneLinks, replaceTeamLinks } from "@/board/links";
 import { pruneShots } from "@/board/scenes";
 
@@ -201,6 +201,7 @@ export type TeamSpec = {
   name: string;
   color: string;
   textColor: string;
+  pattern?: TeamPattern;
   formation: string;
   direction: Direction;
   /**
@@ -290,6 +291,9 @@ export function buildTeam(
       name: spec.name,
       color: spec.color,
       textColor: spec.textColor,
+      // buildTeam mints the whole team, so anything not on the spec is dropped —
+      // the same reason a formation change has to carry the squad across.
+      ...(spec.pattern ? { pattern: spec.pattern } : {}),
       players,
       formation: formation.id,
     },
@@ -323,19 +327,27 @@ export function createBoardDoc(
   home: TeamSpec = HOME,
   away: TeamSpec = AWAY,
   pitch = DEFAULT_PITCH,
+  /**
+   * What a new board and its first scene are called.
+   *
+   * Passed in rather than fixed here, so a board made in Portuguese is seeded in
+   * Portuguese. English when nobody says otherwise, which keeps the engine
+   * usable — and testable — with no translator in sight.
+   */
+  labels: { board?: string; scene?: string } = {},
 ): BoardDoc {
   const a = buildTeam(home, pitch);
   const b = buildTeam(away, pitch);
 
   return {
     version: 1,
-    name: "Untitled board",
+    name: labels.board ?? "Untitled board",
     pitch: { ...pitch },
     teams: [a.team, b.team],
     scenes: [
       {
         id: "scene-1",
-        name: "Scene 1",
+        name: labels.scene ?? "Scene 1",
         transitionMs: 0,
         holdMs: 1000,
         positions: { ...a.positions, ...b.positions },
@@ -411,6 +423,7 @@ export function changeFormation(doc: BoardDoc, teamIndex: 0 | 1, formation: stri
     name: team.name,
     color: team.color,
     textColor: team.textColor,
+    pattern: team.pattern,
     formation,
     squad: team.players.map((p) => ({ number: p.number, label: p.label })),
   });

@@ -13,11 +13,19 @@
  */
 
 import type { BoardDoc } from "./types";
+import { msg, type Message } from "@/i18n/core";
 
 /** The version this build writes. Bumped by any breaking schema change. */
 export const CURRENT_VERSION = 1;
 
-export type MigrateOutcome = { ok: true; doc: unknown } | { ok: false; error: string };
+/**
+ * A failure carries a message KEY, not a sentence.
+ *
+ * This module is pure and is reached from the app, the export worker and every
+ * import path. None of them agree on a language, and a pure function has no
+ * business knowing one — so the words are chosen by whoever is doing the showing.
+ */
+export type MigrateOutcome = { ok: true; doc: unknown } | { ok: false; error: Message };
 
 /**
  * One step per version, keyed by the version it upgrades FROM.
@@ -33,20 +41,20 @@ const STEPS: Record<number, (doc: Record<string, unknown>) => Record<string, unk
 
 export function migrate(raw: unknown): MigrateOutcome {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
-    return { ok: false, error: "That is not a Pitchboard board." };
+    return { ok: false, error: msg("migrate.notABoard") };
   }
 
   const doc = raw as Record<string, unknown>;
   const version = doc.version;
 
   if (typeof version !== "number" || !Number.isInteger(version) || version < 1) {
-    return { ok: false, error: "That board has no version, so it cannot be read." };
+    return { ok: false, error: msg("migrate.noVersion") };
   }
 
   if (version > CURRENT_VERSION) {
     return {
       ok: false,
-      error: `That board was made by a newer version of Pitchboard (v${version}). Update the page and try again.`,
+      error: msg("migrate.tooNew", { version }),
     };
   }
 
@@ -55,7 +63,7 @@ export function migrate(raw: unknown): MigrateOutcome {
     const step = STEPS[v];
     // A gap in the chain is a build error, not a user error, but it must not
     // hand a half-migrated document to the validator.
-    if (!step) return { ok: false, error: `No way to read a v${v} board in this build.` };
+    if (!step) return { ok: false, error: msg("migrate.noStep", { version: v }) };
     current = step(current);
   }
 

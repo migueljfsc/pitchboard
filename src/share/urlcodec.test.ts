@@ -2,12 +2,18 @@ import { describe, expect, it } from "vitest";
 import { createBoardDoc } from "@/formations";
 import { addSceneAfter } from "@/board/scenes";
 import { createLink } from "@/board/links";
+import { say } from "@/i18n/core";
+import { en } from "@/i18n/en";
 import {
   HASH_KEY,
   URL_BUDGET,
+  VIEW_KEY,
   decodeBoard,
+  decodeView,
   encodeBoard,
+  encodeView,
   readHash,
+  readView,
   shareUrl,
   withinBudget,
   withoutHash,
@@ -19,7 +25,7 @@ describe("share links", () => {
   it("round-trips a board deep-equal", async () => {
     const doc = addSceneAfter(createBoardDoc(), 0);
     const out = await decodeBoard(await encodeBoard(doc));
-    if (!out.ok) throw new Error(out.error);
+    if (!out.ok) throw new Error(out.error.key);
     expect(out.doc).toEqual(doc);
   });
 
@@ -36,7 +42,7 @@ describe("share links", () => {
       ],
     };
     const out = await decodeBoard(await encodeBoard(doc));
-    if (!out.ok) throw new Error(out.error);
+    if (!out.ok) throw new Error(out.error.key);
     expect(out.doc).toEqual(doc);
   });
 
@@ -58,7 +64,7 @@ describe("share links", () => {
     const payload = await encodeBoard(createBoardDoc());
     const out = await decodeBoard(payload.slice(0, Math.floor(payload.length / 2)));
     expect(out.ok).toBe(false);
-    if (!out.ok) expect(out.error).toMatch(/damaged|does not contain|cannot read/);
+    if (!out.ok) expect(say(en, out.error)).toMatch(/damaged|does not contain|cannot read/);
   });
 
   it("rejects a hand-tampered payload rather than opening it", async () => {
@@ -79,7 +85,7 @@ describe("share links", () => {
     const payload = await encodeBoard({ ...createBoardDoc(), version: 99 } as never);
     const out = await decodeBoard(payload);
     expect(out.ok).toBe(false);
-    if (!out.ok) expect(out.error).toContain("newer version");
+    if (!out.ok) expect(say(en, out.error)).toContain("newer version");
   });
 });
 
@@ -103,7 +109,7 @@ describe("the hash", () => {
     const doc = createBoardDoc();
     const url = new URL(shareUrl(HREF, await encodeBoard(doc)));
     const out = await decodeBoard(readHash(url.hash)!);
-    if (!out.ok) throw new Error(out.error);
+    if (!out.ok) throw new Error(out.error.key);
     expect(out.doc).toEqual(doc);
   });
 });
@@ -119,5 +125,53 @@ describe("the budget", () => {
   it("catches one that would be truncated in transit", () => {
     expect(withinBudget("x".repeat(URL_BUDGET))).toBe(true);
     expect(withinBudget("x".repeat(URL_BUDGET + 1))).toBe(false);
+  });
+});
+
+describe("the framing", () => {
+  const FRAMINGS = [
+    { half: "full" as const, rotated: false, tilt: false },
+    { half: "left" as const, rotated: true, tilt: false },
+    { half: "right" as const, rotated: false, tilt: true },
+    { half: "full" as const, rotated: true, tilt: true },
+  ];
+
+  it("round-trips every framing", () => {
+    for (const view of FRAMINGS) expect(decodeView(encodeView(view))).toEqual(view);
+  });
+
+  it("stays short enough not to matter against the budget", () => {
+    for (const view of FRAMINGS) expect(encodeView(view).length).toBeLessThanOrEqual(3);
+  });
+
+  it("rides beside the payload without disturbing it", async () => {
+    const doc = createBoardDoc();
+    const payload = await encodeBoard(doc);
+    const view = { half: "right" as const, rotated: true, tilt: true };
+    const url = new URL(shareUrl(HREF, payload, view));
+
+    expect(readHash(url.hash)).toBe(payload);
+    expect(readView(url.hash)).toEqual(view);
+
+    const out = await decodeBoard(readHash(url.hash)!);
+    if (!out.ok) throw new Error(out.error.key);
+    expect(out.doc).toEqual(doc);
+  });
+
+  /**
+   * Every link published before framing travelled has no `v`, and has to keep
+   * opening — which is the whole reason this sits beside the payload rather than
+   * inside the compressed document.
+   */
+  it("is absent from a link that predates it", () => {
+    expect(readView(`#${HASH_KEY}=abc`)).toBeNull();
+    expect(shareUrl(HREF, "abc")).not.toContain(VIEW_KEY + "=");
+  });
+
+  it("discards a hand-edited framing rather than repairing it", () => {
+    for (const bad of ["", "x", "fz", "3", "lvv3x", "  "]) {
+      expect(decodeView(bad)).toBeNull();
+    }
+    expect(decodeView(null)).toBeNull();
   });
 });

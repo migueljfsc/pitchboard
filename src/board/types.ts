@@ -19,6 +19,15 @@ export type Player = {
   label: string;
 };
 
+/**
+ * Kit pattern drawn over the team colour on every token.
+ *
+ * Screen-oriented, like the shirt number is: "vertical" means vertical in the
+ * frame, whatever the board is doing underneath. Stripes are a way of telling two
+ * sides apart, not a picture of a shirt seen from above.
+ */
+export type TeamPattern = "solid" | "vertical" | "horizontal";
+
 export type Team = {
   id: string;
   name: string;
@@ -26,6 +35,8 @@ export type Team = {
   color: string;
   /** Number/label colour, chosen for contrast against `color`. */
   textColor: string;
+  /** Absent means solid — every board written before patterns existed. */
+  pattern?: TeamPattern;
   players: Player[];
   /** Hidden teams stay in the document but are not drawn or selectable. */
   hidden?: boolean;
@@ -187,6 +198,15 @@ export type PitchView = {
   half: PitchHalf;
   /** Quarter turn, so the pitch runs top-to-bottom with +x attacking upwards. */
   rotated: boolean;
+  /**
+   * The angled camera — see board/projection.ts.
+   *
+   * Implies `rotated`: the angle exists to put you behind the home goal looking
+   * at the away one, and teams[0] defends x=0, which is the bottom of a vertical
+   * board. Editing stays flat, so this is a presentation mode with no pointer
+   * handling behind it.
+   */
+  tilt?: boolean;
 };
 
 export const DEFAULT_PITCH_VIEW: PitchView = { half: "full", rotated: false };
@@ -229,6 +249,12 @@ export type RenderView = Viewport & {
   height: number;
   /** False during export: suppresses handles, marquee and hover chrome. */
   interactive: boolean;
+  /**
+   * Render through the angled camera. The viewport fields are still filled in and
+   * still describe the flat board — the tilted path builds its own ground-layer
+   * viewport and reads neither the scale nor the offsets.
+   */
+  tilt?: boolean;
   selection?: ReadonlySet<string>;
   hover?: string | null;
   /** Editor only: draw and handle-edit the run into this scene, wherever the

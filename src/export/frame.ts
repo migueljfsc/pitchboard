@@ -9,6 +9,7 @@
 import type { BoardDoc, PitchView, RenderView } from "@/board/types";
 import { DEFAULT_PITCH_VIEW } from "@/board/types";
 import { fitViewport, halfRange } from "@/board/geometry";
+import { framingOf, tiltedAspect } from "@/board/projection";
 import { PITCH_PADDING } from "@/board/pitch";
 
 export type Size = { width: number; height: number };
@@ -45,6 +46,10 @@ export function boardAspect(doc: BoardDoc, view: PitchView = DEFAULT_PITCH_VIEW)
   const [x0, x1] = halfRange(view.half, doc.pitch.length);
   const along = x1 - x0 + PITCH_PADDING * 2;
   const across = doc.pitch.width + PITCH_PADDING * 2;
+  // The angled camera foreshortens the length and widens the near edge, which
+  // leaves a tilted board far closer to square than the pitch it is drawn from.
+  // Sizing an export off the flat aspect would band it with dead surround.
+  if (view.tilt) return tiltedAspect(across, along);
   return view.rotated ? across / along : along / across;
 }
 
@@ -71,11 +76,13 @@ export function exportView(
   size: Size,
   view: PitchView = DEFAULT_PITCH_VIEW,
 ): RenderView {
+  const framing = framingOf(view);
   return {
-    ...fitViewport(size.width, size.height, doc.pitch.length, doc.pitch.width, view),
+    ...fitViewport(size.width, size.height, doc.pitch.length, doc.pitch.width, framing),
     width: size.width,
     height: size.height,
     interactive: false,
+    tilt: framing.tilt,
   };
 }
 

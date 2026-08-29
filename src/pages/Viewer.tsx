@@ -7,9 +7,14 @@ import { ViewControls } from "@/components/ViewControls";
 import { sceneStartSeconds, totalSeconds } from "@/board/scenes";
 import { frameAt } from "@/board/timeline";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/i18n/context";
+import { LocaleSwitch } from "@/components/LocaleSwitch";
 
 type Props = {
   doc: BoardDoc;
+  /** How the sharer was framing the board. The crop is theirs and cannot be
+   *  changed here; rotation and 3D are the viewer's own (D35). */
+  initialView?: PitchView;
   /** Take a local copy and open it in the editor. */
   onFork: () => void;
 };
@@ -26,11 +31,12 @@ type Props = {
  * Forking is the only way out, and it is a local copy: the link still holds the
  * original, so there is nothing to overwrite and no permission to grant.
  */
-export function Viewer({ doc, onFork }: Props) {
+export function Viewer({ doc, initialView, onFork }: Props) {
+  const { t, tn } = useI18n();
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [loop, setLoop] = useState(true);
-  const [pitchView, setPitchView] = useState<PitchView>(DEFAULT_PITCH_VIEW);
+  const [pitchView, setPitchView] = useState<PitchView>(initialView ?? DEFAULT_PITCH_VIEW);
 
   const total = totalSeconds(doc);
   const frame = frameAt(doc, time);
@@ -77,20 +83,21 @@ export function Viewer({ doc, onFork }: Props) {
         <div className="min-w-0">
           <h1 className="truncate text-sm font-semibold text-white">{doc.name}</h1>
           <p className="text-[11px] text-ink-400">
-            Shared board · {doc.teams[0].name} v {doc.teams[1].name} ·{" "}
-            {doc.scenes.length === 1 ? "1 scene" : `${doc.scenes.length} scenes`}
+            {t("viewer.shared")} · {doc.teams[0].name} v {doc.teams[1].name} ·{" "}
+            {tn("viewer.scenes", doc.scenes.length)}
           </p>
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          <ViewControls view={pitchView} onChange={setPitchView} />
+          <ViewControls view={pitchView} onChange={setPitchView} showHalves={false} />
+          <LocaleSwitch />
           <button
             type="button"
             onClick={onFork}
             className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-ink-900 transition hover:brightness-110"
           >
             <Pencil size={13} />
-            Fork to edit
+            {t("viewer.fork")}
           </button>
         </div>
       </header>
@@ -112,7 +119,7 @@ export function Viewer({ doc, onFork }: Props) {
         <button
           type="button"
           onClick={() => setPlaying(!playing)}
-          aria-label={playing ? "Pause" : "Play"}
+          aria-label={t(playing ? "viewer.pause" : "viewer.play")}
           className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-ink-900 transition hover:brightness-110"
         >
           {playing ? <Pause size={15} /> : <Play size={15} />}
@@ -121,9 +128,9 @@ export function Viewer({ doc, onFork }: Props) {
         <button
           type="button"
           onClick={() => setLoop(!loop)}
-          aria-label="Loop"
+          aria-label={t("viewer.loop")}
           aria-pressed={loop}
-          title={loop ? "Stop at the end" : "Loop"}
+          title={t(loop ? "viewer.loop.off" : "viewer.loop.on")}
           className={cn(
             "flex size-8 shrink-0 items-center justify-center rounded-md border transition",
             loop ? "border-accent text-accent" : "border-ink-600 text-ink-400 hover:text-ink-200",
@@ -142,7 +149,7 @@ export function Viewer({ doc, onFork }: Props) {
             setPlaying(false);
             setTime(Number(e.target.value));
           }}
-          aria-label="Scrub"
+          aria-label={t("viewer.scrub")}
           className="min-w-0 flex-1 accent-accent"
         />
 
