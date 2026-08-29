@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Pause,
   Play,
@@ -22,6 +22,7 @@ import {
   setSceneTiming,
   setShot,
   totalSeconds,
+  setScenePace,
 } from "@/board/scenes";
 import {
   DEFAULT_END_HOLD_MS,
@@ -30,6 +31,7 @@ import {
   MIN_FLOW_SPEED,
   resolveAt,
   sceneTimings,
+  scenePace,
 } from "@/board/timeline";
 import type { Change } from "@/lib/history";
 import { cn } from "@/lib/utils";
@@ -125,7 +127,7 @@ export function Timeline({
           title={
             flow
               ? "Back to per-scene travel and hold times"
-              : "One continuous movement: no holds between scenes, one pace throughout"
+              : "One continuous movement: nothing held between scenes, and each scene lasting as long as its longest run needs"
           }
           className={cn(
             "flex size-8 shrink-0 items-center justify-center rounded-md border transition",
@@ -222,35 +224,26 @@ export function Timeline({
 
           {flow ? (
             <>
-              <label className="flex flex-col gap-1">
-                <span className="text-[11px] uppercase tracking-wide text-ink-400">Pace</span>
-                <div className="flex items-center gap-1">
-                  <input
-                    type="number"
-                    min={MIN_FLOW_SPEED}
-                    max={MAX_FLOW_SPEED}
-                    step={0.5}
-                    value={flow.speed}
-                    onChange={(e) => {
-                      const speed = Number(e.target.value);
-                      if (speed >= MIN_FLOW_SPEED && speed <= MAX_FLOW_SPEED) {
-                        setFlow({ ...flow, speed }, "flow-speed");
-                      }
-                    }}
-                    className="w-16 rounded-md border border-ink-600 bg-ink-900 px-2 py-1 font-mono text-xs text-ink-200 outline-none focus:border-accent"
-                  />
-                  <span className="text-[11px] text-ink-400">m/s</span>
-                </div>
-              </label>
+              {activeScene > 0 && (
+                <NumberField
+                  key={scene.id}
+                  label="Pace"
+                  title="Metres per second for the run into this scene. Each scene keeps its own, and a scene added after it inherits the same pace."
+                  value={scenePace(doc, activeScene)}
+                  min={MIN_FLOW_SPEED}
+                  max={MAX_FLOW_SPEED}
+                  step={0.5}
+                  unit="m/s"
+                  onCommit={(v) =>
+                    onDocChange(setScenePace(doc, activeScene, v), `pace:${scene.id}`)
+                  }
+                />
+              )}
               <Duration
                 label="End hold"
                 value={flow.endHoldMs}
                 onChange={(v) => setFlow({ ...flow, endHoldMs: Math.round(v) }, "flow-hold")}
               />
-              <p className="max-w-64 text-[11px] leading-relaxed text-ink-300">
-                One pace for every scene, nothing held in between. Each scene takes as long as
-                its longest run needs.
-              </p>
             </>
           ) : (
             <>
@@ -352,19 +345,76 @@ function Duration({
   onChange: (ms: number) => void;
 }) {
   return (
-    <label className="flex flex-col gap-1">
+    <NumberField
+      label={label}
+      value={value / 1000}
+      min={0}
+      max={60}
+      step={0.1}
+      decimals={1}
+      unit="s"
+      onCommit={(v) => onChange(v * 1000)}
+    />
+  );
+}
+
+/**
+ * A numeric field that holds its own text.
+ *
+ * A fully controlled number input cannot be emptied. Retyping 10 as 20 goes
+ * through "1" and then "", and neither is a value the document can hold, so the
+ * field snaps back mid-edit and the second digit never lands. This keeps
+ * whatever is typed and commits only what is inside the range; blur puts it back
+ * to what the document actually says, so an abandoned edit leaves nothing
+ * behind. Same shape as the label-size field in DrawPanel.
+ */
+function NumberField({
+  label,
+  title,
+  value,
+  min,
+  max,
+  step,
+  unit,
+  decimals = 0,
+  onCommit,
+}: {
+  label: string;
+  /** Hover text for the whole control, where the rule is worth more than a caption. */
+  title?: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  unit: string;
+  decimals?: number;
+  onCommit: (value: number) => void;
+}) {
+  /** null while the field is showing the committed value rather than a draft. */
+  const [draft, setDraft] = useState<string | null>(null);
+  const text = draft ?? (decimals > 0 ? value.toFixed(decimals) : String(value));
+
+  return (
+    <label className="flex flex-col gap-1" title={title}>
       <span className="text-[11px] uppercase tracking-wide text-ink-400">{label}</span>
       <div className="flex items-center gap-1">
         <input
           type="number"
-          min={0}
-          max={60}
-          step={0.1}
-          value={(value / 1000).toFixed(1)}
-          onChange={(e) => onChange(Number(e.target.value) * 1000)}
+          min={min}
+          max={max}
+          step={step}
+          value={text}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            const n = Number(e.target.value);
+            if (e.target.value.trim() !== "" && Number.isFinite(n) && n >= min && n <= max) {
+              onCommit(n);
+            }
+          }}
+          onBlur={() => setDraft(null)}
           className="w-16 rounded-md border border-ink-600 bg-ink-900 px-2 py-1 font-mono text-xs text-ink-200 outline-none focus:border-accent"
         />
-        <span className="text-[11px] text-ink-400">s</span>
+        <span className="text-[11px] text-ink-400">{unit}</span>
       </div>
     </label>
   );
