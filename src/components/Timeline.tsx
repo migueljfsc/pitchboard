@@ -5,6 +5,7 @@ import {
   Plus,
   Copy,
   Crosshair,
+  Waves,
   Trash2,
   ChevronLeft,
   ChevronRight,
@@ -22,7 +23,14 @@ import {
   setShot,
   totalSeconds,
 } from "@/board/scenes";
-import { resolveAt } from "@/board/timeline";
+import {
+  DEFAULT_END_HOLD_MS,
+  DEFAULT_FLOW_SPEED,
+  MAX_FLOW_SPEED,
+  MIN_FLOW_SPEED,
+  resolveAt,
+  sceneTimings,
+} from "@/board/timeline";
 import type { Change } from "@/lib/history";
 import { cn } from "@/lib/utils";
 
@@ -69,6 +77,12 @@ export function Timeline({
   }, [live.index, playing]);
 
   const canShoot = ballTravels(doc, activeScene);
+  // What each scene is really worth, which is not its own fields in flow mode.
+  const timing = sceneTimings(doc);
+  const flow = doc.flow;
+
+  const setFlow = (next: BoardDoc["flow"], merge?: string) =>
+    onDocChange({ ...doc, ...(next ? { flow: next } : {}) }, merge);
 
   const mutate = (next: BoardDoc, index = activeScene) => {
     onDocChange(next);
@@ -99,6 +113,26 @@ export function Timeline({
           )}
         >
           <Repeat size={14} />
+        </button>
+
+        {/* Flow sets the per-scene timings aside rather than overwriting them,
+            so turning it off gives back whatever was tuned. */}
+        <button
+          type="button"
+          onClick={() => onDocChange(flow ? withoutFlow(doc) : withFlow(doc))}
+          aria-label="Seamless flow"
+          aria-pressed={!!flow}
+          title={
+            flow
+              ? "Back to per-scene travel and hold times"
+              : "One continuous movement: no holds between scenes, one pace throughout"
+          }
+          className={cn(
+            "flex size-8 shrink-0 items-center justify-center rounded-md border transition",
+            flow ? "border-accent text-accent" : "border-ink-600 text-ink-400 hover:text-ink-200",
+          )}
+        >
+          <Waves size={14} />
         </button>
 
         <input
@@ -148,8 +182,8 @@ export function Timeline({
                 {s.name}
               </span>
               <span className="font-mono text-[11px] text-ink-400">
-                {i > 0 ? `${(s.transitionMs / 1000).toFixed(1)}s → ` : ""}
-                {(s.holdMs / 1000).toFixed(1)}s
+                {i > 0 ? `${(timing[i].travelMs / 1000).toFixed(1)}s` : ""}
+                {timing[i].holdMs > 0 && `${i > 0 ? " → " : ""}${(timing[i].holdMs / 1000).toFixed(1)}s`}
                 {s.shot && <span className="ml-1 text-accent">shot</span>}
               </span>
               <span className="mt-1 h-0.5 w-full overflow-hidden rounded-full bg-ink-600/70">
@@ -186,18 +220,54 @@ export function Timeline({
             />
           </label>
 
-          {activeScene > 0 && (
-            <Duration
-              label="Travel"
-              value={scene.transitionMs}
-              onChange={(v) => onDocChange(setSceneTiming(doc, activeScene, { transitionMs: v }))}
-            />
+          {flow ? (
+            <>
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] uppercase tracking-wide text-ink-400">Pace</span>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={MIN_FLOW_SPEED}
+                    max={MAX_FLOW_SPEED}
+                    step={0.5}
+                    value={flow.speed}
+                    onChange={(e) => {
+                      const speed = Number(e.target.value);
+                      if (speed >= MIN_FLOW_SPEED && speed <= MAX_FLOW_SPEED) {
+                        setFlow({ ...flow, speed }, "flow-speed");
+                      }
+                    }}
+                    className="w-16 rounded-md border border-ink-600 bg-ink-900 px-2 py-1 font-mono text-xs text-ink-200 outline-none focus:border-accent"
+                  />
+                  <span className="text-[11px] text-ink-400">m/s</span>
+                </div>
+              </label>
+              <Duration
+                label="End hold"
+                value={flow.endHoldMs}
+                onChange={(v) => setFlow({ ...flow, endHoldMs: Math.round(v) }, "flow-hold")}
+              />
+              <p className="max-w-64 text-[11px] leading-relaxed text-ink-300">
+                One pace for every scene, nothing held in between. Each scene takes as long as
+                its longest run needs.
+              </p>
+            </>
+          ) : (
+            <>
+              {activeScene > 0 && (
+                <Duration
+                  label="Travel"
+                  value={scene.transitionMs}
+                  onChange={(v) => onDocChange(setSceneTiming(doc, activeScene, { transitionMs: v }))}
+                />
+              )}
+              <Duration
+                label="Hold"
+                value={scene.holdMs}
+                onChange={(v) => onDocChange(setSceneTiming(doc, activeScene, { holdMs: v }))}
+              />
+            </>
           )}
-          <Duration
-            label="Hold"
-            value={scene.holdMs}
-            onChange={(v) => onDocChange(setSceneTiming(doc, activeScene, { holdMs: v }))}
-          />
 
           {activeScene > 0 && (
             <label className="flex flex-col gap-1">
@@ -259,6 +329,18 @@ export function Timeline({
     </div>
   );
 }
+
+/** Dropped rather than set undefined, so the board serialises as it did before. */
+function withoutFlow(doc: BoardDoc): BoardDoc {
+  const next = { ...doc };
+  delete next.flow;
+  return next;
+}
+
+const withFlow = (doc: BoardDoc): BoardDoc => ({
+  ...doc,
+  flow: { speed: DEFAULT_FLOW_SPEED, endHoldMs: DEFAULT_END_HOLD_MS },
+});
 
 function Duration({
   label,

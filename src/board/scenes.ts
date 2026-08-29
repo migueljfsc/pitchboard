@@ -6,7 +6,7 @@
  */
 
 import type { BoardDoc, PathCurve, Scene, Vec2 } from "./types";
-import { ballAt, resolveAt, totalDurationMs } from "./timeline";
+import { ballAt, resolveAt, sceneTimings, totalDurationMs } from "./timeline";
 import { pruneAnnotations } from "./annotations";
 import { teamOf } from "./players";
 
@@ -15,11 +15,17 @@ export const DEFAULT_HOLD_MS = 800;
 
 const replace = (doc: BoardDoc, scenes: Scene[]): BoardDoc => ({ ...doc, scenes });
 
-/** Seconds at which scene `index` comes to rest — where the scrubber should sit. */
+/**
+ * Seconds at which scene `index` comes to rest — where the scrubber should sit.
+ *
+ * Reads the timing table rather than the raw fields, so it lands in the right
+ * place in flow mode too.
+ */
 export function sceneStartSeconds(doc: BoardDoc, index: number): number {
+  const timing = sceneTimings(doc);
   let ms = 0;
   for (let i = 1; i <= Math.min(index, doc.scenes.length - 1); i++) {
-    ms += doc.scenes[i - 1].holdMs + doc.scenes[i].transitionMs;
+    ms += timing[i - 1].holdMs + timing[i].travelMs;
   }
   return ms / 1000;
 }

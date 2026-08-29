@@ -54,39 +54,116 @@ export function entityTravelMs(scene: Scene, entityId: string): number {
   return scene.travel?.[entityId] ?? scene.transitionMs;
 }
 
+// ---------------------------------------------------------------- flow mode
+
+/** Bounds on the flow pace, in metres per second. A sprint is about 9. */
+export const MIN_FLOW_SPEED = 1;
+export const MAX_FLOW_SPEED = 30;
+export const DEFAULT_FLOW_SPEED = 10;
+export const DEFAULT_END_HOLD_MS = 1200;
+
 /**
- * Scene 0 contributes only its hold; every later scene contributes a transition
- * then a hold. `scenes[0].transitionMs` is meaningless — there is nothing to
- * travel from — and is ignored throughout.
+ * Floor on a flow transition, so a scene where nothing moves still exists.
+ * Only ever reached when there is no movement at all to pace.
  */
-export function totalDurationMs(doc: BoardDoc): number {
-  let total = doc.scenes[0]?.holdMs ?? 0;
-  for (let i = 1; i < doc.scenes.length; i++) {
-    total += sceneTravelMs(doc.scenes[i]) + doc.scenes[i].holdMs;
-  }
-  return total;
+export const MIN_FLOW_STEP_MS = 200;
+
+/** Where the ball is at rest in a scene — its carrier, or its stored position. */
+function ballRest(scene: Scene): Vec2 | undefined {
+  return scene.carrier ? scene.positions[scene.carrier] : scene.ballPos;
 }
+
+/**
+ * The furthest anything travels between two scenes, in metres.
+ *
+ * Straight-line, not arc length: this is called every frame, and a curved run
+ * coming out a few per cent quick is invisible next to the cost of building an
+ * arc table per entity per scene.
+ */
+function longestMove(from: Scene, to: Scene): number {
+  let longest = 0;
+  for (const id of Object.keys(to.positions)) {
+    const a = from.positions[id];
+    const b = to.positions[id];
+    if (a && b) longest = Math.max(longest, Math.hypot(b.x - a.x, b.y - a.y));
+  }
+  // The ball can outrun everyone — a pass between two players standing still.
+  const ballFrom = ballRest(from);
+  const ballTo = ballRest(to);
+  if (ballFrom && ballTo) {
+    longest = Math.max(longest, Math.hypot(ballTo.x - ballFrom.x, ballTo.y - ballFrom.y));
+  }
+  return longest;
+}
+
+export type SceneTiming = { travelMs: number; holdMs: number };
+
+/**
+ * What each scene is actually worth, in milliseconds.
+ *
+ * The single source of timing for the whole engine: duration, scrubbing and
+ * scene starts all read this rather than the raw fields, so flow mode is decided
+ * in one place instead of branching in four.
+ *
+ * Scene 0 never has a travel — there is nothing to travel from.
+ */
+export function sceneTimings(doc: BoardDoc): SceneTiming[] {
+  const last = doc.scenes.length - 1;
+
+  if (!doc.flow) {
+    return doc.scenes.map((scene, i) => ({
+      travelMs: i === 0 ? 0 : sceneTravelMs(scene),
+      holdMs: scene.holdMs,
+    }));
+  }
+
+  const speed = Math.min(Math.max(doc.flow.speed, MIN_FLOW_SPEED), MAX_FLOW_SPEED);
+  return doc.scenes.map((scene, i) => ({
+    travelMs:
+      i === 0
+        ? 0
+        : Math.max(MIN_FLOW_STEP_MS, (longestMove(doc.scenes[i - 1], scene) / speed) * 1000),
+    // Nothing rests but the final frame, which is the pause before the loop.
+    holdMs: i === last ? doc.flow!.endHoldMs : 0,
+  }));
+}
+
+export function totalDurationMs(doc: BoardDoc): number {
+  return sceneTimings(doc).reduce((total, t) => total + t.travelMs + t.holdMs, 0);
+}
+
+/**
+ * Slack at a scene boundary, in milliseconds.
+ *
+ * Scene start times are handed out in seconds and come back as milliseconds, and
+ * that round trip is not exact — in flow mode least of all, where a travel is a
+ * distance divided by a speed. A time a billionth short of the end of a travel
+ * is the end of that travel, and must resolve as the scene at rest: landing
+ * `moving` instead swaps the editing overlay for every run arrow on the board
+ * and makes positions interpolated rather than stored.
+ */
+const SEAM_MS = 1e-6;
 
 export function resolveAt(doc: BoardDoc, tSeconds: number): Resolved {
   const scenes = doc.scenes;
   const last = scenes.length - 1;
-  const total = totalDurationMs(doc);
+  const timing = sceneTimings(doc);
+  const total = timing.reduce((n, t) => n + t.travelMs + t.holdMs, 0);
   const ms = Math.min(Math.max(tSeconds * 1000, 0), total);
 
   const hold = (i: number): Resolved => ({ from: scenes[i], to: scenes[i], u: 1, moving: false, index: i });
 
-  if (ms <= scenes[0].holdMs || last === 0) return hold(0);
+  if (ms <= timing[0].holdMs || last === 0) return hold(0);
 
-  let acc = scenes[0].holdMs;
+  let acc = timing[0].holdMs;
   for (let i = 1; i <= last; i++) {
-    const s = scenes[i];
-    const travel = sceneTravelMs(s);
-    if (travel > 0 && ms < acc + travel) {
-      return { from: scenes[i - 1], to: s, u: (ms - acc) / travel, moving: true, index: i };
+    const travel = timing[i].travelMs;
+    if (travel > 0 && ms < acc + travel - SEAM_MS) {
+      return { from: scenes[i - 1], to: scenes[i], u: (ms - acc) / travel, moving: true, index: i };
     }
     acc += travel;
-    if (ms <= acc + s.holdMs) return hold(i);
-    acc += s.holdMs;
+    if (ms <= acc + timing[i].holdMs) return hold(i);
+    acc += timing[i].holdMs;
   }
   return hold(last);
 }
@@ -139,7 +216,11 @@ function bezierFor(entityId: string, r: Resolved): Bezier | null {
  * An entity with a shorter time of its own finishes early and waits at its
  * destination.
  */
-export function progressOf(entityId: string, r: Resolved): number {
+export function progressOf(entityId: string, r: Resolved, doc?: BoardDoc): number {
+  // Flow mode sets the pace for the whole board, so a per-entity override would
+  // be one player breaking step. Everyone shares the window and arrives together.
+  if (doc?.flow) return r.u;
+
   const window = sceneTravelMs(r.to);
   const own = entityTravelMs(r.to, entityId);
   if (window <= 0 || own <= 0) return 1;
@@ -154,7 +235,12 @@ export function positionAt(entityId: string, r: Resolved, doc: BoardDoc): Vec2 {
   if (!from) return to ?? centre(doc);
   if (!to) return from;
 
-  const eased = easeInOutCubic(progressOf(entityId, r));
+  // Flow mode is deliberately unEASED. easeInOutCubic starts and ends at zero
+  // velocity, so with holds removed every player would still stop dead at each
+  // scene boundary and set off again — the stutter that makes scenes read as
+  // cuts. Linear is what makes one movement out of many.
+  const u = progressOf(entityId, r, doc);
+  const eased = doc.flow ? u : easeInOutCubic(u);
   const b = bezierFor(entityId, r);
   // Travel BY LENGTH, not by parameter, or the run speeds up and stalls.
   return b ? cubicAtDistance(b, eased, buildArcTable(b)) : lerpVec(from, to, eased);
@@ -226,7 +312,9 @@ export function ballAt(r: Resolved, doc: BoardDoc): Vec2 {
 
   // A pass is struck hard and decelerates; easing it in like a jogging player
   // looks wrong immediately. The ball honours its own travel override too.
-  const eased = easeOutQuad(progressOf(BALL_ID, r));
+  // The ball keeps its own easing in flow mode: a struck ball really does
+  // decelerate, and that is its motion rather than a seam between scenes.
+  const eased = easeOutQuad(progressOf(BALL_ID, r, doc));
   const curve = r.to.ballPath;
   if (!curve) return lerpVec(start, end, eased);
 

@@ -104,6 +104,13 @@ infrastructure/terraform/cloudflare/    OpenTofu stack
 - **Formation slots pair by ORDER, not by id.** `buildTeam` mints `<team>-<number>` ids, but
   renumbering a player keeps their id — so after a renumber those ids no longer match the squad.
   Anything mapping a fresh build onto an existing team walks both lists by index.
+- **In flow mode the timings are derived from the positions**, so any edit retimes the
+  animation and slides the scrubber into the middle of a transition. The board then draws
+  interpolated positions — a dragged player lags the cursor — while the edit lands on the scene
+  you think you are looking at. Re-pin the scrubber to the selected scene on every change.
+- **Zero holds is not seamless.** `easeInOutCubic` starts and ends at zero velocity, so removing
+  the holds still leaves every player stopping dead at each scene boundary. Flow mode is linear
+  for that reason — see D27.
 - **A dribble is not a pass.** The ball is glued to its carrier, so it moves as far as they
   run. Anything deciding what the ball *did* must read the carrier change (`ballTravelBetween`),
   never the distance the ball covered.

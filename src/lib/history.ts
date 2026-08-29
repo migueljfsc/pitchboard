@@ -85,8 +85,9 @@ export function redoStack<T>(s: Stack<T>): Stack<T> {
 export type History<T> = {
   state: T;
   set: Change<T>;
-  undo: () => void;
-  redo: () => void;
+  /** Both return the value now current, so a caller can react to it at once. */
+  undo: () => T;
+  redo: () => T;
   canUndo: boolean;
   canRedo: boolean;
 };
@@ -100,8 +101,19 @@ export function useHistory<T>(initial: T | (() => T)): History<T> {
     setStack((s) => pushChange(s, next, merge));
   }, []);
 
-  const undo = useCallback(() => setStack(undoStack), []);
-  const redo = useCallback(() => setStack(redoStack), []);
+  // Computed from the current stack rather than inside the updater, so the
+  // resulting value can be returned: callers need it in the same tick.
+  const undo = useCallback(() => {
+    const next = undoStack(stack);
+    setStack(next);
+    return next.present;
+  }, [stack]);
+
+  const redo = useCallback(() => {
+    const next = redoStack(stack);
+    setStack(next);
+    return next.present;
+  }, [stack]);
 
   return useMemo(
     () => ({

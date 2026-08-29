@@ -9,6 +9,7 @@ import { z } from "zod";
 import type { BoardDoc } from "./types";
 import { BALL_ID } from "./types";
 import { TEXT_SCALE_MAX, TEXT_SCALE_MIN } from "./annotations";
+import { MAX_FLOW_SPEED, MIN_FLOW_SPEED } from "./timeline";
 
 const vec2 = z.object({ x: z.number().finite(), y: z.number().finite() });
 
@@ -97,6 +98,12 @@ const boardDocShape = z.object({
     width: z.number().min(30).max(100),
   }),
   tokenScale: z.number().min(0.5).max(2.5).optional(),
+  flow: z
+    .object({
+      speed: z.number().min(MIN_FLOW_SPEED).max(MAX_FLOW_SPEED),
+      endHoldMs: z.number().int().min(0).max(60_000),
+    })
+    .optional(),
   teams: z.tuple([team, team]),
   scenes: z.array(scene).min(1).max(60),
   links: z.array(link).max(20),

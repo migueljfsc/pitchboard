@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { ballAt, ballGlue, frameAt, positionAt, resolveAt, totalDurationMs } from "./timeline";
+import {
+  DEFAULT_END_HOLD_MS,
+  MIN_FLOW_STEP_MS,
+  ballAt,
+  ballGlue,
+  frameAt,
+  positionAt,
+  resolveAt,
+  sceneTimings,
+  totalDurationMs,
+} from "./timeline";
 import { createBoardDoc } from "@/formations";
+import { sceneStartSeconds } from "./scenes";
 import { boardDocSchema } from "./schema";
 import type { BoardDoc, Scene } from "./types";
 
@@ -320,5 +331,120 @@ describe("frameAt", () => {
 
   it("builds documents the schema accepts", () => {
     expect(boardDocSchema.safeParse(twoScene()).success).toBe(true);
+  });
+});
+
+describe("flow mode", () => {
+  /** Two scenes with one player covering exactly 40 m between them. */
+  const flowing = (speed = 10, endHoldMs = DEFAULT_END_HOLD_MS): BoardDoc => {
+    const doc = twoScene((a, b) => {
+      a.positions[HOME_9] = { x: 10, y: 34 };
+      b.positions[HOME_9] = { x: 50, y: 34 };
+      // Every other player holds station, so 40 m is the longest move.
+      for (const id of Object.keys(b.positions)) {
+        if (id !== HOME_9) b.positions[id] = { ...a.positions[id] };
+      }
+      a.ballPos = { x: 1, y: 1 };
+      b.ballPos = { x: 1, y: 1 };
+    });
+    return { ...doc, flow: { speed, endHoldMs } };
+  };
+
+  it("paces each scene by its longest move, not by its own timings", () => {
+    // 40 m at 10 m/s is 4 s, whatever transitionMs happens to say.
+    expect(sceneTimings(flowing())[1].travelMs).toBeCloseTo(4000);
+    expect(flowing().scenes[1].transitionMs).toBe(2000);
+  });
+
+  it("halves the time when the pace doubles", () => {
+    expect(sceneTimings(flowing(20))[1].travelMs).toBeCloseTo(2000);
+  });
+
+  it("holds nothing but the last frame", () => {
+    const timing = sceneTimings(flowing(10, 900));
+    expect(timing[0].holdMs).toBe(0);
+    expect(timing[timing.length - 1].holdMs).toBe(900);
+  });
+
+  it("totals the travel plus the one end hold", () => {
+    expect(totalDurationMs(flowing(10, 900))).toBeCloseTo(4900);
+  });
+
+  it("gives a scene where nothing moves a floor, so it still exists", () => {
+    const still = twoScene();
+    expect(sceneTimings({ ...still, flow: { speed: 10, endHoldMs: 0 } })[1].travelMs).toBe(
+      MIN_FLOW_STEP_MS,
+    );
+  });
+
+  it("moves linearly — a quarter of the window is a quarter of the run", () => {
+    const doc = flowing();
+    // 1 s into a 4 s transition that starts at t=0, since nothing holds first.
+    expect(positionAt(HOME_9, resolveAt(doc, 1), doc).x).toBeCloseTo(20, 6);
+    expect(positionAt(HOME_9, resolveAt(doc, 2), doc).x).toBeCloseTo(30, 6);
+
+    // Sampled a quarter in, the eased mode is still accelerating and well
+    // behind — which is exactly the stop-start that flow mode removes.
+    const eased = twoScene((a, b) => {
+      a.positions[HOME_9] = { x: 10, y: 34 };
+      b.positions[HOME_9] = { x: 50, y: 34 };
+    });
+    // Its transition runs from 1 s to 3 s, so 1.5 s is a quarter of the way in.
+    expect(positionAt(HOME_9, resolveAt(eased, 1.5), eased).x).toBeCloseTo(12.5, 6);
+  });
+
+  it("starts moving at once — no opening hold to sit through", () => {
+    const doc = flowing();
+    expect(resolveAt(doc, 0.001).moving).toBe(true);
+  });
+
+  it("ignores per-entity travel overrides, so nobody breaks step", () => {
+    const doc = flowing();
+    const solo = { ...doc, scenes: [doc.scenes[0], { ...doc.scenes[1], travel: { [HOME_9]: 100 } }] };
+    expect(positionAt(HOME_9, resolveAt(solo, 2), solo).x).toBeCloseTo(30, 6);
+  });
+
+  it("leaves the scenes' own timings untouched, so turning it off restores them", () => {
+    const off: BoardDoc = { ...flowing() };
+    delete off.flow;
+    expect(totalDurationMs(off)).toBe(totalDurationMs(twoScene()));
+  });
+
+  /**
+   * The regression behind "the player is not dragged with the mouse": a scene
+   * start that resolves as `moving` gives interpolated positions and the wrong
+   * editing overlay. Flow travels are distances over a speed, so the round trip
+   * through seconds does not always land exactly on the boundary.
+   */
+  it("resolves every scene's own start time as that scene at rest", () => {
+    for (const speed of [3, 7, 10, 13.5, 29]) {
+      const doc = flowing(speed);
+      doc.scenes.forEach((_, i) => {
+        const at = resolveAt(doc, sceneStartSeconds(doc, i));
+        expect(at.index, `scene ${i} at ${speed} m/s`).toBe(i);
+        expect(at.moving, `scene ${i} at ${speed} m/s`).toBe(false);
+      });
+    }
+  });
+
+  it("holds that boundary for awkward distances too", () => {
+    // A pile of positions whose distances do not divide cleanly by the speed.
+    const doc = twoScene((a, b) => {
+      b.positions[HOME_9] = { x: a.positions[HOME_9].x + 17.31, y: a.positions[HOME_9].y + 4.07 };
+    });
+    const flowed = { ...doc, flow: { speed: 7.3, endHoldMs: 700 } };
+    const at = resolveAt(flowed, sceneStartSeconds(flowed, 1));
+    expect(at.index).toBe(1);
+    expect(at.moving).toBe(false);
+  });
+
+  it("round-trips through the schema", () => {
+    const parsed = boardDocSchema.parse(JSON.parse(JSON.stringify(flowing(12, 800))));
+    expect(parsed.flow).toEqual({ speed: 12, endHoldMs: 800 });
+  });
+
+  it("rejects a pace outside the supported range", () => {
+    expect(boardDocSchema.safeParse(flowing(0)).success).toBe(false);
+    expect(boardDocSchema.safeParse(flowing(99)).success).toBe(false);
   });
 });

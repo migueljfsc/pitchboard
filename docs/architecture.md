@@ -192,7 +192,8 @@ type BoardDoc = {
   version: 1
   name: string
   pitch: { length: number; width: number }   // defaults 105 × 68
-  tokenScale?: number                        // 0.5–2.5, default 1
+  tokenScale?: number                        // 0.5–2.5, default DEFAULT_TOKEN_SCALE (1.25)
+  flow?: { speed: number; endHoldMs: number } // seamless playback; absent = per-scene timings
   teams: [Team, Team]
   scenes: Scene[]                            // at least one
   links: Link[]
@@ -249,6 +250,14 @@ Scene 0 contributes only its hold. Every later scene contributes a transition th
 totalMs = scenes[0].holdMs
         + Σ (scenes[i].transitionMs + scenes[i].holdMs)   for i in 1..n-1
 ```
+
+### Timing
+
+`sceneTimings(doc)` is the single source of what each scene is worth: `totalDurationMs`,
+`resolveAt` and `sceneStartSeconds` all read it rather than the raw fields. Two modes feed it —
+the per-scene `transitionMs`/`holdMs`, or `doc.flow`, which paces every transition at one speed
+and holds only the final frame. See D27, including why removing the holds is not on its own
+enough to make playback seamless.
 
 ### Resolution
 

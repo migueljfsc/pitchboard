@@ -128,7 +128,9 @@ export function Inspector({
         </p>
       )}
 
-      {canEditPaths && scene && (
+      {/* Flow mode paces the whole board, so a per-entity time has nothing to
+          override — hidden rather than shown doing nothing. */}
+      {canEditPaths && scene && !doc.flow && (
         <div className="flex flex-col gap-1.5">
           <div className="flex items-baseline justify-between">
             <span className="text-[11px] uppercase tracking-wide text-ink-400">Travel time</span>

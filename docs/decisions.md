@@ -526,6 +526,52 @@ not components.
 
 ---
 
+## D27 — Seamless flow is a pace, and linear
+
+**Decision.** `BoardDoc.flow` — `{ speed, endHoldMs }`, present meaning on. Every transition runs
+at `speed` metres per second, nothing holds between scenes, only the last frame is held, and
+movement is linear.
+
+**Zero holds is not seamless.** The obvious implementation — set every `holdMs` to 0 — does not
+work, and the reason is the easing. `easeInOutCubic` starts *and ends* at zero velocity, so with
+the holds gone every player still decelerates to a dead stop at each scene boundary and sets off
+again. That pulse is most of what reads as a cut between scenes. Flow mode is therefore linear:
+constant velocity through the seam is the whole point.
+
+**A pace, not a duration.** One speed, and each transition takes as long as its longest move
+needs. A scene where the shape shuffles two metres takes two metres' worth of time rather than a
+full beat, which is what makes the result read as one movement instead of a sequence.
+
+*Rejected — one step duration for every scene.* Simplest knob, and it makes a 2 m adjustment
+last exactly as long as a 40 m sprint. *Rejected — a total clip length.* The same maths with the
+knob at the other end; worth revisiting if the export ever wants a target duration.
+
+A consequence worth knowing: the window belongs to the scene's *longest* mover, so everyone else
+covers a shorter run inside it and is correspondingly slower. The alternative is players
+arriving early and standing still, which is the stutter being removed.
+
+**Nothing is overwritten.** `transitionMs`, `holdMs` and the per-entity `travel` overrides stay
+exactly as they were and are simply not read; per-entity overrides are ignored outright, since a
+board-wide pace with one player keeping their own time is one player breaking step. Turning flow
+off gives back the timing that was tuned, to the millisecond.
+
+**One timing table.** `sceneTimings(doc)` returns what each scene is actually worth, and
+duration, scrubbing and scene starts all read it. The mode is decided in one function rather
+than branched in four, which is what keeps the scrubber, the strip and the playhead agreeing.
+The pace uses straight-line distance rather than arc length — it is called every frame, and a
+curved run coming out a few per cent quick is invisible next to building an arc table per entity
+per scene.
+
+**The ball keeps its own easing.** A struck ball really does decelerate, and that is its motion
+rather than a seam between scenes.
+
+The price of deriving timings from content: an edit retimes the animation, and the scrubber
+holds an absolute time. The editor re-pins it to the selected scene on every change, or the
+board ends up rendering a frame mid-transition — interpolated positions, which do not follow a
+drag — while the edit lands on the scene the panel says is selected.
+
+---
+
 ## Invariants
 
 Two rules a future change is most likely to break. Both belong in `AGENTS.md`.

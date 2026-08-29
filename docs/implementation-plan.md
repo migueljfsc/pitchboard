@@ -472,6 +472,38 @@ A batch of editor work landed together, out of milestone order. Decisions in D22
 
 ---
 
+## M9 — Seamless playback
+
+One checkbox that turns a sequence of tuned scenes into a single continuous movement. D27.
+
+### Tasks
+
+- `BoardDoc.flow` — `{ speed, endHoldMs }`, additive and optional
+- `sceneTimings(doc)` as the one timing table, read by duration, scrubbing and scene starts
+- Linear movement while flow is on; per-entity travel overrides ignored
+- Flow toggle in the transport row; Pace and End hold replace Travel and Hold
+
+### Definition of done
+
+- [x] a long sprint takes longer than a short shuffle, at one pace
+- [x] nothing holds between scenes, and only the last frame holds before the loop
+- [x] turning it off restores the tuned timings to the millisecond
+- [x] the scene strip, the scrubber and the playhead all agree in both modes
+- [x] dragging a player still tracks the cursor exactly, at any scene
+
+### Notes from the build
+
+- **Derived timings move under the scrubber.** The scrubber holds an absolute time, so the
+  moment an edit changes a transition's length that time points somewhere else — mid-transition,
+  where positions are interpolated. The symptom is a player who will not follow the mouse while
+  the run arrow moves instead. Every document change re-pins the scrubber to the selected scene.
+- **A scene boundary needs slack.** Scene start times go out in seconds and come back in
+  milliseconds, and in flow mode a travel is a distance over a speed, so the round trip lands a
+  hair short of the boundary and resolves as `moving`. A microsecond of tolerance at the seam
+  turns that back into the scene at rest.
+
+---
+
 ## Cross-cutting: testing
 
 Vitest, pure engine only, no component tests. This is the first JS/TS test suite in the

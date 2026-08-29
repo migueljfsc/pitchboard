@@ -155,6 +155,15 @@ export type BoardDoc = {
    * and a shared board should arrive looking as its author left it.
    */
   tokenScale?: number;
+  /**
+   * Seamless playback. Present means the per-scene timings are set aside for one
+   * continuous flow: every transition runs at `speed`, nothing holds between
+   * scenes, and only the last frame is held — for `endHoldMs`, before the loop.
+   *
+   * The scenes keep their own `transitionMs`, `holdMs` and `travel` untouched,
+   * so turning this off gives back exactly the timing that was tuned.
+   */
+  flow?: { /** Metres per second. */ speed: number; endHoldMs: number };
   teams: [Team, Team];
   /** At least one. */
   scenes: Scene[];

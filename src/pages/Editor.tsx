@@ -22,7 +22,7 @@ import { LinkPanel } from "@/components/LinkPanel";
 import { DrawPanel } from "@/components/DrawPanel";
 import { Timeline } from "@/components/Timeline";
 import { nudgeEntities } from "@/board/interaction";
-import { useHistory } from "@/lib/history";
+import { useHistory, type Change } from "@/lib/history";
 import { cn } from "@/lib/utils";
 import { createLink } from "@/board/links";
 import { annotationsOf, deleteAnnotation, sceneRange } from "@/board/annotations";
@@ -56,9 +56,14 @@ export function Editor() {
   // The document is the only undoable thing. How you are looking at the board —
   // the framing, the selection, which panel is open — is not an edit, and
   // rewinding it would be its own kind of surprise.
-  const { state: doc, set: setDoc, undo, redo, canUndo, canRedo } = useHistory<BoardDoc>(
-    createBoardDoc,
-  );
+  const {
+    state: doc,
+    set: commitDoc,
+    undo: undoHistory,
+    redo: redoHistory,
+    canUndo,
+    canRedo,
+  } = useHistory<BoardDoc>(createBoardDoc);
   const [selection, setSelection] = useState<ReadonlySet<string>>(() => new Set());
   const [chosenScene, setActiveScene] = useState(0);
   const [time, setTime] = useState(0);
@@ -89,6 +94,41 @@ export function Editor() {
   // and deleting a scene all do it. Clamped where it is read rather than synced
   // back into state, so there is no render where the index is out of range.
   const activeScene = Math.min(chosenScene, doc.scenes.length - 1);
+
+  /**
+   * Keep the scrubber on the selected scene when the timing moves under it.
+   *
+   * Flow mode paces each transition by how far everything travels, so ANY edit
+   * to a position retimes the animation. The scrubber holds an absolute time, so
+   * without this it slides into the middle of a transition: the board then draws
+   * interpolated positions that lag behind the cursor while the drag edits the
+   * scene you think you are looking at. That is the "player is not dragged with
+   * the mouse" bug.
+   *
+   * Fixed timings cannot drift this way, so this does nothing outside flow mode.
+   */
+  const pinScrubber = useCallback(
+    (next: BoardDoc, scene: number) => {
+      if (!playing && next.flow) setTime(sceneStartSeconds(next, scene));
+    },
+    [playing],
+  );
+
+  const setDoc = useCallback<Change<BoardDoc>>(
+    (next, merge) => {
+      commitDoc(next, merge);
+      pinScrubber(next, activeScene);
+    },
+    [commitDoc, pinScrubber, activeScene],
+  );
+
+  const undo = useCallback(() => {
+    pinScrubber(undoHistory(), chosenScene);
+  }, [undoHistory, pinScrubber, chosenScene]);
+
+  const redo = useCallback(() => {
+    pinScrubber(redoHistory(), chosenScene);
+  }, [redoHistory, pinScrubber, chosenScene]);
 
   // The chosen formation lives on the team, not in this component, so a board
   // that arrives by import still knows its own shape.
