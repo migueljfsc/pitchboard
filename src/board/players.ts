@@ -42,10 +42,28 @@ export function setPlayerLabel(doc: BoardDoc, id: string, label: string): BoardD
   return patchPlayer(doc, id, { label: label.slice(0, 40) });
 }
 
-/** Shirt number, clamped to the range the schema accepts. */
+/**
+ * The other player in this one's team already wearing `number`, if any.
+ *
+ * Same team only — the two sides number independently, and a 10 on each is how
+ * football works.
+ */
+export function shirtClash(doc: BoardDoc, id: string, number: number): Player | null {
+  return teamOf(doc, id)?.players.find((p) => p.id !== id && p.number === number) ?? null;
+}
+
+/**
+ * Shirt number, clamped to the range the schema accepts.
+ *
+ * A number already worn in the same team is refused outright rather than
+ * clamped to something else: the caller asked for a specific shirt, and quietly
+ * granting a different one is worse than not moving. Anywhere a build derives an
+ * id from the number, two players on one shirt would also collide on the id.
+ */
 export function setPlayerNumber(doc: BoardDoc, id: string, number: number): BoardDoc {
   if (!Number.isFinite(number)) return doc;
-  return patchPlayer(doc, id, { number: Math.max(0, Math.min(99, Math.round(number))) });
+  const wanted = Math.max(0, Math.min(99, Math.round(number)));
+  return shirtClash(doc, id, wanted) ? doc : patchPlayer(doc, id, { number: wanted });
 }
 
 // ---------------------------------------------------------------- squad size

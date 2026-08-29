@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { UserMinus } from "lucide-react";
-import type { BoardDoc } from "@/board/types";
+import type { BoardDoc, Player } from "@/board/types";
 import { BALL_ID } from "@/board/types";
-import { displayName } from "@/board/players";
+import { displayName, shirtClash } from "@/board/players";
 import { entityTravelMs, sceneTravelMs } from "@/board/timeline";
+import { cn } from "@/lib/utils";
 
 type Props = {
   doc: BoardDoc;
@@ -99,29 +100,14 @@ export function Inspector({
       </div>
 
       {player ? (
-        <div className="flex gap-1.5">
-          <label className="flex min-w-0 flex-1 flex-col gap-1">
-            <span className="text-[11px] uppercase tracking-wide text-ink-400">Name</span>
-            <input
-              ref={nameRef}
-              value={player.label}
-              onChange={(e) => onRename(player.id, e.target.value)}
-              placeholder={`Player ${player.number}`}
-              className="w-full rounded border border-ink-600 bg-ink-900 px-2 py-1 text-xs text-ink-200 outline-none transition placeholder:text-ink-400 hover:border-ink-400 focus:border-accent"
-            />
-          </label>
-          <label className="flex w-14 shrink-0 flex-col gap-1">
-            <span className="text-[11px] uppercase tracking-wide text-ink-400">No.</span>
-            <input
-              type="number"
-              min={0}
-              max={99}
-              value={player.number}
-              onChange={(e) => onRenumber(player.id, Number(e.target.value))}
-              className="w-full rounded border border-ink-600 bg-ink-900 px-2 py-1 font-mono text-xs text-ink-200 outline-none transition hover:border-ink-400 focus:border-accent"
-            />
-          </label>
-        </div>
+        <IdentityFields
+          key={player.id}
+          doc={doc}
+          player={player}
+          nameRef={nameRef}
+          onRename={onRename}
+          onRenumber={onRenumber}
+        />
       ) : (
         <p className="text-[11px] leading-relaxed text-ink-300">
           {[...selection].map(nameOf).join(", ")}
@@ -206,6 +192,91 @@ export function Inspector({
             applies to this scene only — the player still moves.
           </p>
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Who this player is: the name and the shirt, plus what is wrong with the shirt.
+ *
+ * The number field holds its own text and commits only a free number. Committing
+ * on every keystroke cannot work here: renumbering a 7 to 12 passes through 1 on
+ * the way, and if somebody already wears 1 the edit would be refused before the
+ * second digit was typed. Blur puts the field back to what the document actually
+ * says, so an abandoned edit leaves nothing behind.
+ */
+function IdentityFields({
+  doc,
+  player,
+  nameRef,
+  onRename,
+  onRenumber,
+}: {
+  doc: BoardDoc;
+  player: Player;
+  nameRef: React.RefObject<HTMLInputElement | null>;
+  onRename: (playerId: string, label: string) => void;
+  onRenumber: (playerId: string, number: number) => void;
+}) {
+  /** null while the field is showing the committed number rather than a draft. */
+  const [draft, setDraft] = useState<string | null>(null);
+  const text = draft ?? String(player.number);
+
+  const wanted = Number(text);
+  const valid = text.trim() !== "" && Number.isInteger(wanted) && wanted >= 0 && wanted <= 99;
+  const clash = valid ? shirtClash(doc, player.id, wanted) : null;
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex gap-1.5">
+        <label className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="text-[11px] uppercase tracking-wide text-ink-400">Name</span>
+          <input
+            ref={nameRef}
+            value={player.label}
+            onChange={(e) => onRename(player.id, e.target.value)}
+            placeholder={`Player ${player.number}`}
+            className="w-full rounded border border-ink-600 bg-ink-900 px-2 py-1 text-xs text-ink-200 outline-none transition placeholder:text-ink-400 hover:border-ink-400 focus:border-accent"
+          />
+        </label>
+        <label className="flex w-14 shrink-0 flex-col gap-1">
+          <span className="text-[11px] uppercase tracking-wide text-ink-400">No.</span>
+          <input
+            type="number"
+            min={0}
+            max={99}
+            value={text}
+            aria-invalid={clash !== null}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              const n = Number(e.target.value);
+              if (
+                e.target.value.trim() !== "" &&
+                Number.isInteger(n) &&
+                n >= 0 &&
+                n <= 99 &&
+                !shirtClash(doc, player.id, n)
+              ) {
+                onRenumber(player.id, n);
+              }
+            }}
+            onBlur={() => setDraft(null)}
+            className={cn(
+              "w-full rounded border bg-ink-900 px-2 py-1 font-mono text-xs outline-none transition",
+              clash
+                ? "border-red-500/70 text-red-300 focus:border-red-400"
+                : "border-ink-600 text-ink-200 hover:border-ink-400 focus:border-accent",
+            )}
+          />
+        </label>
+      </div>
+
+      {clash && (
+        <p role="alert" className="text-[11px] leading-relaxed text-red-300">
+          {clash.label.trim() || `Player ${clash.number}`} already wears {clash.number} for this
+          team.
+        </p>
       )}
     </div>
   );

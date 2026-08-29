@@ -6,12 +6,14 @@ import {
   removePlayer,
   setPlayerLabel,
   setPlayerNumber,
+  shirtClash,
   teamOf,
 } from "./players";
 import { setCarrier, setPath, setTravel } from "./scenes";
 import { createLink } from "./links";
 import { createBoardDoc } from "@/formations";
 import { boardDocSchema } from "./schema";
+import type { BoardDoc } from "./types";
 
 const A = "home-9";
 const B = "home-10";
@@ -225,5 +227,81 @@ describe("removePlayer", () => {
     expect(doc.teams[0].players).toHaveLength(0);
     expect(doc.teams[1].players).toHaveLength(11);
     expect(boardDocSchema.safeParse(doc).success).toBe(true);
+  });
+});
+
+describe("shirt numbers must be free", () => {
+  const home = (doc: BoardDoc) => doc.teams[0].players;
+
+  it("refuses a number already worn in the same team", () => {
+    const doc = createBoardDoc();
+    const [first, second] = home(doc);
+    const next = setPlayerNumber(doc, second.id, first.number);
+    expect(next).toBe(doc);
+    expect(home(next)[1].number).toBe(second.number);
+  });
+
+  it("allows the number the player already wears", () => {
+    const doc = createBoardDoc();
+    const p = home(doc)[3];
+    expect(home(setPlayerNumber(doc, p.id, p.number))[3].number).toBe(p.number);
+  });
+
+  it("allows a number worn by the OTHER team", () => {
+    // Both sides are built from formations, so 1-11 are taken on each. Park a
+    // home player on 50 first, then give the same shirt to an away player.
+    let doc = createBoardDoc();
+    doc = setPlayerNumber(doc, home(doc)[5].id, 50);
+    expect(home(doc)[5].number).toBe(50);
+
+    doc = setPlayerNumber(doc, doc.teams[1].players[0].id, 50);
+    expect(doc.teams[1].players[0].number).toBe(50);
+    expect(doc.teams[0].players[5].number).toBe(50);
+    expect(boardDocSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("allows a genuinely free number", () => {
+    const doc = createBoardDoc();
+    const worn = new Set(home(doc).map((p) => p.number));
+    const free = [...Array(100).keys()].find((n) => !worn.has(n))!;
+    expect(home(setPlayerNumber(doc, home(doc)[2].id, free))[2].number).toBe(free);
+  });
+
+  it("refuses after the clamp, not before it", () => {
+    // 150 clamps to 99. If 99 is taken, the clamped value is what must be
+    // refused — checking the raw input would let it through.
+    let doc = createBoardDoc();
+    doc = setPlayerNumber(doc, home(doc)[0].id, 99);
+    const before = home(doc)[1].number;
+    expect(setPlayerNumber(doc, home(doc)[1].id, 150).teams[0].players[1].number).toBe(before);
+  });
+
+  it("never leaves a team with two players on one shirt", () => {
+    let doc = createBoardDoc();
+    for (const p of home(doc)) doc = setPlayerNumber(doc, p.id, 7);
+    const numbers = doc.teams[0].players.map((p) => p.number);
+    expect(new Set(numbers).size).toBe(numbers.length);
+  });
+
+  it("keeps the document valid", () => {
+    const doc = setPlayerNumber(createBoardDoc(), createBoardDoc().teams[0].players[0].id, 42);
+    expect(boardDocSchema.safeParse(doc).success).toBe(true);
+  });
+});
+
+describe("shirtClash", () => {
+  it("names the player standing in the way", () => {
+    const doc = createBoardDoc();
+    const [first, second] = doc.teams[0].players;
+    expect(shirtClash(doc, second.id, first.number)?.id).toBe(first.id);
+  });
+
+  it("is null for the player's own number, and for a free one", () => {
+    const doc = createBoardDoc();
+    const p = doc.teams[0].players[0];
+    expect(shirtClash(doc, p.id, p.number)).toBeNull();
+    const worn = new Set(doc.teams[0].players.map((x) => x.number));
+    const free = [...Array(100).keys()].find((n) => !worn.has(n))!;
+    expect(shirtClash(doc, p.id, free)).toBeNull();
   });
 });
