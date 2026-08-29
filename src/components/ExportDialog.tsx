@@ -136,10 +136,24 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
   const unavailable =
     (format === "mp4" || format === "webm") && encodable !== null && !encodable.includes(format);
 
-  const chooseFormat = (next: ExportFormat) => {
-    setFormat(next);
-    setError(null);
+  /**
+   * Any change to what would be produced invalidates the last result.
+   *
+   * The saved line names a file and its size. Left standing beside settings it
+   * was not produced from, it reads as a prediction of what those settings will
+   * produce — a 900 KB GIF is not what 2560 at 60 fps is about to cost. The
+   * blob goes with it, since a stale one is a video's worth of memory held for
+   * a button that is no longer offered.
+   */
+  const forget = () => {
     setSaved(null);
+    setError(null);
+    file.current = null;
+  };
+
+  const chooseFormat = (next: ExportFormat) => {
+    forget();
+    setFormat(next);
     if (next !== "png") setFps(DEFAULT_FPS[next]);
   };
 
@@ -241,7 +255,14 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
           <Field label={format === "png" ? "Size" : "Resolution"}>
             <div className="flex flex-wrap gap-1">
               {sizes.map((r) => (
-                <Choice key={r} active={longEdge === r} onClick={() => setLongEdge(r)}>
+                <Choice
+                  key={r}
+                  active={longEdge === r}
+                  onClick={() => {
+                    forget();
+                    setLongEdge(r);
+                  }}
+                >
                   {r}
                 </Choice>
               ))}
@@ -252,7 +273,14 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
             <Field label="Frame rate">
               <div className="flex flex-wrap gap-1">
                 {FPS_OPTIONS[format].map((r) => (
-                  <Choice key={r} active={fps === r} onClick={() => setFps(r)}>
+                  <Choice
+                    key={r}
+                    active={fps === r}
+                    onClick={() => {
+                      forget();
+                      setFps(r);
+                    }}
+                  >
                     {r} fps
                   </Choice>
                 ))}
@@ -264,7 +292,14 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
             <Field label="Bitrate">
               <div className="flex flex-wrap gap-1">
                 {BITRATES.map((r) => (
-                  <Choice key={r} active={bitrate === r} onClick={() => setBitrate(r)}>
+                  <Choice
+                    key={r}
+                    active={bitrate === r}
+                    onClick={() => {
+                      forget();
+                      setBitrate(r);
+                    }}
+                  >
                     {r / 1e6} Mb/s
                   </Choice>
                 ))}
