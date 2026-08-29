@@ -5,6 +5,8 @@ import { MAX_SQUAD } from "@/board/players";
 import { PALETTE } from "@/components/ui/palette";
 import { contrastOn } from "@/lib/color";
 import type { Change } from "@/lib/history";
+import { SquadPresets } from "@/components/SquadPresets";
+import type { PresetLibrary } from "@/share/presets";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -15,6 +17,11 @@ type Props = {
   onFormationChange: (teamIndex: 0 | 1, formation: string) => void;
   direction: Direction;
   onAddPlayer: (teamIndex: 0 | 1) => void;
+  presets: PresetLibrary;
+  onSavePreset: (teamIndex: 0 | 1, label: string) => void;
+  onApplyPreset: (teamIndex: 0 | 1, id: string) => void;
+  onRenamePreset: (id: string, label: string) => void;
+  onDeletePreset: (id: string) => void;
 };
 
 export function TeamControls({
@@ -25,6 +32,11 @@ export function TeamControls({
   onFormationChange,
   direction,
   onAddPlayer,
+  presets,
+  onSavePreset,
+  onApplyPreset,
+  onRenamePreset,
+  onDeletePreset,
 }: Props) {
   const team = doc.teams[teamIndex];
 
@@ -86,6 +98,16 @@ export function TeamControls({
           ))}
         </select>
       </label>
+
+      <SquadPresets
+        doc={doc}
+        teamIndex={teamIndex}
+        presets={presets}
+        onSave={onSavePreset}
+        onApply={onApplyPreset}
+        onRename={onRenamePreset}
+        onDelete={onDeletePreset}
+      />
 
       <button
         type="button"

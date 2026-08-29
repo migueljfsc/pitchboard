@@ -13,8 +13,9 @@
  */
 
 import { z } from "zod";
-import type { BoardDoc, LinkStyle } from "@/board/types";
+import type { BoardDoc, Link, LinkStyle, Team } from "@/board/types";
 import { boardDocSchema } from "@/board/schema";
+import { replaceTeamLinks } from "@/board/links";
 import { AWAY, DEFAULT_FORMATION, HOME, createBoardDoc, type TeamSpec } from "@/formations";
 import { contrastOn } from "@/lib/color";
 
@@ -35,43 +36,57 @@ export const toJson = (doc: BoardDoc): string => JSON.stringify(doc, null, 2);
  * A link spanning both teams belongs to neither side's list and is dropped; the
  * setup shape has nowhere to put it, and it is trivially redrawn.
  */
-export function toSetupJson(doc: BoardDoc): string {
-  const setup: Setup = {
-    name: doc.name,
-    teams: doc.teams.map((team) => {
-      const ids = new Set(team.players.map((p) => p.id));
-      const numberOf = new Map(team.players.map((p) => [p.id, p.number]));
+/**
+ * One team reduced to its setup — formation, XI and units, no positions.
+ *
+ * Shared by the setup file and by squad presets, so the two cannot drift: a
+ * preset is a setup team with a name on it.
+ */
+export function teamToSetup(doc: BoardDoc, index: 0 | 1): SetupTeam {
+  const team = doc.teams[index];
+  const ids = new Set(team.players.map((p) => p.id));
+  const numberOf = new Map(team.players.map((p) => [p.id, p.number]));
 
-      return {
-        name: team.name,
-        color: team.color,
-        textColor: team.textColor,
-        formation: team.formation ?? DEFAULT_FORMATION,
-        players: team.players.map((p) => (p.label ? { number: p.number, label: p.label } : { number: p.number })),
-        links: doc.links
-          .filter((l) => l.members.every((m) => ids.has(m)))
-          .map((l) => ({
-            name: l.name,
-            members: l.members.map((m) => numberOf.get(m)!),
-            style: l.style,
-            ...(l.showDistances ? { showDistances: true } : {}),
-            ...(l.color ? { color: l.color } : {}),
-          })),
-      };
-    }) as [SetupTeam, SetupTeam],
+  return {
+    name: team.name,
+    color: team.color,
+    textColor: team.textColor,
+    formation: team.formation ?? DEFAULT_FORMATION,
+    players: team.players.map((p) =>
+      p.label ? { number: p.number, label: p.label } : { number: p.number },
+    ),
+    links: doc.links
+      .filter((l) => l.members.every((m) => ids.has(m)))
+      .map((l) => ({
+        name: l.name,
+        members: l.members.map((m) => numberOf.get(m)!),
+        style: l.style,
+        ...(l.showDistances ? { showDistances: true } : {}),
+        ...(l.color ? { color: l.color } : {}),
+      })),
   };
+}
+
+/**
+ * The board reduced to its setup.
+ *
+ * A link spanning both teams belongs to neither side's list and is dropped; the
+ * setup shape has nowhere to put it, and it is trivially redrawn.
+ */
+export function toSetupJson(doc: BoardDoc): string {
+  const setup: Setup = { name: doc.name, teams: [teamToSetup(doc, 0), teamToSetup(doc, 1)] };
   return JSON.stringify(setup, null, 2);
 }
 
 // ------------------------------------------------------------------- import
 
-const setupPlayer = z.object({
+export const setupPlayerSchema = z.object({
   number: z.number().int().min(0).max(99).optional(),
   label: z.string().max(40).optional(),
 });
 
 /** Members are SHIRT NUMBERS here, resolved against the team once it is built. */
-const setupLink = z.object({
+export const setupLinkSchema = z.object({
   name: z.string().max(60).optional(),
   members: z.array(z.number().int().min(0).max(99)).min(2).max(11),
   style: z.enum(["chain", "polygon", "filled"]).optional(),
@@ -79,15 +94,15 @@ const setupLink = z.object({
   showDistances: z.boolean().optional(),
 });
 
-const setupTeam = z.object({
+export const setupTeamSchema = z.object({
   name: z.string().min(1).max(60).optional(),
   color: z.string().min(1).optional(),
   textColor: z.string().min(1).optional(),
   formation: z.string().min(1).max(20).optional(),
   /** In formation order, keeper first. Shorter than the XI leaves the rest as the preset had them. */
-  players: z.array(setupPlayer).max(30).optional(),
+  players: z.array(setupPlayerSchema).max(30).optional(),
   /** Given, these REPLACE the links the formation seeds for that side. */
-  links: z.array(setupLink).max(20).optional(),
+  links: z.array(setupLinkSchema).max(20).optional(),
 });
 
 /**
@@ -97,18 +112,19 @@ const setupTeam = z.object({
  */
 const setupSchema = z.object({
   name: z.string().min(1).max(120).optional(),
-  teams: z.tuple([setupTeam, setupTeam]),
+  teams: z.tuple([setupTeamSchema, setupTeamSchema]),
 });
 
 type Setup = z.infer<typeof setupSchema>;
-type SetupTeam = z.infer<typeof setupTeam>;
+export type SetupTeam = z.infer<typeof setupTeamSchema>;
+export type SetupLink = z.infer<typeof setupLinkSchema>;
 
 export type ImportOutcome =
   | { ok: true; doc: BoardDoc; kind: "board" | "setup" }
   | { ok: false; error: string };
 
 /** A setup that parsed but cannot describe a real board. */
-class SetupError extends Error {}
+export class SetupError extends Error {}
 
 export function fromJson(text: string): ImportOutcome {
   if (text.length > MAX_IMPORT_CHARS) {
@@ -175,8 +191,12 @@ function docFromSetup(setup: Setup): BoardDoc {
         `Team ${i + 1}: ${t.players.length} players listed but ${built.formation} has ${built.players.length} places.`,
       );
     }
-    const numbers = built.players.map((p) => p.number);
-    if (new Set(numbers).size !== numbers.length) {
+    // Checked against what the FILE says, not against what came out of the
+    // build: buildTeam resolves a collision by moving one player to a free
+    // shirt, which is right when it picked the number itself and wrong when a
+    // person typed the same one twice. Reject what was written wrong; resolve
+    // what was left to us.
+    if (duplicateNumber(t.players)) {
       throw new SetupError(`Team ${i + 1}: two players share a shirt number.`);
     }
   });
@@ -188,50 +208,59 @@ function docFromSetup(setup: Setup): BoardDoc {
 }
 
 /**
- * Turn shirt numbers into player ids.
+ * Turn shirt numbers into player ids for one side.
  *
+ * Numbers rather than ids because a number is the only stable way to name a
+ * player in a file: ids are minted per board, and renumbering a player keeps
+ * theirs. Shared with squad presets, which arrive the same way.
+ *
+ * Throws `SetupError` naming `where` — "Team 1", or the preset — so the message
+ * says which side could not be resolved.
+ */
+export function resolveTeamLinks(team: Team, links: SetupLink[], where: string): Link[] {
+  const byNumber = new Map(team.players.map((p) => [p.number, p.id]));
+
+  return links.map((link, k) => {
+    const members = link.members.map((n) => {
+      const id = byNumber.get(n);
+      if (!id) throw new SetupError(`${where}: no player wears ${n}, so it cannot be linked.`);
+      return id;
+    });
+    if (new Set(members).size !== members.length) {
+      throw new SetupError(`${where}: a link names the same player twice.`);
+    }
+    return {
+      id: `${team.id}-link-${k + 1}`,
+      name: link.name ?? members.map((m) => numberFor(team, m)).join(", "),
+      members,
+      style: (link.style ?? "chain") as LinkStyle,
+      showDistances: link.showDistances ?? false,
+      ...(link.color ? { color: link.color } : {}),
+    };
+  });
+}
+
+/**
  * A side that lists links replaces the ones its formation seeded; a side that
- * says nothing keeps them. Seeded links are identified by membership rather than
- * by id, which survives any future change to how ids are minted.
+ * says nothing keeps them.
  */
 function resolveLinks(doc: BoardDoc, setup: Setup) {
-  let links = doc.links;
-
+  let next = doc;
   setup.teams.forEach((t, i) => {
     if (!t.links) return;
-    const team = doc.teams[i];
-    const ids = new Set(team.players.map((p) => p.id));
-    const byNumber = new Map(team.players.map((p) => [p.number, p.id]));
-
-    // Slot the replacements in where that side's links already sat, so a team
-    // listing its own units does not jump to the end of the draw order.
-    const owns = (l: (typeof links)[number]) => l.members.some((m) => ids.has(m));
-    const firstAt = links.findIndex(owns);
-    const kept = links.filter((l) => !owns(l));
-    const resolved = t.links.map((link, k) => {
-      const members = link.members.map((n) => {
-        const id = byNumber.get(n);
-        if (!id) throw new SetupError(`Team ${i + 1}: no player wears ${n}, so it cannot be linked.`);
-        return id;
-      });
-      if (new Set(members).size !== members.length) {
-        throw new SetupError(`Team ${i + 1}: a link names the same player twice.`);
-      }
-      return {
-        id: `${team.id}-link-${k + 1}`,
-        name: link.name ?? members.map((m) => numberFor(team, m)).join(", "),
-        members,
-        style: (link.style ?? "chain") as LinkStyle,
-        showDistances: link.showDistances ?? false,
-        ...(link.color ? { color: link.color } : {}),
-      };
-    });
-
-    const at = firstAt < 0 ? kept.length : firstAt;
-    links = [...kept.slice(0, at), ...resolved, ...kept.slice(at)];
+    const index = i as 0 | 1;
+    const resolved = resolveTeamLinks(next.teams[index], t.links, `Team ${i + 1}`);
+    next = { ...next, links: replaceTeamLinks(next, index, resolved) };
   });
+  return next.links;
+}
 
-  return links;
+/** True when a squad lists one shirt twice. Unnumbered players are not a clash. */
+export function duplicateNumber(players?: { number?: number }[]): boolean {
+  const listed = (players ?? [])
+    .map((p) => p.number)
+    .filter((n): n is number => n !== undefined);
+  return new Set(listed).size !== listed.length;
 }
 
 const numberFor = (team: BoardDoc["teams"][0], id: string): string =>
