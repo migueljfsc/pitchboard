@@ -1,13 +1,20 @@
 import { RotateCw } from "lucide-react";
 import type { BoardDoc, PitchHalf, PitchView } from "@/board/types";
-import { MAX_TOKEN_SCALE, MIN_TOKEN_SCALE, tokenScaleOf } from "@/board/pitch";
+import { DEFAULT_TOKEN_SCALE, MAX_TOKEN_SCALE, MIN_TOKEN_SCALE, tokenScaleOf } from "@/board/pitch";
 import { cn } from "@/lib/utils";
 
 type Props = {
   view: PitchView;
   onChange: (view: PitchView) => void;
-  doc: BoardDoc;
-  onTokenScaleChange: (scale: number) => void;
+  /**
+   * Both omitted for read-only playback, which hides the player-size slider.
+   *
+   * Framing is presentation and belongs to whoever is looking (D12); token size
+   * is document state (D18). A viewer may reframe a shared board all it likes
+   * and may not resize its players.
+   */
+  doc?: BoardDoc;
+  onTokenScaleChange?: (scale: number) => void;
 };
 
 const HALVES: { value: PitchHalf; label: string }[] = [
@@ -17,7 +24,7 @@ const HALVES: { value: PitchHalf; label: string }[] = [
 ];
 
 export function ViewControls({ view, onChange, doc, onTokenScaleChange }: Props) {
-  const scale = tokenScaleOf(doc);
+  const scale = doc ? tokenScaleOf(doc) : DEFAULT_TOKEN_SCALE;
   return (
     <div className="flex flex-col gap-2">
       <div className="flex gap-1">
@@ -53,23 +60,25 @@ export function ViewControls({ view, onChange, doc, onTokenScaleChange }: Props)
         {view.rotated ? "Vertical" : "Horizontal"}
       </button>
 
-      <label className="flex flex-col gap-1.5 pt-1">
-        <span className="flex items-baseline justify-between text-[11px] uppercase tracking-wide text-ink-400">
-          Player size
-          <span className="font-mono normal-case tracking-normal text-ink-300">
-            {scale.toFixed(2)}x
+      {doc && onTokenScaleChange && (
+        <label className="flex flex-col gap-1.5 pt-1">
+          <span className="flex items-baseline justify-between text-[11px] uppercase tracking-wide text-ink-400">
+            Player size
+            <span className="font-mono normal-case tracking-normal text-ink-300">
+              {scale.toFixed(2)}x
+            </span>
           </span>
-        </span>
-        <input
-          type="range"
-          min={MIN_TOKEN_SCALE}
-          max={MAX_TOKEN_SCALE}
-          step={0.05}
-          value={scale}
-          onChange={(e) => onTokenScaleChange(Number(e.target.value))}
-          className="h-1 w-full cursor-pointer appearance-none rounded-full bg-ink-600 accent-accent"
-        />
-      </label>
+          <input
+            type="range"
+            min={MIN_TOKEN_SCALE}
+            max={MAX_TOKEN_SCALE}
+            step={0.05}
+            value={scale}
+            onChange={(e) => onTokenScaleChange(Number(e.target.value))}
+            className="h-1 w-full cursor-pointer appearance-none rounded-full bg-ink-600 accent-accent"
+          />
+        </label>
+      )}
 
       {view.half !== "full" && !view.rotated && (
         <p className="text-[11px] leading-relaxed text-ink-300">

@@ -20,6 +20,7 @@ import { Inspector } from "@/components/Inspector";
 import { DrawingsPanel } from "@/components/DrawingsPanel";
 import { ExportDialog } from "@/components/ExportDialog";
 import { JsonDialog } from "@/components/JsonDialog";
+import { SharePanel } from "@/components/SharePanel";
 import { LinkPanel } from "@/components/LinkPanel";
 import { DrawPanel } from "@/components/DrawPanel";
 import { Timeline } from "@/components/Timeline";
@@ -71,7 +72,15 @@ type Pending =
   | { kind: "preset"; preset: SquadPreset; replacing: SquadPreset }
   | { kind: "import"; doc: BoardDoc };
 
-export function Editor() {
+type Props = {
+  /**
+   * A board to open instead of the autosave — a fork of a shared link. It is
+   * already a local copy, so from here it is an ordinary board.
+   */
+  initialDoc?: BoardDoc;
+};
+
+export function Editor({ initialDoc }: Props = {}) {
   // The document is the only undoable thing. How you are looking at the board —
   // the framing, the selection, which panel is open — is not an edit, and
   // rewinding it would be its own kind of surprise.
@@ -85,7 +94,7 @@ export function Editor() {
     // Reopen on whatever was last being worked on. A stored board that no
     // longer validates is discarded by loadBoard, so a bad autosave costs a
     // fresh board rather than a broken one.
-  } = useHistory<BoardDoc>(() => loadBoard() ?? createBoardDoc());
+  } = useHistory<BoardDoc>(() => initialDoc ?? loadBoard() ?? createBoardDoc());
   const [selection, setSelection] = useState<ReadonlySet<string>>(() => new Set());
   const [chosenScene, setActiveScene] = useState(0);
   const [time, setTime] = useState(0);
@@ -548,6 +557,7 @@ export function Editor() {
               MP4, WebM or GIF of the whole animation, or a PNG of the frame on screen. Exported
               at the framing you are looking at.
             </p>
+            <SharePanel doc={doc} />
           </div>
         </Section>
 

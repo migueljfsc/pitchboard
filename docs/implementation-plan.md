@@ -287,38 +287,72 @@ tactics board produces; if a very long animation is ever needed, switch to `Stre
 
 ## M5 — Persistence and sharing
 
+**Status: the no-backend half is complete.** Autosave, share links, the viewer and the migration
+seam all ship. The KV half is deliberately unbuilt — see below.
+
 Goal: a link you can send someone.
 
 ### Tasks
 
-1. ~~**`share/local.ts`** — `localStorage` autosave with debounce, restore on load.~~ **Done**,
-   with squad presets in M10. The `.json` import/export half shipped early in M8 as
-   `share/json.ts`.
-2. **`share/urlcodec.ts`** — `#d=<base64url(deflate(json))>` via native `CompressionStream`,
-   with a length budget check.
-3. **`share/api.ts`** — client for the Worker endpoints.
-4. **`worker/index.ts`** — `POST /api/boards`, `GET /api/boards/:id`, static passthrough. Imports
-   the app's `schema.ts`. Size cap 256 KB, zod validation, rate-limiting binding on `POST`.
-5. **`pages/Viewer.tsx`** — read-only playback of a shared board, with "fork to edit".
-6. **`board/migrate.ts`** — version dispatch, running before validation on load.
+1. [x] **`share/local.ts`** — `localStorage` autosave with debounce, restore on load. Shipped with
+   squad presets in M10; the `.json` import/export half shipped in M8 as `share/json.ts`.
+2. [x] **`share/urlcodec.ts`** — `#d=<base64url(deflate-raw(json))>` via native
+   `CompressionStream`, with a length budget check. D33.
+3. [ ] **`share/api.ts`** — client for the Worker endpoints.
+4. [ ] **`worker/index.ts`** — `POST /api/boards`, `GET /api/boards/:id`, static passthrough.
+5. [x] **`pages/Viewer.tsx`** — read-only playback of a shared board, with "fork to edit", chosen
+   by `App.tsx` from the hash. No router: a fragment needs none, and needs no rewrite rules on a
+   static host either.
+6. [x] **`board/migrate.ts`** — version dispatch, running before validation on load. Wired into
+   all three inbound paths: share link, `.json` import, autosave restore.
 
 ### Definition of done
 
 - [x] Reload the page mid-edit; work is restored
-- Publish a link, open it in a private window: board and animation reproduce exactly
-- Self-contained `#d=` link opens with the API blocked in devtools
-- Oversized payload is rejected with a useful message, not a 500
-- Malformed and hand-tampered payloads are rejected by zod on the Worker
-- Fork from a shared board produces an independent local copy
+- [x] Publish a link, open it, and the board reproduces exactly — verified by minting a link,
+      then changing the local board to something else: the viewer still shows the shared board,
+      so it can only have come from the link
+- [x] Self-contained `#d=` link opens with the API blocked — there is no API to block
+- [x] Oversized payload is refused with a useful message, not silently truncated
+- [x] Malformed and hand-tampered payloads are rejected — truncated, mangled and non-base64 links
+      all land on a message and a way out, never a broken board
+- [x] Fork from a shared board produces an independent local copy, and the hash is cleared so a
+      reload keeps the fork rather than restoring the original
+
+### Why the KV half is not built
+
+Measured rather than assumed. A ten-scene board with a path on every player compresses to 3,282
+characters, and a default board to 998 — so a link already carries every board that is not heavy
+with freehand. KV would buy only the freehand-heavy tail, at the cost of the entire M6 stack:
+Worker, KV namespace, OpenTofu, wrangler, a terraform workflow, and moving off GitHub Pages.
+
+Worth knowing before that trade is made: the schema permits 200 annotations of 400 points each,
+which extrapolates to roughly 1.8 MB of JSON and 480 KB of URL. That is over the link budget AND
+over the 256 KB cap M5 sets for KV, so the largest documents the schema allows cannot be shared
+by either route. Tightening stroke simplification would close that gap more cheaply than a
+backend.
+
+### Notes from the build
+
+- **Measure before designing.** The URL budget question had been open since D8, and one afternoon
+  of measurement settled it: the feared payload problem is a freehand problem, not a board
+  problem.
+- **A hash change does not reload the page.** The first cut read the hash once at mount, so
+  pasting a link into an already-open tab did nothing at all — the recipient sat looking at their
+  own board. Watching `hashchange` fixes it, and `replaceState` needs its own state update since
+  it fires no event.
+- **The clipboard refuses more often than you would think** — any time the document is not
+  focused. Saying so and stopping leaves the link unreachable, so the refusal path shows it in a
+  selectable field.
+- **`interactive: false` was already there.** The renderer's export flag is exactly what a
+  read-only viewer needs, so the viewer draws what an exported frame draws, for free.
 
 ### Risks
 
-**Payload size.** Long animations with many paths grow quickly. Measure a realistic worst case
-early — a 10-scene board with paths on every player — and confirm the compressed URL budget and
-the 256 KB cap are both sensible.
+**Payload size** — measured, and the answer is above.
 
-**Schema drift between client and Worker.** Prevented by importing one `schema.ts`. Do not let a
-second validator appear in `worker/`.
+**Schema drift between client and Worker.** Not yet live: there is no Worker. When there is, it
+imports the same `schema.ts`. Do not let a second validator appear in `worker/`.
 
 ---
 

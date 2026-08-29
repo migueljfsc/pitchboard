@@ -69,9 +69,13 @@ src/formations/           preset shapes, each seeding its own links
 src/export/               worker render loop, mediabunny, gifenc, PNG
 src/share/                localStorage, URL-hash codec, API client
   storage.ts              the ONLY place localStorage is touched; never throws
+  urlcodec.ts             #d= share links: deflate + base64url, and the budget
   json.ts                 board and setup files in and out; owns setupTeamSchema
   presets.ts              named one-team squad presets, built on setupTeamSchema
   local.ts                autosave of the board in progress
+src/App.tsx               picks Viewer or Editor from the hash; no router
+src/pages/Viewer.tsx      read-only playback of a shared board, with fork
+src/board/migrate.ts      version dispatch, run before validation on every load
 src/components/           React chrome; ui/ holds shadcn-style primitives
 worker/                   Cloudflare Worker — /api/boards + static passthrough
 infrastructure/terraform/cloudflare/    OpenTofu stack
@@ -160,6 +164,10 @@ infrastructure/terraform/cloudflare/    OpenTofu stack
   inside a synchronous encode loop.
 - **The penalty arc** is the part of a 9.15 m circle centred on the *penalty spot* that falls
   outside the box — not an arc on the box edge.
+- **A hash change does not reload the page.** Pasting a `#d=` link into a tab that already has
+  Pitchboard open fires `hashchange` and nothing else, so anything reading the hash once at mount
+  silently ignores the link. `replaceState` fires no event at all — clearing the hash in code has
+  to update the state too (D33).
 - **Anything read from `localStorage` is untrusted input** — it survives app versions and can be
   hand-edited in devtools. Validate it and discard what fails; never repair it (D31).
 - **A stored preset names players by shirt number, never by id.** Ids are minted per board and a

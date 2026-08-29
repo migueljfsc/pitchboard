@@ -59,6 +59,12 @@ type Props = {
   sticky?: boolean;
   annotationSelection?: string | null;
   onAnnotationSelect?: (id: string | null) => void;
+  /**
+   * False for read-only playback: no pointer handling and no editor chrome.
+   * The renderer already draws that distinction — this is the same flag the
+   * exporter passes, so a shared board looks exactly like an exported frame.
+   */
+  interactive?: boolean;
 };
 
 type Drag =
@@ -88,6 +94,7 @@ export function BoardCanvas({
   sticky = false,
   annotationSelection = null,
   onAnnotationSelect,
+  interactive = true,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -127,7 +134,7 @@ export function BoardCanvas({
       ...view,
       width: size.w,
       height: size.h,
-      interactive: true,
+      interactive,
       selection,
       hover,
       editScene,
@@ -135,7 +142,18 @@ export function BoardCanvas({
       annotationSelection,
       draft: drag?.kind === "draw" ? drag.ann : null,
     });
-  }, [doc, t, size, selection, hover, drag, editScene, pitchView, annotationSelection]);
+  }, [
+    doc,
+    t,
+    size,
+    selection,
+    hover,
+    drag,
+    editScene,
+    pitchView,
+    annotationSelection,
+    interactive,
+  ]);
 
   const pointFrom = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>): Vec2 => {
@@ -401,8 +419,9 @@ export function BoardCanvas({
         ref={canvasRef}
         className="block touch-none select-none"
         style={{
-          cursor:
-            tool !== "select"
+          cursor: !interactive
+            ? "default"
+            : tool !== "select"
               ? "crosshair"
               : drag?.kind === "move" || drag?.kind === "handle" || drag?.kind === "ann-move"
                 ? "grabbing"
@@ -410,11 +429,11 @@ export function BoardCanvas({
                   ? "grab"
                   : "default",
         }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
+        onPointerDown={interactive ? onPointerDown : undefined}
+        onPointerMove={interactive ? onPointerMove : undefined}
+        onPointerUp={interactive ? onPointerUp : undefined}
         onPointerLeave={() => setHover(null)}
-        onDoubleClick={onDoubleClick}
+        onDoubleClick={interactive ? onDoubleClick : undefined}
       />
     </div>
   );

@@ -743,6 +743,45 @@ checks the numbers in the *file*, not the numbers that came out of the build.
 
 ---
 
+## D33 — The share link carries the board, and opens it read-only
+
+**Decision.** `#d=<base64url(deflate-raw(json))>`, decoded by the page itself. A link opens in a
+read-only viewer with one way out: fork, which takes a local copy and clears the hash.
+
+**Measured before it was designed.** The plan's stated worst case — ten scenes with a path on
+every player — compresses to **3,282 characters**; a default board to 998. Freehand is the only
+thing that breaks that: ten strokes at the 400-point cap reach 28,000 characters and thirty reach
+77,000. So the link covers every board that is not drowning in drawing, which is what D16
+predicted and now has a number behind it.
+
+The budget is 8,000 characters, and it is not a browser limit — Chrome and Safari both carry far
+more. It is the chat clients, mail gateways and issue trackers in between, which truncate
+silently. A cut link is worse than a rejected one, because it fails at the recipient's end as a
+damaged board rather than at the sender's end as an error. Over budget, the panel says so and
+offers the JSON export instead, with "copy it anyway" for anyone who knows where it is going.
+
+**A read-only viewer, not the editor.** D7 makes a published snapshot immutable, and this makes
+that legible: a recipient is shown a tactic rather than handed an editor that happens to contain
+one. The canvas takes no pointer events and draws with the same `interactive: false` the exporter
+passes, so a shared board looks exactly like an exported frame. Framing stays available because
+framing belongs to whoever is looking (D12); player size does not, because it is document state
+(D18).
+
+*Rejected — opening straight into the editor.* Cheaper, and it makes every share look like an
+invitation to edit something that cannot be edited.
+
+**No router.** The app is one page and a share link is a fragment, which is also what lets it work
+on a static host with no rewrite rules. The hash is watched rather than read once: pasting a link
+into a tab that already has Pitchboard open changes the fragment WITHOUT reloading, and a
+one-shot read at mount leaves the recipient looking at their own board wondering what the link
+did.
+
+**The clipboard is allowed to refuse.** `writeText` throws whenever the document is not focused,
+which is routine rather than exceptional. Reporting that and stopping leaves the link unreachable,
+so the fallback shows it in a selectable field instead.
+
+---
+
 ## Invariants
 
 Two rules a future change is most likely to break. Both belong in `AGENTS.md`.

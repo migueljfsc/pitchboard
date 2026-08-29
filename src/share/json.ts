@@ -15,6 +15,7 @@
 import { z } from "zod";
 import type { BoardDoc, Link, LinkStyle, Team } from "@/board/types";
 import { boardDocSchema } from "@/board/schema";
+import { migrate } from "@/board/migrate";
 import { replaceTeamLinks } from "@/board/links";
 import { AWAY, DEFAULT_FORMATION, HOME, createBoardDoc, type TeamSpec } from "@/formations";
 import { contrastOn } from "@/lib/color";
@@ -142,7 +143,12 @@ export function fromJson(text: string): ImportOutcome {
   // schema is a broken board, not a setup, so say so rather than reporting the
   // confusing setup errors underneath.
   if (typeof raw === "object" && raw !== null && "version" in raw) {
-    const parsed = boardDocSchema.safeParse(raw);
+    // Migrated before validation: a file saved by an older build is a board we
+    // can still open, not a board we reject.
+    const migrated = migrate(raw);
+    if (!migrated.ok) return { ok: false, error: migrated.error };
+
+    const parsed = boardDocSchema.safeParse(migrated.doc);
     return parsed.success
       ? { ok: true, kind: "board", doc: parsed.data as BoardDoc }
       : { ok: false, error: describe(parsed.error) };

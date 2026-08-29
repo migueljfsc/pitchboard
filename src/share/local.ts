@@ -14,6 +14,7 @@
 
 import type { BoardDoc } from "@/board/types";
 import { boardDocSchema } from "@/board/schema";
+import { migrate } from "@/board/migrate";
 import { browserStore, keyFor, read, remove, write, type Store } from "./storage";
 
 export const BOARD_KEY = keyFor("board");
@@ -29,7 +30,11 @@ export const AUTOSAVE_MS = 700;
 
 export function loadBoard(store: Store | null = browserStore()): BoardDoc | null {
   return read(store, BOARD_KEY, (raw) => {
-    const parsed = boardDocSchema.safeParse(raw);
+    // An autosave outlives the build that wrote it, so it migrates like any
+    // other document arriving from outside this session.
+    const migrated = migrate(raw);
+    if (!migrated.ok) return null;
+    const parsed = boardDocSchema.safeParse(migrated.doc);
     return parsed.success ? (parsed.data as BoardDoc) : null;
   });
 }
