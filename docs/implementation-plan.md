@@ -261,6 +261,10 @@ Goal: MP4, GIF, PNG out of the browser, nothing server-side.
   to the clip duration exactly.
 - **Each format keeps its own resolution.** One clamped list meant picking GIF and then MP4 again
   silently exported at GIF's size — the user's 2560 quietly became 960.
+- **A finished export's filename and size must not outlive the settings that made it.** Left on
+  screen while the format, resolution, frame rate or bitrate changes, it stops being a record of
+  what was produced and reads as a forecast of what the new settings will cost. The same
+  one-scene board ranges from 347 KB to 1.3 MB across those options, so the gap is not small.
 - **Cancelling is terminating the worker.** A cooperative flag cannot be read by a thread inside a
   synchronous encode loop, and there is nothing left to clean up once the scope is gone.
 - **Verifying "the UI does not freeze" needs a baseline.** A background tab clamps timers to one
@@ -512,6 +516,7 @@ One checkbox that turns a sequence of tuned scenes into a single continuous move
 ### Tasks
 
 - `BoardDoc.flow` — `{ speed, endHoldMs }`, additive and optional
+- `Scene.speed` — a per-scene override of the board pace, inherited by a scene added after it
 - `sceneTimings(doc)` as the one timing table, read by duration, scrubbing and scene starts
 - Linear movement while flow is on; per-entity travel overrides ignored
 - Flow toggle in the transport row; Pace and End hold replace Travel and Hold
@@ -523,6 +528,8 @@ One checkbox that turns a sequence of tuned scenes into a single continuous move
 - [x] turning it off restores the tuned timings to the millisecond
 - [x] the scene strip, the scrubber and the playhead all agree in both modes
 - [x] dragging a player still tracks the cursor exactly, at any scene
+- [x] one scene runs at its own pace without moving any other, and a new scene keeps the pace of
+      the one it follows
 
 ### Notes from the build
 

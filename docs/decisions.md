@@ -555,7 +555,15 @@ the holds gone every player still decelerates to a dead stop at each scene bound
 again. That pulse is most of what reads as a cut between scenes. Flow mode is therefore linear:
 constant velocity through the seam is the whole point.
 
-**A pace, not a duration.** One speed, and each transition takes as long as its longest move
+**A pace per scene, not one for the board.** `Scene.speed` overrides `flow.speed` for the travel
+INTO that scene, and a scene added after another inherits its pace — you set 20 m/s once and keep
+working, rather than resetting it on every scene you add. Absent means the board's pace, so a
+document written before per-scene pacing reads exactly as it did. `scenePace(doc, index)` is the
+one place the fallback is resolved, so the timeline and the field showing the number cannot
+disagree. Scene 0 takes no pace: nothing travels into it, and the panel hides the field there the
+same way it hides Travel.
+
+**A pace, not a duration.** Each transition takes as long as its longest move
 needs. A scene where the shape shuffles two metres takes two metres' worth of time rather than a
 full beat, which is what makes the result read as one movement instead of a sequence.
 

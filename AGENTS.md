@@ -110,8 +110,10 @@ infrastructure/terraform/cloudflare/    OpenTofu stack
   Anything mapping a fresh build onto an existing team walks both lists by index.
 - **A field that validates on every keystroke blocks the value you are typing.** Renumbering a
   7 to 12 passes through 1 on the way, so refusing a taken 1 refuses the edit before the second
-  digit exists. The field holds its own text, commits only a free number, and blur puts it back
-  to what the document says — the same shape as the label-size field.
+  digit exists. Retyping a pace of 10 as 20 is worse: it passes through the empty string, which
+  no document can hold, so a fully controlled input snaps back mid-edit. Every numeric field
+  holds its own text, commits only what is valid, and restores on blur — `NumberField` in
+  `Timeline.tsx` and the label-size field in `DrawPanel.tsx`.
 - **Two players on one shirt share an id**, since an id is `<team>-<number>`, and the second
   overwrites the first in every scene's positions. A formation's own numbers never collide; a
   squad carried into a new shape can. `buildTeam` moves the loser to the lowest free shirt —
