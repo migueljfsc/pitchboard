@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { drawBoard } from "./render";
+import { SHAFT_INTO_HEAD, SHOT_OFFSET, drawBoard } from "./render";
+import { HEAD_LENGTH } from "./annotations";
 import { ballRadius, tokenRadius } from "./pitch";
 import { PITCH, PITCH_PADDING, TEAM_NAME_OFFSET } from "./pitch";
 import { frameAt } from "./timeline";
@@ -419,12 +420,99 @@ describe("the ball's own line", () => {
     expect(moving().r.log).not.toContain("setLineDash([1.4,1])");
   });
 
-  it("goes solid and doubles up for a shot", () => {
-    const plain = pass();
-    const shot = pass((d) => setShot(d, 1, true));
+  /**
+   * A ball struck loose: carried, then released to a point downfield.
+   *
+   * Not a pass — a strike cannot be one. `setShot` refuses a pass outright, so
+   * building this out of a carrier change would silently leave the flag off and
+   * the test would be asserting nothing.
+   */
+  const strike = (extra: (d: ReturnType<typeof createBoardDoc>) => ReturnType<typeof createBoardDoc> = (d) => d) =>
+    moving((doc) => {
+      const from = doc.teams[0].players[5].id;
+      let next = setCarrier(setCarrier(doc, 0, from), 1, null);
+      const scenes = next.scenes.slice();
+      scenes[1] = { ...scenes[1], ballPos: { x: 100, y: 34 } };
+      next = { ...next, scenes };
+      return extra(next);
+    });
+
+  it("draws a released ball solid, never dashed", () => {
+    expect(strike().r.log).not.toContain("setLineDash([1.4,1])");
+  });
+
+  it("doubles up and bursts for a shot", () => {
+    const loose = strike();
+    const shot = strike((d) => setShot(d, 1, true));
     expect(shot.r.log).not.toContain("setLineDash([1.4,1])");
-    // Two rails plus the strike burst, against the pass's single line.
-    expect(shot.r.count("stroke")).toBeGreaterThan(plain.r.count("stroke"));
+    // Two rails plus the strike burst, against the loose ball's single line.
+    expect(shot.r.count("stroke")).toBeGreaterThan(loose.r.count("stroke"));
+  });
+
+  /**
+   * A dead-straight, horizontal strike, so "how far along" is just x.
+   *
+   * The shooter stands still at y=34 in both scenes and the ball ends at y=34,
+   * which puts the whole line on one row: the rails sit at 34±SHOT_OFFSET and
+   * the arrowhead's tip is the far point on 34 itself.
+   */
+  const flatStrike = (shot: boolean) => {
+    let doc = createBoardDoc();
+    const shooter = doc.teams[0].players[9].id;
+    doc = setCarrier(doc, 0, shooter);
+    doc = addSceneAfter(doc, 0);
+    doc = setCarrier(doc, 1, null);
+    const place = (s: (typeof doc.scenes)[number]) => ({
+      ...s,
+      positions: { ...s.positions, [shooter]: { x: 60, y: 34 } },
+    });
+    doc = {
+      ...doc,
+      scenes: [
+        place(doc.scenes[0]),
+        { ...place(doc.scenes[1]), ballPos: { x: 100, y: 34 } },
+      ],
+    };
+    if (shot) doc = setShot(doc, 1, true);
+
+    const r = createRecordingCtx();
+    // Mid-transition, where the ball is in flight. The line spans the whole
+    // journey regardless, since its ends come from ballAt at u=0 and u=1.
+    drawBoard(r.ctx, doc, doc.scenes[0].holdMs / 1000 + 0.5, view());
+    return r;
+  };
+
+  /** Every moveTo/lineTo coordinate in the log, as pairs. */
+  const coords = (r: ReturnType<typeof createRecordingCtx>) =>
+    r.log
+      .filter((e) => e.startsWith("moveTo(") || e.startsWith("lineTo("))
+      .map((e) => e.slice(e.indexOf("(") + 1, -1).split(",").map(Number))
+      .map(([x, y]) => ({ x, y }));
+
+  const near = (a: number, b: number, tol = 0.02) => Math.abs(a - b) < tol;
+
+  it("stops the shot's rails inside the arrowhead, not at its tip", () => {
+    // The bug: rails drawn to the tip emerge from under the head where the
+    // triangle narrows past them, and read as two lines overshooting the arrow.
+    const points = coords(flatStrike(true));
+    const railX = points.filter((p) => near(Math.abs(p.y - 34), SHOT_OFFSET)).map((p) => p.x);
+    const tipX = Math.max(...points.filter((p) => near(p.y, 34)).map((p) => p.x));
+
+    expect(railX.length).toBeGreaterThan(0);
+    const shaftEnd = Math.max(...railX);
+
+    // Well short of the tip — at least the head's length, less the overlap.
+    expect(tipX - shaftEnd).toBeGreaterThan(HEAD_LENGTH - SHAFT_INTO_HEAD - 0.05);
+    // But not so short that a gap opens between shaft and head.
+    expect(tipX - shaftEnd).toBeLessThan(HEAD_LENGTH);
+  });
+
+  it("keeps the arrowhead reaching the same point either way", () => {
+    // Trimming the shaft must not move the tip: the arrow still points at the
+    // ball, it is only the rails behind it that stop earlier.
+    const far = (r: ReturnType<typeof createRecordingCtx>) =>
+      Math.max(...coords(r).filter((p) => near(p.y, 34) && p.x > 60).map((p) => p.x));
+    expect(near(far(flatStrike(true)), far(flatStrike(false)), 0.001)).toBe(true);
   });
 
   it("goes when the ball's line is hidden for that scene", () => {

@@ -45,6 +45,7 @@ import {
 } from "./annotations";
 import {
   buildArcTable,
+  clamp,
   halfRange,
   cubicAt,
   cubicTangent,
@@ -500,7 +501,18 @@ const BALL_PATH_WIDTH = 0.32;
 /** Below this the ball has barely moved and a line would be noise. */
 const MIN_BALL_TRAVEL = 1.5;
 /** Half the gap between the two rails of a shot. */
-const SHOT_OFFSET = 0.26;
+export const SHOT_OFFSET = 0.26;
+/**
+ * How far the shaft runs INTO the arrowhead before stopping, in metres.
+ *
+ * The head is a triangle narrowing to the tip, so it only hides what is inside
+ * it. A shaft drawn all the way to the tip emerges from under the head where the
+ * triangle becomes narrower than the shaft is wide — on a shot that is two rails
+ * appearing to overshoot the arrow and run on to the ball. Ending the shaft
+ * inside the head instead leaves the arrow as the terminus, with enough overlap
+ * that no gap opens between them.
+ */
+export const SHAFT_INTO_HEAD = 0.35;
 
 /**
  * The ball's own journey into a scene — the pass, or the shot.
@@ -530,19 +542,30 @@ function drawBallPath(ctx: Ctx, doc: BoardDoc, r: Resolved): void {
   const curve = r.to.ballPath ?? straightCurve(start, end);
   const b: Bezier = { p0: start, c1: curve.c1, c2: curve.c2, p1: end };
 
+  const table = buildArcTable(b);
+  const sample = (length: number): Vec2[] => {
+    const to = clamp(length / table.total, 0, 1);
+    const out: Vec2[] = [];
+    for (let i = 0; i <= PATH_STEPS; i++) {
+      out.push(cubicAt(b, reparameterise(table, (i / PATH_STEPS) * to)));
+    }
+    return out;
+  };
+
   // Stop short of the destination so the head is not buried under the ball.
   const clear = ballRadius(doc) * 2;
-  const table = buildArcTable(b);
-  const trim = table.total > clear * 2 ? 1 - clear / table.total : 1;
-  const points: Vec2[] = [];
-  for (let i = 0; i <= PATH_STEPS; i++) {
-    points.push(cubicAt(b, reparameterise(table, (i / PATH_STEPS) * trim)));
-  }
+  const tipAt = table.total > clear * 2 ? table.total - clear : table.total;
+  const points = sample(tipAt);
+
+  // The shaft stops inside the head rather than at the tip. Floored at a
+  // fraction of the line so a short travel keeps a visible shaft instead of
+  // collapsing to a bare arrowhead.
+  const shaft = sample(Math.max(tipAt * 0.2, tipAt - HEAD_LENGTH + SHAFT_INTO_HEAD));
 
   const shot = r.to.shot === true;
   const rails = shot
-    ? [offsetPolyline(points, SHOT_OFFSET), offsetPolyline(points, -SHOT_OFFSET)]
-    : [points];
+    ? [offsetPolyline(shaft, SHOT_OFFSET), offsetPolyline(shaft, -SHOT_OFFSET)]
+    : [shaft];
 
   ctx.save();
   ctx.lineJoin = "round";
