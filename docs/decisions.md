@@ -468,6 +468,23 @@ is a carrier change, not an object — so a shot is a property of that change.
 *Rejected — a fourth `AnnotationDash`.* Same objection, plus it would let you draw a shot that
 no ball takes.
 
+**Only a loose travel can be a shot**, and `canShoot` is the one place that is decided — read by
+both the toggle's enabled state and by `pruneShots`. A ball played to an OPPONENT stays a shot: a
+keeper's save is the most common one there is. A ball reaching a TEAM-MATE is a pass by the
+definition above, which is the one travel a strike cannot be.
+
+**The flag does not outlive the travel it describes.** It began as a bug: releasing the ball,
+marking the shot, then handing the ball back left `shot` set on a scene with nothing arriving —
+the renderer drew no line, so the board looked right while the strip still said "shot" and the
+toggle sat lit but disabled, and releasing the ball again silently restored a strike nobody asked
+for. The cause was two rules for one question: the toggle was gated on the ball travelling, and
+nothing at all guarded the stored flag.
+
+Enforcing it at the edited scene alone would not have been enough. Setting a carrier changes the
+travel into **that** scene and into the one after it, and deleting or reordering a scene changes
+it for a neighbour. `pruneShots` therefore runs in `replace`, the one point every scene mutation
+passes through, and again in `applyFormation`, which nulls carriers of its own accord.
+
 **What gets a line, and which one, comes from the carrier change** — `ballTravelBetween`, not
 from how far the ball moved. A carrier running with it drags it the length of their run, so
 distance drew every dribble as a pass. Same carrier throughout is a dribble and gets no line at
@@ -569,6 +586,152 @@ The price of deriving timings from content: an edit retimes the animation, and t
 holds an absolute time. The editor re-pins it to the selected scene on every change, or the
 board ends up rendering a frame mid-transition — interpolated positions, which do not follow a
 drag — while the edit lands on the scene the panel says is selected.
+
+---
+
+## D28 — Export size follows the board, not a broadcast aspect
+
+**Decision.** A resolution preset sets the **long edge**; the short edge derives from the board's
+own aspect — the visible span along the pitch plus `PITCH_PADDING` on every side, swapped when the
+board is rotated. `exportSize()` is the one place it happens, and it rounds both axes even because
+H.264 and VP9 both want that.
+
+The full upright board is about 1.46:1, a rotated one is taller than wide, and a half view is
+nearly square. A fixed 16:9 would serve exactly one of those three. It is also the framing the
+editor already uses: `fitViewport` fits the same content box, so an export at this aspect touches
+all four margins and there is no dead space to letterbox.
+
+*Rejected — fixed 720p/1080p/1440p.* Standard sizes, and a vertical board exports as a strip of
+pitch between two wide bands of surround. The board is the subject; the surround is not.
+
+*Rejected — matching the editor canvas.* It is a window size. Export output must not depend on how
+wide someone happens to have dragged their browser, which is the same reason `drawBoard` is pure.
+
+The consequence is that dimensions vary with framing — a 1920 export is 1920×1318 upright and
+1178×1920 rotated. The dialog states the size before you commit, taken from the same `exportSize`
+the worker uses, so it is a statement rather than an estimate.
+
+---
+
+## D29 — The GIF palette is quantised once, over sampled frames
+
+**Decision.** Sample sixteen evenly spaced frames, subsample their pixels to a fixed budget,
+quantise **once** to 256 colours, then map every frame through that one palette.
+
+The rule that matters is one palette for the whole animation, and it is not about file size: a
+palette rebuilt per frame makes the pitch greens crawl between frames, and that shimmer reads far
+worse than any colour loss it avoids. The encoder writes one global colour table and no local
+tables — which is a thing a test can actually assert about the bytes.
+
+*Rejected — a fixed palette built from the board's named colours* (pitch, lines, both kits, ball,
+links), which is what `architecture.md` originally specified. It is the smallest and most literal
+reading of "quantise once", and it ignores that the renderer antialiases every token edge and
+pitch line and that a `filled` link is translucent over grass. Those blends are most of the
+picture; snapping them to the nearest kit colour bands the fills and serrates the tokens.
+
+Sampling has to see the whole clip — first and last frame included — or a kit colour that only
+appears in the final scene is missing from the palette. It also has to see thin features, so the
+pixel stride is forced odd: a stride dividing the row width walks the same columns on every row
+and misses the vertical markings entirely.
+
+---
+
+## D30 — A preset is a squad, not a board
+
+**Decision.** A saved preset holds **one team**: formation, kit, the XI with their numbers and
+names, and that side's units. It applies to Home or Away independently, leaving the opponent, the
+scenes, the drawings and the timings untouched.
+
+The thing worth not retyping is an eleven. A coach sets their own side up once and plays it
+against a different opponent every week, so a preset that dragged last week's opponent along with
+it would be reusable exactly never.
+
+**It reuses `setupTeamSchema`** rather than declaring a shape of its own — a preset *is* a setup
+team with a label on it. One validator, so the stored form and the hand-written `.json` setup file
+cannot drift, and `teamToSetup` / `resolveTeamLinks` serve both.
+
+**Applying goes through `applyFormation`**, which already rebuilds one team in place and leaves
+the other alone. That means positions for that side go back to their formation marks in every
+scene — unavoidable, since changing the shape is repositioning. There is no confirmation, because
+it is an ordinary document edit and undo already covers it.
+
+*Rejected — whole-board presets.* Free, since the setup shape already describes both sides, and it
+answers the wrong question. Still reachable through the existing `.json` export.
+
+*Rejected — storing positions.* That is a board, and boards are what `.json` export and share
+links are for. A preset that carried positions would fight whatever scene it landed on.
+
+Members are shirt numbers, not ids: ids are minted per board, and renumbering a player keeps
+theirs, so a number is the only stable way for a stored file to name a player.
+
+**A preset is identified by its name AND its shape.** Saving over the same name in the same
+formation replaces that preset in place, keeping its id and its position in the list, behind a
+confirmation. The same name in a DIFFERENT formation is a separate preset — "Arsenal" as a 4-3-3
+and "Arsenal" as a 3-5-2 are two setups a coach switches between, not one saved twice, which is
+why the picker shows the formation beside the name. Names match trimmed and case-insensitively,
+so re-saving under what reads as the same name replaces rather than leaving a near-duplicate
+differing by a capital.
+
+That confirmation is one of the few in the app that really is final: presets live outside the
+document, so nothing about them reaches the undo stack.
+
+---
+
+## D31 — Browser storage is untrusted, and never throws
+
+**Decision.** `share/storage.ts` is the only place `localStorage` is touched. Every read takes a
+parser and returns null on failure; every write returns a boolean; nothing anywhere throws.
+
+**Touching `localStorage` is not safe.** Safari's private mode throws on write, a browser set to
+block site data throws on read, and some embedded contexts throw on the property access itself.
+The store is therefore resolved per call rather than once at module load — a module-level failure
+would take the whole bundle down with it. A tactics board losing an autosave is a shrug; one that
+will not open because it could not read one is not.
+
+**Everything read back is untrusted input.** It has sat in a browser across app versions and can
+be edited by hand in devtools. A restored board goes through `boardDocSchema` and a preset library
+through its own schema, and anything that fails is discarded rather than repaired — a
+half-understood preset reaching `applyFormation` is worse than no preset.
+
+The cost is that presets live in one browser: they do not follow anyone to another device, and
+clearing site data takes them. That is the price of D7's no-accounts position, and the `.json`
+export is the escape hatch.
+
+---
+
+## D32 — A formation change keeps the squad and drops the units
+
+**Decision.** Changing a side's formation carries its **names and numbers** across and discards
+its **links**, replacing them with the ones the new shape seeds. `changeFormation` names that
+intent; `applyFormation` stays mechanical underneath it so a preset can still bring a squad of its
+own.
+
+A squad and a shape are different things. The eleven is the coach's work — typed once, and the
+reason presets were asked for in the first place; the shape is only where they stand this week.
+Wiping the names on a formation change made trying a shape cost the same as building a board.
+
+Units go the other way. A back four's chain says nothing about a back three: the members are
+different players in different roles, and the name on it is now a lie. Worse, the seeded links are
+appended, so keeping the old ones stacked a stale connector under the new one and a few changes
+left eleven overlapping links on one side. Ownership is read from the **old** team, because a
+squad carried across keeps its ids and the stale links would otherwise survive the prune.
+
+**Slots pair by order**, which is what `buildTeam` already expects. A squad deeper than the new
+shape loses its tail; a shallower one takes the new shape's own numbers for the slots it does not
+reach. Roles do not follow: slot four of a back four becomes a midfielder in a back three, so a
+right-back's name can land on someone further forward. That is inherent to order-pairing, and the
+alternative — inferring roles across 27 formations — is a guess dressed as a feature.
+
+**A carried squad can collide with the new shape's numbers.** Ids are `<team>-<number>`, so two
+players on one shirt share an id and the second silently overwrites the first in every scene's
+positions. `buildTeam` now moves the loser to the lowest free shirt. A formation's own numbers
+never collide; this only bites when a squad is shallower than the shape it is moving into.
+
+That repair created a second question, since the setup importer *rejects* duplicate numbers rather
+than fixing them. Both are right, on a rule worth stating: **reject what was written wrong, resolve
+what was left to us.** A file naming two number 7s is an error worth reporting; a collision between
+a number a person chose and one the app picked is the app's to sort out. The importer therefore
+checks the numbers in the *file*, not the numbers that came out of the build.
 
 ---
 

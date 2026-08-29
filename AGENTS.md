@@ -68,6 +68,10 @@ src/board/                the engine — zero React, zero DOM
 src/formations/           preset shapes, each seeding its own links
 src/export/               worker render loop, mediabunny, gifenc, PNG
 src/share/                localStorage, URL-hash codec, API client
+  storage.ts              the ONLY place localStorage is touched; never throws
+  json.ts                 board and setup files in and out; owns setupTeamSchema
+  presets.ts              named one-team squad presets, built on setupTeamSchema
+  local.ts                autosave of the board in progress
 src/components/           React chrome; ui/ holds shadcn-style primitives
 worker/                   Cloudflare Worker — /api/boards + static passthrough
 infrastructure/terraform/cloudflare/    OpenTofu stack
@@ -104,6 +108,18 @@ infrastructure/terraform/cloudflare/    OpenTofu stack
 - **Formation slots pair by ORDER, not by id.** `buildTeam` mints `<team>-<number>` ids, but
   renumbering a player keeps their id — so after a renumber those ids no longer match the squad.
   Anything mapping a fresh build onto an existing team walks both lists by index.
+- **A field that validates on every keystroke blocks the value you are typing.** Renumbering a
+  7 to 12 passes through 1 on the way, so refusing a taken 1 refuses the edit before the second
+  digit exists. The field holds its own text, commits only a free number, and blur puts it back
+  to what the document says — the same shape as the label-size field.
+- **Two players on one shirt share an id**, since an id is `<team>-<number>`, and the second
+  overwrites the first in every scene's positions. A formation's own numbers never collide; a
+  squad carried into a new shape can. `buildTeam` moves the loser to the lowest free shirt —
+  but the setup importer still REJECTS duplicates a file states outright. Reject what was
+  written wrong, resolve what was left to us (D32).
+- **A formation change keeps the squad and drops that side's links** (D32). Seeded links are
+  appended, so keeping the old ones stacks a stale connector under the new one. Link ownership
+  is read from the OLD team: a carried squad keeps its ids, so the prune would not catch them.
 - **In flow mode the timings are derived from the positions**, so any edit retimes the
   animation and slides the scrubber into the middle of a transition. The board then draws
   interpolated positions — a dragged player lags the cursor — while the edit lands on the scene
@@ -111,9 +127,18 @@ infrastructure/terraform/cloudflare/    OpenTofu stack
 - **Zero holds is not seamless.** `easeInOutCubic` starts and ends at zero velocity, so removing
   the holds still leaves every player stopping dead at each scene boundary. Flow mode is linear
   for that reason — see D27.
+- **`Scene.shot` must not outlive the travel it describes.** It marks the ball's arrival, so
+  setting a carrier invalidates it on that scene AND the next, and deleting or reordering a scene
+  invalidates it for a neighbour. `pruneShots` runs inside `replace` for that reason. `canShoot`
+  is the only rule for whether a strike is possible — gate and flag disagreeing is what let one
+  go stale (D24).
 - **A dribble is not a pass.** The ball is glued to its carrier, so it moves as far as they
   run. Anything deciding what the ball *did* must read the carrier change (`ballTravelBetween`),
   never the distance the ball covered.
+- **An arrowhead only hides what is inside it.** The head is a triangle narrowing to the tip, so
+  a shaft drawn all the way to that tip emerges from under it wherever the triangle gets narrower
+  than the shaft is wide. On a shot that is two rails appearing to overshoot the arrow and run on
+  to the ball. The shaft stops inside the head instead (`SHAFT_INTO_HEAD`).
 - **The ball's line is sampled from `ballAt`, not guessed.** Endpoints come from the function
   that actually moves the ball, at `u=0` and `u=1`, so carrier glue and travel overrides are
   included rather than reimplemented.
@@ -122,10 +147,21 @@ infrastructure/terraform/cloudflare/    OpenTofu stack
   `useHistory`. See D26.
 - **Chains must not close.** A back 4 rendered as a closed polygon draws an edge across the
   width of the pitch. Member order is load-bearing for chains and polygon perimeters.
-- **GIF palette shimmer.** Quantise once against the board's known colours, never per frame, or
-  the pitch greens crawl between frames.
+- **GIF palette shimmer.** Quantise once for the whole animation, never per frame, or the pitch
+  greens crawl between frames. The palette comes from sampled frames rather than the board's
+  named colours — antialiased edges and translucent fills are most of the picture (D29).
+- **A GIF delay is a whole number of centiseconds.** Rounding each frame independently runs a
+  30 fps clip a second short over ten seconds. Take differences of rounded cumulative times.
+- **Export size follows the board's aspect, not 16:9** (D28), and both axes must be even or the
+  H.264 encoder refuses the frame.
+- **Cancelling an export is terminating the worker.** A cooperative flag cannot be read from
+  inside a synchronous encode loop.
 - **The penalty arc** is the part of a 9.15 m circle centred on the *penalty spot* that falls
   outside the box — not an arc on the box edge.
+- **Anything read from `localStorage` is untrusted input** — it survives app versions and can be
+  hand-edited in devtools. Validate it and discard what fails; never repair it (D31).
+- **A stored preset names players by shirt number, never by id.** Ids are minted per board and a
+  renumbered player keeps theirs, so an id in a file means nothing later (D30).
 - **DPR double-application** looks correct on a 1× monitor and wrong everywhere else.
 
 ## Definition of done, per phase

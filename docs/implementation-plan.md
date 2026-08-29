@@ -13,7 +13,7 @@ touches it. Every phase ends at a state you can actually look at.
 | M1 | Static board | Drag a 4-3-3 around a real pitch |
 | M2 | Animation | Scrub a multi-scene move with curved runs and passes |
 | M3 | Links | Watch a midfield 3 deform as it presses |
-| M4 | Export | MP4 / GIF / PNG out |
+| M4 | Export | MP4 / WebM / GIF / PNG out |
 | M5 | Persistence | Share a link |
 | M6 | Infra + CI | Deployed and green |
 
@@ -213,27 +213,59 @@ schema invariant tests.
 
 ## M4 — Export
 
+**Status: complete.**
+
 Goal: MP4, GIF, PNG out of the browser, nothing server-side.
 
 ### Tasks
 
-1. **`export/image.ts`** — hi-res PNG at a configurable scale, current frame.
-2. **`export/worker.ts`** — the offscreen render loop, progress messaging, cancellation.
-3. **`export/video.ts`** — mediabunny wiring, capability detection, the MP4 → WebM ladder.
-4. **`export/gif.ts`** — `gifenc` with a palette built once from the board's known colours.
-5. **`components/ExportDialog.tsx`** — format (MP4 / GIF / PNG), resolution, fps, bitrate,
-   progress bar, cancel.
+1. **`export/frame.ts`** — the pure layer: board aspect, even-dimension sizing, frame count and
+   timestamps, GIF delays, palette sample indices. Everything the dialog quotes and the worker
+   renders comes from here, and it is the only part with tests.
+2. **`export/image.ts`** — hi-res PNG at a configurable long edge, current frame, main thread.
+3. **`export/worker.ts`** — the offline render loop, progress messaging, one request per worker.
+4. **`export/video.ts`** + **`export/codecs.ts`** — mediabunny wiring and the MP4 → WebM ladder.
+5. **`export/gif.ts`** — `gifenc` with one palette for the whole animation.
+6. **`export/client.ts`** — main-thread handle: spawn, progress, cancel by termination.
+7. **`components/ExportDialog.tsx`** — format, resolution, fps, bitrate, progress, cancel.
 
 ### Definition of done
 
-- PNG at 4× is crisp; text and line weights scale proportionally
-- MP4 at 1080p60 plays in QuickTime, VLC, and a browser
-- **Frames from the exported MP4 match the editor preview at the same `t`** — check three
-  timestamps including one mid-transition
-- Stub the capability check: WebM and GIF both produce playable files
-- GIF does not shimmer between frames
-- Export of a 20-second animation completes faster than realtime and does not freeze the UI
-- Cancel mid-export leaves no leaked worker
+- [x] PNG at 4x is crisp; text and line weights scale proportionally — a 3840 render downscaled
+      to 960 matches a native 960 render (mean error 1.2/255)
+- [x] MP4 plays in a browser and in QuickTime — macOS reads the file as H.264 `public.mpeg-4`
+- [x] **Frames from the exported MP4 match the editor preview at the same `t`** — three
+      timestamps including two mid-transition, decoded back and diffed per pixel: mean error
+      ~1/255, and decoded timestamps land exactly on the requested ones
+- [x] Stub the capability check: WebM (VP9) and GIF both produce playable files
+- [x] GIF does not shimmer — one global colour table, zero local tables, asserted on the bytes
+- [x] Export of a 20-second animation completes faster than realtime and does not freeze the UI
+      — 19.5 s at 1920x1318/60 encodes in 7.3 s, with no main-thread stall over the idle baseline
+- [x] Cancel mid-export leaves no leaked worker — one created, one terminated, none live, and no
+      callbacks afterwards
+
+### Notes from the build
+
+- **The frame-match check needs a control.** "The exported frame matches the preview" is only
+  worth anything alongside evidence the comparison could have failed. Diffing the same decoded
+  frame against the preview one frame either side gives 1.78 where the match gives 1.07, so the
+  metric has the power to catch an off-by-one — without that number the low error proves nothing
+  more than that both images are mostly grass.
+- **Sizing follows the board, not 16:9** (D28). A rotated board in a 16:9 frame is a strip
+  between two wide bands of surround.
+- **The GIF palette is quantised over sampled frames** (D29), not built from the board's named
+  colours as originally specified. Antialiased edges and translucent link fills are most of the
+  picture, and they have no named colour.
+- **A GIF delay is centiseconds**, so naive per-frame rounding runs a 30 fps clip a full second
+  short over ten seconds. Differences of rounded cumulative times fix it; the exported delays sum
+  to the clip duration exactly.
+- **Each format keeps its own resolution.** One clamped list meant picking GIF and then MP4 again
+  silently exported at GIF's size — the user's 2560 quietly became 960.
+- **Cancelling is terminating the worker.** A cooperative flag cannot be read by a thread inside a
+  synchronous encode loop, and there is nothing left to clean up once the scope is gone.
+- **Verifying "the UI does not freeze" needs a baseline.** A background tab clamps timers to one
+  second, which looks exactly like a blocked main thread; the idle measurement and the
+  during-export measurement have to be compared rather than read absolutely.
 
 ### Risks
 
@@ -255,8 +287,9 @@ Goal: a link you can send someone.
 
 ### Tasks
 
-1. **`share/local.ts`** — `localStorage` autosave with debounce, restore on load. The `.json`
-   import/export half shipped early in M8 as `share/json.ts`; only the autosave is left.
+1. ~~**`share/local.ts`** — `localStorage` autosave with debounce, restore on load.~~ **Done**,
+   with squad presets in M10. The `.json` import/export half shipped early in M8 as
+   `share/json.ts`.
 2. **`share/urlcodec.ts`** — `#d=<base64url(deflate(json))>` via native `CompressionStream`,
    with a length budget check.
 3. **`share/api.ts`** — client for the Worker endpoints.
@@ -267,7 +300,7 @@ Goal: a link you can send someone.
 
 ### Definition of done
 
-- Reload the page mid-edit; work is restored
+- [x] Reload the page mid-edit; work is restored
 - Publish a link, open it in a private window: board and animation reproduce exactly
 - Self-contained `#d=` link opens with the API blocked in devtools
 - Oversized payload is rejected with a useful message, not a 500
@@ -501,6 +534,58 @@ One checkbox that turns a sequence of tuned scenes into a single continuous move
   milliseconds, and in flow mode a travel is a distance over a speed, so the round trip lands a
   hair short of the boundary and resolves as `moving`. A microsecond of tolerance at the seam
   turns that back into the scene at rest.
+
+---
+
+## M10 — Squad presets and autosave
+
+Out of order, on request: retyping an eleven for every new board was the friction. D30 and D31.
+
+### Tasks
+
+- `share/storage.ts` — the one place `localStorage` is touched. Never throws, every read
+  validates, the store is injectable so tests need no DOM
+- `share/presets.ts` — a named library of one-team setups, built on `setupTeamSchema`
+- `share/local.ts` + `lib/useAutosave.ts` — debounced autosave of the board in progress
+- `json.ts` split so `teamToSetup`, `resolveTeamLinks` and `replaceTeamLinks` serve both the
+  setup file and presets — one validator, no drift
+- `components/SquadPresets.tsx` in the Formations panel, per team
+
+### Definition of done
+
+- [x] save a named squad, change the formation, load it back and get the XI returned intact
+- [x] applying to one side leaves the opponent, every scene and the drawings untouched
+- [x] a preset applies to Home or Away, and to a board it was not saved from
+- [x] saving over the same name in the same formation asks, then replaces in place; the same
+      name in another formation saves alongside it
+- [x] the library and the board both survive a reload
+- [x] editing is quiet for the debounce before anything is written
+- [x] hand-corrupted storage yields a fresh board, never a crash — verified in the browser for
+      malformed JSON, a wrong shape and a non-array
+- [x] a preset naming an unknown formation, an over-deep squad, or a shirt nobody wears is
+      refused with a message rather than silently half-applied
+
+### Notes from the build
+
+- **A preset stores shirt numbers, not ids.** Ids are minted per board and renumbering a player
+  keeps theirs, so a number is the only stable way a stored file can name a player. The existing
+  "formation slots pair by ORDER, not by id" trap is the same fact from the other side.
+- **`buildTeam` fills the formation's slots and ignores the rest**, so a 13-player squad saved
+  against an 11-slot shape would silently lose its tail. Refused with a message instead, matching
+  what the setup importer already does.
+- **Changing formation now keeps the squad and drops that side's links** (D32), which was the
+  other half of the same friction. `changeFormation` names the intent so it can be tested without
+  a component; `applyFormation` stays mechanical so a preset can still bring its own squad.
+- **The library is written through on change**, not from an effect watching it, so a failed write
+  cannot leave the list on screen disagreeing with the one in storage.
+- **Presets are not undoable and never reach a document.** They are a library the board draws
+  from, not part of what a board is, so nothing about them lands in an export or a share link.
+
+### Risks
+
+**One browser.** Presets do not sync and clearing site data takes them. Consistent with D7's
+no-accounts position; the `.json` export is the way out. If they ever need to travel, they are
+already in the shape the share API would take.
 
 ---
 

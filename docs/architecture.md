@@ -463,55 +463,78 @@ retroactively changes an earlier scene.
 
 ## 9. Export
 
-`src/export/worker.ts` owns the loop. The main thread posts `{ doc, format, fps, size }` and
-receives progress messages.
+`src/export/` — four consumers, one seam. `frame.ts` decides how big a frame is, when it happens
+and how it is viewed; everything else renders through it. All of it is pure and tested, so the
+size the dialog quotes before you commit is the size the worker actually produces.
 
 ```ts
-const output = new Output({ format: new Mp4OutputFormat(), target: new BufferTarget() })
-const source = new CanvasSource(offscreen, {
-  codec: 'avc',
-  quality: new Quality({ bitrate: 8e6 }),
-})
-output.addVideoTrack(source, { frameRate: 60 })
-await output.start()
-
-for (let f = 0; f < totalFrames; f++) {
-  drawBoard(ctx, doc, f / 60, exportViewport)
-  await source.add(f / 60, 1 / 60)
-}
-
-await output.finalize()
-const bytes = output.target.buffer
+exportSize(longEdge, doc, pitchView): Size        // even on both axes — see D28
+exportView(doc, size, pitchView): RenderView      // interactive: false, nothing else differs
+frameCount(seconds, fps): number                  // covers [0, duration), never duration itself
 ```
 
-Because this is an `OffscreenCanvas` in a worker, there is no compositor to wait on — no
-`requestAnimationFrame` sync is needed, and no frame can be captured stale. That is the whole
-reason export lives off the main thread.
+Frames stop short of `duration` deliberately: the timeline always ends on a hold, so a frame at
+exactly `duration` repeats the one before it — a wasted frame in an MP4 and a visible stutter at
+the seam of a looping GIF.
+
+### The worker
+
+`src/export/worker.ts` owns the loop. The main thread posts one `ExportRequest` and receives
+progress; there is no shared state and no second copy of the document.
+
+```ts
+const source = new CanvasSource(offscreen, { codec, quality: new Quality({ bitrate }) })
+output.addVideoTrack(source, { frameRate: fps })
+await output.start()
+
+for (let i = 0; i < frames; i++) {
+  drawBoard(ctx, doc, frameTime(i, fps), view)
+  await source.add(frameTime(i, fps), 1 / fps)   // awaited: respects encoder backpressure
+}
+await output.finalize()
+```
+
+Because this is an `OffscreenCanvas` in a worker there is no compositor to wait on — no
+`requestAnimationFrame` sync, and no frame can be captured stale. That is the whole reason export
+lives off the main thread, and it is why a 19.5 s clip encodes at 1920x1318/60 in about 7 s.
+
+**Cancelling is termination**, not a cooperative flag. The encode loop is a tight synchronous run
+in a thread of its own, so killing the scope takes the `VideoEncoder` and the `OffscreenCanvas`
+with it and leaves nothing to leak. `client.ts` terminates on cancel, on error, on completion and
+on unmount, and is safe to call twice.
+
+The finished file is **transferred**, not cloned — a 1080p60 clip is tens of megabytes.
 
 ### Format ladder
 
 Resolved at runtime through mediabunny's codec-capability check, never by user-agent sniffing.
+The check depends on the dimensions, so it is re-asked when the resolution changes: a machine
+that encodes 720p H.264 may refuse 4K. `capability.ts` imports it dynamically, keeping the
+encoder out of the main bundle — the dialog is the only thing that ever asks.
 
 | Format | Codec | Availability |
 |---|---|---|
 | MP4 | H.264 (avc) | Chrome, Edge, Safari 16.4+, Firefox 130+ desktop |
-| WebM | VP9 | where AVC encoding is unavailable |
+| WebM | VP9, then VP8 | where AVC encoding is unavailable |
 | GIF | `gifenc` | universal |
 
-GIF is a **first-class choice in the export dialog**, not a downgrade path — it is the format
-that actually pastes into a group chat.
+GIF is a **first-class choice in the export dialog**, not a downgrade path — it is the format that
+actually pastes into a group chat. It needs one palette for the whole animation; see D29 for how
+it is built and why it is not the board's named colours.
 
-**GIF needs a fixed palette.** Quantising per frame makes the pitch greens shimmer between
-frames, which looks far worse than the colour loss itself. Build one palette up front from the
-known set of board colours (pitch, lines, both kits, ball, link colours), then quantise every
-frame against it.
+**A GIF delay is a whole number of centiseconds.** At 30 fps every frame rounds 33.3 ms down to
+30 ms and a ten-second animation finishes a second early. `gifDelays()` takes differences of
+rounded cumulative times instead, so the error stays inside the frame it belongs to rather than
+accumulating; the offered rates divide 100 exactly, and 50 is the ceiling because browsers clamp
+anything faster to 10 fps.
 
 ### PNG
 
-Same renderer, `OffscreenCanvas` at a configurable scale factor, then `convertToBlob()`. Exports
-whatever frame the scrubber currently sits on, so the still and the video agree by construction.
-
----
+`src/export/image.ts`, main thread — one frame needs no worker, and staying here means it works
+without `OffscreenCanvas` too. Exports whatever frame the scrubber sits on, through the same
+`exportView`, so the still and the video agree by construction. Rendering at 3840 and downscaling
+to 960 matches a native 960 render, which is what "line weights scale proportionally" means in
+practice: font sizes derive from `view.scale` rather than being fixed in pixels.
 
 ## 10. Persistence and sharing
 
@@ -521,7 +544,11 @@ actually means — you are sending someone a position, not granting write access
 
 Three layers:
 
-1. **Work in progress** — autosaved to `localStorage`, plus explicit `.json` import/export.
+1. **Work in progress** — autosaved to `localStorage` (`share/local.ts`, debounced: a drag emits
+   a document per pointermove and a `localStorage` write is synchronous on the main thread), plus
+   explicit `.json` import/export, plus **squad presets** (`share/presets.ts`) — a named library
+   of one-team setups, reusing `setupTeamSchema` so a preset and a hand-written setup file are the
+   same shape. See D30 and D31.
    The JSON half shipped early, in `src/share/json.ts`. It accepts two shapes, told apart by
    `version`: a whole `BoardDoc`, and a much shorter **setup** document naming a formation, an
    eleven and its units. A setup is built into a board and then validated *as* a board, so
