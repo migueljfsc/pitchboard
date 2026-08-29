@@ -22,6 +22,8 @@ type Props = {
   selection: ReadonlySet<string>;
   onSelectMembers: (members: string[]) => void;
   onCreateFromSelection: () => void;
+  /** Raises the confirmation; the Editor owns it, as it does the two resets. */
+  onClearAll: () => void;
   expanded: string | null;
   onExpandedChange: (id: string | null) => void;
 };
@@ -38,6 +40,7 @@ export function LinkPanel({
   selection,
   onSelectMembers,
   onCreateFromSelection,
+  onClearAll,
   expanded,
   onExpandedChange,
 }: Props) {
@@ -63,6 +66,17 @@ export function LinkPanel({
         <span className="text-[11px] uppercase tracking-wide text-ink-400">
           Links ({doc.links.length})
         </span>
+        {doc.links.length > 0 && (
+          <button
+            type="button"
+            onClick={onClearAll}
+            title="Delete every link on the board"
+            className="flex items-center gap-1 rounded px-1 py-0.5 text-[11px] text-ink-400 transition hover:text-red-400"
+          >
+            <Trash2 size={11} />
+            Delete all
+          </button>
+        )}
       </div>
 
       <button

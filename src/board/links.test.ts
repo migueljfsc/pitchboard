@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   NEUTRAL_LINK_COLOR,
   area,
+  clearLinks,
   createLink,
   deleteLink,
   linkColor,
@@ -386,5 +387,29 @@ describe("moveLink", () => {
     expect(moveLink(doc, 1, 1)).toBe(doc);
     expect(moveLink(doc, -1, 0)).toBe(doc);
     expect(moveLink(doc, 0, 9)).toBe(doc);
+  });
+});
+
+describe("clearLinks", () => {
+  it("drops every link on both teams", () => {
+    const doc = createBoardDoc();
+    expect(doc.links.length).toBeGreaterThan(0);
+    expect(clearLinks(doc).links).toEqual([]);
+  });
+
+  it("leaves the players, scenes and ball untouched", () => {
+    const doc = createBoardDoc();
+    const cleared = clearLinks(doc);
+    expect(cleared.teams).toEqual(doc.teams);
+    expect(cleared.scenes).toEqual(doc.scenes);
+  });
+
+  it("is the same object when there is nothing to clear", () => {
+    const empty = clearLinks(createBoardDoc());
+    expect(clearLinks(empty)).toBe(empty);
+  });
+
+  it("still validates", () => {
+    expect(boardDocSchema.safeParse(clearLinks(createBoardDoc())).success).toBe(true);
   });
 });

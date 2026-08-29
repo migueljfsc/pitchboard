@@ -7,6 +7,7 @@ import { ViewControls } from "@/components/ViewControls";
 import { Section } from "@/components/ui/Section";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
+  Download,
   FileJson,
   PanelRightClose,
   PanelRightOpen,
@@ -17,14 +18,30 @@ import {
 } from "lucide-react";
 import { Inspector } from "@/components/Inspector";
 import { DrawingsPanel } from "@/components/DrawingsPanel";
+import { ExportDialog } from "@/components/ExportDialog";
 import { JsonDialog } from "@/components/JsonDialog";
 import { LinkPanel } from "@/components/LinkPanel";
 import { DrawPanel } from "@/components/DrawPanel";
 import { Timeline } from "@/components/Timeline";
 import { nudgeEntities } from "@/board/interaction";
 import { useHistory, type Change } from "@/lib/history";
+import { useAutosave } from "@/lib/useAutosave";
+import { AUTOSAVE_MS, loadBoard, saveBoard } from "@/share/local";
+import {
+  addPreset,
+  applyPreset,
+  deletePreset,
+  loadPresets,
+  presetFrom,
+  renamePreset,
+  replaceable,
+  savePresets,
+  updatePreset,
+  type PresetLibrary,
+  type SquadPreset,
+} from "@/share/presets";
 import { cn } from "@/lib/utils";
-import { createLink } from "@/board/links";
+import { clearLinks, createLink } from "@/board/links";
 import { annotationsOf, deleteAnnotation, sceneRange } from "@/board/annotations";
 import { concealedPlayers } from "@/board/render";
 import {
@@ -40,7 +57,7 @@ import { addPlayer, removePlayer, setPlayerLabel, setPlayerNumber } from "@/boar
 import {
   AWAY,
   HOME,
-  applyFormation,
+  changeFormation,
   createBoardDoc,
   resetPositions,
   type Direction,
@@ -50,6 +67,8 @@ import {
 type Pending =
   | { kind: "reset" }
   | { kind: "positions" }
+  | { kind: "links" }
+  | { kind: "preset"; preset: SquadPreset; replacing: SquadPreset }
   | { kind: "import"; doc: BoardDoc };
 
 export function Editor() {
@@ -63,7 +82,10 @@ export function Editor() {
     redo: redoHistory,
     canUndo,
     canRedo,
-  } = useHistory<BoardDoc>(createBoardDoc);
+    // Reopen on whatever was last being worked on. A stored board that no
+    // longer validates is discarded by loadBoard, so a bad autosave costs a
+    // fresh board rather than a broken one.
+  } = useHistory<BoardDoc>(() => loadBoard() ?? createBoardDoc());
   const [selection, setSelection] = useState<ReadonlySet<string>>(() => new Set());
   const [chosenScene, setActiveScene] = useState(0);
   const [time, setTime] = useState(0);
@@ -73,9 +95,16 @@ export function Editor() {
   const [pitchView, setPitchView] = useState<PitchView>(DEFAULT_PITCH_VIEW);
   const [pending, setPending] = useState<Pending | null>(null);
   const [jsonOpen, setJsonOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [selectionOpen, setSelectionOpen] = useState(true);
   const [drawingsOpen, setDrawingsOpen] = useState(false);
   const [focusName, setFocusName] = useState(0);
+
+  // Squad presets live outside the document: they are a library the board draws
+  // from, not part of what the board IS. Nothing about them is undoable, and
+  // none of it reaches an export or a share link.
+  const [presets, setPresets] = useState<PresetLibrary>(() => loadPresets());
+  const [presetError, setPresetError] = useState<string | null>(null);
 
   // Drawing. The tool owns what a drag on the grass does; colour and dash are
   // the style the next shape takes, and also restyle the selected one.
@@ -121,6 +150,10 @@ export function Editor() {
     },
     [commitDoc, pinScrubber, activeScene],
   );
+
+  // Debounced so a drag, which emits a document per pointermove, does not
+  // serialise the whole board forty times a second on the main thread.
+  useAutosave(doc, saveBoard, AUTOSAVE_MS);
 
   const undo = useCallback(() => {
     pinScrubber(undoHistory(), chosenScene);
@@ -201,18 +234,53 @@ export function Editor() {
     [doc],
   );
 
+  // The library is written through on every change rather than in an effect, so
+  // a failed write cannot leave the list on screen disagreeing with storage.
+  const commitPresets = useCallback((next: PresetLibrary) => {
+    setPresets(next);
+    savePresets(next);
+  }, []);
+
+  const onSavePreset = (teamIndex: 0 | 1, label: string) => {
+    const preset = presetFrom(doc, teamIndex, presets, label);
+
+    // The same name in the same shape is the same squad being saved again. A
+    // different shape under that name is a separate preset, so it just adds.
+    const replacing = replaceable(presets, preset.label, preset.formation);
+    if (replacing) {
+      setPending({ kind: "preset", preset, replacing });
+      return;
+    }
+
+    commitPresets(addPreset(presets, preset));
+    setPresetError(null);
+  };
+
+  /** Keeps the replaced preset's id, so it stays where it was in the list. */
+  const replacePreset = (preset: SquadPreset, replacing: SquadPreset) => {
+    commitPresets(updatePreset(presets, { ...preset, id: replacing.id }));
+    setPresetError(null);
+    setPending(null);
+  };
+
+  const onApplyPreset = (teamIndex: 0 | 1, id: string) => {
+    const preset = presets.find((p) => p.id === id);
+    if (!preset) return;
+    const outcome = applyPreset(doc, teamIndex, preset);
+    if (!outcome.ok) {
+      setPresetError(outcome.error);
+      return;
+    }
+    setPresetError(null);
+    setDoc(outcome.doc);
+    // The squad has been rebuilt, so anything selected refers to players who no
+    // longer exist under those ids.
+    setSelection(new Set());
+  };
+
   const onFormationChange = (teamIndex: 0 | 1, formation: string) => {
-    const base = teamIndex === 0 ? HOME : AWAY;
-    const team = doc.teams[teamIndex];
-    setDoc(
-      applyFormation(doc, teamIndex, {
-        ...base,
-        name: team.name,
-        color: team.color,
-        textColor: team.textColor,
-        formation,
-      }),
-    );
+    setDoc(changeFormation(doc, teamIndex, formation));
+    // The side has been rebuilt, so anything selected on it is stale.
     setSelection(new Set());
   };
 
@@ -299,6 +367,12 @@ export function Editor() {
     clearEditorState();
   };
 
+  const dropLinks = () => {
+    setDoc(clearLinks(doc));
+    setExpandedLink(null);
+    setPending(null);
+  };
+
   /** The narrow one: back to the formation marks, keeping everything else. */
   const restoreShape = () => {
     setDoc(resetPositions(doc));
@@ -363,7 +437,7 @@ export function Editor() {
       if (e.target instanceof HTMLElement && ["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName)) return;
       // A dialog owns the keyboard while it is up — Space must not start
       // playback behind it, and Escape belongs to the dialog.
-      if (pending || jsonOpen) return;
+      if (pending || jsonOpen || exportOpen) return;
 
       // Escape disarms a drawing tool before anything else looks at the key.
       if (e.key === "Escape") {
@@ -399,7 +473,19 @@ export function Editor() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onNudge, pending, jsonOpen, playing, setPlayback, annotation, doc, setDoc, undo, redo]);
+  }, [
+    onNudge,
+    pending,
+    jsonOpen,
+    exportOpen,
+    playing,
+    setPlayback,
+    annotation,
+    doc,
+    setDoc,
+    undo,
+    redo,
+  ]);
 
   return (
     <div className="flex h-full w-full">
@@ -450,6 +536,18 @@ export function Editor() {
               Send someone the whole board and they open your play. A short setup file names a
               formation, an eleven and its units.
             </p>
+            <button
+              type="button"
+              onClick={() => setExportOpen(true)}
+              className="flex items-center justify-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
+            >
+              <Download size={13} />
+              Export video or image
+            </button>
+            <p className="text-[11px] leading-relaxed text-ink-300">
+              MP4, WebM or GIF of the whole animation, or a PNG of the frame on screen. Exported
+              at the framing you are looking at.
+            </p>
           </div>
         </Section>
 
@@ -480,9 +578,22 @@ export function Editor() {
                   onFormationChange={onFormationChange}
                   direction={directions[i]}
                   onAddPlayer={(index) => setDoc(addPlayer(doc, index))}
+                  presets={presets}
+                  onSavePreset={onSavePreset}
+                  onApplyPreset={onApplyPreset}
+                  onRenamePreset={(id, label) => commitPresets(renamePreset(presets, id, label))}
+                  onDeletePreset={(id) => commitPresets(deletePreset(presets, id))}
                 />
               </div>
             ))}
+            {presetError && (
+              <p
+                role="alert"
+                className="rounded border border-red-500/50 bg-red-500/10 px-2 py-1.5 text-[11px] leading-relaxed text-red-300"
+              >
+                {presetError}
+              </p>
+            )}
           </div>
         </Section>
 
@@ -516,6 +627,7 @@ export function Editor() {
             selection={visible}
             onSelectMembers={(members) => setSelection(new Set(members))}
             onCreateFromSelection={onCreateLink}
+            onClearAll={() => setPending({ kind: "links" })}
             expanded={expandedLink}
             onExpandedChange={setExpandedLink}
           />
@@ -569,7 +681,7 @@ export function Editor() {
       {pending?.kind === "reset" && (
         <ConfirmDialog
           title="Reset the board?"
-          message={`Every scene, run, link, drawing, player name and team setting goes back to a fresh ${formationOf(0)} against a ${formationOf(1)}. This cannot be undone.`}
+          message={`Every scene, run, link, drawing, player name and team setting goes back to a fresh ${formationOf(0)} against a ${formationOf(1)}. Undo brings the board back.`}
           confirmLabel="Discard changes"
           onConfirm={reset}
           onCancel={() => setPending(null)}
@@ -579,9 +691,29 @@ export function Editor() {
       {pending?.kind === "positions" && (
         <ConfirmDialog
           title="Reset every position?"
-          message={`Both teams go back to their formation marks in every scene, and the runs between them are cleared. Names, numbers, links, drawings, the ball and the scene list are kept. This cannot be undone.`}
+          message={`Both teams go back to their formation marks in every scene, and the runs between them are cleared. Names, numbers, links, drawings, the ball and the scene list are kept. Undo brings the positions back.`}
           confirmLabel="Reset positions"
           onConfirm={restoreShape}
+          onCancel={() => setPending(null)}
+        />
+      )}
+
+      {pending?.kind === "links" && (
+        <ConfirmDialog
+          title={`Delete all ${doc.links.length} links?`}
+          message="Every connector on the board goes, on both teams, along with the names, styles and colours given to them. The players stay where they are. Undo brings them back."
+          confirmLabel="Delete all links"
+          onConfirm={dropLinks}
+          onCancel={() => setPending(null)}
+        />
+      )}
+
+      {pending?.kind === "preset" && (
+        <ConfirmDialog
+          title={`Replace "${pending.replacing.label}"?`}
+          message={`A ${pending.replacing.formation} squad is already saved under that name. Its players, numbers, kit and units are replaced by the ones on the board. Saved squads are not part of the board, so this is not on the undo stack.`}
+          confirmLabel="Replace squad"
+          onConfirm={() => replacePreset(pending.preset, pending.replacing)}
           onCancel={() => setPending(null)}
         />
       )}
@@ -589,7 +721,7 @@ export function Editor() {
       {pending?.kind === "import" && (
         <ConfirmDialog
           title="Replace this board?"
-          message={`"${pending.doc.name}" will replace everything on the board — scenes, runs, links and drawings. This cannot be undone.`}
+          message={`"${pending.doc.name}" will replace everything on the board — scenes, runs, links and drawings. Undo brings the old board back.`}
           confirmLabel="Replace board"
           onConfirm={() => importDoc(pending.doc)}
           onCancel={() => setPending(null)}
@@ -602,6 +734,15 @@ export function Editor() {
           onImport={(next) => setPending({ kind: "import", doc: next })}
           onClose={() => setJsonOpen(false)}
           blocked={pending !== null}
+        />
+      )}
+
+      {exportOpen && (
+        <ExportDialog
+          doc={doc}
+          t={time}
+          pitchView={pitchView}
+          onClose={() => setExportOpen(false)}
         />
       )}
 

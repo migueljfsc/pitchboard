@@ -163,6 +163,16 @@ export function deleteLink(doc: BoardDoc, id: string): BoardDoc {
 }
 
 /**
+ * Drop every link on the board.
+ *
+ * Both sides at once: the panel lists them as one stack, so clearing "the links"
+ * that are on screen is what the button appears to offer.
+ */
+export function clearLinks(doc: BoardDoc): BoardDoc {
+  return doc.links.length === 0 ? doc : withLinks(doc, []);
+}
+
+/**
  * Reorder the link list itself.
  *
  * Document order is draw order, so this is also the z-order: a filled link moved
@@ -195,6 +205,23 @@ export function moveMember(doc: BoardDoc, id: string, from: number, to: number):
  * Drop players from every link that references them, and discard links left with
  * fewer than two members. Keeps the document valid when a squad changes.
  */
+/**
+ * Splice one side's links in where that side's links already sat.
+ *
+ * Ownership is by membership rather than by id, which survives any future change
+ * to how ids are minted. Slotting them in place rather than appending means a
+ * team replacing its own units does not jump to the end of the draw order — and
+ * document order is draw order.
+ */
+export function replaceTeamLinks(doc: BoardDoc, index: 0 | 1, resolved: Link[]): Link[] {
+  const ids = new Set(doc.teams[index].players.map((p) => p.id));
+  const owns = (l: Link) => l.members.some((m) => ids.has(m));
+  const firstAt = doc.links.findIndex(owns);
+  const kept = doc.links.filter((l) => !owns(l));
+  const at = firstAt < 0 ? kept.length : firstAt;
+  return [...kept.slice(0, at), ...resolved, ...kept.slice(at)];
+}
+
 export function pruneLinks(doc: BoardDoc): BoardDoc {
   const live = new Set(doc.teams.flatMap((t) => t.players.map((p) => p.id)));
   let changed = false;
