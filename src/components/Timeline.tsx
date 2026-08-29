@@ -14,7 +14,7 @@ import {
 import type { BoardDoc } from "@/board/types";
 import {
   addSceneAfter,
-  ballTravels,
+  canShoot as canShootInto,
   deleteScene,
   duplicateScene,
   moveScene,
@@ -76,7 +76,7 @@ export function Timeline({
     if (playing) liveRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [live.index, playing]);
 
-  const canShoot = ballTravels(doc, activeScene);
+  const canShoot = canShootInto(doc, activeScene);
   // What each scene is really worth, which is not its own fields in flow mode.
   const timing = sceneTimings(doc);
   const flow = doc.flow;
@@ -280,7 +280,7 @@ export function Timeline({
                 title={
                   canShoot
                     ? "Draw the ball's travel into this scene as a strike rather than a pass"
-                    : "The ball does not travel into this scene — release it or pass it first"
+                    : "Only a loose ball can be a strike — release it, or play it to an opponent"
                 }
                 className={cn(
                   "flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition disabled:opacity-45",

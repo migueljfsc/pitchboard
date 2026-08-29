@@ -13,7 +13,38 @@ import { teamOf } from "./players";
 export const DEFAULT_TRANSITION_MS = 1500;
 export const DEFAULT_HOLD_MS = 800;
 
-const replace = (doc: BoardDoc, scenes: Scene[]): BoardDoc => ({ ...doc, scenes });
+/**
+ * Swap the scene list in, and keep `shot` honest.
+ *
+ * `shot` describes the ball's travel INTO a scene, so it means nothing on a
+ * scene the ball does not travel into. Almost every scene edit can change that,
+ * and rarely obviously: setting a carrier changes the travel into that scene AND
+ * into the one after it, and deleting or reordering a scene changes it for a
+ * neighbour. Enforcing it at the one point they all pass through is what stops a
+ * flag going stale — otherwise a scene with nothing arriving still reads "shot"
+ * in the strip, still shows the toggle lit while disabled, and quietly becomes a
+ * shot again the moment the ball is released.
+ */
+const replace = (doc: BoardDoc, scenes: Scene[]): BoardDoc => pruneShots({ ...doc, scenes });
+
+/**
+ * Clear `shot` wherever the ball does not travel into the scene.
+ *
+ * Scene 0 included: there is nothing for the ball to arrive from.
+ */
+export function pruneShots(doc: BoardDoc): BoardDoc {
+  let changed = false;
+
+  const scenes = doc.scenes.map((scene, i) => {
+    if (scene.shot !== true || canShoot(doc, i)) return scene;
+    changed = true;
+    const next = { ...scene };
+    delete next.shot;
+    return next;
+  });
+
+  return changed ? { ...doc, scenes } : doc;
+}
 
 /**
  * Seconds at which scene `index` comes to rest — where the scrubber should sit.
@@ -247,14 +278,21 @@ export function ballTravelBetween(doc: BoardDoc, from: Scene, to: Scene): BallTr
 }
 
 /**
- * Does the ball travel on its own into this scene? Gates the shot toggle, which
- * would otherwise be offered on a scene where the ball never leaves anyone's
- * feet.
+ * Can the ball's arrival into this scene be a strike?
+ *
+ * Only a LOOSE travel qualifies — the ball leaving someone and ending on the
+ * turf, in the net, or at an opponent's feet, a keeper's save included. A change
+ * of hands between team-mates is a pass by definition (D24) and is drawn dashed,
+ * so it is the one thing a shot is not; a ball that never leaves its carrier has
+ * no travel to mark at all.
+ *
+ * This is the single source for both the toggle's enabled state and pruneShots.
+ * They were two rules once, and a shot flag outliving its shot is what that cost.
  */
-export function ballTravels(doc: BoardDoc, index: number): boolean {
+export function canShoot(doc: BoardDoc, index: number): boolean {
   const to = doc.scenes[index];
   const from = doc.scenes[index - 1];
-  return !!to && !!from && ballTravelBetween(doc, from, to) !== "none";
+  return !!to && !!from && ballTravelBetween(doc, from, to) === "loose";
 }
 
 /** Mark the ball's travel into scene `index` as a strike at goal. */

@@ -3,10 +3,11 @@ import {
   DEFAULT_HOLD_MS,
   addSceneAfter,
   ballTravelBetween,
-  ballTravels,
+  canShoot,
   isRunHidden,
   defaultCurve,
   deleteScene,
+  pruneShots,
   duplicateScene,
   moveScene,
   renameScene,
@@ -252,39 +253,58 @@ describe("setRunHidden", () => {
   });
 });
 
-describe("ballTravels", () => {
+describe("canShoot", () => {
   it("is false with no previous scene to travel from", () => {
-    expect(ballTravels(base(), 0)).toBe(false);
+    expect(canShoot(base(), 0)).toBe(false);
   });
 
   it("is false while the same player carries the ball throughout", () => {
     let doc = setCarrier(base(), 0, HOME_9);
     doc = addSceneAfter(doc, 0);
     expect(doc.scenes[1].carrier).toBe(HOME_9);
-    expect(ballTravels(doc, 1)).toBe(false);
+    expect(canShoot(doc, 1)).toBe(false);
   });
 
-  it("is true for a pass — a carrier change", () => {
+  it("is FALSE for a pass — a pass is the one thing a shot is not", () => {
     let doc = setCarrier(base(), 0, HOME_9);
     doc = addSceneAfter(doc, 0);
     doc = setCarrier(doc, 1, HOME_10);
-    expect(ballTravels(doc, 1)).toBe(true);
+    expect(canShoot(doc, 1)).toBe(false);
+  });
+
+  it("is true for a ball played to an OPPONENT — a keeper's save is still a shot", () => {
+    let doc = setCarrier(base(), 0, HOME_9);
+    doc = addSceneAfter(doc, 0);
+    doc = setCarrier(doc, 1, doc.teams[1].players[0].id);
+    expect(canShoot(doc, 1)).toBe(true);
   });
 
   it("is true for a loose ball that rolls, and false for one that does not", () => {
     const doc = addSceneAfter(base(), 0);
-    expect(ballTravels(doc, 1)).toBe(false);
+    expect(canShoot(doc, 1)).toBe(false);
     const rolled = {
       ...doc,
       scenes: doc.scenes.map((s, i) => (i === 1 ? { ...s, ballPos: { x: 90, y: 34 } } : s)),
     };
-    expect(ballTravels(rolled, 1)).toBe(true);
+    expect(canShoot(rolled, 1)).toBe(true);
   });
 });
 
 describe("setShot", () => {
+  /** A ball struck at goal: carried in scene 0, loose and moved in scene 1. */
+  const struck = () => {
+    let doc = setCarrier(base(), 0, HOME_9);
+    doc = addSceneAfter(doc, 0);
+    doc = setCarrier(doc, 1, null);
+    const scenes = doc.scenes.slice();
+    scenes[1] = { ...scenes[1], ballPos: { x: 100, y: 34 } };
+    return { ...doc, scenes };
+  };
+
   it("marks and unmarks the travel into a scene, dropping the key when off", () => {
-    const doc = addSceneAfter(base(), 0);
+    const doc = struck();
+    expect(canShoot(doc, 1)).toBe(true);
+
     const shot = setShot(doc, 1, true);
     expect(shot.scenes[1].shot).toBe(true);
     expect(valid(shot)).toBe(true);
@@ -292,8 +312,75 @@ describe("setShot", () => {
   });
 
   it("is a no-op when already in that state", () => {
-    const doc = addSceneAfter(base(), 0);
+    const doc = struck();
     expect(setShot(doc, 1, false)).toBe(doc);
+  });
+
+  it("refuses a scene the ball does not travel into", () => {
+    // The toggle is disabled there, so this is only reachable by code — but a
+    // flag that cannot be seen or cleared is exactly how one goes stale.
+    const doc = addSceneAfter(base(), 0);
+    expect(canShoot(doc, 1)).toBe(false);
+    expect(setShot(doc, 1, true).scenes[1].shot).toBeUndefined();
+  });
+});
+
+describe("a shot does not outlive the ball's travel", () => {
+  /** Carried in 0, released and struck into 1. */
+  const struck = () => {
+    let doc = setCarrier(base(), 0, HOME_9);
+    doc = addSceneAfter(doc, 0);
+    doc = setCarrier(doc, 1, null);
+    const scenes = doc.scenes.slice();
+    scenes[1] = { ...scenes[1], ballPos: { x: 100, y: 34 } };
+    return setShot({ ...doc, scenes }, 1, true);
+  };
+
+  it("clears when the ball is given to someone in that scene", () => {
+    const doc = struck();
+    expect(doc.scenes[1].shot).toBe(true);
+    // The reported bug: handing the ball back leaves the strike behind.
+    const held = setCarrier(doc, 1, HOME_9);
+    expect(held.scenes[1].shot).toBeUndefined();
+    expect(valid(held)).toBe(true);
+  });
+
+  it("clears when the ball is passed to a team-mate instead", () => {
+    // The ball still travels, so a rule written around "does it move" would keep
+    // the flag and draw a pass with a strike burst on it. A pass is the one
+    // travel a shot cannot be (D24).
+    const doc = struck();
+    const passed = setCarrier(doc, 1, HOME_10);
+    expect(passed.scenes[1].shot).toBeUndefined();
+    expect(valid(passed)).toBe(true);
+  });
+
+  it("survives the ball reaching an opponent — that is a save, not a pass", () => {
+    const doc = struck();
+    const saved = setCarrier(doc, 1, doc.teams[1].players[0].id);
+    expect(saved.scenes[1].shot).toBe(true);
+  });
+
+  it("clears when the PREVIOUS scene stops sending the ball", () => {
+    // setCarrier on scene 0 changes what travels into scene 1, which is the
+    // route a fix aimed only at the edited scene would miss.
+    const doc = struck();
+    const scenes = doc.scenes.slice();
+    scenes[0] = { ...scenes[0], carrier: null, ballPos: { x: 100, y: 34 } };
+    const stalled = { ...doc, scenes };
+    expect(canShoot(stalled, 1)).toBe(false);
+    expect(pruneShots(stalled).scenes[1].shot).toBeUndefined();
+  });
+
+  it("clears on a scene that is no longer second", () => {
+    const doc = struck();
+    expect(deleteScene(doc, 0).scenes[0].shot).toBeUndefined();
+  });
+
+  it("leaves a genuine shot alone", () => {
+    const doc = struck();
+    expect(renameScene(doc, 1, "Strike").scenes[1].shot).toBe(true);
+    expect(setSceneTiming(doc, 1, { holdMs: 500 }).scenes[1].shot).toBe(true);
   });
 });
 
