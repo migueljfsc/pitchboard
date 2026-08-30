@@ -384,6 +384,19 @@ export const en = {
   "preset.invalid": "That preset does not describe a valid team.",
   "preset.failed": "Could not apply that preset.",
 
+  // --------------------------------------------------------------- account
+  "account.signIn": "Sign in",
+  "account.signIn.google": "Continue with Google",
+  "account.signIn.why": "Sign in to keep your boards and group them into projects.",
+  "account.signedInAs": "Signed in as",
+  "account.menu": "Account",
+  "account.signOut": "Sign out",
+  "account.error.access_denied": "Sign-in was cancelled.",
+  "account.error.invalid_state": "That sign-in link had expired. Please try again.",
+  "account.error.email_unverified": "Google has not verified that email address.",
+  "account.error.unknown": "Sign-in did not complete. Please try again.",
+  "account.error.dismiss": "Dismiss",
+
   // ---------------------------------------------------------------- viewer
   "viewer.shared": "Shared board",
   "viewer.fork": "Fork to edit",

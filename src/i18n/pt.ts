@@ -376,6 +376,19 @@ export const pt: Dictionary = {
   "preset.invalid": "Esta predefinição não descreve uma equipa válida.",
   "preset.failed": "Não foi possível aplicar esta predefinição.",
 
+  // --------------------------------------------------------------- account
+  "account.signIn": "Entrar",
+  "account.signIn.google": "Continuar com Google",
+  "account.signIn.why": "Entra para guardares os teus quadros e agrupá-los em projetos.",
+  "account.signedInAs": "Sessão iniciada como",
+  "account.menu": "Conta",
+  "account.signOut": "Terminar sessão",
+  "account.error.access_denied": "O início de sessão foi cancelado.",
+  "account.error.invalid_state": "Essa ligação de início de sessão expirou. Tenta novamente.",
+  "account.error.email_unverified": "A Google não verificou esse endereço de email.",
+  "account.error.unknown": "O início de sessão não foi concluído. Tenta novamente.",
+  "account.error.dismiss": "Dispensar",
+
   // ---------------------------------------------------------------- viewer
   "viewer.shared": "Quadro partilhado",
   "viewer.fork": "Copiar para editar",

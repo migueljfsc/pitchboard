@@ -43,6 +43,7 @@ import {
 } from "@/share/presets";
 import { cn } from "@/lib/utils";
 import { LocaleSwitch } from "@/components/LocaleSwitch";
+import { AccountMenu } from "@/components/AccountMenu";
 import { useI18n } from "@/i18n/context";
 import type { Message } from "@/i18n/core";
 import { clearLinks, createLink } from "@/board/links";
@@ -571,6 +572,7 @@ export function Editor({ initialDoc }: Props = {}) {
           <span className="mx-1 h-5 w-px bg-ink-600" />
 
           <LocaleSwitch />
+          <AccountMenu />
         </div>
       </header>
 
