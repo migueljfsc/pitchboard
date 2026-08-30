@@ -3,14 +3,46 @@
  * layer ahead of this script (see `run_worker_first` in wrangler.jsonc), so a page load
  * never reaches here and never counts against the free tier's request budget.
  *
- * `Env` is ambient, generated from wrangler.jsonc by `wrangler types` into
- * worker-configuration.d.ts — which is gitignored and rebuilt by the `types` script that
- * both typecheck and build run first. Adding a binding to wrangler.jsonc is therefore the
+ * `Env` is ambient: worker-configuration.d.ts is generated from wrangler.jsonc by the
+ * `types` script that typecheck and build both run first, and worker/secrets.d.ts merges in
+ * the secrets wrangler.jsonc cannot hold. Adding a binding to wrangler.jsonc is therefore the
  * only place a binding is declared; there is no hand-written mirror to drift from it.
  */
 
+import {
+  authorizeUrl,
+  clearedOauthCookie,
+  exchangeCode,
+  newOauthChallenge,
+  oauthCookie,
+  OAUTH_COOKIE,
+  parseOauthCookie,
+  timingSafeEqual,
+} from "./lib/google";
 import { fail, json } from "./lib/http";
-import { clearedSessionCookie, destroySession, resolveSession } from "./lib/session";
+import {
+  clearedSessionCookie,
+  createSession,
+  destroySession,
+  readCookie,
+  resolveSession,
+  sessionCookie,
+  SESSION_TTL_S,
+} from "./lib/session";
+import { userForGoogleIdentity } from "./lib/users";
+
+/**
+ * Sign-in ends in a browser navigation, not a fetch, so a failure has to be something a page
+ * can render rather than a status code nobody sees. The reason rides in the query string;
+ * the SPA reads it and the hash — which carries shared boards (D33) — is left alone.
+ */
+function backToApp(origin: string, error?: string): Response {
+  const url = error ? `${origin}/?auth_error=${encodeURIComponent(error)}` : `${origin}/`;
+  return new Response(null, {
+    status: 302,
+    headers: { location: url, "set-cookie": clearedOauthCookie(), "cache-control": "no-store" },
+  });
+}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -39,6 +71,54 @@ export default {
       case "POST /api/auth/logout": {
         await destroySession(env, request);
         return json({ ok: true }, 200, { "set-cookie": clearedSessionCookie() });
+      }
+
+      case "GET /api/auth/google/start": {
+        const { state, verifier } = newOauthChallenge();
+        return new Response(null, {
+          status: 302,
+          headers: {
+            location: await authorizeUrl(env.GOOGLE_CLIENT_ID, url.origin, state, verifier),
+            "set-cookie": oauthCookie(state, verifier),
+            "cache-control": "no-store",
+          },
+        });
+      }
+
+      case "GET /api/auth/google/callback": {
+        // Google reports a declined consent screen here rather than by failing the redirect.
+        const denied = url.searchParams.get("error");
+        if (denied) return backToApp(url.origin, denied);
+
+        const code = url.searchParams.get("code");
+        const state = url.searchParams.get("state");
+        const challenge = parseOauthCookie(readCookie(request.headers.get("cookie"), OAUTH_COOKIE));
+
+        // The state check is the CSRF defence: without it, an attacker can complete a
+        // sign-in of their own account in someone else's browser and watch what they save.
+        if (!code || !state || !challenge || !timingSafeEqual(state, challenge.state)) {
+          return backToApp(url.origin, "invalid_state");
+        }
+
+        let user;
+        try {
+          const identity = await exchangeCode(env, code, url.origin, challenge.verifier);
+          user = await userForGoogleIdentity(env, identity, now);
+        } catch (cause) {
+          // The message is one of this module's own codes — never Google's body, which
+          // would put an unbounded string into a URL the browser then displays.
+          return backToApp(url.origin, cause instanceof Error ? cause.message : "sign_in_failed");
+        }
+
+        const { token } = await createSession(env, user.id, now);
+
+        // Two Set-Cookie headers — the session is issued and the OAuth scratch is dropped.
+        // Cookies are the one header that must not be folded into a comma-separated value,
+        // so this appends rather than building an object literal.
+        const headers = new Headers({ location: `${url.origin}/`, "cache-control": "no-store" });
+        headers.append("set-cookie", sessionCookie(token, SESSION_TTL_S));
+        headers.append("set-cookie", clearedOauthCookie());
+        return new Response(null, { status: 302, headers });
       }
 
       default:
