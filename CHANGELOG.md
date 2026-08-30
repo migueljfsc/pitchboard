@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.13.3 (2026-08-30)
+
+### Fix
+
+- **infra**: stop managing the ci api token in opentofu
+
 ## v0.13.2 (2026-08-30)
 
 ### Fix
