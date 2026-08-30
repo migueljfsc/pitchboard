@@ -148,10 +148,13 @@ export function drawBoard(
     }
   }
 
-  drawBall(ctx, frame.ball, ballRadius(doc), {
-    selected: view.selection?.has(BALL_ID) ?? false,
-    hovered: view.interactive && view.hover === BALL_ID,
-  });
+  // No ball until one is given to somebody (D44).
+  if (frame.ball) {
+    drawBall(ctx, frame.ball, ballRadius(doc), {
+      selected: view.selection?.has(BALL_ID) ?? false,
+      hovered: view.interactive && view.hover === BALL_ID,
+    });
+  }
 
   for (const ann of marks) if (!isZone(ann)) drawMark(ctx, ann, view.rotated);
 
@@ -548,19 +551,21 @@ function drawBillboards(
   }
 
   const ball = frame.ball;
-  const ballR = ballRadius(doc);
-  const ballAtScreen = projectPitch(ball, groundView, proj);
-  standing.push({
-    at: ballAtScreen,
-    draw: () =>
-      billboard(ctx, ball, ballAtScreen, () => {
-        drawGroundShadow(ctx, ball, ballR);
-        drawBall(ctx, ball, ballR, {
-          selected: view.selection?.has(BALL_ID) ?? false,
-          hovered: view.interactive && view.hover === BALL_ID,
-        });
-      }),
-  });
+  if (ball) {
+    const ballR = ballRadius(doc);
+    const ballAtScreen = projectPitch(ball, groundView, proj);
+    standing.push({
+      at: ballAtScreen,
+      draw: () =>
+        billboard(ctx, ball, ballAtScreen, () => {
+          drawGroundShadow(ctx, ball, ballR);
+          drawBall(ctx, ball, ballR, {
+            selected: view.selection?.has(BALL_ID) ?? false,
+            hovered: view.interactive && view.hover === BALL_ID,
+          });
+        }),
+    });
+  }
 
   // Nearest last. A billboard standing on the grass has to cover the one behind
   // it, and draw order is the only depth test there is.
@@ -655,6 +660,7 @@ function drawGhosts(
     }
 
     const ball = ballAt({ from: scene, to: scene, u: 1, moving: false, index }, doc);
+    if (!ball) continue;
     wrap(ball, () => {
       ctx.save();
       ctx.globalAlpha = GHOST_ALPHA;
@@ -1130,6 +1136,7 @@ function drawBallPath(ctx: Ctx, doc: BoardDoc, r: Resolved): void {
   // it — carrier glue and per-entity travel included.
   const start = ballAt({ ...r, u: 0 }, doc);
   const end = ballAt({ ...r, u: 1 }, doc);
+  if (!start || !end) return;
   if (Math.hypot(end.x - start.x, end.y - start.y) < MIN_BALL_TRAVEL) return;
 
   const curve = r.to.ballPath ?? straightCurve(start, end);

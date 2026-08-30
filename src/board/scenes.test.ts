@@ -25,6 +25,18 @@ import { distanceToSegment } from "./geometry";
 import type { BoardDoc } from "./types";
 
 const base = () => createBoardDoc();
+/** The same board with a ball on the grass in every scene; a fresh one has none. */
+const loose = (doc: BoardDoc): BoardDoc => ({
+  ...doc,
+  scenes: doc.scenes.map((s) => ({ ...s, carrier: null, ballPos: { x: 52.5, y: 34 } })),
+});
+
+/** A board of `n` scenes, each a copy of the one before — a board just laid out. */
+const scenes = (n: number): BoardDoc => {
+  let doc = base();
+  for (let i = 1; i < n; i++) doc = addSceneAfter(doc, i - 1);
+  return doc;
+};
 const HOME_9 = "home-9";
 const HOME_10 = "home-10";
 const valid = (doc: BoardDoc) => boardDocSchema.safeParse(doc).success;
@@ -175,6 +187,55 @@ describe("setCarrier", () => {
     const doc = setCarrier(base(), 0, HOME_9);
     expect(setCarrier(doc, 0, HOME_9)).toBe(doc);
   });
+
+  it("touches only this scene without a carry", () => {
+    let doc = scenes(4);
+    doc = setCarrier(doc, 1, HOME_9);
+    expect(doc.scenes.map((s) => s.carrier)).toEqual([null, HOME_9, null, null]);
+  });
+
+  it("carries the handover into the following scenes nobody has touched", () => {
+    let doc = scenes(4);
+    doc = setCarrier(doc, 1, HOME_9, "stationary");
+    expect(doc.scenes.map((s) => s.carrier)).toEqual([null, HOME_9, HOME_9, HOME_9]);
+    // A scene holding the ball must not also hold a loose position for it.
+    expect(doc.scenes.slice(1).every((s) => !("ballPos" in s))).toBe(true);
+    expect(valid(doc)).toBe(true);
+  });
+
+  it("stops at a scene the ball was already given to somebody", () => {
+    let doc = scenes(5);
+    doc = setCarrier(doc, 3, HOME_10);
+    doc = setCarrier(doc, 1, HOME_9, "stationary");
+    // Scene 4 was never given the ball, so the stop at 3 leaves it as it was.
+    expect(doc.scenes.map((s) => s.carrier)).toEqual([null, HOME_9, HOME_9, HOME_10, null]);
+  });
+
+  it("stops at a scene the ball was moved to a space", () => {
+    let doc = scenes(4);
+    doc.scenes[2] = { ...doc.scenes[2], ballPos: { x: 80, y: 20 } };
+    doc = setCarrier(doc, 0, HOME_9, "stationary");
+    expect(doc.scenes.map((s) => s.carrier)).toEqual([HOME_9, HOME_9, null, null]);
+  });
+
+  it("reaches no further on \"all\" than on \"stationary\" — a handover has no delta", () => {
+    let doc = scenes(5);
+    doc = setCarrier(doc, 3, HOME_10);
+    const stationary = setCarrier(doc, 1, HOME_9, "stationary");
+    const all = setCarrier(doc, 1, HOME_9, "all");
+    expect(all.scenes.map((s) => s.carrier)).toEqual(stationary.scenes.map((s) => s.carrier));
+  });
+
+  it("carries a release forward, leaving the ball where it was put down", () => {
+    let doc = scenes(3);
+    doc = setCarrier(doc, 0, HOME_9, "stationary");
+    doc = setCarrier(doc, 1, null, "stationary");
+
+    expect(doc.scenes.map((s) => s.carrier)).toEqual([HOME_9, null, null]);
+    // The same spot in both, rather than following the player through scene 2.
+    expect(doc.scenes[2].ballPos).toEqual(doc.scenes[1].ballPos);
+    expect(valid(doc)).toBe(true);
+  });
 });
 
 describe("setPath", () => {
@@ -280,13 +341,18 @@ describe("canShoot", () => {
   });
 
   it("is true for a loose ball that rolls, and false for one that does not", () => {
-    const doc = addSceneAfter(base(), 0);
+    const doc = loose(addSceneAfter(base(), 0));
     expect(canShoot(doc, 1)).toBe(false);
     const rolled = {
       ...doc,
       scenes: doc.scenes.map((s, i) => (i === 1 ? { ...s, ballPos: { x: 90, y: 34 } } : s)),
     };
     expect(canShoot(rolled, 1)).toBe(true);
+  });
+
+  it("is false where the ball first appears — arriving is not travelling", () => {
+    const doc = setCarrier(addSceneAfter(base(), 0), 1, HOME_9);
+    expect(canShoot(doc, 1)).toBe(false);
   });
 });
 
@@ -418,9 +484,13 @@ describe("ballTravelBetween", () => {
     doc = addSceneAfter(doc, 0);
     expect(pair(setCarrier(doc, 1, null))).toBe("loose");
 
-    let collected = addSceneAfter(base(), 0);
+    let collected = loose(addSceneAfter(base(), 0));
     collected = setCarrier(collected, 1, HOME_9);
     expect(pair(collected)).toBe("loose");
+  });
+
+  it("is none where the ball first appears — it came from nowhere", () => {
+    expect(pair(setCarrier(addSceneAfter(base(), 0), 1, HOME_9))).toBe("none");
   });
 
   it("is none for a loose ball nobody has moved", () => {

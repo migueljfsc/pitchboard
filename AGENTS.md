@@ -176,6 +176,16 @@ hatch, but CI owns the real deploy.
   invalidates it for a neighbour. `pruneShots` runs inside `replace` for that reason. `canShoot`
   is the only rule for whether a strike is possible — gate and flag disagreeing is what let one
   go stale (D24).
+- **Giving the ball away carries forward.** `setCarrier` takes the same `Carry` a drag does: the
+  handover reaches every following scene nothing happens to the ball in, because those scenes are
+  still the kick-off nobody has said anything about yet (D43). `"all"` reaches no further than
+  `"stationary"` — a handover has no delta to translate, so carrying past a pass could only
+  overwrite it.
+- **There is no ball until somebody is given it.** A scene has one when it names a carrier or
+  stores a position, and a new board does neither — so `ballAt` returns `null` and the renderer,
+  the hit-test and the ghosts all have to check (D44). A ball appearing for the first time appears
+  on its new holder rather than travelling in, and arriving is not a travel, so it cannot be a
+  shot. The schema's only rule is that a scene never holds both a carrier and a `ballPos`.
 - **A dribble is not a pass.** The ball is glued to its carrier, so it moves as far as they
   run. Anything deciding what the ball *did* must read the carrier change (`ballTravelBetween`),
   never the distance the ball covered.
@@ -256,10 +266,11 @@ hatch, but CI owns the real deploy.
   the scene helpers accept. Locale itself is presentation and never enters `BoardDoc` (D38).
 - **DPR double-application** looks correct on a 1× monitor and wrong everywhere else.
 
-## Definition of done, per phase
+## Definition of done
 
-See [`docs/implementation-plan.md`](docs/implementation-plan.md) — each phase carries its own
-checklist. Two checks belong in every phase regardless:
+What is built and what is left is in
+[`docs/implementation-plan.md`](docs/implementation-plan.md). Two checks belong to every change,
+whatever it touches:
 
 - resize the window and confirm players do not move relative to the pitch
 - `pnpm lint && pnpm typecheck && pnpm test && pnpm build` clean

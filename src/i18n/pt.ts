@@ -22,10 +22,10 @@ export const pt: Dictionary = {
   "bar.name.label": "Nome do quadro",
   "bar.name.placeholder": "Quadro sem nome",
   "bar.save": "Guardar",
-  "bar.save.hint": "Guardar já este quadro na tua conta, em vez de esperar pela gravação automática.",
+  "bar.save.hint": "Guardar já este quadro na sua conta, sem esperar pela gravação automática.",
   "bar.export": "Exportar",
   "bar.export.title":
-    "MP4, WebM ou GIF da animação completa, ou um PNG do momento no ecrã. Exportado no enquadramento que está a ver.",
+    "MP4, WebM ou GIF da animação completa, ou um PNG do momento no ecrã — tal como o vê.",
 
   "history.undo": "Anular",
   "history.redo": "Refazer",
@@ -46,6 +46,8 @@ export const pt: Dictionary = {
   "view.left": "Esquerda",
   "view.full": "Todo",
   "view.right": "Direita",
+  "view.bottom": "Baixo",
+  "view.top": "Cima",
   "view.vertical": "Vertical",
   "view.horizontal": "Horizontal",
   "view.flat": "Plano",
@@ -54,10 +56,10 @@ export const pt: Dictionary = {
   "view.ghosts.before": "Anterior",
   "view.ghosts.after": "Seguinte",
   "view.ghosts.hint":
-    "Contorna onde cada jogador está na cena vizinha. Um jogador cujo contorno fica por baixo dele é um que não se mexe.",
+    "Contorna onde cada jogador está na cena vizinha, para ver de relance quem se move e quanto.",
   "view.playerSize": "Tamanho dos jogadores",
   "view.halfHint":
-    "Meio campo é mais alto do que comprido, pelo que na horizontal fica com a mesma altura do campo inteiro e espaço de cada lado. Na vertical preenche o quadro.",
+    "Meio campo é mais alto do que comprido. Vire o quadro na vertical e ele preenche o espaço.",
 
   // ------------------------------------------------------------------ team
   "team.namePlaceholder": "Nome da equipa",
@@ -88,11 +90,11 @@ export const pt: Dictionary = {
   "share.method.board": "Ligação do quadro",
   "share.method.file": "Ficheiro",
   "share.link.blurb":
-    "O quadro inteiro viaja dentro da ligação, por isso nunca expira e não precisa de conta. Quem a abrir vê uma cópia só de leitura, enquadrada como a tens agora, e pode criar a sua própria versão. Nunca chega ao servidor — os navegadores não enviam a parte depois do #.",
+    "O quadro inteiro viaja dentro da ligação, por isso nunca expira e não precisa de conta. Quem a abrir vê uma cópia só de leitura, no enquadramento que tem agora, e pode criar a sua própria versão. O quadro viaja na própria ligação, por isso o servidor nunca o vê.",
   "share.length": "{chars} de {budget} caracteres",
   "share.board.blurb":
-    "Uma ligação curta para este quadro guardado. Ao recarregá-la aparece o que tiveres alterado entretanto, e dura enquanto o quadro existir. Podes retirá-la a qualquer momento.",
-  "share.board.needsAccount": "Inicia sessão para partilhares um quadro desta forma.",
+    "Uma ligação curta para este quadro guardado. Mostra sempre a versão mais recente e pode retirá-la a qualquer momento.",
+  "share.board.needsAccount": "Inicie sessão para partilhar um quadro desta forma.",
   "share.board.needsSaving": "Guarda primeiro este quadro num projeto e a ligação passa a apontar para ele.",
   "share.board.copy": "Copiar ligação do quadro",
   "share.board.copied": "Ligação copiada",
@@ -102,7 +104,7 @@ export const pt: Dictionary = {
   "share.failed": "Este navegador não conseguiu comprimir o quadro.",
   "share.long": "{chars} caracteres — demasiado longa para colar em segurança",
   "share.long.title":
-    "Este link tem {chars} caracteres, acima dos {budget} que sobrevivem à maioria das aplicações de conversa e do correio eletrónico. Se for cortada, abre como um quadro danificado em vez de dar erro. O desenho à mão livre é quase sempre a causa — exporte o JSON ou simplifique o desenho.",
+    "Esta ligação tem {chars} caracteres. As aplicações de conversa e o correio cortam tudo acima de cerca de {budget}, e uma ligação cortada abre como um quadro danificado. O desenho à mão livre costuma ser a causa — simplifique-o, ou exporte o JSON.",
   "share.anyway": "Copiar mesmo assim",
   "share.manual": "O navegador não chegou à área de transferência — copie o link à mão.",
 
@@ -125,7 +127,7 @@ export const pt: Dictionary = {
 
   "confirm.preset.title": "Substituir “{label}”?",
   "confirm.preset.message":
-    "Já existe um plantel {formation} guardado com esse nome. Os jogadores, números, equipamento e unidades são substituídos pelos do quadro. Os planteis guardados não fazem parte do quadro, por isso isto não entra no histórico de anulação.",
+    "Já existe um plantel {formation} guardado com esse nome. Os jogadores, números, equipamento e unidades são substituídos pelos do quadro. Os planteis guardados vivem fora do quadro — uma vez substituído, o antigo desaparece.",
   "confirm.preset.action": "Substituir plantel",
 
   "confirm.import.title": "Substituir este quadro?",
@@ -143,7 +145,7 @@ export const pt: Dictionary = {
   "json.wholeBoard": "Quadro completo",
   "json.setupOnly": "Só a preparação",
   "json.wholeBoard.hint": "Todas as cenas, corridas, ligações e desenhos — a jogada como a deixou.",
-  "json.setupOnly.hint": "Sistema, nomes, números e unidades. Sem cenas.",
+  "json.setupOnly.hint": "Sistema, nomes, números e unidades — a equipa, sem a jogada.",
   "json.payload.label": "JSON do quadro",
   "json.copy": "Copiar",
   "json.copied": "Copiado",
@@ -168,7 +170,7 @@ export const pt: Dictionary = {
   "timeline.scrub": "Percorrer a linha temporal",
   "timeline.flow": "Movimento contínuo",
   "timeline.flow.on":
-    "Um só movimento contínuo: nada fica parado entre cenas e cada cena dura o que a sua corrida mais longa precisar",
+    "Reproduzir como um só movimento contínuo, com cada cena a durar o que a sua corrida mais longa precisa",
   "timeline.flow.off": "Voltar aos tempos de deslocação e de espera por cena",
   "timeline.thumbs": "Pré-visualização das cenas",
   "timeline.thumbs.on": "Mostrar uma pré-visualização de cada cena",
@@ -185,8 +187,7 @@ export const pt: Dictionary = {
   "timeline.shot": "Remate",
   "timeline.shotMark": "remate",
   "timeline.shot.can": "Desenhar o percurso da bola para esta cena como um remate em vez de um passe",
-  "timeline.shot.cannot":
-    "Só uma bola solta pode ser um remate — liberte-a, ou jogue-a para um adversário",
+  "timeline.shot.cannot": "Um remate precisa de bola solta — liberte-a, ou jogue-a para um adversário",
   "timeline.moveEarlier": "Mover a cena para trás",
   "timeline.moveLater": "Mover a cena para a frente",
   "timeline.duplicate": "Duplicar a cena",
@@ -195,17 +196,16 @@ export const pt: Dictionary = {
   // ------------------------------------------------------------- inspector
   "inspect.empty":
     "Clique num jogador para o selecionar, duplo clique para lhe mudar o nome. Shift+clique para juntar, ou arraste sobre a relva vazia para marcar uma área. As setas deslocam; com shift, 5 m. O espaço reproduz.",
-  "inspect.selected": "{count} selecionados",
-  "inspect.clear": "limpar",
   "inspect.carry": "Levar o movimento",
   "inspect.carry.scene": "Só esta cena",
-  "inspect.carry.scene.hint": "Move a seleção aqui e mais nada. Carrega em Alt para o fazer sem mudar a definição.",
+  "inspect.carry.scene.hint":
+    "Move a seleção apenas nesta cena. Carregue em Alt para o fazer uma vez sem mudar de modo.",
   "inspect.carry.stationary": "Enquanto parado",
   "inspect.carry.stationary.hint":
-    "Leva o movimento para todas as cenas seguintes em que a seleção ainda não corre, para que quem está parado fique parado no sítio novo.",
+    "Move a seleção aqui e em todas as cenas seguintes em que ela fica parada, para que quem está parado passe a estar parado no sítio novo.",
   "inspect.carry.all": "Todas as cenas",
   "inspect.carry.all.hint":
-    "Desloca a seleção em todas as cenas seguintes, mantendo tudo o que faz a partir daí e movendo-o em conjunto.",
+    "Move a seleção também em todas as cenas seguintes, levando as corridas com ela.",
   "inspect.delay": "Esperar antes de arrancar",
   "inspect.delay.together": "Arrancar com os outros",
   "inspect.delay.hint":
@@ -215,20 +215,24 @@ export const pt: Dictionary = {
   "inspect.travel.default": "s — valor da cena",
   "inspect.travel.unit": "s",
   "inspect.travel.hint":
-    "Menos do que a cena significa que este jogador chega cedo e espera. Mais estica a cena inteira, que passa a durar {seconds} s.",
+    "Menos do que a cena e este jogador chega cedo e espera. Mais estica a cena, que passa a durar {seconds} s.",
   "inspect.travel.reset": "Usar o valor da cena",
   "inspect.ball": "Bola — {scene}",
   "inspect.ball.release": "Libertar a bola",
   "inspect.ball.give": "Dar a bola a {who}",
-  "inspect.ball.hint": "Dar a bola a outro jogador na cena seguinte faz um passe.",
+  "inspect.ball.hint":
+    "A bola acompanha quem a tem. Entregá-la a outro jogador na cena seguinte faz um passe, e dar a bola segue pelas cenas seguintes até algo mais lhe acontecer.",
   "inspect.ballName": "Bola",
   "inspect.remove": "Remover {who}",
+  "inspect.remove.hint": "Retira este jogador do quadro, em todas as cenas.",
   "inspect.run": "Corrida — {scene}",
   "inspect.straighten": "Endireitar",
+  "inspect.straighten.hint": "Volta a pôr as corridas curvas desta cena em linha reta.",
+  "inspect.straighten.none": "Curve primeiro uma corrida, arrastando as pegas âmbar da seta.",
   "inspect.showRuns": "Mostrar as setas de movimento",
+  "inspect.showRuns.hint": "Volta a desenhar as setas desta cena.",
   "inspect.hideRuns": "Ocultar as setas de movimento",
-  "inspect.run.hint":
-    "Arraste as pegas âmbar na corrida de um jogador selecionado para a curvar. Ocultar uma seta aplica-se só a esta cena — o jogador continua a mover-se.",
+  "inspect.hideRuns.hint": "Esconde as setas nesta cena. Os jogadores continuam a correr.",
   "inspect.name": "Nome",
   "inspect.number": "N.º",
   "inspect.playerPlaceholder": "Jogador {number}",
@@ -249,8 +253,9 @@ export const pt: Dictionary = {
   "export.again": "Transferir de novo",
   "export.cancel": "Cancelar",
   "export.blurb.mp4": "H.264. Abre em todo o lado — QuickTime, VLC, um navegador, um telemóvel.",
-  "export.blurb.webm": "VP9. Mais pequeno do que MP4 com a mesma qualidade; nem todos os leitores o aceitam.",
-  "export.blurb.gif": "Repete-se sozinho e cola-se numa conversa. Uma só paleta, por isso sem tremeluzir.",
+  "export.blurb.webm":
+    "VP9. Mais pequeno do que MP4 com a mesma qualidade. Abre nos navegadores; alguns leitores preferem MP4.",
+  "export.blurb.gif": "Repete-se sozinho e cola-se diretamente numa conversa.",
   "export.blurb.png": "O momento em que está o cursor, na resolução máxima.",
   "export.phase.palette": "A construir a paleta",
   "export.phase.render": "A desenhar",
@@ -265,7 +270,7 @@ export const pt: Dictionary = {
   "draw.tool.arrow": "Seta",
   "draw.tool.arrow.hint": "Arraste uma seta — uma corrida, um passe ou um remate",
   "draw.tool.line": "Linha",
-  "draw.tool.line.hint": "Arraste uma linha sem ponta",
+  "draw.tool.line.hint": "Arraste uma linha simples",
   "draw.tool.rect": "Retângulo",
   "draw.tool.rect.hint": "Arraste uma zona retangular",
   "draw.tool.ellipse": "Elipse",
@@ -301,7 +306,7 @@ export const pt: Dictionary = {
   "draw.bg.aria": "Fundo em {color}",
   "draw.bg.opacity": "Opacidade do fundo",
   "draw.bg.opacity.title":
-    "Quão sólido é o painel por trás das palavras. Abaixo de metade o contorno escuro regressa, porque só o painel já não destaca o texto da relva.",
+    "Quão sólido é o painel por trás das palavras. Abaixo de metade, o texto mantém um contorno escuro para continuar legível.",
   "draw.from": "De",
   "draw.to": "Até",
   "draw.duplicate": "Duplicar forma",
@@ -351,9 +356,9 @@ export const pt: Dictionary = {
   "links.style.chain": "Cadeia",
   "links.style.polygon": "Forma",
   "links.style.filled": "Preenchida",
-  "links.style.chain.hint": "Linha aberta — uma linha de quatro não se pode fechar sobre si própria",
+  "links.style.chain.hint": "Linha aberta, de ponta a ponta — uma linha de quatro",
   "links.style.polygon.hint": "Contorno fechado",
-  "links.style.filled.hint": "Fechada e sombreada — mostra a área a encolher",
+  "links.style.filled.hint": "Fechada e sombreada — mostra o espaço que a unidade cobre",
   "links.reorder": "Reordenar {name}",
   "links.reorder.title": "Arraste para reordenar, ou foque e use as setas. As ligações mais abaixo desenham por cima.",
   "links.expandRow": "Mudar o nome e o estilo de {name}",
@@ -370,9 +375,16 @@ export const pt: Dictionary = {
   "links.auto": "Automática",
   "links.auto.title": "Seguir a cor do equipamento da equipa",
   "links.colorAria": "Definir a cor de {name} como {color}",
-  "links.order": "Ordem",
+  "links.members": "Jogadores",
   "links.moveEarlier": "Mover o {number} para trás",
   "links.moveLater": "Mover o {number} para a frente",
+  "links.dragMember": "Arraste para reordenar — a ordem é a linha que a unidade desenha.",
+  "links.removeMember": "Retirar o {number} desta unidade",
+  "links.removeMember.title": "Tira este jogador da unidade.",
+  "links.removeMember.min": "Uma unidade precisa de dois jogadores. Apague antes a unidade.",
+  "links.addSelected": "Juntar {n} selecionados",
+  "links.addSelected.none": "Selecione jogadores para juntar",
+  "links.addSelected.title": "Junta a esta unidade os jogadores selecionados no quadro.",
   "links.delete": "Apagar ligação",
 
   // ---------------------------------------------------------- squad presets
@@ -423,7 +435,7 @@ export const pt: Dictionary = {
   // --------------------------------------------------------------- account
   "account.signIn": "Entrar",
   "account.signIn.google": "Continuar com Google",
-  "account.signIn.why": "Entra para guardares os teus quadros e agrupá-los em projetos.",
+  "account.signIn.why": "Inicie sessão para guardar os seus quadros e agrupá-los em projetos.",
   "account.signedInAs": "Sessão iniciada como",
   "account.menu": "Conta",
   "account.signOut": "Terminar sessão",
@@ -434,17 +446,17 @@ export const pt: Dictionary = {
   "account.error.dismiss": "Dispensar",
 
   // ---------------------------------------------------------------- adopt
-  "adopt.title": "Guardar este quadro na tua conta?",
-  "adopt.message": "Tens um quadro em curso neste navegador. Guardá-lo na tua conta permite abri-lo em qualquer lado. De qualquer forma, continua neste navegador.",
+  "adopt.title": "Guardar este quadro na sua conta?",
+  "adopt.message": "Tem um quadro em curso neste navegador. Guardá-lo na sua conta permite abri-lo em qualquer lado. De qualquer forma, continua neste navegador.",
   "adopt.confirm": "Guardar",
   "adopt.project": "Os meus quadros",
 
   // ---------------------------------------------------------------- boards
   "boards.title": "Quadros",
-  "boards.title.hint": "Os teus quadros e projetos guardados",
+  "boards.title.hint": "Os seus quadros e projetos guardados",
   "boards.loading": "A carregar…",
   "boards.projects": "Projetos",
-  "boards.noProjects": "Ainda não tens projetos. Cria um para guardar este quadro.",
+  "boards.noProjects": "Ainda não tem projetos. Crie um para guardar este quadro.",
   "boards.newProject": "Novo projeto",
   "boards.newProject.placeholder": "Nome do projeto",
   "boards.create": "Criar",
@@ -457,7 +469,7 @@ export const pt: Dictionary = {
   "boards.status.saving": "A guardar…",
   "boards.status.saved": "Guardado",
   "boards.openConfirm.title": "Abrir este quadro?",
-  "boards.openConfirm.message": "O quadro em que estás a trabalhar não está guardado na tua conta, e abrir este substitui-o.",
+  "boards.openConfirm.message": "O quadro em que está a trabalhar não está guardado na sua conta, e abrir este substitui-o.",
   "boards.openConfirm.confirm": "Abrir",
   "boards.deleteBoard.title": "Eliminar este quadro?",
   "boards.deleteBoard.message": "“{name}” é eliminado definitivamente. Isto não pode ser desfeito.",
@@ -469,12 +481,12 @@ export const pt: Dictionary = {
   "boards.conflict.theirs": "Usar o mais recente",
   "boards.error.project_limit_reached": "Atingiste o limite de projetos.",
   "boards.error.board_limit_reached": "Atingiste o limite de quadros.",
-  "boards.error.invalid_name": "Esse nome não serve — entre um e cem caracteres.",
+  "boards.error.invalid_name": "Os nomes têm entre um e cem caracteres.",
   "boards.error.invalid_document": "Não foi possível ler esse quadro.",
   "boards.error.not_found": "Esse quadro já não existe.",
   "boards.error.invalid_project": "Esse projeto já não existe.",
-  "boards.error.offline": "Não foi possível contactar o servidor. O teu quadro continua guardado neste navegador.",
-  "boards.error.unknown": "Isso não resultou. O teu quadro continua guardado neste navegador.",
+  "boards.error.offline": "Não foi possível contactar o servidor. O seu quadro continua guardado neste navegador.",
+  "boards.error.unknown": "Isso não resultou. O seu quadro continua guardado neste navegador.",
 
   // -------------------------------------------------------------- library
   "library.search": "Procurar quadros",

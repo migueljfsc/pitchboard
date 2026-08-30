@@ -30,7 +30,7 @@ export const en = {
   "bar.save.hint": "Save this board to your account now, rather than waiting for the autosave.",
   "bar.export": "Export",
   "bar.export.title":
-    "MP4, WebM or GIF of the whole animation, or a PNG of the frame on screen. Exported at the framing you are looking at.",
+    "MP4, WebM or GIF of the whole animation, or a PNG of the frame on screen — exactly as you see it.",
 
   "history.undo": "Undo",
   "history.redo": "Redo",
@@ -51,6 +51,8 @@ export const en = {
   "view.left": "Left",
   "view.full": "Full",
   "view.right": "Right",
+  "view.bottom": "Bottom",
+  "view.top": "Top",
   "view.vertical": "Vertical",
   "view.horizontal": "Horizontal",
   "view.flat": "Flat",
@@ -59,10 +61,10 @@ export const en = {
   "view.ghosts.before": "Previous",
   "view.ghosts.after": "Next",
   "view.ghosts.hint":
-    "Outlines where everyone stands in the neighbouring scene. A player whose outline sits under them is one who does not move.",
+    "Outlines where everyone stands in the neighbouring scene, so you can see at a glance who moves and how far.",
   "view.playerSize": "Player size",
   "view.halfHint":
-    "Half a pitch is taller than it is long, so horizontally it fits to the same height as the full board with space either side. Vertical fills the board instead.",
+    "Half a pitch is taller than it is long. Turn the board vertical and it fills the frame.",
 
   // ------------------------------------------------------------------ team
   "team.namePlaceholder": "Team name",
@@ -93,10 +95,10 @@ export const en = {
   "share.method.board": "Board link",
   "share.method.file": "File",
   "share.link.blurb":
-    "The whole board travels inside the link, so it never expires and needs no account. Whoever opens it watches a read-only copy, framed as you have it now, and can fork their own. It never reaches the server — browsers do not send the part after the #.",
+    "The whole board travels inside the link, so it never expires and needs no account. Whoever opens it watches a read-only copy, framed as you have it now, and can fork their own. The board rides in the link itself, so the server never sees it.",
   "share.length": "{chars} of {budget} characters",
   "share.board.blurb":
-    "A short link to this saved board. Reloading it shows whatever you have changed since, and it lasts as long as the board does. You can withdraw it at any time.",
+    "A short link to this saved board. It always shows the latest version, and you can withdraw it at any time.",
   "share.board.needsAccount": "Sign in to share a board this way.",
   "share.board.needsSaving": "Save this board to a project first, and the link will point at it.",
   "share.board.copy": "Copy board link",
@@ -107,7 +109,7 @@ export const en = {
   "share.failed": "This browser could not compress the board.",
   "share.long": "{chars} chars — too long to paste safely",
   "share.long.title":
-    "This link is {chars} characters, past the {budget} that survives most chat apps and mail. Anything that cuts it short produces a link that opens as damaged rather than as an error. Freehand drawing is almost always the cause — export the JSON instead, or simplify the drawing.",
+    "This link is {chars} characters. Chat apps and mail cut anything past about {budget}, and a cut link opens as a damaged board. Freehand drawing is usually the cause — simplify it, or export the JSON instead.",
   "share.anyway": "Anyway",
   "share.manual": "The browser would not reach the clipboard — copy the link by hand.",
 
@@ -130,7 +132,7 @@ export const en = {
 
   "confirm.preset.title": "Replace “{label}”?",
   "confirm.preset.message":
-    "A {formation} squad is already saved under that name. Its players, numbers, kit and units are replaced by the ones on the board. Saved squads are not part of the board, so this is not on the undo stack.",
+    "A {formation} squad is already saved under that name. Its players, numbers, kit and units are replaced by the ones on the board. Saved squads live outside the board — once replaced, the old one is gone.",
   "confirm.preset.action": "Replace squad",
 
   "confirm.import.title": "Replace this board?",
@@ -148,7 +150,7 @@ export const en = {
   "json.wholeBoard": "Whole board",
   "json.setupOnly": "Setup only",
   "json.wholeBoard.hint": "Every scene, run, link and drawing — the play as you left it.",
-  "json.setupOnly.hint": "Formation, names, numbers and units. No scenes.",
+  "json.setupOnly.hint": "Formation, names, numbers and units — the team, without the play.",
   "json.payload.label": "Board JSON",
   "json.copy": "Copy",
   "json.copied": "Copied",
@@ -175,7 +177,7 @@ export const en = {
   "timeline.scrub": "Scrub timeline",
   "timeline.flow": "Seamless flow",
   "timeline.flow.on":
-    "One continuous movement: nothing held between scenes, and each scene lasting as long as its longest run needs",
+    "Play as one continuous movement, each scene running for as long as its longest run",
   "timeline.flow.off": "Back to per-scene travel and hold times",
   "timeline.thumbs": "Scene previews",
   "timeline.thumbs.on": "Show a preview of each scene",
@@ -192,8 +194,7 @@ export const en = {
   "timeline.shot": "Shot",
   "timeline.shotMark": "shot",
   "timeline.shot.can": "Draw the ball’s travel into this scene as a strike rather than a pass",
-  "timeline.shot.cannot":
-    "Only a loose ball can be a strike — release it, or play it to an opponent",
+  "timeline.shot.cannot": "A strike needs a loose ball — release it, or play it to an opponent",
   "timeline.moveEarlier": "Move scene earlier",
   "timeline.moveLater": "Move scene later",
   "timeline.duplicate": "Duplicate scene",
@@ -202,17 +203,16 @@ export const en = {
   // ------------------------------------------------------------- inspector
   "inspect.empty":
     "Click a player to select, double-click to rename. Shift-click to add, or drag on empty grass to marquee. Arrow keys nudge; hold shift for 5 m. Space plays.",
-  "inspect.selected": "{count} selected",
-  "inspect.clear": "clear",
   "inspect.carry": "Carry the move",
   "inspect.carry.scene": "This scene",
-  "inspect.carry.scene.hint": "Moves the selection here and nowhere else. Hold Alt for this without changing the setting.",
+  "inspect.carry.scene.hint":
+    "Moves the selection in this scene only. Hold Alt to do it once without switching mode.",
   "inspect.carry.stationary": "While still",
   "inspect.carry.stationary.hint":
-    "Carries the move into every later scene the selection is not already running into, so someone parked in place stays parked in the new place.",
+    "Moves the selection here and in every later scene where it stays put, so a player standing still ends up standing in the new place.",
   "inspect.carry.all": "Every scene",
   "inspect.carry.all.hint":
-    "Shifts the selection through every later scene, keeping everything they do afterwards and moving all of it together.",
+    "Moves the selection in every later scene too, carrying its runs along with it.",
   "inspect.delay": "Wait before starting",
   "inspect.delay.together": "Start with everyone",
   "inspect.delay.hint":
@@ -222,20 +222,24 @@ export const en = {
   "inspect.travel.default": "s — scene default",
   "inspect.travel.unit": "s",
   "inspect.travel.hint":
-    "Shorter than the scene means this player arrives early and waits. Longer stretches the whole scene, which now runs for {seconds} s.",
+    "Shorter than the scene and this player arrives early and waits. Longer stretches the scene, which now runs for {seconds} s.",
   "inspect.travel.reset": "Use the scene default",
   "inspect.ball": "Ball — {scene}",
   "inspect.ball.release": "Release the ball",
   "inspect.ball.give": "Give ball to {who}",
-  "inspect.ball.hint": "Handing the ball to a different player in the next scene makes a pass.",
+  "inspect.ball.hint":
+    "The ball follows whoever holds it. Handing it to someone else in the next scene makes a pass, and giving it out carries through the scenes that follow until something else happens to it.",
   "inspect.ballName": "Ball",
   "inspect.remove": "Remove {who}",
+  "inspect.remove.hint": "Takes this player off the board, in every scene.",
   "inspect.run": "Run — {scene}",
   "inspect.straighten": "Straighten",
+  "inspect.straighten.hint": "Puts the curved runs in this scene back to a straight line.",
+  "inspect.straighten.none": "Curve a run first, by dragging the amber handles on its arrow.",
   "inspect.showRuns": "Show movement arrows",
+  "inspect.showRuns.hint": "Draws the arrows for this scene again.",
   "inspect.hideRuns": "Hide movement arrows",
-  "inspect.run.hint":
-    "Drag the amber handles on a selected player’s run to curve it. Hiding an arrow applies to this scene only — the player still moves.",
+  "inspect.hideRuns.hint": "Hides the arrows in this scene. The players still run.",
   "inspect.name": "Name",
   "inspect.number": "No.",
   "inspect.playerPlaceholder": "Player {number}",
@@ -256,8 +260,8 @@ export const en = {
   "export.again": "Download again",
   "export.cancel": "Cancel",
   "export.blurb.mp4": "H.264. Plays everywhere — QuickTime, VLC, a browser, a phone.",
-  "export.blurb.webm": "VP9. Smaller than MP4 at the same quality; not every player takes it.",
-  "export.blurb.gif": "Loops on its own and pastes into a chat. One palette, so no shimmer.",
+  "export.blurb.webm": "VP9. Smaller than MP4 at the same quality. Plays in browsers; some players want MP4.",
+  "export.blurb.gif": "Loops on its own and pastes straight into a chat.",
   "export.blurb.png": "The frame the scrubber is on, at full resolution.",
   "export.phase.palette": "Building the palette",
   "export.phase.render": "Rendering",
@@ -272,7 +276,7 @@ export const en = {
   "draw.tool.arrow": "Arrow",
   "draw.tool.arrow.hint": "Drag an arrow — a run, pass or shot",
   "draw.tool.line": "Line",
-  "draw.tool.line.hint": "Drag a line with no head",
+  "draw.tool.line.hint": "Drag a plain line",
   "draw.tool.rect": "Box",
   "draw.tool.rect.hint": "Drag a rectangular zone",
   "draw.tool.ellipse": "Oval",
@@ -308,7 +312,7 @@ export const en = {
   "draw.bg.aria": "Background in {color}",
   "draw.bg.opacity": "Background opacity",
   "draw.bg.opacity.title":
-    "How solid the panel behind the words is. Below half the dark outline comes back, since the panel alone no longer lifts the text off the grass.",
+    "How solid the panel behind the words is. Below half, the text keeps a dark outline to stay readable.",
   "draw.from": "From",
   "draw.to": "To",
   "draw.duplicate": "Duplicate shape",
@@ -358,9 +362,9 @@ export const en = {
   "links.style.chain": "Chain",
   "links.style.polygon": "Shape",
   "links.style.filled": "Filled",
-  "links.style.chain.hint": "Open line — a back four must not close on itself",
+  "links.style.chain.hint": "Open line, end to end — a back four",
   "links.style.polygon.hint": "Closed outline",
-  "links.style.filled.hint": "Closed and shaded — shows the area collapse",
+  "links.style.filled.hint": "Closed and shaded — shows the space a unit covers",
   "links.reorder": "Reorder {name}",
   "links.reorder.title": "Drag to reorder, or focus and use the arrow keys. Later links draw on top.",
   "links.expandRow": "Rename and restyle {name}",
@@ -377,9 +381,16 @@ export const en = {
   "links.auto": "Auto",
   "links.auto.title": "Follow the team’s kit colour",
   "links.colorAria": "Set {name} colour to {color}",
-  "links.order": "Order",
+  "links.members": "Members",
   "links.moveEarlier": "Move {number} earlier",
   "links.moveLater": "Move {number} later",
+  "links.dragMember": "Drag to reorder — the order is the line the link draws.",
+  "links.removeMember": "Remove {number} from this link",
+  "links.removeMember.title": "Takes this player out of the link.",
+  "links.removeMember.min": "A link needs two players. Delete the link instead.",
+  "links.addSelected": "Add {n} selected",
+  "links.addSelected.none": "Select players to add",
+  "links.addSelected.title": "Adds the players selected on the board to this link.",
   "links.delete": "Delete link",
 
   // ---------------------------------------------------------- squad presets
@@ -477,7 +488,7 @@ export const en = {
   "boards.conflict.theirs": "Use the newer one",
   "boards.error.project_limit_reached": "You have reached the limit on projects.",
   "boards.error.board_limit_reached": "You have reached the limit on boards.",
-  "boards.error.invalid_name": "That name will not do — one to a hundred characters.",
+  "boards.error.invalid_name": "Names run from one to a hundred characters.",
   "boards.error.invalid_document": "That board could not be read.",
   "boards.error.not_found": "That board is no longer there.",
   "boards.error.invalid_project": "That project is no longer there.",

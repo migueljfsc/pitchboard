@@ -4,14 +4,26 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
+  Plus,
   EyeOff,
   GripVertical,
   Link2,
   Ruler,
   Trash2,
+  X,
 } from "lucide-react";
 import type { BoardDoc, Link, LinkStyle } from "@/board/types";
-import { deleteLink, linkColor, moveLink, moveMember, updateLink } from "@/board/links";
+import {
+  MAX_MEMBERS,
+  MIN_MEMBERS,
+  addMembers,
+  deleteLink,
+  linkColor,
+  moveLink,
+  moveMember,
+  removeMember,
+  updateLink,
+} from "@/board/links";
 import { PALETTE } from "@/components/ui/palette";
 import type { Change } from "@/lib/history";
 import { cn } from "@/lib/utils";
@@ -111,6 +123,10 @@ export function LinkPanel({
             onSelect={() => onSelectMembers(link.members)}
             onChange={(patch, merge) => onDocChange(updateLink(doc, link.id, patch), merge)}
             onMove={(from, to) => onDocChange(moveMember(doc, link.id, from, to))}
+            // Only players the link does not already hold, and never the ball.
+            addable={players.filter((id) => !link.members.includes(id))}
+            onAdd={(ids) => onDocChange(addMembers(doc, link.id, ids))}
+            onRemoveMember={(id) => onDocChange(removeMember(doc, link.id, id))}
             onDelete={() => onDocChange(deleteLink(doc, link.id))}
             onReorder={(to) => onDocChange(moveLink(doc, i, to))}
             onDragStart={() => setDragging(i)}
@@ -150,6 +166,9 @@ function LinkRow({
   onSelect,
   onChange,
   onMove,
+  addable,
+  onAdd,
+  onRemoveMember,
   onDelete,
   onReorder,
   onDragStart,
@@ -171,6 +190,10 @@ function LinkRow({
   onSelect: () => void;
   onChange: (patch: Partial<Omit<Link, "id">>, merge?: string) => void;
   onMove: (from: number, to: number) => void;
+  /** Selected players this link does not hold yet — what "add" would add. */
+  addable: string[];
+  onAdd: (ids: string[]) => void;
+  onRemoveMember: (id: string) => void;
   onDelete: () => void;
   onReorder: (to: number) => void;
   onDragStart: () => void;
@@ -180,6 +203,21 @@ function LinkRow({
   i18n: I18n;
 }) {
   const { t } = i18n;
+  // Which member chip is in the air, and which GAP it would land in — 0 before the
+  // first, n after the last. Local, because only one row is expanded at a time.
+  const [lift, setLift] = useState<number | null>(null);
+  const [gap, setGap] = useState<number | null>(null);
+
+  const dropMember = () => {
+    // The gap counts positions in the list as it stands; once the chip is lifted
+    // out, everything after it shifts down one.
+    if (lift !== null && gap !== null && gap !== lift && gap !== lift + 1) {
+      onMove(lift, gap > lift ? gap - 1 : gap);
+    }
+    setLift(null);
+    setGap(null);
+  };
+
   return (
     <div
       onDragOver={(e) => {
@@ -345,18 +383,56 @@ function LinkRow({
 
           <div>
             <span className="text-[11px] uppercase tracking-wide text-ink-400">
-              {t("links.order")}
+              {t("links.members")}
             </span>
             <div className="mt-1 flex flex-wrap gap-1">
               {link.members.map((id, i) => (
                 <span
                   key={id}
-                  className="flex items-center gap-0.5 rounded border border-ink-600 bg-ink-900 pl-1.5 text-[11px] text-ink-200"
+                  draggable
+                  title={t("links.dragMember")}
+                  onDragStart={(e) => {
+                    // Firefox refuses to start a drag without payload.
+                    e.dataTransfer.effectAllowed = "move";
+                    e.dataTransfer.setData("text/plain", id);
+                    setLift(i);
+                  }}
+                  onDragEnd={() => {
+                    setLift(null);
+                    setGap(null);
+                  }}
+                  // Only while a chip is in the air. A link ROW dragged over this
+                  // one must keep bubbling to the row's own handler, or it loses
+                  // its drop marker over anything expanded.
+                  onDragOver={(e) => {
+                    if (lift === null) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const box = e.currentTarget.getBoundingClientRect();
+                    setGap(e.clientX < box.left + box.width / 2 ? i : i + 1);
+                  }}
+                  onDrop={(e) => {
+                    if (lift === null) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropMember();
+                  }}
+                  className={cn(
+                    "relative flex cursor-grab items-center gap-0.5 rounded border border-ink-600 bg-ink-900 pl-1.5 text-[11px] text-ink-200 active:cursor-grabbing",
+                    lift === i && "opacity-40",
+                  )}
                 >
+                  {/* In the gap between chips, so it marks a position rather than
+                      a chip. Absolute, so nothing reflows mid-drag. */}
+                  {gap === i && <DropBar className="-left-1" />}
+                  {gap === link.members.length && i === link.members.length - 1 && (
+                    <DropBar className="-right-1" />
+                  )}
                   {numberOf(id)}
                   <button
                     type="button"
                     aria-label={t("links.moveEarlier", { number: numberOf(id) })}
+                    title={t("links.moveEarlier", { number: numberOf(id) })}
                     disabled={i === 0}
                     onClick={() => onMove(i, i - 1)}
                     className="px-0.5 text-ink-400 enabled:hover:text-accent disabled:opacity-45"
@@ -366,15 +442,47 @@ function LinkRow({
                   <button
                     type="button"
                     aria-label={t("links.moveLater", { number: numberOf(id) })}
+                    title={t("links.moveLater", { number: numberOf(id) })}
                     disabled={i === link.members.length - 1}
                     onClick={() => onMove(i, i + 1)}
-                    className="pr-1 text-ink-400 enabled:hover:text-accent disabled:opacity-45"
+                    className="px-0.5 text-ink-400 enabled:hover:text-accent disabled:opacity-45"
                   >
                     <ChevronRight size={11} />
+                  </button>
+                  {/* Refused at two, where the link would have no edge left to
+                      draw. Deleting the link is its own button below. */}
+                  <button
+                    type="button"
+                    aria-label={t("links.removeMember", { number: numberOf(id) })}
+                    title={t(
+                      link.members.length > MIN_MEMBERS
+                        ? "links.removeMember.title"
+                        : "links.removeMember.min",
+                    )}
+                    disabled={link.members.length <= MIN_MEMBERS}
+                    onClick={() => onRemoveMember(id)}
+                    className="pr-1 text-ink-400 enabled:hover:text-red-400 disabled:opacity-45"
+                  >
+                    <X size={11} />
                   </button>
                 </span>
               ))}
             </div>
+
+            {/* Same gesture that made the link in the first place: pick players on
+                the board, then say where they go. */}
+            <button
+              type="button"
+              disabled={addable.length === 0 || link.members.length >= MAX_MEMBERS}
+              onClick={() => onAdd(addable)}
+              title={t("links.addSelected.title")}
+              className="mt-1.5 flex w-full items-center justify-center gap-1 rounded border border-ink-600 bg-ink-800 px-1.5 py-1 text-[11px] text-ink-200 transition enabled:hover:border-accent enabled:hover:text-white disabled:opacity-45"
+            >
+              <Plus size={11} />
+              {addable.length > 0
+                ? t("links.addSelected", { n: addable.length })
+                : t("links.addSelected.none")}
+            </button>
           </div>
 
           <button
@@ -387,6 +495,19 @@ function LinkRow({
         </div>
       )}
     </div>
+  );
+}
+
+/** The members wrap horizontally, so their drop marker stands on end. */
+function DropBar({ className }: { className: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "pointer-events-none absolute inset-y-0 w-0.5 rounded-full bg-accent",
+        className,
+      )}
+    />
   );
 }
 

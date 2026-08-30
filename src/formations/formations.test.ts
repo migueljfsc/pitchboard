@@ -214,11 +214,11 @@ describe("createBoardDoc", () => {
     expect(boardDocSchema.safeParse(createBoardDoc()).success).toBe(true);
   });
 
-  it("has one scene, a loose ball and no paths", () => {
+  it("has one scene, no ball and no paths", () => {
     const doc = createBoardDoc();
     expect(doc.scenes).toHaveLength(1);
     expect(doc.scenes[0].carrier).toBeNull();
-    expect(doc.scenes[0].ballPos).toEqual({ x: 52.5, y: 34 });
+    expect(doc.scenes[0].ballPos).toBeUndefined();
     expect(doc.scenes[0].paths).toEqual({});
   });
 });

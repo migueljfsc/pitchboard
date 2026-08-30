@@ -10,11 +10,14 @@ import {
   MAX_FLOW_SPEED,
   MIN_FLOW_SPEED,
   ballAt,
+  hasBall,
   resolveAt,
   sceneTimings,
   totalDurationMs,
 } from "./timeline";
 import { pruneAnnotations } from "./annotations";
+import { SAME_PLACE, distance } from "./geometry";
+import type { Carry } from "./interaction";
 import { teamOf } from "./players";
 
 export const DEFAULT_TRANSITION_MS = 1500;
@@ -172,26 +175,88 @@ export function renameScene(doc: BoardDoc, index: number, name: string): BoardDo
 }
 
 /**
+ * Did anything happen to the ball between these two scenes?
+ *
+ * The same question the drag carry asks of a player, asked of a discrete state
+ * rather than a position: the same holder is nobody deciding anything, and so is
+ * a loose ball nobody moved. A different holder is a pass, and a ball put down
+ * somewhere else is a pass to a space — both are decisions, and both stop a carry.
+ *
+ * A player running with the ball moves it, but that is the player's edit, not the
+ * ball's: no handover happened in that scene, so it is one the carry may pass
+ * through.
+ */
+function sameBall(scene: Scene, before: Scene): boolean {
+  if (scene.carrier !== before.carrier) return false;
+  if (scene.carrier !== null) return true;
+  const here = scene.ballPos;
+  const there = before.ballPos;
+  // No ball in either is the commonest case of nothing happening: it is what
+  // every scene looks like before the ball is first given out (D44).
+  if (here === undefined && there === undefined) return true;
+  return here !== undefined && there !== undefined && distance(here, there) <= SAME_PLACE;
+}
+
+/**
  * Give the ball to a player, or set it loose.
  *
  * Releasing drops the ball where it currently is rather than at some default, so
  * clearing a carrier never makes the ball jump. `ballPos` must be present exactly
  * when there is no carrier, which the schema enforces.
+ *
+ * `carry` reaches the handover forward through the following scenes nobody meant
+ * anything by — the same bargain a drag makes (D41), and for the same reason. A
+ * board is built by adding scenes and then deciding what happens in them, so the
+ * scenes after the one being edited are usually still the kick-off the board was
+ * seeded with. Handing the ball over in scene 2 and leaving scenes 3 onward at the
+ * centre spot does not mean "the ball returns to the centre"; it means nobody has
+ * said anything about them yet, and the ball snapping back is the answer to a
+ * question that was never asked.
+ *
+ * `"all"` reaches exactly as far as `"stationary"` here. There is no rigid
+ * translation of a handover to preserve what the later scenes do — carrying past a
+ * pass could only overwrite it — so the modes collapse to the two answers the
+ * question actually has: this scene, or onward until something happens.
  */
-export function setCarrier(doc: BoardDoc, index: number, carrier: string | null): BoardDoc {
+export function setCarrier(
+  doc: BoardDoc,
+  index: number,
+  carrier: string | null,
+  carry: Carry = "scene",
+): BoardDoc {
   const scene = doc.scenes[index];
   if (!scene || scene.carrier === carrier) return doc;
 
+  // Read before anything moves, and reused for every scene the release carries
+  // into: a ball put down stays where it was put rather than following the player
+  // who was holding it in each later scene.
+  const held = scene.carrier;
+  const dropped =
+    carrier === null && held
+      ? (ballAt(resolveAt(doc, sceneStartSeconds(doc, index)), doc) ?? scene.positions[held])
+      : null;
+
   const scenes = doc.scenes.slice();
-  if (carrier === null) {
-    const at = ballAt(resolveAt(doc, sceneStartSeconds(doc, index)), doc);
-    scenes[index] = { ...scene, carrier: null, ballPos: at };
-  } else {
-    // ballPos must be absent while a carrier holds the ball, so drop the key
-    // rather than setting it undefined — the schema checks presence.
-    const rest = { ...scene, carrier };
+  const hand = (i: number): void => {
+    if (dropped) {
+      scenes[i] = { ...scenes[i], carrier: null, ballPos: dropped };
+      return;
+    }
+    // A carrier derives the ball's position, so a scene never holds both. Drop
+    // the key rather than setting it undefined, to keep the document clean.
+    const rest = { ...scenes[i], carrier };
     delete rest.ballPos;
-    scenes[index] = rest;
+    scenes[i] = rest;
+  };
+
+  hand(index);
+  if (carry !== "scene") {
+    // Each scene judged against the one BEFORE it, in the document as it was, so
+    // the boundary does not move as the carry writes through it.
+    for (let k = index + 1; k < doc.scenes.length; k++) {
+      if (!sameBall(doc.scenes[k], doc.scenes[k - 1])) break;
+      hand(k);
+    }
   }
   return replace(doc, scenes);
 }
@@ -306,6 +371,8 @@ export function isRunHidden(scene: Scene | undefined, entityId: string): boolean
 export type BallTravel = "none" | "pass" | "loose";
 
 export function ballTravelBetween(doc: BoardDoc, from: Scene, to: Scene): BallTravel {
+  // A ball arriving on the pitch, or leaving it, has not travelled anywhere.
+  if (!hasBall(from) || !hasBall(to)) return "none";
   if (from.carrier === to.carrier) {
     if (from.carrier !== null) return "none";
     const a = from.ballPos;

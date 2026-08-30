@@ -21,8 +21,16 @@ describe("hitTest", () => {
     expect(hitTest(doc, frame, { x: at.x + TOKEN_RADIUS + 1, y: at.y })).toBeNull();
   });
 
-  it("finds the ball", () => {
-    expect(hitTest(doc, frame, frame.ball)).toEqual({ kind: "ball", id: BALL_ID });
+  it("finds a loose ball", () => {
+    const loose = createBoardDoc();
+    loose.scenes[0].ballPos = { x: 52.5, y: 34 };
+    const f = frameAt(loose, 0);
+    expect(hitTest(loose, f, f.ball!)).toEqual({ kind: "ball", id: BALL_ID });
+  });
+
+  it("finds nothing where the ball would be before anyone has it", () => {
+    expect(frame.ball).toBeNull();
+    expect(hitTest(doc, frame, { x: 52.5, y: 34 })).toBeNull();
   });
 
   it("prefers the ball over a token beneath it — it renders on top", () => {
@@ -32,7 +40,7 @@ describe("hitTest", () => {
     delete carried.scenes[0].ballPos;
 
     const f = frameAt(carried, 0);
-    expect(hitTest(carried, f, f.ball)?.kind).toBe("ball");
+    expect(hitTest(carried, f, f.ball!)?.kind).toBe("ball");
   });
 });
 
@@ -107,8 +115,10 @@ describe("moveEntities", () => {
   });
 
   it("moves a loose ball", () => {
-    const next = moveEntities(doc, 0, [BALL_ID], { x: 10, y: 0 });
-    expect(next.scenes[0].ballPos!.x).toBeCloseTo(doc.scenes[0].ballPos!.x + 10);
+    const loose = createBoardDoc();
+    loose.scenes[0].ballPos = { x: 52.5, y: 34 };
+    const next = moveEntities(loose, 0, [BALL_ID], { x: 10, y: 0 });
+    expect(next.scenes[0].ballPos!.x).toBeCloseTo(62.5);
   });
 
   it("ignores a carried ball — it is derived from its carrier", () => {
@@ -137,7 +147,8 @@ describe("carrying an edit forward", () => {
   const still = (n: number): BoardDoc => {
     let d = createBoardDoc();
     for (let i = 1; i < n; i++) d = addSceneAfter(d, i - 1);
-    return d;
+    // A ball on the grass in every scene, since a fresh board has none.
+    return { ...d, scenes: d.scenes.map((s) => ({ ...s, ballPos: { x: 52.5, y: 34 } })) };
   };
 
   /** Where `id` stands in each scene. */

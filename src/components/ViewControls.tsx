@@ -4,6 +4,7 @@ import { framingOf } from "@/board/projection";
 import { DEFAULT_TOKEN_SCALE, MAX_TOKEN_SCALE, MIN_TOKEN_SCALE, tokenScaleOf } from "@/board/pitch";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n/context";
+import type { MessageKey } from "@/i18n/core";
 
 type Props = {
   view: PitchView;
@@ -36,10 +37,17 @@ type Props = {
 /** Neighbouring scenes to outline behind the board. */
 export type Ghosts = { before: boolean; after: boolean };
 
-const HALVES: { value: PitchHalf; key: "view.left" | "view.full" | "view.right" }[] = [
-  { value: "left", key: "view.left" },
-  { value: "full", key: "view.full" },
-  { value: "right", key: "view.right" },
+/**
+ * The halves, named for where they are on screen.
+ *
+ * A vertical board turns the pitch a quarter turn with x=0 at the bottom, so the
+ * half a coach calls "left" on a horizontal board is the one they see at the
+ * bottom of a vertical one. The crop is the same; only the word changes.
+ */
+const HALVES: { value: PitchHalf; flat: MessageKey; upright: MessageKey }[] = [
+  { value: "left", flat: "view.left", upright: "view.bottom" },
+  { value: "full", flat: "view.full", upright: "view.full" },
+  { value: "right", flat: "view.right", upright: "view.top" },
 ];
 
 export function ViewControls({
@@ -73,7 +81,7 @@ export function ViewControls({
                   : "border-ink-600 text-ink-400 hover:text-ink-200",
               )}
             >
-              {t(h.key)}
+              {t(framing.rotated ? h.upright : h.flat)}
             </button>
           ))}
         </div>

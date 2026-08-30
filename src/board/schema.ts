@@ -157,15 +157,12 @@ export const boardDocSchema = boardDocShape.superRefine((doc, ctx) => {
       });
     }
 
-    // The ball is derived while carried, and explicit while loose. Exactly one.
-    const hasBallPos = s.ballPos !== undefined;
-    if ((s.carrier === null) !== hasBallPos) {
+    // The ball is derived while carried and explicit while loose, so never both.
+    // Neither is also legal: a board has no ball until one is given out (D44).
+    if (s.carrier !== null && s.ballPos !== undefined) {
       ctx.addIssue({
         code: "custom",
-        message:
-          s.carrier === null
-            ? "a scene with no carrier must give ballPos"
-            : "a scene with a carrier must not give ballPos",
+        message: "a scene with a carrier must not give ballPos",
         path: ["scenes", i, "ballPos"],
       });
     }

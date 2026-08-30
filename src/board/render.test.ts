@@ -25,7 +25,12 @@ function view(overrides: Partial<RenderView> = {}): RenderView {
 }
 
 describe("ghost scenes", () => {
-  const two = addSceneAfter(createBoardDoc(), 0);
+  // With a ball on the pitch: a ghost outlines whatever the scene holds, and a
+  // board has no ball until one is given out.
+  const two = (() => {
+    const doc = addSceneAfter(createBoardDoc(), 0);
+    return { ...doc, scenes: doc.scenes.map((s) => ({ ...s, ballPos: { x: 52.5, y: 34 } })) };
+  })();
   const players = two.teams[0].players.length + two.teams[1].players.length;
 
   /** Each ghost opens with its own alpha, so counting them counts the outlines. */
@@ -221,6 +226,7 @@ describe("drawBoard", () => {
 
   it("draws one token arc per player, and the ball above them", () => {
     const doc = createBoardDoc();
+    doc.scenes[0].ballPos = { x: 52.5, y: 34 };
     const r = createRecordingCtx();
     drawBoard(r.ctx, doc, 0, view());
 
@@ -364,7 +370,12 @@ describe("team names", () => {
 describe("frameAt", () => {
   it("places a loose ball at its stored position", () => {
     const doc = createBoardDoc();
+    doc.scenes[0].ballPos = { x: 52.5, y: 34 };
     expect(frameAt(doc, 0).ball).toEqual(doc.scenes[0].ballPos);
+  });
+
+  it("has no ball until one is given out", () => {
+    expect(frameAt(createBoardDoc(), 0).ball).toBeNull();
   });
 
   it("glues a carried ball beside its carrier", () => {
@@ -373,7 +384,7 @@ describe("frameAt", () => {
     doc.scenes[0].carrier = carrier;
     delete doc.scenes[0].ballPos;
 
-    const ball = frameAt(doc, 0).ball;
+    const ball = frameAt(doc, 0).ball!;
     const at = doc.scenes[0].positions[carrier];
     expect(ball.y).toBeCloseTo(at.y);
     expect(ball.x).toBeGreaterThan(at.x);
@@ -565,10 +576,17 @@ describe("the ball's own line", () => {
       const runner = doc.teams[0].players[5].id;
       return setCarrier(setCarrier(doc, 0, runner), 1, runner);
     });
+    // A ball nobody moves, for the stroke count to be measured against: the
+    // baseline has to have a ball on the pitch, or it is short one circle.
+    const still = moving((doc) => ({
+      ...doc,
+      scenes: doc.scenes.map((s) => ({ ...s, ballPos: { x: 52.5, y: 34 } })),
+    }));
+
     expect(dribble.doc.scenes[0].carrier).toBe(dribble.doc.scenes[1].carrier);
     expect(dribble.r.log).not.toContain("setLineDash([1.4,1])");
     // Not merely undashed: no ball line at all. The run arrow already says it.
-    expect(dribble.r.count("stroke")).toBe(moving().r.count("stroke"));
+    expect(dribble.r.count("stroke")).toBe(still.r.count("stroke"));
   });
 
   it("does not dash a turnover — the convention is a pass between team-mates", () => {

@@ -21,9 +21,10 @@ type Props = {
   selection: ReadonlySet<string>;
   activeScene: number;
   canEditPaths: boolean;
-  onClear: () => void;
   onCarrierChange: (playerId: string | null) => void;
   onClearPaths: () => void;
+  /** True when a selected entity has a curved run in this scene to put back. */
+  canStraighten: boolean;
   onRename: (playerId: string, label: string) => void;
   onRenumber: (playerId: string, number: number) => void;
   onTravelChange: (ms: number | null) => void;
@@ -48,9 +49,9 @@ export function Inspector({
   selection,
   activeScene,
   canEditPaths,
-  onClear,
   onCarrierChange,
   onClearPaths,
+  canStraighten,
   onRename,
   onRenumber,
   onTravelChange,
@@ -105,20 +106,9 @@ export function Inspector({
   const waits = only !== null && ownDelayMs > 0;
 
   return (
+    // No count and no clear at the top: the section header already carries the
+    // count as its badge, and clicking empty grass clears the selection.
     <div className="flex flex-col gap-3.5">
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] uppercase tracking-wide text-ink-400">
-          {t("inspect.selected", { count: selection.size })}
-        </span>
-        <button
-          type="button"
-          onClick={onClear}
-          className="text-[11px] text-ink-300 underline-offset-2 hover:text-white hover:underline"
-        >
-          {t("inspect.clear")}
-        </button>
-      </div>
-
       {player ? (
         <IdentityFields
           key={player.id}
@@ -221,42 +211,53 @@ export function Inspector({
       )}
 
       {only && (
-        // The rule sits on the group rather than on each control: a title on an
-        // ancestor is what a child without one shows, so the whole block explains
-        // itself on hover without repeating the sentence three times.
-        <div className="flex flex-col gap-1.5" title={t("inspect.ball.hint")}>
+        <div className="flex flex-col gap-1.5">
           <span className="text-[11px] uppercase tracking-wide text-ink-400">
             {t("inspect.ball", { scene: scene?.name ?? "" })}
           </span>
           <SmallButton
+            icon="⚽"
             label={carries ? t("inspect.ball.release") : t("inspect.ball.give", { who: nameOf(only) })}
+            title={t("inspect.ball.hint")}
             onClick={() => onCarrierChange(carries ? null : only)}
           />
         </div>
       )}
 
+      {/* Every hint names one control. A title on the block would be inherited by
+          each button in it, so two buttons doing different things would explain
+          themselves with the same sentence. */}
+      {canEditPaths && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[11px] uppercase tracking-wide text-ink-400">
+            {t("inspect.run", { scene: scene?.name ?? "" })}
+          </span>
+          <SmallButton
+            label={t("inspect.straighten")}
+            title={t(canStraighten ? "inspect.straighten.hint" : "inspect.straighten.none")}
+            disabled={!canStraighten}
+            onClick={onClearPaths}
+          />
+          <SmallButton
+            label={t(runsHidden ? "inspect.showRuns" : "inspect.hideRuns")}
+            title={t(runsHidden ? "inspect.showRuns.hint" : "inspect.hideRuns.hint")}
+            onClick={() => onRunsHiddenChange(!runsHidden)}
+          />
+        </div>
+      )}
+
+      {/* Last, and on its own. Removing a player belongs to neither the ball nor
+          the run, and sitting under either read as part of it. */}
       {player && (
         <button
           type="button"
+          title={t("inspect.remove.hint")}
           onClick={() => onRemovePlayer(player.id)}
-          className="flex items-center justify-center gap-1.5 rounded-md border border-ink-600 px-2 py-1.5 text-xs text-ink-300 transition hover:border-red-500/60 hover:text-red-400"
+          className="flex w-full items-center justify-center gap-1.5 rounded-md border border-ink-600 px-2 py-1.5 text-xs text-ink-300 transition hover:border-red-500/60 hover:text-red-400"
         >
           <UserMinus size={13} />
           {t("inspect.remove", { who: displayName(doc, player.id) })}
         </button>
-      )}
-
-      {canEditPaths && (
-        <div className="flex flex-col gap-1.5" title={t("inspect.run.hint")}>
-          <span className="text-[11px] uppercase tracking-wide text-ink-400">
-            {t("inspect.run", { scene: scene?.name ?? "" })}
-          </span>
-          <SmallButton label={t("inspect.straighten")} onClick={onClearPaths} />
-          <SmallButton
-            label={t(runsHidden ? "inspect.showRuns" : "inspect.hideRuns")}
-            onClick={() => onRunsHiddenChange(!runsHidden)}
-          />
-        </div>
       )}
     </div>
   );
@@ -350,14 +351,45 @@ function IdentityFields({
   );
 }
 
-function SmallButton({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
+function SmallButton({
+  label,
+  icon,
+  title,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  /** Sits before the label. Decorative — the label already says what it does. */
+  icon?: string;
+  title?: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  const button = (
     <button
       type="button"
+      title={disabled ? undefined : title}
+      disabled={disabled}
       onClick={onClick}
-      className="rounded-md border border-ink-600 bg-ink-800 px-2 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
+      className={cn(
+        "flex items-center justify-center gap-1.5 rounded-md border border-ink-600 bg-ink-800 px-2 py-1.5 text-xs text-ink-200 transition",
+        "disabled:pointer-events-none disabled:opacity-40",
+        !disabled && "hover:border-accent hover:text-white",
+      )}
     >
+      {icon && <span aria-hidden>{icon}</span>}
       {label}
     </button>
+  );
+
+  // A disabled button dispatches no mouse events, so its own title never appears —
+  // and why it is disabled is exactly the hint worth reading. The pointer passes
+  // through it to a wrapper that can hold one.
+  return disabled ? (
+    <span title={title} className="flex cursor-not-allowed flex-col">
+      {button}
+    </span>
+  ) : (
+    button
   );
 }

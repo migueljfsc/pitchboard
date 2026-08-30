@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  MAX_MEMBERS,
   NEUTRAL_LINK_COLOR,
+  addMembers,
   area,
   clearLinks,
   createLink,
@@ -11,6 +13,7 @@ import {
   moveMember,
   perimeter,
   pruneLinks,
+  removeMember,
   updateLink,
 } from "./links";
 import { resolveAt } from "./timeline";
@@ -251,6 +254,47 @@ describe("updateLink / deleteLink", () => {
   it("removes a link", () => {
     const doc = board([A, B], "chain", { [A]: { x: 0, y: 0 }, [B]: { x: 5, y: 0 } });
     expect(deleteLink(doc, "l1").links).toHaveLength(0);
+  });
+});
+
+describe("membership", () => {
+  const pair = () => board([A, B], "chain", { [A]: { x: 0, y: 0 }, [B]: { x: 5, y: 0 } });
+
+  it("appends rather than re-sorting, so a hand-ordered chain survives", () => {
+    const doc = board([B, A], "chain", { [A]: { x: 0, y: 0 }, [B]: { x: 5, y: 0 } });
+    expect(addMembers(doc, "l1", [C]).links[0].members).toEqual([B, A, C]);
+  });
+
+  it("adds several in document order", () => {
+    const next = addMembers(pair(), "l1", [D, C]);
+    expect(next.links[0].members).toEqual([A, B, C, D]);
+    expect(boardDocSchema.safeParse(next).success).toBe(true);
+  });
+
+  it("ignores members it already holds, and anything that is not a player", () => {
+    const doc = pair();
+    expect(addMembers(doc, "l1", [A])).toBe(doc);
+    expect(addMembers(doc, "l1", ["ball"])).toBe(doc);
+    expect(addMembers(doc, "nope", [C])).toBe(doc);
+  });
+
+  it("stops at the schema's ceiling rather than writing a document it rejects", () => {
+    const doc = pair();
+    const everyone = doc.teams[0].players.map((p) => p.id);
+    const next = addMembers(doc, "l1", everyone);
+    expect(next.links[0].members).toHaveLength(MAX_MEMBERS);
+    expect(boardDocSchema.safeParse(next).success).toBe(true);
+  });
+
+  it("removes a member", () => {
+    const doc = addMembers(pair(), "l1", [C]);
+    expect(removeMember(doc, "l1", B).links[0].members).toEqual([A, C]);
+  });
+
+  it("refuses to go below two — a link of one has nothing to draw", () => {
+    const doc = pair();
+    expect(removeMember(doc, "l1", A)).toBe(doc);
+    expect(removeMember(doc, "l1", "nobody")).toBe(doc);
   });
 });
 

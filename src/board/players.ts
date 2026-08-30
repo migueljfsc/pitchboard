@@ -147,8 +147,7 @@ export function addPlayer(doc: BoardDoc, teamIndex: 0 | 1): BoardDoc {
  *
  * Positions, runs, travel overrides and waits go from all scenes; links lose them and
  * are dropped if fewer than two members remain. A scene where they were carrying
- * the ball gets the ball back as a loose one, where they were standing — the
- * schema requires ballPos exactly when there is no carrier.
+ * the ball gets it back as a loose one, where they were standing.
  */
 export function removePlayer(doc: BoardDoc, id: string): BoardDoc {
   if (!allIds(doc).has(id)) return doc;
@@ -184,7 +183,10 @@ export function removePlayer(doc: BoardDoc, id: string): BoardDoc {
 
     if (scene.carrier === id) {
       next.carrier = null;
-      next.ballPos = dropped ?? { x: doc.pitch.length / 2, y: doc.pitch.width / 2 };
+      // The ball drops where they stood. With no position to drop it at, the
+      // scene simply has no ball — the board is allowed to be without one (D44).
+      if (dropped) next.ballPos = dropped;
+      else delete next.ballPos;
     }
 
     return next;

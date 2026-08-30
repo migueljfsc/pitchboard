@@ -25,7 +25,7 @@ import {
   type AnnotationHandle,
 } from "./annotations";
 import { HANDLE_RADIUS, concealedPlayers } from "./render";
-import { clamp, distanceToSegment } from "./geometry";
+import { SAME_PLACE, clamp, distanceToSegment } from "./geometry";
 
 export type HitTarget = { kind: "token" | "ball"; id: string } | null;
 
@@ -83,7 +83,7 @@ export function dragHandle(
  * tie. A small grab margin makes tokens easier to catch than their visual radius.
  */
 export function hitTest(doc: BoardDoc, frame: Frame, p: Vec2, margin = 0.25): HitTarget {
-  if (dist(p, frame.ball) <= ballRadius(doc) + margin) {
+  if (frame.ball && dist(p, frame.ball) <= ballRadius(doc) + margin) {
     return { kind: "ball", id: BALL_ID };
   }
 
@@ -257,16 +257,6 @@ export function entitiesInRect(doc: BoardDoc, frame: Frame, a: Vec2, b: Vec2): s
  *   afterwards survives, translated.
  */
 export type Carry = "scene" | "stationary" | "all";
-
-/**
- * Below this, two stored positions are the same place. In metres.
- *
- * A millimetre: a scene copied from another holds bit-identical coordinates, so
- * this only has to absorb float noise. Erring small makes a carry stop early,
- * which costs a drag — erring large would run it through a scene the entity was
- * deliberately placed in, silently undoing that edit.
- */
-const SAME_PLACE = 1e-3;
 
 /**
  * Translate entities by `delta`, clamped so a token cannot be dragged off the

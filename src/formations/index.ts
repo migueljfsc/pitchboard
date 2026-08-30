@@ -352,8 +352,8 @@ export function createBoardDoc(
         holdMs: 1000,
         positions: { ...a.positions, ...b.positions },
         paths: {},
+        // No ball until one is given to somebody — see D44.
         carrier: null,
-        ballPos: { x: pitch.length / 2, y: pitch.width / 2 },
         ballPath: null,
       },
     ],
@@ -378,15 +378,19 @@ export function applyFormation(doc: BoardDoc, teamIndex: 0 | 1, spec: TeamSpec):
       const p = scene.positions[id];
       if (p) positions[id] = p;
     }
-    // A carrier that no longer exists would fail validation.
-    const carrier = scene.carrier && (otherIds.has(scene.carrier) || scene.carrier in built.positions)
-      ? scene.carrier
-      : null;
+    // A carrier that no longer exists would fail validation. One who leaves the
+    // squad drops the ball where they were standing; a scene that had no ball
+    // still has none.
+    const held = scene.carrier;
+    const carrier = held && (otherIds.has(held) || held in built.positions) ? held : null;
     return {
       ...scene,
       positions,
       carrier,
-      ballPos: carrier === null ? (scene.ballPos ?? { x: doc.pitch.length / 2, y: doc.pitch.width / 2 }) : undefined,
+      ballPos:
+        carrier !== null
+          ? undefined
+          : (scene.ballPos ?? (held ? scene.positions[held] : undefined)),
     };
   });
 

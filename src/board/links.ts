@@ -188,6 +188,58 @@ export function moveLink(doc: BoardDoc, from: number, to: number): BoardDoc {
   return withLinks(doc, links);
 }
 
+/**
+ * The most players one link may hold. Matches the schema, and an eleven.
+ */
+export const MAX_MEMBERS = 11;
+/** Below this a link has no geometry to draw, and the schema rejects it. */
+export const MIN_MEMBERS = 2;
+
+/**
+ * Add players to an existing link.
+ *
+ * Appended rather than re-sorted into document order: member order is the chain
+ * sequence, and someone who has arranged a back four by hand should not have that
+ * undone by adding a fifth. The new ones arrive in document order among
+ * themselves, which is the same rule `createLink` uses when there is no existing
+ * order to respect.
+ *
+ * Walking the teams is also what keeps a non-player out — the ball is selectable
+ * on the board, and a link may only name players.
+ */
+export function addMembers(doc: BoardDoc, id: string, members: Iterable<string>): BoardDoc {
+  const link = doc.links.find((l) => l.id === id);
+  if (!link) return doc;
+
+  const wanted = new Set(members);
+  const held = new Set(link.members);
+  const added: string[] = [];
+
+  for (const team of doc.teams) {
+    for (const player of team.players) {
+      if (!wanted.has(player.id) || held.has(player.id)) continue;
+      if (link.members.length + added.length >= MAX_MEMBERS) break;
+      added.push(player.id);
+    }
+  }
+  if (added.length === 0) return doc;
+  return updateLink(doc, id, { members: [...link.members, ...added] });
+}
+
+/**
+ * Drop one player from a link.
+ *
+ * Refused at two members: a link of one has no geometry, and silently deleting
+ * the whole link because its last edge was removed is not what an × on a chip
+ * offers. Removing the link itself is its own button.
+ */
+export function removeMember(doc: BoardDoc, id: string, member: string): BoardDoc {
+  const link = doc.links.find((l) => l.id === id);
+  if (!link || link.members.length <= MIN_MEMBERS) return doc;
+  const members = link.members.filter((m) => m !== member);
+  return members.length === link.members.length ? doc : updateLink(doc, id, { members });
+}
+
 /** Member order defines the chain sequence and the polygon perimeter. */
 export function moveMember(doc: BoardDoc, id: string, from: number, to: number): BoardDoc {
   const link = doc.links.find((l) => l.id === id);

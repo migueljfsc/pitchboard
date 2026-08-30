@@ -90,8 +90,8 @@ anything else on a PR.
 | Document | Contents |
 |---|---|
 | [`docs/architecture.md`](docs/architecture.md) | Renderer contract, coordinate system, `BoardDoc` schema, timeline and ball model, links, export pipeline, sharing |
-| [`docs/implementation-plan.md`](docs/implementation-plan.md) | Phases M0–M10 with tasks, definition of done, and per-phase risks |
-| [`docs/decisions.md`](docs/decisions.md) | Decision log — what was chosen, and what was rejected |
+| [`docs/implementation-plan.md`](docs/implementation-plan.md) | What is built, what is left, and the checks every change passes |
+| [`docs/decisions.md`](docs/decisions.md) | Decision log — why the design is what it is |
 | [`docs/bugs.md`](docs/bugs.md) | Known defects, with the cause where it is understood |
 | [`AGENTS.md`](AGENTS.md) | Working conventions and the invariants that must not be broken |
 

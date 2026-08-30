@@ -22,6 +22,20 @@ export const scaleVec = (a: Vec2, k: number): Vec2 => ({ x: a.x * k, y: a.y * k 
 
 export const distance = (a: Vec2, b: Vec2): number => Math.hypot(a.x - b.x, a.y - b.y);
 
+/**
+ * Below this, two stored positions are the same place. In metres.
+ *
+ * A millimetre: a scene copied from another holds bit-identical coordinates, so
+ * this only has to absorb float noise. Erring small makes a carry stop early,
+ * which costs a drag — erring large would run it through a scene the entity was
+ * deliberately placed in, silently undoing that edit.
+ *
+ * Lives here rather than with either caller: the drag carry and the ball handover
+ * both answer "did anything happen in this scene", and answering it with two
+ * different tolerances is how they would drift apart.
+ */
+export const SAME_PLACE = 1e-3;
+
 export const lerp = (a: number, b: number, u: number): number => a + (b - a) * u;
 
 export const lerpVec = (a: Vec2, b: Vec2, u: number): Vec2 => ({

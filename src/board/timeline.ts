@@ -89,6 +89,17 @@ function ballRest(scene: Scene): Vec2 | undefined {
 }
 
 /**
+ * Is there a ball in this scene at all?
+ *
+ * A board starts without one. Held or loose, the ball is something the author put
+ * on the pitch; before that there is nothing to draw, nothing to hit-test and
+ * nothing to animate. See D44.
+ */
+export function hasBall(scene: Scene): boolean {
+  return scene.carrier !== null || scene.ballPos !== undefined;
+}
+
+/**
  * The furthest anything travels between two scenes, in metres.
  *
  * Straight-line, not arc length: this is called every frame, and a curved run
@@ -319,14 +330,22 @@ function gluedTo(carrier: string, r: Resolved, doc: BoardDoc): Vec2 {
  * | A -> null  | loose: travels to the stored position                |
  * | null -> B  | collected                                            |
  * | null->null | ordinary entity, along ballPath if one is drawn      |
+ *
+ * `null` when the destination scene has no ball — before it is first given to
+ * anyone there is nothing on the pitch to draw (D44).
  */
-export function ballAt(r: Resolved, doc: BoardDoc): Vec2 {
+export function ballAt(r: Resolved, doc: BoardDoc): Vec2 | null {
   const fromCarrier = r.from.carrier;
   const toCarrier = r.to.carrier;
 
-  if (toCarrier && fromCarrier === toCarrier) return gluedTo(toCarrier, r, doc);
-  if (!r.moving) {
-    return toCarrier ? gluedTo(toCarrier, r, doc) : (r.to.ballPos ?? centre(doc));
+  if (!hasBall(r.to)) return null;
+
+  // Held throughout, standing still, or arriving on the pitch for the first time:
+  // all three put the ball where this scene says it is rather than travelling it
+  // in from somewhere. A ball that did not exist a moment ago has nowhere to come
+  // from, so it appears on its new holder rather than flying in off the centre spot.
+  if ((toCarrier && fromCarrier === toCarrier) || !r.moving || !hasBall(r.from)) {
+    return toCarrier ? gluedTo(toCarrier, r, doc) : (r.to.ballPos ?? null);
   }
 
   // Endpoints are sampled ONCE, not per frame: the release point at u=0 and the
@@ -339,8 +358,10 @@ export function ballAt(r: Resolved, doc: BoardDoc): Vec2 {
   // Continuity holds because the receiver reaches that same point at u=1.
   const release: Resolved = { ...r, u: 0 };
   const arrival: Resolved = { ...r, u: 1 };
-  const start = fromCarrier ? gluedTo(fromCarrier, release, doc) : (r.from.ballPos ?? centre(doc));
-  const end = toCarrier ? gluedTo(toCarrier, arrival, doc) : (r.to.ballPos ?? centre(doc));
+  // Both scenes hold a ball by here, so neither end can be missing.
+  const start = fromCarrier ? gluedTo(fromCarrier, release, doc) : r.from.ballPos;
+  const end = toCarrier ? gluedTo(toCarrier, arrival, doc) : r.to.ballPos;
+  if (!start || !end) return end ?? start ?? null;
 
   // A pass is struck hard and decelerates; easing it in like a jogging player
   // looks wrong immediately. The ball honours its own travel override too.
@@ -357,7 +378,8 @@ export function ballAt(r: Resolved, doc: BoardDoc): Vec2 {
 /** Resolved board state at an instant — everything the renderer needs. */
 export type Frame = {
   positions: Record<string, Vec2>;
-  ball: Vec2;
+  /** `null` before the ball is first given to anyone — see D44. */
+  ball: Vec2 | null;
   resolved: Resolved;
 };
 

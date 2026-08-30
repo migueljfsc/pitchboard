@@ -34,15 +34,18 @@ describe("boardDocSchema", () => {
     expect(boardDocSchema.safeParse(doc).success).toBe(false);
   });
 
-  it("requires ballPos exactly when there is no carrier", () => {
-    const withCarrier = clone(createBoardDoc());
-    withCarrier.scenes[0].carrier = withCarrier.teams[0].players[0].id;
-    // ballPos left in place alongside a carrier — contradictory.
-    expect(boardDocSchema.safeParse(withCarrier).success).toBe(false);
+  it("rejects a scene that both holds the ball and stores its position", () => {
+    const doc = clone(createBoardDoc());
+    doc.scenes[0].carrier = doc.teams[0].players[0].id;
+    doc.scenes[0].ballPos = { x: 52.5, y: 34 };
+    expect(boardDocSchema.safeParse(doc).success).toBe(false);
+  });
 
-    const loose = clone(createBoardDoc());
-    delete loose.scenes[0].ballPos;
-    expect(boardDocSchema.safeParse(loose).success).toBe(false);
+  it("accepts a scene with no ball at all — a board starts without one", () => {
+    const doc = clone(createBoardDoc());
+    expect(doc.scenes[0].carrier).toBeNull();
+    expect(doc.scenes[0].ballPos).toBeUndefined();
+    expect(boardDocSchema.safeParse(doc).success).toBe(true);
   });
 
   it("rejects a link member that is not a player", () => {

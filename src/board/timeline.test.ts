@@ -12,11 +12,12 @@ import {
   resolveAt,
   sceneTimings,
   totalDurationMs,
+  type Resolved,
 } from "./timeline";
 import { createBoardDoc } from "@/formations";
 import { addSceneAfter, sceneStartSeconds, setScenePace } from "./scenes";
 import { boardDocSchema } from "./schema";
-import type { BoardDoc, Scene } from "./types";
+import type { BoardDoc, Scene, Vec2 } from "./types";
 
 /** Two scenes: 1 s hold, 2 s transition, 0.5 s hold. Total 3.5 s. */
 function twoScene(mutate?: (a: Scene, b: Scene, doc: BoardDoc) => void): BoardDoc {
@@ -29,6 +30,16 @@ function twoScene(mutate?: (a: Scene, b: Scene, doc: BoardDoc) => void): BoardDo
   mutate?.(a, b, doc);
   return doc;
 }
+
+/**
+ * `ballAt` where the scene is known to hold a ball. The board has none until one
+ * is given out (D44), and that case has its own tests below.
+ */
+const ballIn = (doc: BoardDoc, r: Resolved): Vec2 => {
+  const at = ballAt(r, doc);
+  if (!at) throw new Error("expected a ball in this scene");
+  return at;
+};
 
 const HOME_9 = "home-9";
 const HOME_10 = "home-10";
@@ -164,16 +175,17 @@ describe("positionAt", () => {
   });
 });
 
-describe("ball — a pass is a carrier change", () => {
-  const carried = (a: Scene, b: Scene, from: string | null, to: string | null) => {
-    a.carrier = from;
-    b.carrier = to;
-    if (from) delete a.ballPos;
-    else a.ballPos ??= { x: 52.5, y: 34 };
-    if (to) delete b.ballPos;
-    else b.ballPos ??= { x: 52.5, y: 34 };
-  };
+/** Put the ball in the two scenes' hands, or on the grass between them. */
+const carried = (a: Scene, b: Scene, from: string | null, to: string | null) => {
+  a.carrier = from;
+  b.carrier = to;
+  if (from) delete a.ballPos;
+  else a.ballPos ??= { x: 52.5, y: 34 };
+  if (to) delete b.ballPos;
+  else b.ballPos ??= { x: 52.5, y: 34 };
+};
 
+describe("ball — a pass is a carrier change", () => {
   it("glues to a carrier that keeps the ball", () => {
     const doc = twoScene((a, b) => {
       carried(a, b, HOME_9, HOME_9);
@@ -183,7 +195,7 @@ describe("ball — a pass is a carrier change", () => {
     for (const t of [1, 1.5, 2, 2.5, 3]) {
       const r = resolveAt(doc, t);
       const player = positionAt(HOME_9, r, doc);
-      const ball = ballAt(r, doc);
+      const ball = ballIn(doc, r);
       expect(Math.hypot(ball.x - player.x, ball.y - player.y)).toBeCloseTo(ballGlue(doc), 5);
     }
   });
@@ -191,7 +203,7 @@ describe("ball — a pass is a carrier change", () => {
   it("offsets the ball ahead of a stationary carrier, clear of the token", () => {
     const doc = twoScene((a, b) => carried(a, b, HOME_9, HOME_9));
     const r = resolveAt(doc, 0.5);
-    const ball = ballAt(r, doc);
+    const ball = ballIn(doc, r);
     const player = positionAt(HOME_9, r, doc);
     expect(ball.x).toBeGreaterThan(player.x);
     expect(ball.y).toBeCloseTo(player.y);
@@ -205,8 +217,8 @@ describe("ball — a pass is a carrier change", () => {
       a.positions[HOME_10] = { x: 60, y: 50 };
       b.positions[HOME_10] = { x: 60, y: 50 };
     });
-    const start = ballAt(resolveAt(doc, 1.001), doc);
-    const end = ballAt(resolveAt(doc, 3), doc);
+    const start = ballIn(doc, resolveAt(doc, 1.001));
+    const end = ballIn(doc, resolveAt(doc, 3));
     expect(start.x).toBeCloseTo(20 + ballGlue(doc), 1);
     expect(end.x).toBeCloseTo(60 + ballGlue(doc), 1);
   });
@@ -220,8 +232,8 @@ describe("ball — a pass is a carrier change", () => {
       b.positions[HOME_10] = { x: 90, y: 58 }; // receiver runs across the pitch
     });
 
-    const start = ballAt(resolveAt(doc, 1), doc);
-    const end = ballAt(resolveAt(doc, 3), doc);
+    const start = ballIn(doc, resolveAt(doc, 1));
+    const end = ballIn(doc, resolveAt(doc, 3));
     const dx = end.x - start.x;
     const dy = end.y - start.y;
     const span = Math.hypot(dx, dy);
@@ -229,7 +241,7 @@ describe("ball — a pass is a carrier change", () => {
     // Every sample must sit on the line from release point to meeting point.
     // Re-reading the receiver's live position each frame bowed this by metres.
     for (const t of [1.3, 1.7, 2.0, 2.4, 2.8]) {
-      const p = ballAt(resolveAt(doc, t), doc);
+      const p = ballIn(doc, resolveAt(doc, t));
       const cross = Math.abs((p.x - start.x) * dy - (p.y - start.y) * dx) / span;
       expect(cross, `off the line at t=${t}`).toBeLessThan(0.01);
     }
@@ -245,8 +257,8 @@ describe("ball — a pass is a carrier change", () => {
     });
     const r1 = resolveAt(doc, 2.999);
     const rEnd = resolveAt(doc, 3);
-    const nearlyThere = ballAt(r1, doc);
-    const arrived = ballAt(rEnd, doc);
+    const nearlyThere = ballIn(doc, r1);
+    const arrived = ballIn(doc, rEnd);
 
     // Continuous across the handoff — no teleport onto the receiver.
     expect(Math.hypot(arrived.x - nearlyThere.x, arrived.y - nearlyThere.y)).toBeLessThan(0.5);
@@ -264,7 +276,7 @@ describe("ball — a pass is a carrier change", () => {
       b.positions[HOME_10] = { x: 100, y: 34 };
     });
     // Halfway through the transition it is already past halfway to the receiver.
-    const mid = ballAt(resolveAt(doc, 2), doc);
+    const mid = ballIn(doc, resolveAt(doc, 2));
     expect(mid.x).toBeGreaterThan(50);
   });
 
@@ -273,7 +285,7 @@ describe("ball — a pass is a carrier change", () => {
       carried(a, b, HOME_9, null);
       b.ballPos = { x: 90, y: 5 };
     });
-    expect(ballAt(resolveAt(doc, 3), doc)).toEqual({ x: 90, y: 5 });
+    expect(ballIn(doc, resolveAt(doc, 3))).toEqual({ x: 90, y: 5 });
   });
 
   it("is collected when a carrier is set", () => {
@@ -282,7 +294,7 @@ describe("ball — a pass is a carrier change", () => {
       a.ballPos = { x: 10, y: 10 };
       b.positions[HOME_9] = { x: 70, y: 40 };
     });
-    const arrived = ballAt(resolveAt(doc, 3), doc);
+    const arrived = ballIn(doc, resolveAt(doc, 3));
     const player = positionAt(HOME_9, resolveAt(doc, 3), doc);
     expect(Math.hypot(arrived.x - player.x, arrived.y - player.y)).toBeCloseTo(ballGlue(doc), 5);
   });
@@ -292,9 +304,9 @@ describe("ball — a pass is a carrier change", () => {
       a.ballPos = { x: 10, y: 10 };
       b.ballPos = { x: 40, y: 10 };
     });
-    expect(ballAt(resolveAt(doc, 1), doc)).toEqual({ x: 10, y: 10 });
-    expect(ballAt(resolveAt(doc, 3), doc)).toEqual({ x: 40, y: 10 });
-    expect(ballAt(resolveAt(doc, 2), doc).x).toBeGreaterThan(10);
+    expect(ballIn(doc, resolveAt(doc, 1))).toEqual({ x: 10, y: 10 });
+    expect(ballIn(doc, resolveAt(doc, 3))).toEqual({ x: 40, y: 10 });
+    expect(ballIn(doc, resolveAt(doc, 2)).x).toBeGreaterThan(10);
   });
 
   it("follows ballPath when one is drawn", () => {
@@ -303,23 +315,30 @@ describe("ball — a pass is a carrier change", () => {
       b.ballPos = { x: 60, y: 34 };
       b.ballPath = { c1: { x: 20, y: 60 }, c2: { x: 50, y: 60 } };
     });
-    expect(ballAt(resolveAt(doc, 2), doc).y).toBeGreaterThan(40);
+    expect(ballIn(doc, resolveAt(doc, 2)).y).toBeGreaterThan(40);
   });
 });
 
 describe("frameAt", () => {
-  it("positions every player and the ball", () => {
-    const doc = twoScene();
+  it("positions every player, and the ball once somebody has it", () => {
+    const doc = twoScene((a, b) => carried(a, b, HOME_9, HOME_9));
     const frame = frameAt(doc, 2);
     const players = doc.teams.flatMap((t) => t.players);
     expect(Object.keys(frame.positions)).toHaveLength(players.length);
     for (const p of players) expect(frame.positions[p.id]).toBeDefined();
-    expect(frame.ball).toBeDefined();
+    expect(frame.ball).not.toBeNull();
     expect(frame.resolved.moving).toBe(true);
   });
 
+  it("leaves the ball out until it is given to somebody", () => {
+    const doc = twoScene();
+    expect(frameAt(doc, 0).ball).toBeNull();
+    expect(frameAt(doc, 2).ball).toBeNull();
+  });
+
   it("produces finite coordinates across the whole timeline", () => {
-    const doc = twoScene((_a, b) => {
+    const doc = twoScene((a, b) => {
+      carried(a, b, HOME_9, HOME_9);
       b.paths[HOME_9] = { c1: { x: 20, y: 5 }, c2: { x: 40, y: 5 } };
       b.positions[HOME_9] = { x: 80, y: 60 };
     });
@@ -328,7 +347,8 @@ describe("frameAt", () => {
       for (const p of Object.values(frame.positions)) {
         expect(Number.isFinite(p.x) && Number.isFinite(p.y)).toBe(true);
       }
-      expect(Number.isFinite(frame.ball.x) && Number.isFinite(frame.ball.y)).toBe(true);
+      const ball = frame.ball!;
+      expect(Number.isFinite(ball.x) && Number.isFinite(ball.y)).toBe(true);
     }
   });
 

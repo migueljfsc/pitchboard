@@ -485,9 +485,21 @@ export function Editor({ initialDoc }: Props = {}) {
     setDoc(next, `travel:${editScene}`);
   };
 
+  // The handover carries forward like a move does, and reads the same control —
+  // the scenes after this one are usually still the kick-off nobody has said
+  // anything about yet. See D43.
   const onCarrierChange = (playerId: string | null) => {
-    setDoc(setCarrier(doc, activeScene, playerId));
+    setDoc(setCarrier(doc, activeScene, playerId, carry));
   };
+
+  /**
+   * Straighten only has something to undo where a run was actually bent. A stored
+   * path IS the curve — a straight run keeps none — so the button is live exactly
+   * when clearing one would change the board.
+   */
+  const canStraighten =
+    editScene !== undefined &&
+    [...visible].some((id) => doc.scenes[editScene]?.paths[id] != null);
 
   const onClearPaths = () => {
     if (editScene === undefined) return;
@@ -768,9 +780,9 @@ export function Editor({ initialDoc }: Props = {}) {
               selection={visible}
               activeScene={activeScene}
               canEditPaths={editScene !== undefined}
-              onClear={() => setSelection(new Set())}
               onCarrierChange={onCarrierChange}
               onClearPaths={onClearPaths}
+              canStraighten={canStraighten}
               onRename={(id, label) => setDoc(setPlayerLabel(doc, id, label), `label:${id}`)}
               onRenumber={(id, n) => setDoc(setPlayerNumber(doc, id, n), `number:${id}`)}
               onTravelChange={onTravelChange}
