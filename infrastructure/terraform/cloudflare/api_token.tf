@@ -102,12 +102,3 @@ resource "cloudflare_account_token" "ci" {
     prevent_destroy = true
   }
 }
-
-# Adopt the token that already exists rather than minting a second one — and keep
-# its secret out of state (see above). Import blocks are idempotent: once the
-# resource is in state this is a no-op, so it is safe to leave in place.
-import {
-
-  to = cloudflare_account_token.ci
-  id = "${var.cloudflare_account_id}/48b72d434b98fcdafca8e438dd503c34"
-}
