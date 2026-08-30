@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.18.1 (2026-08-30)
+
+### Refactor
+
+- move the worker back to the repository root
+
 ## v0.18.0 (2026-08-30)
 
 ### Feat
