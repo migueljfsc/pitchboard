@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.21.0 (2026-08-30)
+
+### Feat
+
+- boards live at /board/<id>, and sign-out resets the editor
+
 ## v0.20.1 (2026-08-30)
 
 ### Fix
