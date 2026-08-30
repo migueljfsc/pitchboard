@@ -12,6 +12,8 @@
  */
 
 /** A board's row, without the document — what a list needs and no more. */
+import { sharePath } from "./routes";
+
 export interface BoardSummary {
   id: string;
   name: string;
@@ -201,4 +203,4 @@ export async function fetchShare(slug: string): Promise<{ name: string; doc: str
 }
 
 /** Where a slug is read back. Absolute, because the point of it is to be sent to someone. */
-export const shareUrl = (slug: string): string => `${window.location.origin}/s/${slug}`;
+export const shareUrl = (slug: string): string => `${window.location.origin}${sharePath(slug)}`;

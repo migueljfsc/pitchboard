@@ -30,7 +30,7 @@ import type { CloudBoard } from "@/lib/useCloudBoard";
 import { ApiError, publishBoard, shareUrl as boardShareUrl, unpublishBoard } from "@/share/api";
 import { URL_BUDGET, encodeBoard, shareUrl, withinBudget, withoutHash } from "@/share/urlcodec";
 
-type Method = "link" | "board" | "file";
+type Method = "board" | "link" | "file";
 
 type LinkState =
   | { kind: "idle" }
@@ -56,7 +56,13 @@ type Props = {
 
 export function ShareDialog({ doc, view, cloud, signedIn, onImport, onClose, blocked }: Props) {
   const { t } = useI18n();
-  const [method, setMethod] = useState<Method>("link");
+  /**
+   * The board link leads, because it is the one most people want: short, revocable, and it
+   * stays current. It only leads when it can actually be used, though — opening on a pane
+   * that says "sign in first" would make the default advice rather than an action, so a
+   * signed-out visitor lands on the link that works for them.
+   */
+  const [method, setMethod] = useState<Method>(signedIn ? "board" : "link");
   const [link, setLink] = useState<LinkState>({ kind: "idle" });
   const [slug, setSlug] = useState<string | null>(null);
   const [boardCopied, setBoardCopied] = useState(false);
@@ -149,11 +155,11 @@ export function ShareDialog({ doc, view, cloud, signedIn, onImport, onClose, blo
             {t("share.dialog.title")}
           </h2>
           <div className="flex gap-1">
-            <Toggle active={method === "link"} onClick={() => setMethod("link")}>
-              {t("share.method.link")}
-            </Toggle>
             <Toggle active={method === "board"} onClick={() => setMethod("board")}>
               {t("share.method.board")}
+            </Toggle>
+            <Toggle active={method === "link"} onClick={() => setMethod("link")}>
+              {t("share.method.link")}
             </Toggle>
             <Toggle active={method === "file"} onClick={() => setMethod("file")}>
               {t("share.method.file")}
@@ -168,6 +174,56 @@ export function ShareDialog({ doc, view, cloud, signedIn, onImport, onClose, blo
             <X size={15} />
           </button>
         </div>
+
+        {method === "board" && (
+          <div className="flex flex-col gap-3 p-4">
+            <p className="text-[11px] leading-relaxed text-ink-300">{t("share.board.blurb")}</p>
+
+            {/* The two things that have to be true before there is anything to point at. */}
+            {!signedIn ? (
+              <p className="text-[11px] leading-relaxed text-amber-200">
+                {t("share.board.needsAccount")}
+              </p>
+            ) : !cloud.board ? (
+              <p className="text-[11px] leading-relaxed text-amber-200">
+                {t("share.board.needsSaving")}
+              </p>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Action
+                    onClick={() => void copyBoardLink()}
+                    icon={boardCopied ? Check : Link2}
+                    primary
+                  >
+                    {t(boardCopied ? "share.board.copied" : "share.board.copy")}
+                  </Action>
+                  {slug && (
+                    <Action onClick={() => void withdraw()} icon={X}>
+                      {t("share.board.withdraw")}
+                    </Action>
+                  )}
+                </div>
+
+                {slug && (
+                  <input
+                    readOnly
+                    value={boardShareUrl(slug)}
+                    onFocus={(e) => e.currentTarget.select()}
+                    aria-label={t("share.board.copy")}
+                    className="rounded border border-ink-600 bg-ink-900 px-2 py-1.5 font-mono text-[11px] text-ink-300 outline-none"
+                  />
+                )}
+
+                {boardError && (
+                  <p role="alert" className="text-[11px] text-red-300">
+                    {t(`boards.error.${boardError}` as "boards.error.unknown")}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
         {method === "link" && (
           <div className="flex flex-col gap-3 p-4">
@@ -217,56 +273,6 @@ export function ShareDialog({ doc, view, cloud, signedIn, onImport, onClose, blo
                   rows={3}
                 />
               </div>
-            )}
-          </div>
-        )}
-
-        {method === "board" && (
-          <div className="flex flex-col gap-3 p-4">
-            <p className="text-[11px] leading-relaxed text-ink-300">{t("share.board.blurb")}</p>
-
-            {/* The two things that have to be true before there is anything to point at. */}
-            {!signedIn ? (
-              <p className="text-[11px] leading-relaxed text-amber-200">
-                {t("share.board.needsAccount")}
-              </p>
-            ) : !cloud.board ? (
-              <p className="text-[11px] leading-relaxed text-amber-200">
-                {t("share.board.needsSaving")}
-              </p>
-            ) : (
-              <>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Action
-                    onClick={() => void copyBoardLink()}
-                    icon={boardCopied ? Check : Link2}
-                    primary
-                  >
-                    {t(boardCopied ? "share.board.copied" : "share.board.copy")}
-                  </Action>
-                  {slug && (
-                    <Action onClick={() => void withdraw()} icon={X}>
-                      {t("share.board.withdraw")}
-                    </Action>
-                  )}
-                </div>
-
-                {slug && (
-                  <input
-                    readOnly
-                    value={boardShareUrl(slug)}
-                    onFocus={(e) => e.currentTarget.select()}
-                    aria-label={t("share.board.copy")}
-                    className="rounded border border-ink-600 bg-ink-900 px-2 py-1.5 font-mono text-[11px] text-ink-300 outline-none"
-                  />
-                )}
-
-                {boardError && (
-                  <p role="alert" className="text-[11px] text-red-300">
-                    {t(`boards.error.${boardError}` as "boards.error.unknown")}
-                  </p>
-                )}
-              </>
             )}
           </div>
         )}

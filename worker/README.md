@@ -86,15 +86,17 @@ They do not meet, and that is deliberate.
 
 | | anonymous | account |
 |---|---|---|
-| address | `#d=<deflated board>` | `/s/<slug>` |
-| where the board lives | in the URL | KV, behind a snapshot row |
+| address | `#d=<deflated board>` | `/share/<slug>` (`/s/<slug>` still resolves) |
+| where the board lives | in the URL | the board row itself |
 | does the server see it | **no** — browsers never send a fragment | yes |
-| changes when republished | there is nothing to republish | yes, the slug re-aims |
+| changes as the owner edits | never, it is a frozen copy | yes, it is a live pointer |
 | works on GitHub Pages | yes | no, and cannot |
 
 The anonymous one predates accounts and is untouched by any of this (D33). The account one
-exists because a link you can read down a phone is worth having, and it publishes an immutable
-snapshot while keeping the slug stable — so sending the link again is never necessary (D39).
+exists because a link you can read down a phone is worth having, and because reloading it
+should show the board as it is now — otherwise "share" means "share, then remember to
+republish" (0004). Withdrawing is clearing one column; publishing again mints a NEW slug, so a
+withdrawn link stays dead.
 
 `GET /api/shares/:slug` is the only route in the Worker that answers without a session. It
 returns the published document and the board's name, and nothing about who published it.

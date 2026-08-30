@@ -580,7 +580,6 @@ export function Editor({ initialDoc }: Props = {}) {
 
           <span className="mx-1 h-5 w-px bg-ink-600" />
 
-          <LocaleSwitch />
           {accountState.account && <BoardsPanel cloud={cloud} boardName={doc.name} />}
           <AdoptBoardPrompt
             cloud={cloud}
@@ -601,6 +600,10 @@ export function Editor({ initialDoc }: Props = {}) {
               window.location.assign("/?fresh=1");
             }}
           />
+
+          {/* Last in the row, always. It is the only control that is about the app rather
+              than about the board, and it should not move when signing in adds two more. */}
+          <LocaleSwitch />
         </div>
       </header>
 

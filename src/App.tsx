@@ -5,7 +5,7 @@ import { Viewer } from "@/pages/Viewer";
 import { decodeBoard, readHash, readView, withoutHash, type DecodeOutcome } from "@/share/urlcodec";
 import { fetchShare } from "@/share/api";
 import { parseStoredDoc } from "@/share/cloud";
-import { readShareSlug } from "@/share/routes";
+import { canonicalShare, readShareSlug } from "@/share/routes";
 import { useI18n } from "@/i18n/context";
 
 /**
@@ -24,8 +24,8 @@ import { useI18n } from "@/i18n/context";
  * still holds the original, so there is nothing to overwrite and no permission
  * to grant — the whole of D7's authorisation model.
  *
- * Paths mean two more things, both listed in `share/routes.ts`: `/s/<slug>` is a
- * published board, read-only and open to anyone; `/board/<id>` is a saved board
+ * Paths mean two more things, both listed in `share/routes.ts`: `/share/<slug>` is
+ * a published board, read-only and open to anyone; `/board/<id>` is a saved board
  * opened for editing, which the Editor resolves for itself since it needs an
  * account to do it. This is still not a router — a path is one more thing the
  * address can be, read once, because changing one is a page load rather than an
@@ -73,7 +73,9 @@ export function App() {
         // A published document is validated exactly like one from a file or the hash: the
         // server stores it opaquely, and `schema.ts` is the only validator (D31).
         const doc = parseStoredDoc(share.doc);
-        if (live) setShared(doc ?? "missing");
+        if (!live) return;
+        canonicalShare(slug);
+        setShared(doc ?? "missing");
       })
       .catch(() => {
         if (live) setShared("missing");
