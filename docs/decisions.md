@@ -1004,6 +1004,104 @@ a click. `EN | PT` reads as a state you can see. It grows into a dropdown at thr
 
 ---
 
+## D39 — Accounts, projects, and mutable boards
+
+**Decision.** A user signs up with an email and a password and owns projects; a project holds
+boards; a board is mutable. Publishing freezes a copy of it. Users, projects and boards live in
+D1; published snapshots live in KV.
+
+**Supersedes D7's "no accounts" and keeps the rest of D7 intact.** Boards become mutable;
+published snapshots do not. A share link addresses a snapshot, never a board, so what D7 actually
+argued still holds — you are sending a position, not granting write access. Every `#d=` link ever
+published still opens, because the codec is untouched, and the read path still has no
+authorisation model to get wrong.
+
+**What changed is the premise, not the reasoning.** D7 rejected accounts as "a large scope
+increase: auth, per-user storage, quotas, account deletion", and "wrong shape for a portfolio
+piece". The scope estimate was right and still is. What moved is the shape: the piece is now also
+meant to show a stack, and a stack with no server-side state shows less of one. Taking that scope
+deliberately is a different thing from acquiring it by accident.
+
+**A project is the grouping a coach already has.** One game, one session, one opponent — a thing
+that holds several boards. It is one table, and it is the whole reason accounts were worth the
+scope: a library of loose boards would not have been.
+
+**Two stores, split by mutability.** D1 answers "list my boards" and takes an edit; KV serves a
+snapshot that will never change again. That amends D8, which put board JSON in KV back when
+nothing was mutable. KV is still exactly right for the immutable half — write-once, read-heavy,
+cached at the edge — and exactly wrong for the mutable half, where D8 had already spotted that
+**1k writes/day** is the binding constraint. D1's 100k rows written per day is the reason the
+mutable half can exist on a free plan at all.
+
+**An email, a password, and nothing else yet.** Sign-up takes an address and a password, stores a
+PBKDF2-HMAC-SHA256 digest, and checks it on the way back in. No confirmation mail, no reset link,
+no provider redirect. The address is an identifier here, not a verified channel, and calling it
+that in the schema is better than pretending otherwise.
+
+**Rejected — OAuth via GitHub and Google.** It deletes hashing, reset flows, verification mail and
+therefore an email vendor, and it moves the credential-breach blast radius onto someone equipped
+for it. It was the plan for about a day. What it costs is a provider registration, a redirect URI
+and a callback to debug per provider before a single user exists, plus a permanent dependency on
+two consent screens for a board that mostly wants somewhere to put a file. It is the better answer
+for a real product and remains the obvious upgrade; it was not the shortest path to a row in a
+table.
+
+**The work factor is capped by the free plan, and that is a genuine compromise, not a detail.**
+Workers Free allows **10 ms of CPU per request**, and Cloudflare's own limits page observes that
+workloads "that handle authentication" typically use 10-20 ms before any key derivation. OWASP
+asks for 600,000 PBKDF2-SHA256 iterations; 10 ms buys on the order of two percent of that. Going
+over costs nothing — the request dies with Error 1102, which is the platform refusing rather than
+billing, exactly as the rest of this design relies on — but the login dies with it. So the
+iteration count is one named constant, set by measuring on the platform rather than by copying a
+recommendation, and it is the first thing to change if this ever holds a password worth stealing.
+The honest alternative is $5/month for a 30-second CPU budget and a textbook hash. That is the
+right answer for a real product and the wrong one for a portfolio piece that has been free by
+construction from the start.
+
+**No mail means no recovery.** Until a reset flow exists a forgotten password is a lost account,
+and the sign-up copy has to say so rather than let someone discover it later. This is the part of
+"keep it simple" that is a debt rather than a saving, and it is written down here so that it is
+paid deliberately.
+
+**Rejected — edit keys, a second time.** D7 turned them down for requiring an authorisation model.
+There is one now, and they are still refused, for the opposite reason: a second scheme running
+beside real identity is worse than either alone.
+
+**Rejected — Redis.** Cloudflare does not have one, and the shape it would occupy is already
+taken: KV for cached reads, Durable Objects for anything needing coordination or a lock. Upstash
+has a free tier, but it is a second vendor and a second billing surface for a need this project
+cannot yet describe.
+
+**The server is not the autosave.** A drag emits a document per `pointermove` — the trap that
+already forced a merge key into `useHistory` (D26). Pointed at a network that is forty requests
+and forty writes per gesture, which is both a free-tier failure and a worse editor. `localStorage`
+stays the primary autosave: synchronous, free, and still working with the API down, which is what
+D7's three layers were for. The server write is an explicit save plus a coarse debounce.
+
+**Mutability needs a version.** Two tabs on one board otherwise lose an edit in silence. A
+`version` column and a 409 on mismatch, decided now rather than after the first report of a board
+quietly reverting.
+
+**Quotas stop being optional.** Free-tier limits are enforced per *account*, and enforced by
+refusing the operation rather than by billing — which is the entire reason this stays free. The
+corollary is that one abusive signup takes the board away from everybody, so per-user caps on
+projects, boards and document size ship with the feature, not after it.
+
+**Hosting moves to the Worker; GitHub Pages stays up.** Accounts need a server, which is the thing
+D16 deferred when it chose Pages. The Worker serves the SPA as static assets — free, unlimited,
+and outside the 100k requests/day budget — so only `/api/*` is metered at all. It runs on its free
+`workers.dev` subdomain, since a registered domain is the only line item in this design that costs
+real money and it stays deferred until the project earns one. D16's Pages deploy is kept running
+in parallel rather than retired, so existing links keep resolving while the new host proves
+itself.
+
+*What this is not.* Unverified addresses, no reset, no rate limit worth the name until the quotas
+above land, and a hash weaker than the standard asks for. Every one of those is a known gap rather
+than an oversight, and none of them is load-bearing for the thing being demonstrated, which is
+that a board can be saved, grouped and found again.
+
+---
+
 ## Invariants
 
 Two rules a future change is most likely to break. Both belong in `AGENTS.md`.
