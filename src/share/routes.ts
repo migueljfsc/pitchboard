@@ -7,10 +7,7 @@
  *
  *   /board/<id>    a saved board, opened for editing. Needs an account.
  *   /share/<slug>  a published board, opened read-only. Needs nothing.
- *
- * `/s/<slug>` was the published form first and still resolves, because links that have
- * already been sent are the one thing a rename must not break. Nothing generates it any more,
- * and `canonicalShare` rewrites the address on arrival so the short form does not spread.
+
  *
  * Both resolve only on the Worker, which serves index.html for unknown paths. The GitHub
  * Pages deploy has neither the rewrite nor the server, which is correct — it has no accounts
@@ -18,7 +15,7 @@
  */
 
 const BOARD_PATH = /^\/board\/([A-Za-z0-9_-]{22})$/;
-const SHARE_PATH = /\/(?:share|s)\/([2-9bcdfghjkmnpqrstvwxz]{8})$/;
+const SHARE_PATH = /^\/share\/([2-9bcdfghjkmnpqrstvwxz]{8})$/;
 
 export const boardPath = (id: string): string => `/board/${id}`;
 export const sharePath = (slug: string): string => `/share/${slug}`;
@@ -38,15 +35,4 @@ export const readShareSlug = (pathname = window.location.pathname): string | nul
 export function goToBoard(id: string): void {
   if (readBoardId() === id) return;
   window.history.pushState(null, "", boardPath(id));
-}
-
-/**
- * Rewrites a legacy `/s/<slug>` address to `/share/<slug>` without reloading.
- *
- * `replaceState`, not `pushState`: the old form is not a place anyone should be able to go
- * back to, and the board on screen is the same either way.
- */
-export function canonicalShare(slug: string): void {
-  if (window.location.pathname === sharePath(slug)) return;
-  window.history.replaceState(null, "", sharePath(slug));
 }

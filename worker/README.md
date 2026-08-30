@@ -13,7 +13,7 @@ lib/
   google.ts        OAuth: authorize URL, PKCE, code exchange, claim validation
   users.ts         external identity to account, link rather than duplicate
   boards.ts        projects and boards; ownership is a WHERE clause, never a check
-  shares.ts        publishing to /s/<slug>, and the one public read
+  shares.ts        publishing to /share/<slug>, and the one public read
   limits.ts        per-user quotas — D39 wanted them shipping with the feature
   crypto.ts        ids, session tokens, SHA-256 — no password KDF lives here
   http.ts          JSON responses, all no-store
@@ -86,7 +86,7 @@ They do not meet, and that is deliberate.
 
 | | anonymous | account |
 |---|---|---|
-| address | `#d=<deflated board>` | `/share/<slug>` (`/s/<slug>` still resolves) |
+| address | `#d=<deflated board>` | `/share/<slug>` |
 | where the board lives | in the URL | the board row itself |
 | does the server see it | **no** — browsers never send a fragment | yes |
 | changes as the owner edits | never, it is a frozen copy | yes, it is a live pointer |

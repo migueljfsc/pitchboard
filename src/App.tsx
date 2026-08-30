@@ -5,7 +5,7 @@ import { Viewer } from "@/pages/Viewer";
 import { decodeBoard, readHash, readView, withoutHash, type DecodeOutcome } from "@/share/urlcodec";
 import { fetchShare } from "@/share/api";
 import { parseStoredDoc } from "@/share/cloud";
-import { canonicalShare, readShareSlug } from "@/share/routes";
+import { readShareSlug } from "@/share/routes";
 import { useI18n } from "@/i18n/context";
 
 /**
@@ -73,9 +73,7 @@ export function App() {
         // A published document is validated exactly like one from a file or the hash: the
         // server stores it opaquely, and `schema.ts` is the only validator (D31).
         const doc = parseStoredDoc(share.doc);
-        if (!live) return;
-        canonicalShare(slug);
-        setShared(doc ?? "missing");
+        if (live) setShared(doc ?? "missing");
       })
       .catch(() => {
         if (live) setShared("missing");

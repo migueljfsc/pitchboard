@@ -28,16 +28,11 @@ describe("readShareSlug", () => {
     expect(sharePath("3g839hk7")).toBe("/share/3g839hk7");
   });
 
-  // `/s/<slug>` was the published form first. Links already sent have to keep resolving, so
-  // it is still read even though nothing generates it any more.
-  it("still reads the legacy short path", () => {
-    expect(readShareSlug("/s/3g839hk7")).toBe("3g839hk7");
-  });
-
-  it("rejects the wrong length or the wrong alphabet", () => {
+  it("rejects the wrong length, the wrong alphabet, or the old short path", () => {
     expect(readShareSlug("/share/3g839hk")).toBeNull();
     expect(readShareSlug("/share/aeiou123")).toBeNull();
     expect(readShareSlug("/share/3g839hk77")).toBeNull();
+    expect(readShareSlug("/s/3g839hk7")).toBeNull();
   });
 
   // The two path shapes must never both match: one opens an editor, the other a read-only
@@ -45,6 +40,5 @@ describe("readShareSlug", () => {
   it("does not collide with a board path", () => {
     expect(readShareSlug("/board/9Q82CqPzAqBcX7DPgeeo3A")).toBeNull();
     expect(readBoardId("/share/3g839hk7")).toBeNull();
-    expect(readBoardId("/s/3g839hk7")).toBeNull();
   });
 });

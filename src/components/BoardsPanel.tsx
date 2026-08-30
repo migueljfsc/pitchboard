@@ -43,7 +43,8 @@ const codeOf = (error: unknown) =>
 
 type Pending =
   | { kind: "open"; boardId: string }
-  | { kind: "board"; id: string; name: string }
+  /** `projectId` so the list it came from can be refetched afterwards, not guessed at. */
+  | { kind: "board"; id: string; projectId: string; name: string }
   | { kind: "project"; id: string; name: string };
 
 export function BoardsPanel({ cloud, boardName }: { cloud: CloudBoard; boardName: string }) {
@@ -91,15 +92,27 @@ export function BoardsPanel({ cloud, boardName }: { cloud: CloudBoard; boardName
     };
   }, [open, pending]);
 
-  const expand = async (id: string) => {
-    setExpanded(expanded === id ? null : id);
-    if (boards[id]) return;
+  /**
+   * Refetch one project's boards.
+   *
+   * Always a refetch, never an invalidation. Dropping the entry leaves `undefined`, and an
+   * expanded project then renders as "no boards yet" until it is collapsed and reopened —
+   * which is exactly what saving a new board used to do: the board was saved correctly and
+   * the panel said the project was empty.
+   */
+  const refreshBoards = useCallback(async (projectId: string) => {
     try {
-      const rows = await listBoards(id);
-      setBoards((all) => ({ ...all, [id]: rows }));
+      const rows = await listBoards(projectId);
+      setBoards((all) => ({ ...all, [projectId]: rows }));
     } catch (cause) {
       setError(codeOf(cause));
     }
+  }, []);
+
+  const expand = async (id: string) => {
+    setExpanded(expanded === id ? null : id);
+    if (boards[id]) return;
+    await refreshBoards(id);
   };
 
   const add = async () => {
@@ -121,11 +134,9 @@ export function BoardsPanel({ cloud, boardName }: { cloud: CloudBoard; boardName
    */
   const saveHere = async (projectId: string) => {
     await cloud.saveInto(projectId, boardName);
-    setBoards((all) => {
-      const next = { ...all };
-      delete next[projectId];
-      return next;
-    });
+    // The new board belongs in the list that is on screen, and the project's board count on
+    // the row above it has moved too.
+    await refreshBoards(projectId);
     void reload();
   };
 
@@ -147,12 +158,17 @@ export function BoardsPanel({ cloud, boardName }: { cloud: CloudBoard; boardName
         // Deleting the board you are editing leaves the address pointing at nothing, so the
         // page goes back to a plain editor rather than pretending the row is still there.
         if (cloud.board?.id === pending.id) window.location.assign("/");
-        setBoards({});
+        await refreshBoards(pending.projectId);
         void reload();
       } else {
         await deleteProject(pending.id);
         if (cloud.board?.projectId === pending.id) window.location.assign("/");
-        setBoards({});
+        // Only the project that went; every other list on screen is still correct.
+        setBoards((all) => {
+          const next = { ...all };
+          delete next[pending.id];
+          return next;
+        });
         void reload();
       }
     } catch (cause) {
@@ -174,14 +190,7 @@ export function BoardsPanel({ cloud, boardName }: { cloud: CloudBoard; boardName
     await cloud.saveNow();
     setSaved(true);
     window.setTimeout(() => setSaved(false), 4000);
-    if (!cloud.board) return;
-    try {
-      const rows = await listBoards(cloud.board.projectId);
-      setBoards((all) => ({ ...all, [cloud.board!.projectId]: rows }));
-    } catch {
-      // The save is what mattered; a stale row in a list nobody is looking at is not worth
-      // a second error message.
-    }
+    if (cloud.board) await refreshBoards(cloud.board.projectId);
   };
 
   const linkedProject = projects?.find((p) => p.id === cloud.board?.projectId);
@@ -312,7 +321,9 @@ export function BoardsPanel({ cloud, boardName }: { cloud: CloudBoard; boardName
 
                   {expanded === project.id && (
                     <ul className="border-t border-ink-700 px-1.5 py-1">
-                      {(boards[project.id] ?? []).length === 0 ? (
+                      {boards[project.id] === undefined ? (
+                        <li className="py-0.5 text-[11px] text-ink-500">{t("boards.loading")}</li>
+                      ) : boards[project.id].length === 0 ? (
                         <li className="py-0.5 text-[11px] text-ink-500">{t("boards.noBoards")}</li>
                       ) : (
                         boards[project.id].map((board) => (
@@ -330,7 +341,12 @@ export function BoardsPanel({ cloud, boardName }: { cloud: CloudBoard; boardName
                             <IconButton
                               label={t("boards.delete")}
                               onClick={() =>
-                                setPending({ kind: "board", id: board.id, name: board.name })
+                                setPending({
+                                  kind: "board",
+                                  id: board.id,
+                                  projectId: project.id,
+                                  name: board.name,
+                                })
                               }
                             />
                           </li>
