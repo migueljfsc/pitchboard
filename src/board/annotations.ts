@@ -32,6 +32,21 @@ export const ZONE_ALPHA = 0.22;
 /** Text height in metres, at the default size. About a token and a half. */
 export const TEXT_SIZE = 3.2;
 /** Bounds on a label's own size multiplier. */
+/**
+ * A character's width and a line's height, both as multiples of the type size.
+ *
+ * Estimates, and deliberately the ONLY estimates: the renderer wraps with these numbers too,
+ * so the box, the hit test and the drawn text always agree with each other even where they
+ * all disagree slightly with the real glyphs. Measuring in the renderer and estimating here
+ * would put the selection box in a different place from the words inside it.
+ */
+export const TEXT_CHAR_W = 0.55;
+export const TEXT_LINE_H = 1.25;
+
+/** Narrow enough to be a column, wide enough that the pitch is the real limit. */
+export const TEXT_WIDTH_MIN = 4;
+export const TEXT_WIDTH_MAX = 105;
+
 export const TEXT_SCALE_MIN = 0.4;
 export const TEXT_SCALE_MAX = 4;
 /** Samples along a curved arrow. Matches the run curves' resolution. */
@@ -193,15 +208,70 @@ export function textSize(ann: TextAnnotation): number {
 }
 
 /**
+ * The lines a label actually draws as.
+ *
+ * Explicit newlines always break. A `width` additionally wraps on words, so a label becomes
+ * a text box rather than one ever-lengthening line — which was the whole problem: without a
+ * box there is nowhere for a second line to go.
+ *
+ * A single word longer than the box overflows rather than being broken mid-word. Hyphenating
+ * a player's name to fit is worse than a line that sticks out, and the author can widen it.
+ */
+export function textLines(ann: TextAnnotation): string[] {
+  const paragraphs = ann.text.split("\n");
+  if (ann.width === undefined) return paragraphs;
+
+  const perChar = textSize(ann) * TEXT_CHAR_W;
+  const columns = Math.max(1, Math.floor(textWidth(ann) / perChar));
+
+  const out: string[] = [];
+  for (const paragraph of paragraphs) {
+    const words = paragraph.split(/\s+/).filter(Boolean);
+    if (words.length === 0) {
+      // A blank line in the source is a blank line on the board.
+      out.push("");
+      continue;
+    }
+    let line = "";
+    for (const word of words) {
+      const candidate = line ? `${line} ${word}` : word;
+      // `!line` keeps the first word even when it alone is too long: something has to go on
+      // the line, and pushing an empty one would loop forever.
+      if (candidate.length <= columns || !line) {
+        line = candidate;
+        continue;
+      }
+      out.push(line);
+      line = word;
+    }
+    out.push(line);
+  }
+  return out;
+}
+
+/** Clamped here rather than trusted: an imported document is untrusted input. */
+export function textWidth(ann: TextAnnotation): number {
+  return clamp(ann.width ?? TEXT_WIDTH_MAX, TEXT_WIDTH_MIN, TEXT_WIDTH_MAX);
+}
+
+/**
  * Rough extent of a label, without measuring it.
  *
- * The renderer is pure and gets no ctx here, so width is estimated from the
- * character count. Only the selection box and the hit-test use it, and both are
- * forgiving — a fraction of a metre out either way costs nothing.
+ * The renderer is pure and gets no ctx here, so width is estimated from the character count —
+ * and the renderer wraps with the same estimate, so the two never disagree. Only the selection
+ * box and the hit-test use this, and both are forgiving.
  */
 export function textExtent(ann: TextAnnotation): { w: number; h: number } {
   const size = textSize(ann);
-  return { w: Math.max(size * 0.7, ann.text.length * size * 0.55), h: size };
+  const lines = textLines(ann);
+  const longest = lines.reduce((n, line) => Math.max(n, line.length), 0);
+  // A box that was given a width keeps it even when the words do not fill it: that is the
+  // shape the author dragged, and it is what the next line will wrap into.
+  const w = ann.width === undefined ? longest * size * TEXT_CHAR_W : textWidth(ann);
+  return {
+    w: Math.max(size * 0.7, w),
+    h: Math.max(1, lines.length) * size * TEXT_LINE_H,
+  };
 }
 
 /** Corners of a two-point shape, normalised so a backwards drag still works. */
@@ -370,7 +440,7 @@ export function moveAnnotation(doc: BoardDoc, id: string, delta: Vec2): BoardDoc
 // --------------------------------------------------------------------- handles
 
 /** Handle names are shape-specific; `c1`/`c2` bend a curve, the rest reshape. */
-export type AnnotationHandle = { which: "a" | "b" | "c1" | "c2" | "at"; at: Vec2 };
+export type AnnotationHandle = { which: "a" | "b" | "c1" | "c2" | "at" | "w"; at: Vec2 };
 
 /**
  * Grab points for the selected shape.
@@ -380,7 +450,16 @@ export type AnnotationHandle = { which: "a" | "b" | "c1" | "c2" | "at"; at: Vec2
  */
 export function annotationHandles(ann: Annotation): AnnotationHandle[] {
   if (ann.kind === "pen") return [];
-  if (ann.kind === "text") return [{ which: "at", at: ann.at }];
+  if (ann.kind === "text") {
+    // Two: one to move it, one on the right edge to set the box width. The width handle is
+    // what makes a second line possible at all, so it is offered as soon as a label is
+    // selected rather than hidden behind a mode.
+    const { w } = textExtent(ann);
+    return [
+      { which: "at", at: ann.at },
+      { which: "w", at: { x: ann.at.x + w / 2, y: ann.at.y } },
+    ];
+  }
 
   const ends: AnnotationHandle[] = [
     { which: "a", at: ann.a },
@@ -401,7 +480,13 @@ export function dragAnnotationHandle(
   which: AnnotationHandle["which"],
   to: Vec2,
 ): Partial<Annotation> {
-  if (ann.kind === "text") return { at: to };
+  if (ann.kind === "text") {
+    // Doubled, because the box is centred on `at` — the edge moves half as far as the width.
+    if (which === "w") {
+      return { width: clamp((to.x - ann.at.x) * 2, TEXT_WIDTH_MIN, TEXT_WIDTH_MAX) };
+    }
+    return { at: to };
+  }
   if (ann.kind === "pen") return {};
 
   if (which === "a" || which === "b") return { [which]: to } as Partial<Annotation>;

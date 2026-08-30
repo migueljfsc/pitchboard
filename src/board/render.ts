@@ -48,6 +48,8 @@ import {
   boundsOf,
   straightCurve,
   strokePoints,
+  TEXT_LINE_H,
+  textLines,
   textSize,
   visibleAt,
   wavy,
@@ -831,16 +833,29 @@ function drawAnnotationText(
   // Every measurement scales with the label, so a bigger one is the same drawing
   // at a larger size rather than big type in a thin outline.
   const size = textSize(ann);
+  // Wrapped by the same function the box and the hit test use, never by ctx.measureText:
+  // measuring here and estimating there would put the selection box somewhere other than
+  // the words inside it.
+  const lines = textLines(ann);
+  const lineHeight = size * TEXT_LINE_H;
+  // Centred on `at` as a block, so adding a second line grows the label evenly in both
+  // directions rather than pushing the first one upwards.
+  const top = -((lines.length - 1) * lineHeight) / 2;
+
   upright(ctx, ann.at, rotated, () => {
     ctx.font = `700 ${size}px Inter, system-ui, -apple-system, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.lineJoin = "round";
-    ctx.strokeStyle = "rgba(0,0,0,0.75)";
-    ctx.lineWidth = size * 0.2;
-    ctx.strokeText(ann.text, 0, 0);
-    ctx.fillStyle = ann.color;
-    ctx.fillText(ann.text, 0, 0);
+    lines.forEach((line, i) => {
+      if (!line) return;
+      const y = top + i * lineHeight;
+      ctx.strokeStyle = "rgba(0,0,0,0.75)";
+      ctx.lineWidth = size * 0.2;
+      ctx.strokeText(line, 0, y);
+      ctx.fillStyle = ann.color;
+      ctx.fillText(line, 0, y);
+    });
   });
 }
 

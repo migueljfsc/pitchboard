@@ -8,7 +8,7 @@
 import { z } from "zod";
 import type { BoardDoc } from "./types";
 import { BALL_ID } from "./types";
-import { TEXT_SCALE_MAX, TEXT_SCALE_MIN } from "./annotations";
+import { TEXT_SCALE_MAX, TEXT_SCALE_MIN, TEXT_WIDTH_MAX, TEXT_WIDTH_MIN } from "./annotations";
 import { MAX_FLOW_SPEED, MIN_FLOW_SPEED } from "./timeline";
 
 const vec2 = z.object({ x: z.number().finite(), y: z.number().finite() });
@@ -83,8 +83,11 @@ const annotation = z.discriminatedUnion("kind", [
     ...annotationBase,
     kind: z.literal("text"),
     at: vec2,
-    text: z.string().max(120),
+    // Raised from 120 when labels gained a box: a wrapped note is a sentence or two, not a
+    // caption. Still bounded, because every character of it ends up in the share URL.
+    text: z.string().max(400),
     size: z.number().min(TEXT_SCALE_MIN).max(TEXT_SCALE_MAX).optional(),
+    width: z.number().min(TEXT_WIDTH_MIN).max(TEXT_WIDTH_MAX).optional(),
   }),
 ]);
 

@@ -150,7 +150,18 @@ export type Annotation =
   | (AnnotationBase & { kind: "pen"; points: Vec2[] })
   /** `size` multiplies TEXT_SIZE; absent is 1, so a label sized before the
    *  control existed keeps the size it was drawn at. */
-  | (AnnotationBase & { kind: "text"; at: Vec2; text: string; size?: number });
+  | (AnnotationBase & {
+      kind: "text";
+      at: Vec2;
+      text: string;
+      size?: number;
+      /**
+       * Box width in metres. Absent means the label is one line as long as it needs to be,
+       * which is what every label was before boxes existed — so old documents keep their
+       * shape and no migration is owed.
+       */
+      width?: number;
+    });
 
 export type AnnotationKind = Annotation["kind"];
 

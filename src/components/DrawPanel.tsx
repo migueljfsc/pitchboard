@@ -207,7 +207,7 @@ function Selected({
   focusText?: number;
 }) {
   const { t } = useI18n();
-  const textRef = useRef<HTMLInputElement>(null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (!focusText) return;
@@ -245,14 +245,19 @@ function Selected({
       </div>
 
       {ann.kind === "text" && (
-        <div className="flex gap-1.5">
-          <input
+        <div className="flex items-start gap-1.5">
+          {/* A textarea, not an input: Enter has to be a line break. Wrapping needs a box
+              width, which is dragged on the board itself — the handle on the label's right
+              edge — because a number in a panel is a worse way to size something you are
+              looking at. The editor's shortcut handler already ignores TEXTAREA. */}
+          <textarea
             ref={textRef}
+            rows={2}
             value={ann.text}
             onChange={(e) => onPatch({ text: e.target.value }, `ann-text:${ann.id}`)}
             placeholder={t("draw.label.placeholder")}
             aria-label={t("draw.label.aria")}
-            className="min-w-0 flex-1 rounded border border-ink-600 bg-ink-900 px-1.5 py-1 text-[11px] text-ink-200 outline-none transition placeholder:text-ink-400 hover:border-ink-400 focus:border-accent"
+            className="min-w-0 flex-1 resize-y rounded border border-ink-600 bg-ink-900 px-1.5 py-1 text-[11px] leading-snug text-ink-200 outline-none transition placeholder:text-ink-400 hover:border-ink-400 focus:border-accent"
           />
           {/* Keyed so selecting a different label remounts the field with its
               own value, which is what lets it hold a half-typed number. */}

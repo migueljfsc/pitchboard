@@ -4,6 +4,8 @@ import {
   TEXT_SCALE_MAX,
   TEXT_SCALE_MIN,
   TEXT_SIZE,
+  TEXT_WIDTH_MAX,
+  TEXT_WIDTH_MIN,
   addAnnotation,
   annotationHandles,
   boundsOf,
@@ -20,6 +22,7 @@ import {
   straightCurve,
   strokePoints,
   textExtent,
+  textLines,
   textSize,
   updateAnnotation,
   visibleAt,
@@ -515,5 +518,73 @@ describe("a shape's own name", () => {
     doc = addAnnotation(doc, arrow(doc));
     expect("name" in (doc.annotations?.[0] ?? {})).toBe(false);
     expect(boardDocSchema.safeParse(JSON.parse(JSON.stringify(doc))).success).toBe(true);
+  });
+});
+
+describe("text boxes", () => {
+  const label = (over: Partial<Extract<Annotation, { kind: "text" }>> = {}) =>
+    ({
+      id: "t1",
+      kind: "text",
+      color: "#fff",
+      from: "s1",
+      at: { x: 50, y: 30 },
+      text: "hello",
+      ...over,
+    }) as Extract<Annotation, { kind: "text" }>;
+
+  it("is one line when it has no box, however long", () => {
+    const lines = textLines(label({ text: "a fairly long note with several words in it" }));
+    expect(lines).toEqual(["a fairly long note with several words in it"]);
+  });
+
+  // The thing that was missing: without a width there is nowhere for a second line to go.
+  it("wraps on words once it has a width", () => {
+    const lines = textLines(label({ text: "press high and force it wide", width: 12 }));
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines.join(" ")).toBe("press high and force it wide");
+  });
+
+  it("breaks on explicit newlines with or without a box", () => {
+    expect(textLines(label({ text: "one\ntwo" }))).toEqual(["one", "two"]);
+    expect(textLines(label({ text: "one\ntwo", width: 40 }))).toEqual(["one", "two"]);
+  });
+
+  it("keeps a blank line as a blank line", () => {
+    expect(textLines(label({ text: "one\n\ntwo", width: 40 }))).toEqual(["one", "", "two"]);
+  });
+
+  // Hyphenating a name to fit is worse than a line that sticks out, and the author can widen
+  // the box. What matters is that it terminates rather than looping on an empty line.
+  it("lets a single over-long word overflow rather than looping", () => {
+    const lines = textLines(label({ text: "Wolverhampton", width: TEXT_WIDTH_MIN }));
+    expect(lines).toEqual(["Wolverhampton"]);
+  });
+
+  it("grows in height as it wraps, and keeps the width it was given", () => {
+    const narrow = label({ text: "press high and force it wide", width: 12 });
+    const wide = label({ text: "press high and force it wide", width: 60 });
+    expect(textExtent(narrow).h).toBeGreaterThan(textExtent(wide).h);
+    expect(textExtent(narrow).w).toBe(12);
+  });
+
+  it("offers a width handle on the right edge, and dragging it resizes the box", () => {
+    const ann = label({ width: 20 });
+    const handles = annotationHandles(ann);
+    expect(handles.map((h) => h.which).sort()).toEqual(["at", "w"]);
+    expect(handles.find((h) => h.which === "w")?.at).toEqual({ x: 60, y: 30 });
+
+    // Doubled, because the box is centred on `at`.
+    expect(dragAnnotationHandle(ann, "w", { x: 65, y: 30 })).toEqual({ width: 30 });
+  });
+
+  it("clamps a dragged width rather than letting it invert or swallow the pitch", () => {
+    const ann = label({ width: 20 });
+    expect(dragAnnotationHandle(ann, "w", { x: 10, y: 30 })).toEqual({ width: TEXT_WIDTH_MIN });
+    expect(dragAnnotationHandle(ann, "w", { x: 900, y: 30 })).toEqual({ width: TEXT_WIDTH_MAX });
+  });
+
+  it("still moves on the `at` handle", () => {
+    expect(dragAnnotationHandle(label(), "at", { x: 1, y: 2 })).toEqual({ at: { x: 1, y: 2 } });
   });
 });
