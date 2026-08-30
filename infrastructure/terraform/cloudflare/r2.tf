@@ -12,8 +12,23 @@ resource "cloudflare_r2_bucket" "media" {
   storage_class = var.r2_storage_class
 }
 
-# Public access via a custom domain (media.<domain>). Created only when a domain is set;
-# until then, enable the temporary r2.dev dev URL manually in the dashboard for testing.
+# Public read access over Cloudflare's managed r2.dev subdomain. This is the only way to
+# serve objects publicly while `domain` is empty, so it is what "publicly available" means
+# here today. Two things it is not: Cloudflare rate-limits r2.dev (429s under load) and
+# throttles its bandwidth, and states outright that it is not intended for production. Once
+# a domain exists, serve from cloudflare_r2_custom_domain below and revisit this.
+#
+# SECURITY: this makes every object in the bucket world-readable to anyone with the URL.
+# R2 has no per-object ACLs, so the bucket is public or it is not — nothing user-private
+# may be written here. The intended contents are board preview images and exported renders,
+# which are published artefacts by definition.
+resource "cloudflare_r2_managed_domain" "media" {
+  account_id  = var.cloudflare_account_id
+  bucket_name = cloudflare_r2_bucket.media.name
+  enabled     = true
+}
+
+# Public access via a custom domain (media.<domain>). Created only when a domain is set.
 resource "cloudflare_r2_custom_domain" "media" {
   count = local.has_domain ? 1 : 0
 

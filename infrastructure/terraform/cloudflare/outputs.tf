@@ -9,8 +9,8 @@ output "r2_s3_endpoint" {
 }
 
 output "r2_public_url" {
-  value       = local.has_domain ? "https://${local.r2_public_fqdn}" : null
-  description = "Public base URL for served assets (null until a domain is configured)."
+  value       = local.has_domain ? "https://${local.r2_public_fqdn}" : "https://${cloudflare_r2_managed_domain.media.domain}"
+  description = "Public base URL for served assets — the custom domain when set, otherwise the managed r2.dev subdomain."
 }
 
 # The two ids below are the manual step D8 accepted: paste them into the Worker's
