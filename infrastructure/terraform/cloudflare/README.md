@@ -36,7 +36,9 @@ worth settling before the first one.
 
 ## Prerequisites
 
-1. **API token** (provider auth) — create at Cloudflare → My Profile → API Tokens with:
+1. **API token** (provider auth) — created and edited **by hand**, deliberately not managed by
+   this stack; see the header of `api_token.tf` for why. Cloudflare → My Profile → API Tokens,
+   with:
    - Account · Workers R2 Storage · Edit
    - Account · D1 · Edit
    - Account · Workers KV Storage · Edit
