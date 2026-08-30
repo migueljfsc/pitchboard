@@ -19,6 +19,8 @@ export default defineConfig(({ command }) => ({
     // is all it needs — no jsdom, no canvas polyfill. render.ts is tested via
     // a recording proxy context (see src/board/render.test.ts).
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    // The Worker's pure helpers — cookie parsing, the renewal predicate — are the same
+    // kind of small numerical logic the engine tests, and `pnpm test` gates the deploy.
+    include: ["src/**/*.test.ts", "worker/**/*.test.ts"],
   },
 }));
