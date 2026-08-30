@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="index, follow" />
+    <title>Privacy Policy — Pitchboard</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #fbfbfa;
+        --fg: #1c1c1a;
+        --muted: #5f5f58;
+        --rule: #e2e2dd;
+        --accent: #1a6b3c;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #14161a;
+          --fg: #e8e8e4;
+          --muted: #9a9a92;
+          --rule: #2a2d33;
+          --accent: #5fbd85;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 3rem 1.25rem 5rem;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          16px/1.65 ui-sans-serif,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+      }
+      main {
+        max-width: 44rem;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 1.9rem;
+        line-height: 1.2;
+        margin: 0 0 0.35rem;
+        letter-spacing: -0.02em;
+      }
+      h2 {
+        font-size: 1.1rem;
+        margin: 2.5rem 0 0.6rem;
+        letter-spacing: -0.01em;
+        padding-top: 1.4rem;
+        border-top: 1px solid var(--rule);
+      }
+      p,
+      li {
+        margin: 0 0 0.8rem;
+      }
+      ul {
+        padding-left: 1.2rem;
+      }
+      a {
+        color: var(--accent);
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 0.875rem;
+        margin-bottom: 2rem;
+      }
+      .lede {
+        border-left: 3px solid var(--accent);
+        padding: 0.1rem 0 0.1rem 1rem;
+        margin: 1.5rem 0 0;
+      }
+      .back {
+        display: inline-block;
+        margin-top: 3rem;
+        font-size: 0.875rem;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.875em;
+        background: var(--rule);
+        padding: 0.1em 0.35em;
+        border-radius: 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Privacy Policy</h1>
+      <p class="meta">Pitchboard · Last updated 30 August 2026</p>
+
+      <div class="lede">
+        <p>
+          Pitchboard is a football tactics board that runs in your browser. You
+          can use all of it without an account, and if you do, nothing you draw
+          ever leaves your device. An account exists only so that boards can be
+          saved and found again from somewhere else.
+        </p>
+        <p>
+          There is no analytics, no advertising, no tracking, and nothing is
+          sold or shared with anyone for their own purposes.
+        </p>
+      </div>
+
+      <h2>Who is responsible</h2>
+      <p>
+        The controller of any personal data described here is
+        <strong>Miguel Cardoso</strong>, who runs Pitchboard as a personal,
+        non-commercial project. Contact:
+        <a href="mailto:migueljfscardoso@protonmail.com"
+          >migueljfscardoso@protonmail.com</a
+        >.
+      </p>
+
+      <h2>Using Pitchboard without an account</h2>
+      <p>
+        No personal data is collected. The board you are working on is saved in
+        your browser's
+        <code>localStorage</code> so it survives a refresh; it stays on your
+        device and is never transmitted.
+      </p>
+      <p>
+        Anonymous share links carry the whole board compressed into the part of
+        the URL after the
+        <code>#</code>. Browsers do not send that part to the server, so a board
+        shared this way is never received or stored here — it travels only
+        between you and whoever you send the link to.
+      </p>
+
+      <h2>Using Pitchboard with an account</h2>
+      <p>
+        Accounts are optional and exist to persist projects and boards. Two ways
+        to create one:
+      </p>
+      <ul>
+        <li>
+          <strong>Google sign-in.</strong> Google confirms your identity and
+          sends back your email address and a stable account identifier. Both
+          are stored. Your Google password is never seen or received.
+        </li>
+        <li>
+          <strong>Email and password.</strong> Your email address is stored.
+          Your password is not: only an irreversible cryptographic hash of it is
+          kept, which cannot be turned back into the original.
+        </li>
+      </ul>
+      <p>
+        Optionally a display name, if you set one. No other profile information
+        is requested and none is inferred.
+      </p>
+
+      <h2>What your boards contain</h2>
+      <p>
+        A saved board holds whatever you put in it: project and board names,
+        formations, player shirt numbers, positions, movements, drawings, and
+        any player or team names you type. If you enter the names of real
+        people, that content is personal data about them, and you are
+        responsible for having a proper basis to record it. Board content is
+        stored so it can be given back to you, and is never read, mined, or used
+        for any other purpose.
+      </p>
+      <p>
+        Publishing a board produces a share link that anyone holding it can
+        open. What you publish is a frozen copy, readable without an account.
+        Nothing is published unless you choose to publish it.
+      </p>
+
+      <h2>Cookies</h2>
+      <p>
+        One cookie, set only after you sign in. It holds a random session
+        identifier — no personal data — and exists so that you stay signed in.
+        It is <code>HttpOnly</code> and <code>Secure</code>, cannot be read by
+        scripts, expires after 30 days, and is deleted when you sign out. There
+        are no analytics or advertising cookies, so there is no consent banner
+        to click through.
+      </p>
+
+      <h2>Who else handles the data</h2>
+      <ul>
+        <li>
+          <strong>Cloudflare</strong> hosts the site and stores the database,
+          published boards and uploaded images, acting as a processor on
+          instructions. Cloudflare also processes IP addresses and basic request
+          metadata to deliver and protect the service, and keeps short-lived
+          operational logs.
+        </li>
+        <li>
+          <strong>Google</strong> is involved only if you choose Google sign-in,
+          and only at the moment you sign in. If you never use it, Google
+          receives nothing.
+        </li>
+      </ul>
+      <p>
+        No one else. Data is not sold, rented, or shared for anyone's marketing.
+      </p>
+
+      <h2>Where data is stored</h2>
+      <p>
+        On Cloudflare's global network, which means it may be processed outside
+        your own country, including outside the European Economic Area.
+        Cloudflare provides safeguards for such transfers, including the
+        European Commission's Standard Contractual Clauses.
+      </p>
+
+      <h2>How long it is kept, and deleting it</h2>
+      <p>
+        Account data is kept until you delete the account.
+        <strong>Deleting your account deletes everything with it</strong> —
+        projects, boards, published boards and their share links, and sessions —
+        immediately and permanently, with no recovery. Deleting a single board
+        does not by itself withdraw a link you previously published from it;
+        delete the published copy as well if that is what you want.
+      </p>
+      <p>Expired sessions are removed automatically.</p>
+
+      <h2>Your rights</h2>
+      <p>
+        Under the GDPR you can ask for a copy of your data, correct it, have it
+        deleted, receive it in a portable form, restrict how it is used, or
+        object to it being used. Most of this you can do yourself in the
+        application; for anything else, email the address above. You also have
+        the right to complain to your national data protection authority — in
+        Portugal, the
+        <a href="https://www.cnpd.pt/" rel="noopener noreferrer">CNPD</a>.
+      </p>
+      <p>
+        The legal bases are: performing the service you asked for, when handling
+        your account and boards; and a legitimate interest in keeping the
+        service secure and available, when limiting abuse.
+      </p>
+
+      <h2>Security</h2>
+      <p>
+        Everything travels over HTTPS. Passwords are stored only as salted
+        hashes with an additional secret that is held separately from the
+        database. Session identifiers are stored hashed, so the database does
+        not contain anything that could be replayed to impersonate you.
+      </p>
+      <p>
+        Pitchboard is a personal project offered without warranty. It is not the
+        right place for confidential information.
+      </p>
+
+      <h2>Children</h2>
+      <p>
+        Pitchboard is not directed at children under 16, and accounts are not
+        knowingly created for them. If you believe a child has created one,
+        email the address above and it will be removed.
+      </p>
+
+      <h2>Changes</h2>
+      <p>
+        If this policy changes, the date at the top changes with it. Material
+        changes affecting account holders will be notified by email.
+      </p>
+
+      <a class="back" href="./">← Back to Pitchboard</a>
+    </main>
+  </body>
+</html>
