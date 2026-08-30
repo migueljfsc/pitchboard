@@ -94,9 +94,16 @@ export async function fetchAccount(): Promise<Account | null> {
   }
 }
 
-/** A full navigation, not a fetch: the flow ends in a redirect from Google. */
+/**
+ * A full navigation, not a fetch: the flow ends in a redirect from Google.
+ *
+ * The current path goes with it, so signing in to open a deep link to a saved board comes
+ * back to that board rather than to a blank one. The Worker validates it — a path it wrote is
+ * still the browser's copy of it by the time it returns.
+ */
 export function startGoogleSignIn(): void {
-  window.location.href = "/api/auth/google/start";
+  const next = `${window.location.pathname}${window.location.search}`;
+  window.location.href = `/api/auth/google/start?next=${encodeURIComponent(next)}`;
 }
 
 export async function signOut(): Promise<void> {

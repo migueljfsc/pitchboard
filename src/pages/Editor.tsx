@@ -589,15 +589,18 @@ export function Editor({ initialDoc }: Props = {}) {
             boardName={doc.name}
             signedIn={accountState.account !== null}
           />
-          {/* A link outlives a session in localStorage, so signing out drops it here —
-              otherwise the next person to use this browser inherits a pointer into an
-              account that is no longer theirs. Composed at the call site rather than in an
-              effect, which would be a setState during render in all but name. */}
+          {/* Signing out resets the editor: the board you had while signed in is not the
+              board the next person to open this browser should find. Composed at the call
+              site rather than in an effect, which would be a setState during render in all
+              but name. */}
           <AccountMenu
             {...accountState}
             signOut={async () => {
-              cloud.detach();
               await accountState.signOut();
+              // A full navigation rather than a state reset: it drops the board, the undo
+              // history that could bring it back, and the /board/<id> in the address, all at
+              // once. Anything less leaves one of the three behind.
+              window.location.assign("/?fresh=1");
             }}
           />
         </div>

@@ -119,8 +119,12 @@ export function BoardsPanel({ cloud, boardName }: { cloud: CloudBoard; boardName
     }
   };
 
+  /**
+   * Creates the board — once. After this the address points at it and every later save is an
+   * update, so "Save here" is only ever offered while there is nothing to update.
+   */
   const saveHere = async (projectId: string) => {
-    await cloud.saveAs(projectId, boardName);
+    await cloud.saveInto(projectId, boardName);
     setBoards((all) => {
       const next = { ...all };
       delete next[projectId];
@@ -131,7 +135,7 @@ export function BoardsPanel({ cloud, boardName }: { cloud: CloudBoard; boardName
 
   /** Opening replaces the document, so unsaved local work gets a confirmation first. */
   const requestOpen = (boardId: string) => {
-    if (cloud.link) void cloud.open(boardId);
+    if (cloud.board) void cloud.open(boardId);
     else setPending({ kind: "open", boardId });
   };
 
@@ -143,12 +147,14 @@ export function BoardsPanel({ cloud, boardName }: { cloud: CloudBoard; boardName
         await cloud.open(pending.boardId);
       } else if (pending.kind === "board") {
         await deleteBoard(pending.id);
-        if (cloud.link?.boardId === pending.id) cloud.detach();
+        // Deleting the board you are editing leaves the address pointing at nothing, so the
+        // page goes back to a plain editor rather than pretending the row is still there.
+        if (cloud.board?.id === pending.id) window.location.assign("/");
         setBoards({});
         void reload();
       } else {
         await deleteProject(pending.id);
-        if (cloud.link?.projectId === pending.id) cloud.detach();
+        if (cloud.board?.projectId === pending.id) window.location.assign("/");
         setBoards({});
         void reload();
       }
@@ -166,9 +172,9 @@ export function BoardsPanel({ cloud, boardName }: { cloud: CloudBoard; boardName
    * published either way, so a refusal costs the copy and not the link.
    */
   const publish = async () => {
-    if (!cloud.link) return;
+    if (!cloud.board) return;
     try {
-      const slug = await publishBoard(cloud.link.boardId);
+      const slug = await publishBoard(cloud.board.id);
       await navigator.clipboard.writeText(shareUrl(slug)).catch(() => undefined);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 4000);
@@ -179,9 +185,9 @@ export function BoardsPanel({ cloud, boardName }: { cloud: CloudBoard; boardName
   };
 
   const withdraw = async () => {
-    if (!cloud.link) return;
+    if (!cloud.board) return;
     try {
-      await unpublishBoard(cloud.link.boardId);
+      await unpublishBoard(cloud.board.id);
       setBoards({});
       setError(null);
     } catch (cause) {
@@ -189,9 +195,9 @@ export function BoardsPanel({ cloud, boardName }: { cloud: CloudBoard; boardName
     }
   };
 
-  const linkedProject = projects?.find((p) => p.id === cloud.link?.projectId);
-  const publishedSlug = (boards[cloud.link?.projectId ?? ""] ?? []).find(
-    (b) => b.id === cloud.link?.boardId,
+  const linkedProject = projects?.find((p) => p.id === cloud.board?.projectId);
+  const publishedSlug = (boards[cloud.board?.projectId ?? ""] ?? []).find(
+    (b) => b.id === cloud.board?.id,
   )?.share_slug;
 
   return (
@@ -209,7 +215,9 @@ export function BoardsPanel({ cloud, boardName }: { cloud: CloudBoard; boardName
       >
         <FolderOpen size={13} />
         {t("boards.title")}
-        {cloud.status.kind === "saving" && <Dot className="bg-amber-400" />}
+        {(cloud.status.kind === "saving" || cloud.status.kind === "loading") && (
+          <Dot className="bg-amber-400" />
+        )}
         {cloud.status.kind === "saved" && <Dot className="bg-accent" />}
         {cloud.status.kind === "conflict" && <Dot className="bg-red-400" />}
       </button>
@@ -222,11 +230,11 @@ export function BoardsPanel({ cloud, boardName }: { cloud: CloudBoard; boardName
               {t("boards.current")}
             </p>
             <p className="mt-0.5 truncate text-[11px] text-ink-200">
-              {cloud.link
+              {cloud.board
                 ? t("boards.savedIn", { project: linkedProject?.name ?? "…" })
                 : t("boards.unsaved")}
             </p>
-            {cloud.link && (
+            {cloud.board && (
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 <Small onClick={() => void cloud.saveNow()}>{t("boards.saveNow")}</Small>
                 <Small onClick={() => void publish()} title={t("boards.publish.hint")}>
@@ -236,7 +244,6 @@ export function BoardsPanel({ cloud, boardName }: { cloud: CloudBoard; boardName
                 {publishedSlug && (
                   <Small onClick={() => void withdraw()}>{t("boards.unpublish")}</Small>
                 )}
-                <Small onClick={cloud.detach}>{t("boards.detach")}</Small>
               </div>
             )}
           </section>
@@ -310,7 +317,11 @@ export function BoardsPanel({ cloud, boardName }: { cloud: CloudBoard; boardName
                         {tn("boards.count", project.boards, { count: project.boards })}
                       </span>
                     </button>
-                    <Small onClick={() => void saveHere(project.id)}>{t("boards.saveHere")}</Small>
+                    {!cloud.board && (
+                      <Small onClick={() => void saveHere(project.id)}>
+                        {t("boards.saveHere")}
+                      </Small>
+                    )}
                     <IconButton
                       label={t("boards.delete")}
                       onClick={() => setPending({ kind: "project", id: project.id, name: project.name })}
@@ -329,7 +340,7 @@ export function BoardsPanel({ cloud, boardName }: { cloud: CloudBoard; boardName
                               onClick={() => requestOpen(board.id)}
                               className={cn(
                                 "min-w-0 flex-1 truncate text-left text-[11px] transition hover:text-white",
-                                cloud.link?.boardId === board.id ? "text-accent" : "text-ink-300",
+                                cloud.board?.id === board.id ? "text-accent" : "text-ink-300",
                               )}
                             >
                               {board.name}

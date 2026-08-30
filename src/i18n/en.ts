@@ -411,7 +411,6 @@ export const en = {
   "boards.unsaved": "Not saved to your account.",
   "boards.savedIn": "Saved in “{project}”.",
   "boards.saveNow": "Save now",
-  "boards.detach": "Stop syncing",
   "boards.saveHere": "Save here",
   "boards.projects": "Projects",
   "boards.noProjects": "No projects yet. Create one to save this board.",

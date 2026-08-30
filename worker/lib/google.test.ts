@@ -9,6 +9,7 @@ import {
   oauthCookie,
   parseOauthCookie,
   redirectUri,
+  safeNext,
   timingSafeEqual,
 } from "./google";
 import { readCookie } from "./session";
@@ -164,5 +165,35 @@ describe("authorizeUrl", () => {
     expect(redirectUri("https://pitchboard.example")).toBe(
       "https://pitchboard.example/api/auth/google/callback",
     );
+  });
+});
+
+describe("safeNext", () => {
+  it("keeps an ordinary in-app path", () => {
+    expect(safeNext("/board/9Q82CqPzAqBcX7DPgeeo3A")).toBe("/board/9Q82CqPzAqBcX7DPgeeo3A");
+    expect(safeNext("/")).toBe("/");
+  });
+
+  it("falls back to the root when there is nothing to return to", () => {
+    expect(safeNext(null)).toBe("/");
+    expect(safeNext("")).toBe("/");
+  });
+
+  /**
+   * An open redirect here would be a real one: the victim follows a link to this site, sees a
+   * genuine Google consent screen, and is then sent somewhere else with the sign-in appearing
+   * to have worked. "//evil.test" is the case a naive startsWith("/") check waves through —
+   * it is protocol-relative and the browser reads it as another origin.
+   */
+  it("refuses anything that could leave the site", () => {
+    expect(safeNext("//evil.test")).toBe("/");
+    expect(safeNext("//evil.test/board/x")).toBe("/");
+    expect(safeNext("https://evil.test")).toBe("/");
+    expect(safeNext("http://evil.test")).toBe("/");
+    expect(safeNext("javascript:alert(1)")).toBe("/");
+    expect(safeNext("board/relative")).toBe("/");
+    // Backslashes are normalised to slashes by some browsers, making this protocol-relative.
+    expect(safeNext("/\\evil.test")).toBe("/");
+    expect(safeNext("\\\\evil.test")).toBe("/");
   });
 });

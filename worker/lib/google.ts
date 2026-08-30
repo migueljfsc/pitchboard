@@ -179,3 +179,29 @@ export function timingSafeEqual(a: string, b: string): boolean {
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
+
+export const NEXT_COOKIE = "pb_next";
+
+/**
+ * Where to land after signing in.
+ *
+ * Validated to a same-origin absolute PATH and nothing else. An open redirect here would be a
+ * genuine one — the victim arrives via a link to this site, sees a real Google consent screen,
+ * and is then bounced somewhere else entirely with the sign-in appearing to have worked. So a
+ * value must start with a single "/" and carry no scheme and no authority; "//evil.test" is
+ * protocol-relative and is exactly the case a naive startsWith("/") check waves through.
+ */
+export function safeNext(value: string | null): string {
+  if (!value) return "/";
+  if (!value.startsWith("/") || value.startsWith("//")) return "/";
+  if (value.includes("\\")) return "/";
+  return value;
+}
+
+export function nextCookie(next: string): string {
+  return `${NEXT_COOKIE}=${encodeURIComponent(next)}; Path=/api/auth/google; HttpOnly; Secure; SameSite=Lax; Max-Age=${OAUTH_STATE_TTL_S}`;
+}
+
+export function clearedNextCookie(): string {
+  return `${NEXT_COOKIE}=; Path=/api/auth/google; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
+}

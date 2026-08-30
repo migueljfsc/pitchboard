@@ -51,9 +51,9 @@ export function AdoptBoardPrompt({
 
   useEffect(forgetWelcome, []);
 
-  // A board that is already linked has nowhere to be adopted to, and a signed-out visitor
-  // cannot be offered an account.
-  if (!asked || !signedIn || cloud.link) return null;
+  // A board already saved to the account has nowhere to be adopted to, and a signed-out
+  // visitor cannot be offered an account.
+  if (!asked || !signedIn || cloud.board) return null;
 
   const adopt = async () => {
     setAsked(false);
@@ -62,7 +62,7 @@ export function AdoptBoardPrompt({
     // change when the reader does (D38).
     const projects = await listProjects();
     const target = projects[0] ?? (await createProject(t("adopt.project")));
-    await cloud.saveAs(target.id, boardName);
+    await cloud.saveInto(target.id, boardName);
   };
 
   return (

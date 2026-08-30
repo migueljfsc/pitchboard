@@ -16,6 +16,31 @@
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+/**
+ * Pointer cursors on things that respond to a click.
+ *
+ * Tailwind v4 stopped shipping the Preflight rule that gave buttons
+ * `cursor: pointer`, so every button in the app inherited the arrow and nothing
+ * read as clickable. Restored here rather than as a `cursor-pointer` class on
+ * each control, because the rule is "it responds to a click", not "somebody
+ * remembered" — and the ones that already existed would all have needed
+ * revisiting.
+ *
+ * Disabled controls are excluded: the undo and redo buttons spend most of their
+ * life disabled, and a pointer over a dead button is a promise the app does not
+ * keep.
+ */
+button:not(:disabled),
+summary,
+[role="button"]:not([aria-disabled="true"]),
+[role="menuitem"] {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
 html,
 body,
 #root {

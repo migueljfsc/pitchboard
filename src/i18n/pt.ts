@@ -403,7 +403,6 @@ export const pt: Dictionary = {
   "boards.unsaved": "Não está guardado na tua conta.",
   "boards.savedIn": "Guardado em “{project}”.",
   "boards.saveNow": "Guardar agora",
-  "boards.detach": "Parar de sincronizar",
   "boards.saveHere": "Guardar aqui",
   "boards.projects": "Projetos",
   "boards.noProjects": "Ainda não tens projetos. Cria um para guardar este quadro.",

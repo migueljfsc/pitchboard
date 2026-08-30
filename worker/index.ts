@@ -16,7 +16,11 @@ import {
   newOauthChallenge,
   oauthCookie,
   OAUTH_COOKIE,
+  NEXT_COOKIE,
+  clearedNextCookie,
+  nextCookie,
   parseOauthCookie,
+  safeNext,
   timingSafeEqual,
 } from "./lib/google";
 import {
@@ -52,10 +56,10 @@ import { userForGoogleIdentity } from "./lib/users";
  */
 function backToApp(origin: string, error?: string): Response {
   const url = error ? `${origin}/?auth_error=${encodeURIComponent(error)}` : `${origin}/`;
-  return new Response(null, {
-    status: 302,
-    headers: { location: url, "set-cookie": clearedOauthCookie(), "cache-control": "no-store" },
-  });
+  const headers = new Headers({ location: url, "cache-control": "no-store" });
+  headers.append("set-cookie", clearedOauthCookie());
+  headers.append("set-cookie", clearedNextCookie());
+  return new Response(null, { status: 302, headers });
 }
 
 export default {
@@ -89,14 +93,17 @@ export default {
 
       case "GET /api/auth/google/start": {
         const { state, verifier } = newOauthChallenge();
-        return new Response(null, {
-          status: 302,
-          headers: {
-            location: await authorizeUrl(env.GOOGLE_CLIENT_ID, url.origin, state, verifier),
-            "set-cookie": oauthCookie(state, verifier),
-            "cache-control": "no-store",
-          },
+        // Where the user was when they clicked sign in — a deep link to a saved board has to
+        // survive the round trip through Google, or signing in to open a board drops you on a
+        // blank one instead.
+        const next = safeNext(url.searchParams.get("next"));
+        const headers = new Headers({
+          location: await authorizeUrl(env.GOOGLE_CLIENT_ID, url.origin, state, verifier),
+          "cache-control": "no-store",
         });
+        headers.append("set-cookie", oauthCookie(state, verifier));
+        headers.append("set-cookie", nextCookie(next));
+        return new Response(null, { status: 302, headers });
       }
 
       case "GET /api/auth/google/callback": {
@@ -133,12 +140,20 @@ export default {
         // out for itself: after the redirect the page loads fresh, and a returning visitor
         // with a thirty-day cookie looks identical to someone who signed in a second ago.
         // It is what lets the offer to save the local board appear once rather than nag.
+        //
+        // The cookie is re-validated rather than trusted: it is the browser's copy of a value
+        // this Worker wrote, and browser storage is not a trusted channel.
+        const next = safeNext(
+          decodeURIComponent(readCookie(request.headers.get("cookie"), NEXT_COOKIE) ?? ""),
+        );
+        const separator = next.includes("?") ? "&" : "?";
         const headers = new Headers({
-          location: `${url.origin}/?welcome=1`,
+          location: `${url.origin}${next}${separator}welcome=1`,
           "cache-control": "no-store",
         });
         headers.append("set-cookie", sessionCookie(token, SESSION_TTL_S));
         headers.append("set-cookie", clearedOauthCookie());
+        headers.append("set-cookie", clearedNextCookie());
         return new Response(null, { status: 302, headers });
       }
 

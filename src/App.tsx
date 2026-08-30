@@ -5,6 +5,7 @@ import { Viewer } from "@/pages/Viewer";
 import { decodeBoard, readHash, readView, withoutHash, type DecodeOutcome } from "@/share/urlcodec";
 import { fetchShare } from "@/share/api";
 import { parseStoredDoc } from "@/share/cloud";
+import { readShareSlug } from "@/share/routes";
 import { useI18n } from "@/i18n/context";
 
 /**
@@ -23,22 +24,19 @@ import { useI18n } from "@/i18n/context";
  * still holds the original, so there is nothing to overwrite and no permission
  * to grant — the whole of D7's authorisation model.
  *
- * There is a second kind of share link, for boards saved to an account: `/s/<slug>`,
- * short enough to read down a phone. It is a PATH rather than a fragment, which is
- * the only reason this file knows about paths at all — and it is still not a router.
- * A path is one more thing the address can be, read once, because changing one is a
- * page load rather than an event. It resolves only on the Worker, which serves
- * index.html for unknown paths; the GitHub Pages deploy has no such rewrite and no
- * server to ask, which is correct, since that host has no accounts either.
+ * Paths mean two more things, both listed in `share/routes.ts`: `/s/<slug>` is a
+ * published board, read-only and open to anyone; `/board/<id>` is a saved board
+ * opened for editing, which the Editor resolves for itself since it needs an
+ * account to do it. This is still not a router — a path is one more thing the
+ * address can be, read once, because changing one is a page load rather than an
+ * event. Both resolve only on the Worker, which serves index.html for unknown
+ * paths; the Pages deploy has neither the rewrite nor the server, which is
+ * correct, since it has no accounts either.
  */
-const SHARE_PATH = /\/s\/([2-9bcdfghjkmnpqrstvwxz]{8})$/;
-
 export function App() {
   const { t, tm } = useI18n();
   const [hash, setHash] = useState(() => window.location.hash);
-  const [slug, setSlug] = useState<string | null>(
-    () => SHARE_PATH.exec(window.location.pathname)?.[1] ?? null,
-  );
+  const [slug, setSlug] = useState<string | null>(() => readShareSlug());
   /** The published board, or "missing" once the server has said so. */
   const [shared, setShared] = useState<BoardDoc | "missing" | null>(null);
   const [forked, setForked] = useState<BoardDoc | null>(null);
