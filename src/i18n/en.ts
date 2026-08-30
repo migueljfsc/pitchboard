@@ -26,9 +26,6 @@ export const en = {
   // --------------------------------------------------------------- top bar
   "bar.name.label": "Board name",
   "bar.name.placeholder": "Untitled board",
-  "bar.json": "JSON",
-  "bar.json.title":
-    "Import / export JSON. Send someone the whole board and they open your play. A short setup file names a formation, an eleven and its units.",
   "bar.export": "Export",
   "bar.export.title":
     "MP4, WebM or GIF of the whole animation, or a PNG of the frame on screen. Exported at the framing you are looking at.",
@@ -82,10 +79,24 @@ export const en = {
   "reset.board": "Reset board",
 
   // ---------------------------------------------------------------- share
-  "share.copy": "Share link",
+  "share.dialog": "Share",
+  "share.dialog.title": "Send this board to someone",
+  "share.close": "Close",
+  "share.method.link": "Link",
+  "share.method.board": "Board link",
+  "share.method.file": "File",
+  "share.link.blurb":
+    "The whole board travels inside the link, so it never expires and needs no account. Whoever opens it watches a read-only copy, framed as you have it now, and can fork their own. It never reaches the server — browsers do not send the part after the #.",
+  "share.length": "{chars} of {budget} characters",
+  "share.board.blurb":
+    "A short link to this saved board. Reloading it shows whatever you have changed since, and it lasts as long as the board does. You can withdraw it at any time.",
+  "share.board.needsAccount": "Sign in to share a board this way.",
+  "share.board.needsSaving": "Save this board to a project first, and the link will point at it.",
+  "share.board.copy": "Copy board link",
+  "share.board.copied": "Board link copied",
+  "share.board.withdraw": "Withdraw",
+  "share.copy": "Copy link",
   "share.copied": "Link copied",
-  "share.title":
-    "The whole board travels in the link, so it never expires. Whoever opens it watches a read-only copy, framed as you have it now, and can fork their own.",
   "share.failed": "This browser could not compress the board.",
   "share.long": "{chars} chars — too long to paste safely",
   "share.long.title":
@@ -422,11 +433,6 @@ export const en = {
   "boards.count.other": "{count} boards",
   "boards.open": "Open",
   "boards.delete": "Delete",
-  "boards.publish": "Publish link",
-  "boards.published": "Link copied",
-  "boards.unpublish": "Withdraw link",
-  "boards.publish.hint": "A short link anyone can open. Republishing keeps the same link.",
-  "boards.error.slug_unavailable": "Could not make a link just now. Try again.",
   "boards.status.saving": "Saving…",
   "boards.status.saved": "Saved",
   "boards.openConfirm.title": "Open this board?",

@@ -8,7 +8,7 @@ import { Section } from "@/components/ui/Section";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
   Download,
-  FileJson,
+  Share2,
   PanelRightClose,
   PanelRightOpen,
   Redo2,
@@ -19,8 +19,7 @@ import {
 import { Inspector } from "@/components/Inspector";
 import { DrawingsPanel } from "@/components/DrawingsPanel";
 import { ExportDialog } from "@/components/ExportDialog";
-import { JsonDialog } from "@/components/JsonDialog";
-import { SharePanel } from "@/components/SharePanel";
+import { ShareDialog } from "@/components/ShareDialog";
 import { LinkPanel } from "@/components/LinkPanel";
 import { DrawPanel } from "@/components/DrawPanel";
 import { Timeline } from "@/components/Timeline";
@@ -121,7 +120,7 @@ export function Editor({ initialDoc }: Props = {}) {
   const [expandedLink, setExpandedLink] = useState<string | null>(null);
   const [pitchView, setPitchView] = useState<PitchView>(DEFAULT_PITCH_VIEW);
   const [pending, setPending] = useState<Pending | null>(null);
-  const [jsonOpen, setJsonOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [selectionOpen, setSelectionOpen] = useState(true);
   const [drawingsOpen, setDrawingsOpen] = useState(false);
@@ -418,7 +417,7 @@ export function Editor({ initialDoc }: Props = {}) {
   const importDoc = (next: BoardDoc) => {
     setDoc(next);
     clearEditorState();
-    setJsonOpen(false);
+    setShareOpen(false);
   };
 
   const onTravelChange = (ms: number | null) => {
@@ -473,7 +472,7 @@ export function Editor({ initialDoc }: Props = {}) {
       if (e.target instanceof HTMLElement && ["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName)) return;
       // A dialog owns the keyboard while it is up — Space must not start
       // playback behind it, and Escape belongs to the dialog.
-      if (pending || jsonOpen || exportOpen) return;
+      if (pending || shareOpen || exportOpen) return;
 
       // Escape disarms a drawing tool before anything else looks at the key.
       if (e.key === "Escape") {
@@ -512,7 +511,7 @@ export function Editor({ initialDoc }: Props = {}) {
   }, [
     onNudge,
     pending,
-    jsonOpen,
+    shareOpen,
     exportOpen,
     playing,
     setPlayback,
@@ -562,15 +561,6 @@ export function Editor({ initialDoc }: Props = {}) {
 
           <button
             type="button"
-            onClick={() => setJsonOpen(true)}
-            title={t("bar.json.title")}
-            className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
-          >
-            <FileJson size={13} />
-            {t("bar.json")}
-          </button>
-          <button
-            type="button"
             onClick={() => setExportOpen(true)}
             title={t("bar.export.title")}
             className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
@@ -578,7 +568,15 @@ export function Editor({ initialDoc }: Props = {}) {
             <Download size={13} />
             {t("bar.export")}
           </button>
-          <SharePanel doc={doc} view={pitchView} />
+          <button
+            type="button"
+            onClick={() => setShareOpen(true)}
+            title={t("share.dialog.title")}
+            className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
+          >
+            <Share2 size={13} />
+            {t("share.dialog")}
+          </button>
 
           <span className="mx-1 h-5 w-px bg-ink-600" />
 
@@ -785,11 +783,14 @@ export function Editor({ initialDoc }: Props = {}) {
           />
         )}
 
-        {jsonOpen && (
-          <JsonDialog
+        {shareOpen && (
+          <ShareDialog
             doc={doc}
-            onImport={(next) => setPending({ kind: "import", doc: next })}
-            onClose={() => setJsonOpen(false)}
+            view={pitchView}
+            cloud={cloud}
+            signedIn={accountState.account !== null}
+            onImport={(next: BoardDoc) => setPending({ kind: "import", doc: next })}
+            onClose={() => setShareOpen(false)}
             blocked={pending !== null}
           />
         )}

@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, ChevronRight, FolderOpen, Link2, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, FolderOpen, Plus, Trash2 } from "lucide-react";
 
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useI18n } from "@/i18n/context";
@@ -26,9 +26,6 @@ import {
   deleteProject,
   listBoards,
   listProjects,
-  publishBoard,
-  shareUrl,
-  unpublishBoard,
 } from "@/share/api";
 
 /** Codes the Worker emits for these routes; anything else reads as the generic line. */
@@ -39,7 +36,6 @@ const KNOWN = new Set([
   "invalid_document",
   "not_found",
   "offline",
-  "slug_unavailable",
 ]);
 
 const codeOf = (error: unknown) =>
@@ -59,7 +55,7 @@ export function BoardsPanel({ cloud, boardName }: { cloud: CloudBoard; boardName
   const [newName, setNewName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [saved, setSaved] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
   const reload = useCallback(async () => {
@@ -133,11 +129,12 @@ export function BoardsPanel({ cloud, boardName }: { cloud: CloudBoard; boardName
     void reload();
   };
 
-  /** Opening replaces the document, so unsaved local work gets a confirmation first. */
-  const requestOpen = (boardId: string) => {
-    if (cloud.board) void cloud.open(boardId);
-    else setPending({ kind: "open", boardId });
-  };
+  /**
+   * Opening always asks, even when the current board is saved. It replaces what is on screen,
+   * and "I was in the middle of that" is not something a click should be able to do quietly —
+   * a saved board is safe on the server, but your place in it is not.
+   */
+  const requestOpen = (boardId: string) => setPending({ kind: "open", boardId });
 
   const confirm = async () => {
     if (!pending) return;
@@ -164,41 +161,30 @@ export function BoardsPanel({ cloud, boardName }: { cloud: CloudBoard; boardName
   };
 
   /**
-   * Publishing and copying are one action. The slug is only useful once it is on a clipboard,
-   * and a two-step "publish, now copy" is a step nobody wants and one they can forget.
+   * Saving, and saying so.
    *
-   * The clipboard can refuse — a background tab, an embedded frame, a denied permission — and
-   * SharePanel already treats that as routine rather than exceptional. Here the link is
-   * published either way, so a refusal costs the copy and not the link.
+   * A save that changes nothing on screen reads as a save that did not happen — the same
+   * reason the share button says "Link copied" rather than going quiet. The label carries the
+   * answer for a few seconds and then goes back to offering the action.
+   *
+   * The board list is refetched afterwards because a save can carry a RENAME: the document's
+   * name goes up with it, so the row underneath is stale the moment it lands.
    */
-  const publish = async () => {
+  const saveNow = async () => {
+    await cloud.saveNow();
+    setSaved(true);
+    window.setTimeout(() => setSaved(false), 4000);
     if (!cloud.board) return;
     try {
-      const slug = await publishBoard(cloud.board.id);
-      await navigator.clipboard.writeText(shareUrl(slug)).catch(() => undefined);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 4000);
-      setError(null);
-    } catch (cause) {
-      setError(codeOf(cause));
-    }
-  };
-
-  const withdraw = async () => {
-    if (!cloud.board) return;
-    try {
-      await unpublishBoard(cloud.board.id);
-      setBoards({});
-      setError(null);
-    } catch (cause) {
-      setError(codeOf(cause));
+      const rows = await listBoards(cloud.board.projectId);
+      setBoards((all) => ({ ...all, [cloud.board!.projectId]: rows }));
+    } catch {
+      // The save is what mattered; a stale row in a list nobody is looking at is not worth
+      // a second error message.
     }
   };
 
   const linkedProject = projects?.find((p) => p.id === cloud.board?.projectId);
-  const publishedSlug = (boards[cloud.board?.projectId ?? ""] ?? []).find(
-    (b) => b.id === cloud.board?.id,
-  )?.share_slug;
 
   return (
     <div ref={root} className="relative shrink-0">
@@ -236,14 +222,10 @@ export function BoardsPanel({ cloud, boardName }: { cloud: CloudBoard; boardName
             </p>
             {cloud.board && (
               <div className="mt-1.5 flex flex-wrap gap-1.5">
-                <Small onClick={() => void cloud.saveNow()}>{t("boards.saveNow")}</Small>
-                <Small onClick={() => void publish()} title={t("boards.publish.hint")}>
-                  {copied ? <Check size={11} /> : <Link2 size={11} />}
-                  {t(copied ? "boards.published" : "boards.publish")}
+                <Small onClick={() => void saveNow()}>
+                  {saved && <Check size={11} />}
+                  {t(saved ? "boards.status.saved" : "boards.saveNow")}
                 </Small>
-                {publishedSlug && (
-                  <Small onClick={() => void withdraw()}>{t("boards.unpublish")}</Small>
-                )}
               </div>
             )}
           </section>

@@ -1,24 +1,26 @@
-import { useEffect, useRef, useState } from "react";
-import { Check, Copy, Download, FileUp, X } from "lucide-react";
+import { useRef, useState } from "react";
+import { Check, Copy, Download, FileUp } from "lucide-react";
 import type { BoardDoc } from "@/board/types";
 import { SETUP_EXAMPLE, fromJson, toJson, toSetupJson } from "@/share/json";
-import { cn, slug } from "@/lib/utils";
+import { slug } from "@/lib/utils";
+import { Action, Toggle } from "@/components/ui/DialogControls";
 import { useI18n } from "@/i18n/context";
 import { msg, type Message } from "@/i18n/core";
 
 type Props = {
   doc: BoardDoc;
   onImport: (doc: BoardDoc) => void;
-  onClose: () => void;
-  /** A confirmation is up over this dialog, and owns the keyboard. */
-  blocked?: boolean;
 };
 
 type Tab = "export" | "import";
 type Shape = "board" | "setup";
 
 /**
- * Boards in and out as JSON.
+ * Boards in and out as JSON — a pane inside the share dialog, not a dialog of its own.
+ *
+ * A file IS a way to share a board, and the least perishable one: it needs no server, no
+ * account and no link that can rot. It sat behind its own top-bar button until the three ways
+ * of handing a board to someone were collected into one place.
  *
  * Export writes the whole document, which is what you send someone so they open
  * the play exactly as you left it. Setup writes the short form — formation, XI
@@ -27,7 +29,7 @@ type Shape = "board" | "setup";
  * Import takes either, told apart by `version`, and validates before anything
  * reaches the editor.
  */
-export function JsonDialog({ doc, onImport, onClose, blocked }: Props) {
+export function JsonPane({ doc, onImport }: Props) {
   const { t, tm } = useI18n();
   const [tab, setTab] = useState<Tab>("export");
   const [shape, setShape] = useState<Shape>("board");
@@ -37,21 +39,6 @@ export function JsonDialog({ doc, onImport, onClose, blocked }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const payload = shape === "board" ? toJson(doc) : toSetupJson(doc);
-
-  useEffect(() => {
-    // While a confirmation is up, Escape belongs to it. Both listeners are on
-    // the window, so the only reliable way to stay out of its way is not to
-    // listen at all.
-    if (blocked) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, blocked]);
 
   const copy = async () => {
     try {
@@ -90,47 +77,23 @@ export function JsonDialog({ doc, onImport, onClose, blocked }: Props) {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="json-title"
-        className="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-lg border border-ink-600 bg-ink-800 shadow-2xl"
-      >
-        <div className="flex items-center gap-3 border-b border-ink-700 px-4 py-3">
-          <h2 id="json-title" className="text-sm font-semibold text-white">
-            {t("json.title")}
-          </h2>
-          <div className="flex gap-1">
-            <Toggle active={tab === "export"} onClick={() => setTab("export")}>
-              {t("json.export")}
-            </Toggle>
-            <Toggle
-              active={tab === "import"}
-              onClick={() => {
-                setTab("import");
-                setError(null);
-              }}
-            >
-              {t("json.import")}
-            </Toggle>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t("json.close")}
-            className="ml-auto flex size-6 items-center justify-center rounded text-ink-400 transition hover:text-white"
-          >
-            <X size={15} />
-          </button>
-        </div>
+    <div className="flex min-h-0 flex-col">
+      <div className="flex gap-1 px-4 pt-3">
+        <Toggle active={tab === "export"} onClick={() => setTab("export")}>
+          {t("json.export")}
+        </Toggle>
+        <Toggle
+          active={tab === "import"}
+          onClick={() => {
+            setTab("import");
+            setError(null);
+          }}
+        >
+          {t("json.import")}
+        </Toggle>
+      </div>
 
-        {tab === "export" ? (
+      {tab === "export" ? (
           <div className="flex min-h-0 flex-col gap-3 p-4">
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex gap-1">
@@ -207,65 +170,7 @@ export function JsonDialog({ doc, onImport, onClose, blocked }: Props) {
               </Action>
             </div>
           </div>
-        )}
-      </div>
+      )}
     </div>
-  );
-}
-
-function Toggle({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        "rounded border px-2 py-1 text-[11px] transition",
-        active
-          ? "border-accent text-accent"
-          : "border-ink-600 text-ink-400 hover:border-ink-400 hover:text-ink-200",
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-function Action({
-  onClick,
-  icon: Icon,
-  primary,
-  disabled,
-  children,
-}: {
-  onClick: () => void;
-  icon: typeof Copy;
-  primary?: boolean;
-  disabled?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition disabled:opacity-45",
-        primary
-          ? "bg-accent font-medium text-ink-900 enabled:hover:brightness-110"
-          : "border border-ink-600 text-ink-200 enabled:hover:border-ink-400 enabled:hover:text-white",
-      )}
-    >
-      <Icon size={13} />
-      {children}
-    </button>
   );
 }

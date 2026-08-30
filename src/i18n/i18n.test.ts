@@ -52,7 +52,6 @@ describe("the dictionaries", () => {
     const shared = keys.filter((k) => en[k] === pt[k]);
     expect(shared.sort()).toEqual([
       "app.name",
-      "bar.json",
       "export.bitrate",
       "inspect.travel.unit",
       "view.3d",

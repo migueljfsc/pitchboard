@@ -21,9 +21,6 @@ export const pt: Dictionary = {
   // --------------------------------------------------------------- top bar
   "bar.name.label": "Nome do quadro",
   "bar.name.placeholder": "Quadro sem nome",
-  "bar.json": "JSON",
-  "bar.json.title":
-    "Importar / exportar JSON. Envie o quadro completo e do outro lado abre-se a sua jogada. Um ficheiro de preparação curto define um sistema, um onze e as suas unidades.",
   "bar.export": "Exportar",
   "bar.export.title":
     "MP4, WebM ou GIF da animação completa, ou um PNG do momento no ecrã. Exportado no enquadramento que está a ver.",
@@ -77,10 +74,24 @@ export const pt: Dictionary = {
   "reset.board": "Repor quadro",
 
   // ---------------------------------------------------------------- share
-  "share.copy": "Link",
+  "share.dialog": "Partilhar",
+  "share.dialog.title": "Enviar este quadro a alguém",
+  "share.close": "Fechar",
+  "share.method.link": "Ligação",
+  "share.method.board": "Ligação do quadro",
+  "share.method.file": "Ficheiro",
+  "share.link.blurb":
+    "O quadro inteiro viaja dentro da ligação, por isso nunca expira e não precisa de conta. Quem a abrir vê uma cópia só de leitura, enquadrada como a tens agora, e pode criar a sua própria versão. Nunca chega ao servidor — os navegadores não enviam a parte depois do #.",
+  "share.length": "{chars} de {budget} caracteres",
+  "share.board.blurb":
+    "Uma ligação curta para este quadro guardado. Ao recarregá-la aparece o que tiveres alterado entretanto, e dura enquanto o quadro existir. Podes retirá-la a qualquer momento.",
+  "share.board.needsAccount": "Inicia sessão para partilhares um quadro desta forma.",
+  "share.board.needsSaving": "Guarda primeiro este quadro num projeto e a ligação passa a apontar para ele.",
+  "share.board.copy": "Copiar ligação do quadro",
+  "share.board.copied": "Ligação copiada",
+  "share.board.withdraw": "Retirar",
+  "share.copy": "Copiar ligação",
   "share.copied": "Link copiado",
-  "share.title":
-    "O quadro inteiro viaja no link, por isso nunca expira. Quem o abrir vê uma cópia só de leitura, no enquadramento que tem agora, e pode criar o seu próprio quadro.",
   "share.failed": "Este navegador não conseguiu comprimir o quadro.",
   "share.long": "{chars} caracteres — demasiado longa para colar em segurança",
   "share.long.title":
@@ -414,11 +425,6 @@ export const pt: Dictionary = {
   "boards.count.other": "{count} quadros",
   "boards.open": "Abrir",
   "boards.delete": "Eliminar",
-  "boards.publish": "Publicar ligação",
-  "boards.published": "Ligação copiada",
-  "boards.unpublish": "Retirar ligação",
-  "boards.publish.hint": "Uma ligação curta que qualquer pessoa pode abrir. Voltar a publicar mantém a mesma ligação.",
-  "boards.error.slug_unavailable": "Não foi possível criar a ligação agora. Tenta novamente.",
   "boards.status.saving": "A guardar…",
   "boards.status.saved": "Guardado",
   "boards.openConfirm.title": "Abrir este quadro?",

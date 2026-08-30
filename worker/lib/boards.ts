@@ -23,7 +23,6 @@ import {
   MAX_NAME_CHARS,
   MAX_PROJECTS_PER_USER,
 } from "./limits";
-import { purgeSnapshotsFor } from "./shares";
 import type { SessionUser } from "./session";
 
 export interface Ctx {
@@ -121,19 +120,8 @@ export async function renameProject(ctx: Ctx, id: string): Promise<Response> {
   return json({ project: { id, name, updated_at: ctx.now } });
 }
 
-/**
- * The boards and their snapshot rows go with it, by cascade. The published BODIES do not —
- * they live in KV, which no foreign key reaches — so they are purged first, while the boards
- * can still be listed. After the cascade there is nothing left to ask.
- */
+/** The boards go with it — `boards.project_id` cascades, which is why this is one statement. */
 export async function deleteProject(ctx: Ctx, id: string): Promise<Response> {
-  const { results } = await ctx.env.DB.prepare(
-    "SELECT id FROM boards WHERE project_id = ? AND user_id = ?",
-  )
-    .bind(id, ctx.user.id)
-    .all<{ id: string }>();
-  await purgeSnapshotsFor(ctx.env, results.map((row) => row.id));
-
   const result = await ctx.env.DB.prepare("DELETE FROM projects WHERE id = ? AND user_id = ?")
     .bind(id, ctx.user.id)
     .run();
@@ -249,19 +237,11 @@ export async function updateBoard(ctx: Ctx, id: string): Promise<Response> {
   return json({ board: { id, version: version + 1, updated_at: ctx.now } });
 }
 
-/** Deleting a board withdraws every link published from it, and removes the bodies (0003). */
+/** Deleting a board takes its share link with it: the slug lives on this row. */
 export async function deleteBoard(ctx: Ctx, id: string): Promise<Response> {
-  const owned = await count(
-    ctx.env,
-    "SELECT count(*) n FROM boards WHERE id = ? AND user_id = ?",
-    id,
-    ctx.user.id,
-  );
-  if (owned === 0) return fail("not_found", 404);
-
-  await purgeSnapshotsFor(ctx.env, [id]);
-  await ctx.env.DB.prepare("DELETE FROM boards WHERE id = ? AND user_id = ?")
+  const result = await ctx.env.DB.prepare("DELETE FROM boards WHERE id = ? AND user_id = ?")
     .bind(id, ctx.user.id)
     .run();
+  if (result.meta.changes === 0) return fail("not_found", 404);
   return json({ ok: true });
 }

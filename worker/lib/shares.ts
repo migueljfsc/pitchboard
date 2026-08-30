@@ -7,22 +7,22 @@
  * This is the other one — for people with an account who want a link short enough to say out
  * loud.
  *
- * A SLUG ADDRESSES THE BOARD; A SNAPSHOT IS WHAT IT RESOLVES TO. Publishing writes a new
- * immutable snapshot and re-aims the slug at it. So the link is stable across republishes and
- * every snapshot stays individually addressable and unchanged — D39's split between mutable
- * boards and immutable published copies, without making the URL churn.
+ * A SLUG POINTS AT THE BOARD, AND FOLLOWS IT. Reloading the link shows the board as it is
+ * now, not as it was when it was published. This is the whole difference between the two
+ * mechanisms and the reason both exist (0004): a link to a board you own should not need
+ * republishing every time you change something, and a reader has no way to tell that what
+ * they are looking at is stale.
  *
- * The documents live in KV rather than D1 because that is what KV is good at here: written
- * once, then only read. The free tier allows 100k reads a day and only 1,000 writes, and a
- * publish is one write.
+ * Immutability lives in the other one. `#d=` carries the entire board inside the URL, so it
+ * is frozen by construction, needs no account and never reaches a server at all (D33).
+ *
+ * Publishing is therefore just minting a slug. There is no snapshot to write, nothing in KV,
+ * and withdrawing is clearing one column.
  */
 
-import { newId } from "./crypto";
 import { fail, json } from "./http";
 import { SLUG_ALPHABET, SLUG_ATTEMPTS, SLUG_LENGTH } from "./limits";
 import type { Ctx } from "./boards";
-
-const keyFor = (snapshotId: string) => `snapshot:${snapshotId}`;
 
 /**
  * Rejection sampling, not modulo. `256 % 27` is not zero, so folding a random byte with `%`
@@ -40,67 +40,27 @@ export function newSlug(): string {
   return out.join("");
 }
 
-/**
- * Removes the published bodies for a set of boards, before their rows go.
- *
- * A foreign key cascade reaches D1 and stops there — KV knows nothing about it — so anything
- * that deletes a board has to come through here first or leave bodies nobody can reach and
- * nothing will collect. The ids are read BEFORE the delete for exactly that reason: after the
- * cascade there is nothing left to ask.
- *
- * Each removal is a KV write against a budget of 1,000 a day. That is the right way round:
- * publishing is the rare act and deleting rarer still.
- */
-export async function purgeSnapshotsFor(env: Env, boardIds: string[]): Promise<void> {
-  if (boardIds.length === 0) return;
-  const places = boardIds.map(() => "?").join(",");
-  const { results } = await env.DB.prepare(
-    `SELECT id FROM snapshots WHERE board_id IN (${places})`,
-  )
-    .bind(...boardIds)
-    .all<{ id: string }>();
-  await Promise.all(results.map((row) => env.SNAPSHOTS.delete(keyFor(row.id))));
-}
-
 export async function publishBoard(ctx: Ctx, id: string): Promise<Response> {
   const board = await ctx.env.DB.prepare(
-    "SELECT id, doc, share_slug FROM boards WHERE id = ? AND user_id = ?",
+    "SELECT id, share_slug FROM boards WHERE id = ? AND user_id = ?",
   )
     .bind(id, ctx.user.id)
-    .first<{ id: string; doc: string; share_slug: string | null }>();
+    .first<{ id: string; share_slug: string | null }>();
   if (!board) return fail("not_found", 404);
 
-  // The document goes to KV BEFORE anything points at it. The other order leaves a window in
-  // which the slug resolves to a snapshot whose body does not exist yet.
-  const snapshotId = newId();
-  await ctx.env.SNAPSHOTS.put(keyFor(snapshotId), board.doc);
-
-  await ctx.env.DB.prepare(
-    "INSERT INTO snapshots (id, board_id, user_id, created_at) VALUES (?, ?, ?, ?)",
-  )
-    .bind(snapshotId, board.id, ctx.user.id, ctx.now)
-    .run();
-
-  // An already-published board keeps its slug, or republishing would break every link the
-  // author has already sent — which is the one thing a stable address must not do.
-  if (board.share_slug) {
-    await ctx.env.DB.prepare("UPDATE boards SET published_snapshot_id = ? WHERE id = ?")
-      .bind(snapshotId, board.id)
-      .run();
-    return json({ slug: board.share_slug });
-  }
+  // An already-published board keeps its slug. Minting a new one would break every link the
+  // author has already sent, which is the one thing a stable address must not do.
+  if (board.share_slug) return json({ slug: board.share_slug });
 
   for (let attempt = 0; attempt < SLUG_ATTEMPTS; attempt++) {
     const slug = newSlug();
     try {
-      await ctx.env.DB.prepare(
-        "UPDATE boards SET share_slug = ?, published_snapshot_id = ? WHERE id = ?",
-      )
-        .bind(slug, snapshotId, board.id)
+      await ctx.env.DB.prepare("UPDATE boards SET share_slug = ? WHERE id = ?")
+        .bind(slug, board.id)
         .run();
       return json({ slug });
     } catch {
-      // The unique index is the arbiter, not a pre-check: a SELECT-then-INSERT has a gap in
+      // The unique index is the arbiter, not a pre-check: a SELECT-then-UPDATE has a gap in
       // which another publish takes the same slug.
       continue;
     }
@@ -108,13 +68,10 @@ export async function publishBoard(ctx: Ctx, id: string): Promise<Response> {
   return fail("slug_unavailable", 503);
 }
 
-/**
- * Withdraws the link. The snapshot rows and their KV bodies are left alone — they are
- * immutable by definition, and the board may be published again later.
- */
+/** Withdraws the link. Publishing again mints a NEW slug; the old one stays dead. */
 export async function unpublishBoard(ctx: Ctx, id: string): Promise<Response> {
   const result = await ctx.env.DB.prepare(
-    "UPDATE boards SET share_slug = NULL, published_snapshot_id = NULL WHERE id = ? AND user_id = ?",
+    "UPDATE boards SET share_slug = NULL WHERE id = ? AND user_id = ?",
   )
     .bind(id, ctx.user.id)
     .run();
@@ -123,20 +80,14 @@ export async function unpublishBoard(ctx: Ctx, id: string): Promise<Response> {
 }
 
 /**
- * The public read. The ONLY route in the Worker that answers without a session, so it returns
- * exactly what was published and nothing about who published it — no user id, no board id, no
- * project. A withdrawn link is a 404 like any other, which tells a prober nothing.
+ * The public read, and the ONLY route in the Worker that answers without a session. It returns
+ * the board as it is right now and nothing about who owns it — no user id, no board id, no
+ * project. A withdrawn link, or one whose board has been deleted, is a 404 like any other,
+ * which tells a prober nothing.
  */
 export async function readShare(env: Env, slug: string): Promise<Response> {
-  const board = await env.DB.prepare(
-    "SELECT name, published_snapshot_id FROM boards WHERE share_slug = ?",
-  )
+  const board = await env.DB.prepare("SELECT name, doc FROM boards WHERE share_slug = ?")
     .bind(slug)
-    .first<{ name: string; published_snapshot_id: string | null }>();
-  if (!board?.published_snapshot_id) return fail("not_found", 404);
-
-  const doc = await env.SNAPSHOTS.get(keyFor(board.published_snapshot_id));
-  if (doc === null) return fail("not_found", 404);
-
-  return json({ share: { name: board.name, doc } });
+    .first<{ name: string; doc: string }>();
+  return board ? json({ share: { name: board.name, doc: board.doc } }) : fail("not_found", 404);
 }
