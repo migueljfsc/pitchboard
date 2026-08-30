@@ -44,6 +44,9 @@ import {
 import { cn } from "@/lib/utils";
 import { LocaleSwitch } from "@/components/LocaleSwitch";
 import { AccountMenu } from "@/components/AccountMenu";
+import { BoardsPanel } from "@/components/BoardsPanel";
+import { useAccount } from "@/lib/useAccount";
+import { useCloudBoard } from "@/lib/useCloudBoard";
 import { useI18n } from "@/i18n/context";
 import type { Message } from "@/i18n/core";
 import { clearLinks, createLink } from "@/board/links";
@@ -177,6 +180,13 @@ export function Editor({ initialDoc }: Props = {}) {
   // Debounced so a drag, which emits a document per pointermove, does not
   // serialise the whole board forty times a second on the main thread.
   useAutosave(doc, saveBoard, AUTOSAVE_MS);
+
+  // Accounts are optional, so none of this is allowed to gate the editor: signed out, the
+  // hook resolves to null and the board behaves exactly as it always has (D39). The account
+  // is owned here rather than inside the menu because the sync needs it too, and two
+  // useAccount() calls would be two /api/me requests that can disagree.
+  const accountState = useAccount();
+  const cloud = useCloudBoard(doc, setDoc, accountState.account !== null);
 
   const undo = useCallback(() => {
     pinScrubber(undoHistory(), chosenScene);
@@ -572,7 +582,18 @@ export function Editor({ initialDoc }: Props = {}) {
           <span className="mx-1 h-5 w-px bg-ink-600" />
 
           <LocaleSwitch />
-          <AccountMenu />
+          {accountState.account && <BoardsPanel cloud={cloud} boardName={doc.name} />}
+          {/* A link outlives a session in localStorage, so signing out drops it here —
+              otherwise the next person to use this browser inherits a pointer into an
+              account that is no longer theirs. Composed at the call site rather than in an
+              effect, which would be a setState during render in all but name. */}
+          <AccountMenu
+            {...accountState}
+            signOut={async () => {
+              cloud.detach();
+              await accountState.signOut();
+            }}
+          />
         </div>
       </header>
 

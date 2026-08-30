@@ -17,7 +17,7 @@ import { LogOut, UserRound } from "lucide-react";
 
 import { useI18n } from "@/i18n/context";
 import { cn } from "@/lib/utils";
-import { useAccount } from "@/lib/useAccount";
+import type { AccountState } from "@/lib/useAccount";
 import { startGoogleSignIn } from "@/share/api";
 
 /** Codes the Worker actually emits; anything else is a bug and reads as the generic line. */
@@ -44,9 +44,13 @@ function forgetAuthError(): void {
   window.history.replaceState(null, "", url.toString());
 }
 
-export function AccountMenu() {
+/**
+ * The state is passed in rather than hooked here: the editor also needs to know whether
+ * anyone is signed in, and two `useAccount()` calls would be two `/api/me` requests that can
+ * disagree with each other.
+ */
+export function AccountMenu({ account, loading, signOut }: AccountState) {
   const { t } = useI18n();
-  const { account, loading, signOut } = useAccount();
   const [open, setOpen] = useState(false);
   const [authError, setAuthError] = useState<string | null>(readAuthError);
   const root = useRef<HTMLDivElement>(null);

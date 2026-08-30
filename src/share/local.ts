@@ -12,12 +12,15 @@
  * trusted than an imported file.
  */
 
+import { z } from "zod";
+
 import type { BoardDoc } from "@/board/types";
 import { boardDocSchema } from "@/board/schema";
 import { migrate } from "@/board/migrate";
 import { browserStore, keyFor, read, remove, write, type Store } from "./storage";
 
 export const BOARD_KEY = keyFor("board");
+export const LINK_KEY = keyFor("link");
 
 /**
  * How long editing has to stop before the board is written.
@@ -45,4 +48,40 @@ export function saveBoard(doc: BoardDoc, store: Store | null = browserStore()): 
 
 export function clearBoard(store: Store | null = browserStore()): void {
   remove(store, BOARD_KEY);
+}
+
+/**
+ * Which saved board the scratchpad currently corresponds to, if any.
+ *
+ * Kept beside the board rather than inside it: a `BoardDoc` is the same document whether it
+ * came from a file, a share link or an account, and putting an account's row id into the
+ * schema would put it into every export and every `#d=` link (D35's reasoning, one level up).
+ *
+ * Like everything else in browser storage this is untrusted on the way back in (D31) — it
+ * survives app versions and can be hand-edited — so it is validated and discarded rather than
+ * repaired. A wrong link costs a re-open, never a lost board: the worst case is a 404 from the
+ * server and a scratchpad that has simply stopped syncing.
+ */
+const linkSchema = z.object({
+  boardId: z.string().min(1),
+  projectId: z.string().min(1),
+  version: z.number().int().nonnegative(),
+  name: z.string(),
+});
+
+export type CloudLink = z.infer<typeof linkSchema>;
+
+export function loadLink(store: Store | null = browserStore()): CloudLink | null {
+  return read(store, LINK_KEY, (raw) => {
+    const parsed = linkSchema.safeParse(raw);
+    return parsed.success ? parsed.data : null;
+  });
+}
+
+export function saveLink(link: CloudLink, store: Store | null = browserStore()): boolean {
+  return write(store, LINK_KEY, link);
+}
+
+export function clearLink(store: Store | null = browserStore()): void {
+  remove(store, LINK_KEY);
 }
