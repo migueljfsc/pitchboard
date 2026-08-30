@@ -24,6 +24,42 @@ function view(overrides: Partial<RenderView> = {}): RenderView {
   };
 }
 
+describe("ghost scenes", () => {
+  const two = addSceneAfter(createBoardDoc(), 0);
+  const players = two.teams[0].players.length + two.teams[1].players.length;
+
+  /** Each ghost opens with its own alpha, so counting them counts the outlines. */
+  const ghostCount = (log: string[]) => log.filter((e) => e === "globalAlpha=0.4").length;
+
+  it("outlines every player and the ball, once per ghosted scene", () => {
+    const r = createRecordingCtx();
+    drawBoard(r.ctx, two, 0, view({ ghosts: [1] }));
+    expect(ghostCount(r.log)).toBe(players + 1);
+  });
+
+  it("never reaches an export", () => {
+    const withGhosts = createRecordingCtx();
+    const without = createRecordingCtx();
+    drawBoard(withGhosts.ctx, two, 0, view({ interactive: false, ghosts: [1] }));
+    drawBoard(without.ctx, two, 0, view({ interactive: false }));
+    expect(withGhosts.log).toEqual(without.log);
+  });
+
+  it("ignores a scene index the document does not have", () => {
+    const r = createRecordingCtx();
+    drawBoard(r.ctx, two, 0, view({ ghosts: [9] }));
+    expect(ghostCount(r.log)).toBe(0);
+  });
+
+  it("draws nothing extra when none are asked for", () => {
+    const a = createRecordingCtx();
+    const b = createRecordingCtx();
+    drawBoard(a.ctx, two, 0, view({ ghosts: [] }));
+    drawBoard(b.ctx, two, 0, view());
+    expect(a.log).toEqual(b.log);
+  });
+});
+
 describe("drawBoard", () => {
   it("is deterministic — same inputs, identical command log", () => {
     const doc = createBoardDoc();

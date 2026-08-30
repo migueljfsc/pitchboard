@@ -49,6 +49,16 @@ export const TEXT_WIDTH_MAX = 105;
 
 export const TEXT_SCALE_MIN = 0.4;
 export const TEXT_SCALE_MAX = 4;
+
+/**
+ * The panel behind a label: how far it reaches past the words, and how solid it is
+ * when the author has not said.
+ *
+ * The padding is a multiple of the type size rather than a fixed distance, so a
+ * label at 400% gets a panel in proportion rather than words pressed to the edge.
+ */
+export const TEXT_BG_PAD = 0.32;
+export const TEXT_BG_ALPHA = 0.72;
 /** Samples along a curved arrow. Matches the run curves' resolution. */
 export const CURVE_SAMPLES = 32;
 /** Dribble squiggle, in metres. */
@@ -60,6 +70,8 @@ export const DASH_PATTERN: [number, number] = [1.4, 1.0];
 export const PEN_EPSILON = 0.18;
 /** Smallest drag that commits a shape. Below this it was a click, not a draw. */
 export const MIN_DRAG = 1.2;
+/** How far a duplicate sits from its original, in metres — clear of it, still beside it. */
+export const DUPLICATE_OFFSET = 2.5;
 
 export const annotationsOf = (doc: BoardDoc): Annotation[] => doc.annotations ?? [];
 
@@ -249,6 +261,17 @@ export function textLines(ann: TextAnnotation): string[] {
   return out;
 }
 
+/**
+ * Opacity of the panel behind a label.
+ *
+ * Clamped rather than trusted, like every other imported number. Says nothing about
+ * whether there IS a panel — that is `ann.bg`, and asking for one without a colour
+ * paints nothing.
+ */
+export function textBgAlpha(ann: TextAnnotation): number {
+  return clamp(ann.bgOpacity ?? TEXT_BG_ALPHA, 0, 1);
+}
+
 /** Clamped here rather than trusted: an imported document is untrusted input. */
 export function textWidth(ann: TextAnnotation): number {
   return clamp(ann.width ?? TEXT_WIDTH_MAX, TEXT_WIDTH_MIN, TEXT_WIDTH_MAX);
@@ -403,6 +426,32 @@ export function updateAnnotation(
   // The patch never changes `kind`, so the union member is preserved.
   next[i] = { ...next[i], ...patch } as Annotation;
   return withAnnotations(doc, next);
+}
+
+/**
+ * A second copy of a shape, offset so it is visibly its own thing.
+ *
+ * Inserted directly after the original rather than at the end: the list is the
+ * drawing order, and a copy belongs in the same layer as what it was copied from.
+ * The offset is not clamped to the pitch for the same reason a drag is not — the
+ * board draws its surround and a shape is allowed to sit in it.
+ *
+ * `name` is the copy's, because this module has no language to make one in (D38).
+ */
+export function duplicateAnnotation(doc: BoardDoc, id: string, name?: string): BoardDoc {
+  const list = annotationsOf(doc);
+  const i = list.findIndex((a) => a.id === id);
+  if (i < 0) return doc;
+
+  const copy = { ...structuredClone(list[i]), id: freshId(doc), name: name ?? list[i].name };
+  const next = list.slice();
+  next.splice(i + 1, 0, copy);
+  // Shifted through moveAnnotation so the offset knows about pen points, a label's
+  // anchor and a curve's controls without saying any of it twice.
+  return moveAnnotation(withAnnotations(doc, next), copy.id, {
+    x: DUPLICATE_OFFSET,
+    y: DUPLICATE_OFFSET,
+  });
 }
 
 /**

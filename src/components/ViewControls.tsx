@@ -23,7 +23,18 @@ type Props = {
    * a board; the crop is part of what was being shown.
    */
   showHalves?: boolean;
+  /**
+   * Editor only: which neighbouring scenes are outlined behind the live board.
+   *
+   * Presentation, like the framing — it never reaches the document and never
+   * reaches an export.
+   */
+  ghosts?: Ghosts;
+  onGhostsChange?: (ghosts: Ghosts) => void;
 };
+
+/** Neighbouring scenes to outline behind the board. */
+export type Ghosts = { before: boolean; after: boolean };
 
 const HALVES: { value: PitchHalf; key: "view.left" | "view.full" | "view.right" }[] = [
   { value: "left", key: "view.left" },
@@ -37,6 +48,8 @@ export function ViewControls({
   doc,
   onTokenScaleChange,
   showHalves = true,
+  ghosts,
+  onGhostsChange,
 }: Props) {
   const { t } = useI18n();
   const scale = doc ? tokenScaleOf(doc) : DEFAULT_TOKEN_SCALE;
@@ -119,6 +132,38 @@ export function ViewControls({
             className="h-1 w-full cursor-pointer appearance-none rounded-full bg-ink-600 accent-accent"
           />
         </label>
+      )}
+
+      {ghosts && onGhostsChange && (
+        <div className="flex flex-col gap-1.5 pt-1">
+          <span className="text-[11px] uppercase tracking-wide text-ink-400">
+            {t("view.ghosts")}
+          </span>
+          <div className="flex gap-1">
+            {(
+              [
+                ["before", "view.ghosts.before"],
+                ["after", "view.ghosts.after"],
+              ] as const
+            ).map(([which, key]) => (
+              <button
+                key={which}
+                type="button"
+                aria-pressed={ghosts[which]}
+                onClick={() => onGhostsChange({ ...ghosts, [which]: !ghosts[which] })}
+                className={cn(
+                  "flex-1 rounded border px-1 py-1.5 text-[11px] transition",
+                  ghosts[which]
+                    ? "border-accent text-accent"
+                    : "border-ink-600 text-ink-400 hover:text-ink-200",
+                )}
+              >
+                {t(key)}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] leading-relaxed text-ink-300">{t("view.ghosts.hint")}</p>
+        </div>
       )}
 
       {showHalves && view.half !== "full" && !framing.rotated && (

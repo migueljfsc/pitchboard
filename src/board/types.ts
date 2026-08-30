@@ -74,6 +74,15 @@ export type Scene = {
    */
   travel?: Record<string, number>;
   /**
+   * Per-entity wait before setting off into this scene, in milliseconds.
+   *
+   * What lets one scene hold a sequence — the winger goes, then the full-back
+   * overlaps — instead of two scenes that exist only to order them. The scene
+   * still stretches to fit its slowest mover, now measured from when each of
+   * them actually starts. Ignored in flow mode, exactly as `travel` is.
+   */
+  delay?: Record<string, number>;
+  /**
    * Entities whose run into this scene is drawn with no arrow. They still
    * travel — this hides the indicator, not the movement. `BALL_ID` suppresses
    * the pass line.
@@ -161,6 +170,13 @@ export type Annotation =
        * shape and no migration is owed.
        */
       width?: number;
+      /**
+       * Panel painted behind the words. Absent is no panel at all, which is what every label
+       * was before one existed — so old documents keep their look and no migration is owed.
+       */
+      bg?: string;
+      /** Opacity of that panel, 0..1. Absent is the default; meaningless without `bg`. */
+      bgOpacity?: number;
     });
 
 export type AnnotationKind = Annotation["kind"];
@@ -271,6 +287,14 @@ export type RenderView = Viewport & {
   /** Editor only: draw and handle-edit the run into this scene, wherever the
    *  scrubber currently sits. Ignored on export. */
   editScene?: number;
+  /**
+   * Editor only: scenes to outline faintly behind the live board, so a position
+   * can be placed against where everyone else was or is about to be.
+   *
+   * Indices rather than a before/after flag — the renderer is told what to draw
+   * and never works out which scenes those are. Ignored on export.
+   */
+  ghosts?: readonly number[];
   /** Marquee rectangle in pitch metres, while dragging one. */
   marquee?: { a: Vec2; b: Vec2 } | null;
   /** Editor only: the annotation whose handles are showing. */

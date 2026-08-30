@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, Eye, EyeOff, GripVertical, Trash2 } from "lucide-react";
+import { ChevronDown, Copy, Eye, EyeOff, GripVertical, Trash2 } from "lucide-react";
 import type { Annotation, BoardDoc, Scene } from "@/board/types";
 import {
   annotationsOf,
@@ -21,6 +21,8 @@ type Props = {
   sceneIndex: number;
   selected: string | null;
   onSelect: (id: string | null) => void;
+  /** Copies the shape and selects the copy — the same call the Draw panel makes. */
+  onDuplicate: (id: string) => void;
 };
 
 /** One shape, with where it sits in the document and which scenes it spans. */
@@ -41,7 +43,14 @@ type Lift = { group: number; pos: number; docIndex: number };
  * of it. One that runs on from there still belongs to the group it started in;
  * its span is written on the row.
  */
-export function DrawingsPanel({ doc, onDocChange, sceneIndex, selected, onSelect }: Props) {
+export function DrawingsPanel({
+  doc,
+  onDocChange,
+  sceneIndex,
+  selected,
+  onSelect,
+  onDuplicate,
+}: Props) {
   const i18n = useI18n();
   const { t, tn } = i18n;
   const [thisScene, setThisScene] = useState(false);
@@ -157,6 +166,7 @@ export function DrawingsPanel({ doc, onDocChange, sceneIndex, selected, onSelect
             setDropAt(null);
           }}
           onSelect={onSelect}
+          onDuplicate={onDuplicate}
           onDocChange={onDocChange}
           i18n={i18n}
         />
@@ -187,6 +197,7 @@ function SceneGroup({
   onDrop,
   onDragEnd,
   onSelect,
+  onDuplicate,
   onDocChange,
   i18n,
 }: {
@@ -205,6 +216,7 @@ function SceneGroup({
   onDrop: () => void;
   onDragEnd: () => void;
   onSelect: (id: string | null) => void;
+  onDuplicate: (id: string) => void;
   onDocChange: Change<BoardDoc>;
   i18n: I18n;
 }) {
@@ -257,6 +269,7 @@ function SceneGroup({
               onDocChange(deleteAnnotation(doc, entry.ann.id));
               if (selected === entry.ann.id) onSelect(null);
             }}
+            onDuplicate={() => onDuplicate(entry.ann.id)}
             onReorder={(to) => onDocChange(reorderAnnotation(doc, entry.docIndex, rows[to].docIndex))}
             onDragStart={() => onLift(pos, entry.docIndex)}
             onDragOver={onDragOver}
@@ -283,6 +296,7 @@ function Row({
   onFocus,
   onPatch,
   onDelete,
+  onDuplicate,
   onReorder,
   onDragStart,
   onDragOver,
@@ -303,6 +317,7 @@ function Row({
   onFocus: () => void;
   onPatch: (fields: Partial<Annotation>, merge?: string) => void;
   onDelete: () => void;
+  onDuplicate: () => void;
   onReorder: (to: number) => void;
   onDragStart: () => void;
   onDragOver: (pos: number) => void;
@@ -388,6 +403,9 @@ function Row({
           onClick={() => onPatch({ hidden: !ann.hidden })}
         >
           {ann.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
+        </Tiny>
+        <Tiny label={t("drawn.duplicate", { label })} onClick={onDuplicate}>
+          <Copy size={12} />
         </Tiny>
         <Tiny label={t("drawn.delete", { label })} onClick={onDelete}>
           <Trash2 size={12} />

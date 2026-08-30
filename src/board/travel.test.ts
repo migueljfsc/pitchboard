@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  entityDelayMs,
   entityTravelMs,
   positionAt,
   progressOf,
@@ -7,7 +8,7 @@ import {
   sceneTravelMs,
   totalDurationMs,
 } from "./timeline";
-import { addSceneAfter, setSceneTiming, setTravel } from "./scenes";
+import { addSceneAfter, setDelay, setSceneTiming, setTravel } from "./scenes";
 import { createBoardDoc } from "@/formations";
 import { boardDocSchema } from "./schema";
 import type { BoardDoc } from "./types";
@@ -105,6 +106,66 @@ describe("positions honour per-entity travel", () => {
     for (const id of [FAST, SLOW]) {
       expect(positionAt(id, end, doc)).toEqual({ x: 90, y: 34 });
     }
+  });
+});
+
+describe("a per-entity wait", () => {
+  it("is nothing until one is set", () => {
+    expect(entityDelayMs(runners().scenes[1], FAST)).toBe(0);
+  });
+
+  it("stretches the window by when the last arrival lands, not by the longest run", () => {
+    const doc = setDelay(runners(), 1, SLOW, 1500);
+    // SLOW still runs for the scene's 2 s, but only from 1.5 s in.
+    expect(sceneTravelMs(doc.scenes[1])).toBe(3500);
+    expect(doc.scenes[1].transitionMs).toBe(2000);
+    expect(totalDurationMs(doc)).toBe(1000 + 3500);
+  });
+
+  it("holds an entity at its start until the wait is up", () => {
+    const doc = setDelay(runners(), 1, SLOW, 1500);
+    const r = resolveAt(doc, 1 + 1.5);
+
+    // FAST is well into its run by then; SLOW has not set off.
+    expect(progressOf(SLOW, r, doc)).toBe(0);
+    expect(positionAt(SLOW, r, doc)).toEqual({ x: 10, y: 34 });
+    expect(progressOf(FAST, r, doc)).toBeGreaterThan(0.5);
+  });
+
+  it("still lands everyone at the end of the window", () => {
+    const doc = setDelay(runners(), 1, SLOW, 1500);
+    const r = resolveAt(doc, 1 + 3.5);
+    for (const id of [FAST, SLOW]) {
+      expect(positionAt(id, r, doc)).toEqual({ x: 90, y: 34 });
+    }
+  });
+
+  it("combines with a travel time of its own", () => {
+    let doc = setDelay(runners(), 1, SLOW, 1000);
+    doc = setTravel(doc, 1, SLOW, 500);
+    // Away at 1 s, done at 1.5 s — well inside the scene's own 2 s.
+    expect(sceneTravelMs(doc.scenes[1])).toBe(2000);
+
+    const r = resolveAt(doc, 1 + 1.5);
+    expect(progressOf(SLOW, r, doc)).toBe(1);
+  });
+
+  it("is ignored in flow mode, where the board keeps step", () => {
+    const doc = { ...setDelay(runners(), 1, SLOW, 1500), flow: { speed: 10, endHoldMs: 0 } };
+    const r = resolveAt(doc, totalDurationMs(doc) / 2000);
+    expect(progressOf(SLOW, r, doc)).toBe(r.u);
+  });
+
+  it("drops the key when cleared, so an untouched scene serialises as it always did", () => {
+    const doc = setDelay(setDelay(runners(), 1, SLOW, 1500), 1, SLOW, null);
+    expect(doc.scenes[1].delay).toBeUndefined();
+    expect(boardDocSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("survives a round trip through the schema", () => {
+    const doc = setDelay(runners(), 1, SLOW, 1500);
+    const parsed = boardDocSchema.parse(JSON.parse(JSON.stringify(doc)));
+    expect(parsed.scenes[1].delay).toEqual({ [SLOW]: 1500 });
   });
 });
 

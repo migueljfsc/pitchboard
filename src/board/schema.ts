@@ -43,6 +43,7 @@ const scene = z.object({
   ballPos: vec2.optional(),
   ballPath: pathCurve.nullable().optional(),
   travel: z.record(z.string(), z.number().int().min(0).max(60_000)).optional(),
+  delay: z.record(z.string(), z.number().int().min(0).max(60_000)).optional(),
   hiddenRuns: z.array(z.string().min(1)).max(64).optional(),
   speed: z.number().min(MIN_FLOW_SPEED).max(MAX_FLOW_SPEED).optional(),
   shot: z.boolean().optional(),
@@ -88,6 +89,9 @@ const annotation = z.discriminatedUnion("kind", [
     text: z.string().max(400),
     size: z.number().min(TEXT_SCALE_MIN).max(TEXT_SCALE_MAX).optional(),
     width: z.number().min(TEXT_WIDTH_MIN).max(TEXT_WIDTH_MAX).optional(),
+    // Absent is no panel, so there is nothing to migrate for a label drawn before one existed.
+    bg: z.string().min(1).optional(),
+    bgOpacity: z.number().min(0).max(1).optional(),
   }),
 ]);
 

@@ -55,6 +55,11 @@ export const en = {
   "view.horizontal": "Horizontal",
   "view.flat": "Flat",
   "view.3d": "3D",
+  "view.ghosts": "Ghost scenes",
+  "view.ghosts.before": "Previous",
+  "view.ghosts.after": "Next",
+  "view.ghosts.hint":
+    "Outlines where everyone stands in the neighbouring scene. A player whose outline sits under them is one who does not move.",
   "view.playerSize": "Player size",
   "view.halfHint":
     "Half a pitch is taller than it is long, so horizontally it fits to the same height as the full board with space either side. Vertical fills the board instead.",
@@ -162,6 +167,7 @@ export const en = {
   "doc.board": "Untitled board",
   "doc.scene": "Scene {n}",
   "doc.sceneCopy": "{name} copy",
+  "doc.shapeCopy": "{name} copy",
   "doc.home": "Home",
   "doc.away": "Away",
 
@@ -171,6 +177,9 @@ export const en = {
   "timeline.flow.on":
     "One continuous movement: nothing held between scenes, and each scene lasting as long as its longest run needs",
   "timeline.flow.off": "Back to per-scene travel and hold times",
+  "timeline.thumbs": "Scene previews",
+  "timeline.thumbs.on": "Show a preview of each scene",
+  "timeline.thumbs.off": "Names only",
   "timeline.addScene": "Add scene",
   "timeline.scene": "Scene",
   "timeline.pace": "Pace",
@@ -195,6 +204,19 @@ export const en = {
     "Click a player to select, double-click to rename. Shift-click to add, or drag on empty grass to marquee. Arrow keys nudge; hold shift for 5 m. Space plays.",
   "inspect.selected": "{count} selected",
   "inspect.clear": "clear",
+  "inspect.carry": "Carry the move",
+  "inspect.carry.scene": "This scene",
+  "inspect.carry.scene.hint": "Moves the selection here and nowhere else. Hold Alt for this without changing the setting.",
+  "inspect.carry.stationary": "While still",
+  "inspect.carry.stationary.hint":
+    "Carries the move into every later scene the selection is not already running into, so someone parked in place stays parked in the new place.",
+  "inspect.carry.all": "Every scene",
+  "inspect.carry.all.hint":
+    "Shifts the selection through every later scene, keeping everything they do afterwards and moving all of it together.",
+  "inspect.delay": "Wait before starting",
+  "inspect.delay.together": "Start with everyone",
+  "inspect.delay.hint":
+    "Holds this player still for a moment, then runs. One scene can carry a sequence — the winger goes, the full-back overlaps behind them.",
   "inspect.travelTime": "Travel time",
   "inspect.matchScene": "match scene",
   "inspect.travel.default": "s — scene default",
@@ -280,8 +302,16 @@ export const en = {
   "draw.label.aria": "Label text",
   "draw.size.aria": "Label size",
   "draw.size.title": "Label size, as a percentage of the default",
+  "draw.bg": "Background",
+  "draw.bg.none": "None",
+  "draw.bg.noneAria": "No background behind the label",
+  "draw.bg.aria": "Background in {color}",
+  "draw.bg.opacity": "Background opacity",
+  "draw.bg.opacity.title":
+    "How solid the panel behind the words is. Below half the dark outline comes back, since the panel alone no longer lifts the text off the grass.",
   "draw.from": "From",
   "draw.to": "To",
+  "draw.duplicate": "Duplicate shape",
   "draw.delete": "Delete shape",
 
   // ---------------------------------------------------------------- shapes
@@ -311,6 +341,7 @@ export const en = {
   "drawn.rename.away": "Rename — click also jumps to it",
   "drawn.showShape": "Show shape",
   "drawn.hideShape": "Hide shape",
+  "drawn.duplicate": "Duplicate {label}",
   "drawn.delete": "Delete {label}",
   "drawn.visibleFrom": "Visible from",
   "drawn.visibleTo": "Visible to",

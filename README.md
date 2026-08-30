@@ -8,16 +8,20 @@ between scenes along curved runs, and export the result as **MP4**, **GIF**, or 
 all client-side, no server rendering.
 
 **Live:** https://migueljfsc.github.io/pitchboard/ — published by
-[`deploy.yml`](.github/workflows/deploy.yml) on every push to `main`.
+[`deploy.yml`](.github/workflows/deploy.yml) on every push to `main`. The API and share links run
+on a Cloudflare Worker, deployed alongside it by
+[`deploy-worker.yml`](.github/workflows/deploy-worker.yml).
 
 > Releases are cut by [`release.yml`](.github/workflows/release.yml): commitizen bumps the
 > version from conventional commits, updates the changelog, tags, and opens a GitHub Release.
 > It needs a `CZ_TOKEN` secret, because `main` is protected and the built-in `GITHUB_TOKEN`
 > cannot push to a protected branch.
 
-> **Status: in progress.** The board, animation and links are built (M1–M3). Export to MP4 /
-> GIF / PNG is next. See [`docs/implementation-plan.md`](docs/implementation-plan.md) for the
-> plan and [`docs/bugs.md`](docs/bugs.md) for known defects.
+> **Status: usable.** M1–M10 are built — the board, animation, live links, export, sharing,
+> infrastructure, annotations, board handling, seamless playback, and squad presets — along with
+> a 3D view, English and Portuguese, and accounts with saved boards. See
+> [`docs/implementation-plan.md`](docs/implementation-plan.md) for the plan and
+> [`docs/bugs.md`](docs/bugs.md) for known defects.
 
 ## What makes it different
 
@@ -32,15 +36,16 @@ Chain, polygon, or filled per link, with optional live distance labels in metres
 
 | Piece | Approach |
 |---|---|
-| **Animation** | Timeline of scenes. An arrow drawn on a player defines the curve it travels to its next-scene position; no arrow means a straight tween. |
-| **Renderer** | One pure `drawBoard(ctx, doc, t, view)` — plain Canvas2D, no DOM or React. The editor draws it to a visible canvas; the exporter draws the same function to an `OffscreenCanvas` in a Web Worker. Preview and export cannot diverge. |
+| **Animation** | Timeline of scenes. An arrow drawn on a player defines the curve it travels to its next-scene position; no arrow means a straight tween. A player can take longer than the scene, or wait before setting off, so one scene can hold a sequence rather than two scenes existing to order it. |
+| **Renderer** | One pure `drawBoard(ctx, doc, t, view)` — plain Canvas2D, no DOM or React. The editor draws it to a visible canvas; the exporter draws the same function to an `OffscreenCanvas` in a Web Worker; the scene strip draws it again at thumbnail size. Preview and export cannot diverge. |
 | **Coordinates** | Pitch metres (105 × 68), never pixels. Resolution-independent rendering, and link distances come for free. |
 | **Ball** | Attaches to a carrying player. A pass is a *carrier change*, not a separate object. |
-| **Export** | `mediabunny` for MP4 (H.264) and WebM (VP9), `gifenc` for GIF. Format chosen by runtime capability check. |
-| **Sharing** | Immutable snapshots. Small boards fit in a compressed URL fragment with no backend; larger ones go to Cloudflare KV. |
-
-Full detail in [`docs/architecture.md`](docs/architecture.md); the reasoning and the rejected
-alternatives are in [`docs/decisions.md`](docs/decisions.md).
+| **Editing** | A move carries forward through the later scenes the player was not already running into, so fixing scene 4 of ten does not mean repeating the drag six times. |
+| **Drawing** | Arrows, lines, freehand, zones and text labels, each with a range of scenes it appears on. |
+| **Views** | Full pitch or either half, horizontal or vertical, flat or through one fixed angled camera. |
+| **Export** | `mediabunny` for MP4 (H.264) and WebM (VP9), `gifenc` for GIF. Format chosen by runtime capability check; size follows the board's own aspect rather than a broadcast one. |
+| **Sharing** | Small boards fit in a compressed URL fragment with no backend. Larger ones, and anything saved to an account, go to a Cloudflare Worker backed by D1 and R2. |
+| **Storage** | Squad presets and the board in progress autosave to `localStorage`, validated on every read and discarded rather than repaired. Signing in adds projects and saved boards. |
 
 ## Stack
 
@@ -48,8 +53,10 @@ React 19 + TypeScript (strict) + Vite 8 + Tailwind v4. Deployed to GitHub Pages 
 `.github/workflows/deploy.yml` on every push to `main`, behind the same lint / typecheck / test
 / build gates CI runs.
 
-Pages is static, so share links will use the self-contained compressed-URL form. A backend for
-larger boards (Cloudflare Worker + KV) remains an option for M5 — see
+The Worker in [`worker/`](worker/) serves `/api/*` and the share pages. OpenTofu in
+[`infrastructure/terraform/cloudflare`](infrastructure/terraform/cloudflare) owns the durable
+resources — R2, D1, KV — and deliberately does not own the deploy, which is
+[`deploy-worker.yml`](.github/workflows/deploy-worker.yml). The reasoning is D40 in
 [`docs/decisions.md`](docs/decisions.md).
 
 ## Develop
@@ -83,7 +90,7 @@ anything else on a PR.
 | Document | Contents |
 |---|---|
 | [`docs/architecture.md`](docs/architecture.md) | Renderer contract, coordinate system, `BoardDoc` schema, timeline and ball model, links, export pipeline, sharing |
-| [`docs/implementation-plan.md`](docs/implementation-plan.md) | Phases M0–M6 with tasks, definition of done, and per-phase risks |
+| [`docs/implementation-plan.md`](docs/implementation-plan.md) | Phases M0–M10 with tasks, definition of done, and per-phase risks |
 | [`docs/decisions.md`](docs/decisions.md) | Decision log — what was chosen, and what was rejected |
 | [`docs/bugs.md`](docs/bugs.md) | Known defects, with the cause where it is understood |
 | [`AGENTS.md`](AGENTS.md) | Working conventions and the invariants that must not be broken |

@@ -1146,6 +1146,89 @@ one way to get there.
 
 ---
 
+## D41 — An edit carries forward through the scenes nobody meant anything by
+
+**Decision.** Dragging or nudging a player applies the same delta to every FOLLOWING scene the
+player does not travel into, stopping at the first run they already have. Holding Alt confines the
+edit to the scene addressed. The engine exposes a third mode, `"all"`, which carries rigidly through
+everything the player does afterwards; no gesture is bound to it yet.
+
+**The problem.** `Scene.positions` is dense — every scene stores every player. That is what makes
+`resolveAt` trivial and the renderer stateless, and it is also why an edit at scene 4 of a
+ten-scene board leaves scenes 5 to 10 holding the old position. The player steps out at 4 and snaps
+back at 5, and the fix is the same drag six more times, by hand, each one slightly off.
+
+**Rejected — sparse positions.** Store a player only in scenes where they change and let the rest
+inherit. Propagation then comes free, and the document stops growing with the square of the board.
+It is also a version 2 migration that rewrites `resolveAt`, `moveEntities`, `addPlayer`,
+`removePlayer`, `buildTeam` and `changeFormation`, and it reopens a semantic question D1 settled:
+a player absent from scene 5 but present at 6 either holds and then moves, or interpolates across
+both transitions, and those are different animations. The carry gets most of the benefit for a
+fraction of the cost, and stays correct if sparse positions ever happen.
+
+**Rejected — carrying everything, always.** Rigid translation of a player's whole future preserves
+the shape of what they do next, which is right when you are fixing a starting position and wrong
+whenever a later position is anchored to something — a run that has to end on the penalty spot.
+
+**Why the stop rule is the scenes they do not travel into.** Those are exactly the scenes holding
+no intent: the player is standing there because nothing said otherwise. A scene they run into is a
+placement somebody made, and carrying through it would silently undo that placement.
+
+**Each scene is judged against the one before it, never against the scene being edited.** This is
+the part that is easy to get wrong. Measuring from the edited scene makes the boundary depend on a
+distance that the edit itself is changing, so a second nudge in the same direction can capture a
+scene the first stopped at, and a drag that happens to pass over a later position picks it up
+mid-gesture. Judged locally, the boundary is stable: inside a carried range every position shifts
+together, so a run that existed still exists and one that did not still does not.
+
+**The carry mode is fixed at the grab**, not read per `pointermove`. Reading the modifier live
+would let a carry stop halfway through a gesture, stranding the scenes it had already taken along
+wherever the cursor happened to be.
+
+**Curve controls follow the endpoint they belong to**, which fixes a defect that predates this:
+`paths[id]` holds absolute pitch coordinates, so moving a player without moving their controls
+warped every run into and out of that scene. `c1` follows the start, `c2` follows the end. Inside a
+carried range both move and the curve translates; at the far edge of one only the start does, which
+is exactly the tangent that should change. Controls follow what the clamp ALLOWED, not what was
+requested, or a token stopped by the touchline drags its curve past it.
+
+**The ball's line follows whoever is holding it.** A carried ball has no stored position, so
+dragging the player holding it moves the ball without anything in the shift table ever naming the
+ball. The pass line into the next scene is drawn from those resting places, so its controls read
+the CARRIER'S shift where there is one and the ball's own only when it is loose. A loose ball
+dragged directly carries forward like anyone else, stopping where somebody picks it up.
+
+**The mode is a visible control, not a hidden chord.** Alt is a momentary override for "this scene
+only"; the standing mode lives in the selection panel, where it is on screen exactly when
+something is selected and therefore exactly when a drag is about to happen. A mode you cannot see
+is a mode you forget you set, and `"all"` behind a two-key chord would be a mode nobody found.
+
+---
+
+## D42 — A wait is per entity, and the scene fits the last arrival
+
+**Decision.** `Scene.delay` maps an entity to the milliseconds it holds still before setting off
+into that scene. The travel window becomes the latest `delay + travel` of anyone in it. Flow mode
+ignores it, exactly as it ignores `travel`.
+
+**The problem it removes is scene count.** "The winger goes, then the full-back overlaps" was two
+scenes, and the second one existed only to put one movement after the other. Every extra scene is
+another set of positions to keep consistent, and D41 exists because keeping them consistent is
+work. Sequencing inside a scene is the other half of the same complaint.
+
+**This is not the start/end window D14 rejected.** That proposal was normalised — fractions of the
+scene's transition — and could not express "slower than the scene" without making everybody else
+faster. A wait in milliseconds layered over a duration in milliseconds expresses both
+independently, and D14's rule that the scene stretches to fit is preserved rather than replaced:
+it now measures to the last arrival instead of the longest single run.
+
+**Rejected — a delay in metres, so it works in flow mode too.** Flow deliberately has no
+per-entity anything: the whole board moves at one pace and everyone arrives together, which is
+what makes a sequence of scenes read as one movement (D27). A player breaking step is the stutter
+flow exists to remove.
+
+---
+
 ## Invariants
 
 Two rules a future change is most likely to break. Both belong in `AGENTS.md`.

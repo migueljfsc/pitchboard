@@ -43,12 +43,15 @@ import {
   HEAD_LENGTH,
   HEAD_WIDTH,
   MARK_WIDTH,
+  TEXT_BG_PAD,
   ZONE_ALPHA,
   annotationHandles,
   boundsOf,
   straightCurve,
   strokePoints,
   TEXT_LINE_H,
+  textBgAlpha,
+  textExtent,
   textLines,
   textSize,
   visibleAt,
@@ -125,6 +128,8 @@ export function drawBoard(
   // Links sit under the tokens so a connector never covers a shirt number.
   drawLinks(ctx, doc, frame, view.rotated);
   drawPaths(ctx, doc, frame, view);
+
+  drawGhosts(ctx, doc, view, view.rotated);
 
   const scale = tokenScaleOf(doc);
 
@@ -509,6 +514,14 @@ function drawBillboards(
   marks: Annotation[],
 ): void {
   const scale = tokenScaleOf(doc);
+
+  // Behind everything standing, and unsorted: a ghost is reference, not an object
+  // on the pitch competing for depth. A billboard's axes are the screen's, so it
+  // is never rotated in here.
+  drawGhosts(ctx, doc, view, false, (p, draw) =>
+    billboard(ctx, p, projectPitch(p, groundView, proj), draw),
+  );
+
   const standing: { at: Projected; draw: () => void }[] = [];
 
   for (const team of doc.teams) {
@@ -559,6 +572,99 @@ function drawBillboards(
     if (ann.kind !== "text") continue;
     const at = projectPitch(ann.at, groundView, proj);
     billboard(ctx, ann.at, at, () => drawAnnotationText(ctx, ann, false));
+  }
+}
+
+/**
+ * How solid a ghost is. Present enough to place a token against, faint enough
+ * that it is never mistaken for one.
+ */
+const GHOST_ALPHA = 0.4;
+
+/**
+ * A player as another scene has them: an outline, never a token.
+ *
+ * Hollow on purpose. A faded token still reads as a token, and the one thing a
+ * ghost must not look like is something you can pick up and drag.
+ */
+function drawGhost(
+  ctx: Ctx,
+  p: Vec2,
+  number: number,
+  color: string,
+  rotated: boolean,
+  scale: number,
+): void {
+  const radius = TOKEN_RADIUS * scale;
+
+  ctx.save();
+  ctx.globalAlpha = GHOST_ALPHA;
+
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 0.16 * scale;
+  ctx.stroke();
+
+  upright(ctx, p, rotated, () => {
+    ctx.font = `600 ${1.1 * scale}px Inter, system-ui, -apple-system, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = color;
+    ctx.fillText(String(number), 0, 0.05 * scale);
+  });
+
+  ctx.restore();
+}
+
+/**
+ * Everyone as one or more other scenes have them, under the live board.
+ *
+ * Positions are read STRAIGHT FROM THE SCENE, not resolved: a ghost is a scene at
+ * rest, so there is nothing to interpolate and no frame worth building. The ball
+ * is the exception, because a carried ball has no stored position — a hold at that
+ * scene is what `ballAt` wants, and it is two fields.
+ *
+ * `wrap` is how a ghost reaches the surface. Flat, it draws where it stands; under
+ * the angled camera it has to go through `billboard` like every other upright
+ * thing, or it lands squashed into the grass.
+ */
+function drawGhosts(
+  ctx: Ctx,
+  doc: BoardDoc,
+  view: RenderView,
+  rotated: boolean,
+  wrap: (at: Vec2, draw: () => void) => void = (_, draw) => draw(),
+): void {
+  if (!view.interactive || !view.ghosts?.length) return;
+
+  const scale = tokenScaleOf(doc);
+  const radius = ballRadius(doc);
+
+  for (const index of view.ghosts) {
+    const scene = doc.scenes[index];
+    if (!scene) continue;
+
+    for (const team of doc.teams) {
+      if (team.hidden) continue;
+      for (const player of team.players) {
+        const p = scene.positions[player.id];
+        if (!p) continue;
+        wrap(p, () => drawGhost(ctx, p, player.number, team.color, rotated, scale));
+      }
+    }
+
+    const ball = ballAt({ from: scene, to: scene, u: 1, moving: false, index }, doc);
+    wrap(ball, () => {
+      ctx.save();
+      ctx.globalAlpha = GHOST_ALPHA;
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, radius, 0, Math.PI * 2);
+      ctx.strokeStyle = BALL_PATH_COLOR;
+      ctx.lineWidth = 0.14;
+      ctx.stroke();
+      ctx.restore();
+    });
   }
 }
 
@@ -842,8 +948,26 @@ function drawAnnotationText(
   // Centred on `at` as a block, so adding a second line grows the label evenly in both
   // directions rather than pushing the first one upwards.
   const top = -((lines.length - 1) * lineHeight) / 2;
+  const alpha = textBgAlpha(ann);
+  // The dark halo exists to lift the words off the grass. A panel already does that,
+  // and a black outline on a light panel is only grime — so it goes once the panel is
+  // solid enough to be doing the job itself.
+  const halo = ann.bg === undefined || alpha < 0.5;
 
   upright(ctx, ann.at, rotated, () => {
+    // Inside `upright` the axes are the text's own, which is what `textExtent` measures
+    // in — so the panel needs no separate rotated case the way `boundsOf` does.
+    if (ann.bg !== undefined) {
+      const { w, h } = textExtent(ann);
+      const pad = size * TEXT_BG_PAD;
+      ctx.save();
+      ctx.fillStyle = withAlpha(ann.bg, alpha);
+      ctx.beginPath();
+      ctx.roundRect(-w / 2 - pad, -h / 2 - pad, w + pad * 2, h + pad * 2, pad * 0.8);
+      ctx.fill();
+      ctx.restore();
+    }
+
     ctx.font = `700 ${size}px Inter, system-ui, -apple-system, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -851,9 +975,11 @@ function drawAnnotationText(
     lines.forEach((line, i) => {
       if (!line) return;
       const y = top + i * lineHeight;
-      ctx.strokeStyle = "rgba(0,0,0,0.75)";
-      ctx.lineWidth = size * 0.2;
-      ctx.strokeText(line, 0, y);
+      if (halo) {
+        ctx.strokeStyle = "rgba(0,0,0,0.75)";
+        ctx.lineWidth = size * 0.2;
+        ctx.strokeText(line, 0, y);
+      }
       ctx.fillStyle = ann.color;
       ctx.fillText(line, 0, y);
     });

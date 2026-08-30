@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowUpRight,
+  Ban,
   Circle,
+  Copy,
   Eye,
   EyeOff,
   Minus,
@@ -17,9 +19,11 @@ import {
   TEXT_SCALE_MAX,
   TEXT_SCALE_MIN,
   deleteAnnotation,
+  textBgAlpha,
   updateAnnotation,
 } from "@/board/annotations";
 import { KIND_KEY } from "@/components/ui/kinds";
+import { NumberField } from "@/components/ui/NumberField";
 import { PALETTE } from "@/components/ui/palette";
 import type { Change } from "@/lib/history";
 import { cn } from "@/lib/utils";
@@ -39,6 +43,9 @@ type Props = {
   onDashChange: (dash: AnnotationDash) => void;
   selected: string | null;
   onSelect: (id: string | null) => void;
+  /** Copies the shape and selects the copy. Owned by the editor, so the Drawings
+   *  list on the other side duplicates through exactly the same call. */
+  onDuplicate: (id: string) => void;
   /** Bumped to put the cursor in the selected shape's text field. */
   focusText?: number;
 };
@@ -73,6 +80,7 @@ export function DrawPanel({
   onDashChange,
   selected,
   onSelect,
+  onDuplicate,
   focusText,
 }: Props) {
   const { t } = useI18n();
@@ -179,6 +187,7 @@ export function DrawPanel({
             onDocChange(deleteAnnotation(doc, active.id));
             onSelect(null);
           }}
+          onDuplicate={() => onDuplicate(active.id)}
           focusText={focusText}
         />
       ) : (
@@ -198,12 +207,14 @@ function Selected({
   ann,
   onPatch,
   onDelete,
+  onDuplicate,
   focusText,
 }: {
   doc: BoardDoc;
   ann: Annotation;
   onPatch: (fields: Partial<Annotation>, merge?: string) => void;
   onDelete: () => void;
+  onDuplicate: () => void;
   focusText?: number;
 }) {
   const { t } = useI18n();
@@ -230,18 +241,29 @@ function Selected({
         <span className="text-[11px] uppercase tracking-wide text-ink-300">
           {t("draw.selected", { kind: t(KIND_KEY[ann.kind]) })}
         </span>
-        <button
-          type="button"
-          aria-label={t(ann.hidden ? "draw.show" : "draw.hide")}
-          title={t(ann.hidden ? "draw.showThis" : "draw.hideThis")}
-          onClick={() => onPatch({ hidden: !ann.hidden })}
-          className={cn(
-            "flex size-5 items-center justify-center rounded transition",
-            ann.hidden ? "text-ink-400 hover:text-ink-200" : "text-accent",
-          )}
-        >
-          {ann.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
-        </button>
+        <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            aria-label={t("draw.duplicate")}
+            title={t("draw.duplicate")}
+            onClick={onDuplicate}
+            className="flex size-5 items-center justify-center rounded text-ink-400 transition hover:text-white"
+          >
+            <Copy size={12} />
+          </button>
+          <button
+            type="button"
+            aria-label={t(ann.hidden ? "draw.show" : "draw.hide")}
+            title={t(ann.hidden ? "draw.showThis" : "draw.hideThis")}
+            onClick={() => onPatch({ hidden: !ann.hidden })}
+            className={cn(
+              "flex size-5 items-center justify-center rounded transition",
+              ann.hidden ? "text-ink-400 hover:text-ink-200" : "text-accent",
+            )}
+          >
+            {ann.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
+          </button>
+        </div>
       </div>
 
       {ann.kind === "text" && (
@@ -269,6 +291,8 @@ function Selected({
         </div>
       )}
 
+      {ann.kind === "text" && <TextBackground ann={ann} onPatch={onPatch} />}
+
       {/* Which scenes it appears on. Ids, not indices, so reordering carries it. */}
       <div className="flex items-center gap-1">
         <SceneSelect
@@ -293,6 +317,79 @@ function Selected({
       >
         <Trash2 size={11} /> {t("draw.delete")}
       </button>
+    </div>
+  );
+}
+
+/**
+ * The panel behind a label: whether there is one, and how solid it is.
+ *
+ * No colour is the fourth state of the swatch row rather than a checkbox, because it
+ * is what every label already is — a picker with nothing selected would be lying.
+ * Clearing it drops `bgOpacity` too: an opacity with nothing to be opaque is a value
+ * that outlives its meaning, and the next colour picked should start from the default
+ * rather than from whatever the last one happened to be dragged to.
+ */
+function TextBackground({
+  ann,
+  onPatch,
+}: {
+  ann: Extract<Annotation, { kind: "text" }>;
+  onPatch: (fields: Partial<Annotation>, merge?: string) => void;
+}) {
+  const { t } = useI18n();
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("draw.bg")}</span>
+      <div className="flex flex-wrap items-center gap-1">
+        <button
+          type="button"
+          title={t("draw.bg.none")}
+          aria-label={t("draw.bg.noneAria")}
+          aria-pressed={ann.bg === undefined}
+          onClick={() => onPatch({ bg: undefined, bgOpacity: undefined })}
+          className={cn(
+            "flex size-4 items-center justify-center rounded-full text-ink-400 ring-1 transition",
+            ann.bg === undefined
+              ? "ring-2 ring-accent"
+              : "ring-white/15 hover:text-ink-200 hover:ring-white/40",
+          )}
+        >
+          <Ban size={10} />
+        </button>
+        {PALETTE.map((c) => (
+          <button
+            key={c}
+            type="button"
+            aria-label={t("draw.bg.aria", { color: c })}
+            aria-pressed={ann.bg === c}
+            onClick={() => onPatch({ bg: c })}
+            className={cn(
+              "size-4 rounded-full ring-1 transition",
+              ann.bg === c ? "ring-2 ring-accent" : "ring-white/15 hover:ring-white/40",
+            )}
+            style={{ background: c }}
+          />
+        ))}
+      </div>
+
+      {/* Nothing to be opaque without a colour, so the control is absent rather than
+          present and inert. Keyed so selecting another label remounts the field with
+          its own value — it holds a half-typed number, like every other one. */}
+      {ann.bg !== undefined && (
+        <NumberField
+          key={ann.id}
+          label={t("draw.bg.opacity")}
+          title={t("draw.bg.opacity.title")}
+          value={Math.round(textBgAlpha(ann) * 100)}
+          min={0}
+          max={100}
+          step={5}
+          unit="%"
+          onCommit={(percent) => onPatch({ bgOpacity: percent / 100 }, `ann-bgo:${ann.id}`)}
+        />
+      )}
     </div>
   );
 }

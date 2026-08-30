@@ -225,6 +225,38 @@ export function setTravel(
 }
 
 /**
+ * Make an entity wait before setting off into scene `index`, or `null` to leave
+ * with everyone else.
+ *
+ * This is what lets one scene carry a sequence — the winger goes, the full-back
+ * overlaps behind them — rather than splitting into two scenes whose only job is
+ * to put one before the other. See D41.
+ */
+export function setDelay(
+  doc: BoardDoc,
+  index: number,
+  entityId: string,
+  ms: number | null,
+): BoardDoc {
+  const scene = doc.scenes[index];
+  if (!scene) return doc;
+
+  const delay = { ...(scene.delay ?? {}) };
+  if (ms === null || ms <= 0) delete delay[entityId];
+  else delay[entityId] = Math.max(0, Math.min(60_000, Math.round(ms)));
+
+  // Drop the key entirely once empty, so a scene with no waits serialises exactly
+  // as it did before the field existed.
+  const next: Scene = { ...scene };
+  if (Object.keys(delay).length === 0) delete next.delay;
+  else next.delay = delay;
+
+  const scenes = doc.scenes.slice();
+  scenes[index] = next;
+  return replace(doc, scenes);
+}
+
+/**
  * Show or hide the arrow drawn for an entity's run into scene `index`.
  *
  * Per scene and per entity, because a run that needs explaining in one scene is

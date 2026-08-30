@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { applySelection, entitiesInRect, hitTest, moveEntities, nudgeEntities } from "./interaction";
+import { addSceneAfter } from "./scenes";
 import { TOKEN_RADIUS } from "./render";
 import { frameAt } from "./timeline";
 import { createBoardDoc } from "@/formations";
-import { BALL_ID } from "./types";
+import { BALL_ID, type BoardDoc, type Vec2 } from "./types";
 
 const doc = createBoardDoc();
 const frame = frameAt(doc, 0);
@@ -131,6 +132,167 @@ describe("moveEntities", () => {
   });
 });
 
+describe("carrying an edit forward", () => {
+  /** `n` scenes, every one copied from the last, so nobody moves anywhere. */
+  const still = (n: number): BoardDoc => {
+    let d = createBoardDoc();
+    for (let i = 1; i < n; i++) d = addSceneAfter(d, i - 1);
+    return d;
+  };
+
+  /** Where `id` stands in each scene. */
+  const track = (d: BoardDoc, id: string): Vec2[] => d.scenes.map((s) => s.positions[id]);
+
+  const shove = { x: 0, y: -8 };
+
+  it("carries into every later scene the entity stood still in", () => {
+    const d = still(4);
+    const before = track(d, first);
+    const next = moveEntities(d, 1, [first], shove, "stationary");
+
+    expect(next.scenes[0].positions[first]).toEqual(before[0]);
+    for (const i of [1, 2, 3]) {
+      expect(next.scenes[i].positions[first].y).toBeCloseTo(before[i].y - 8);
+    }
+  });
+
+  it("stops at the first scene the entity was already moved in", () => {
+    const d = still(4);
+    d.scenes[2].positions[first] = { x: 60, y: 40 };
+    const before = track(d, first);
+
+    const next = moveEntities(d, 0, [first], shove, "stationary");
+
+    expect(next.scenes[0].positions[first].y).toBeCloseTo(before[0].y - 8);
+    expect(next.scenes[1].positions[first].y).toBeCloseTo(before[1].y - 8);
+    // Scene 2 holds a placement of its own, and the run into it is the point.
+    expect(next.scenes[2].positions[first]).toEqual({ x: 60, y: 40 });
+    expect(next.scenes[3].positions[first]).toEqual(before[3]);
+  });
+
+  it("carries rigidly through a move when asked for all", () => {
+    const d = still(3);
+    d.scenes[2].positions[first] = { x: 60, y: 40 };
+
+    const next = moveEntities(d, 0, [first], shove, "all");
+
+    expect(next.scenes[2].positions[first]).toEqual({ x: 60, y: 32 });
+  });
+
+  it("leaves later scenes alone by default", () => {
+    const d = still(3);
+    const next = moveEntities(d, 0, [first], shove);
+
+    expect(next.scenes[1]).toBe(d.scenes[1]);
+    expect(next.scenes[2]).toBe(d.scenes[2]);
+  });
+
+  it("keeps the identity of scenes it did not change", () => {
+    const d = still(3);
+    const next = moveEntities(d, 1, [first], shove, "stationary");
+
+    expect(next.scenes[0]).toBe(d.scenes[0]);
+  });
+
+  it("translates a curve whose run is carried at both ends", () => {
+    const d = still(3);
+    d.scenes[2].paths[first] = { c1: { x: 20, y: 30 }, c2: { x: 30, y: 30 } };
+
+    const next = moveEntities(d, 1, [first], shove, "stationary");
+    // Both ends of the run into scene 2 moved, so the whole curve moves with it.
+    expect(next.scenes[2].paths[first]).toEqual({ c1: { x: 20, y: 22 }, c2: { x: 30, y: 22 } });
+  });
+
+  it("moves only the leading control where a carry ends", () => {
+    const d = still(3);
+    d.scenes[2].positions[first] = { x: 60, y: 40 };
+    d.scenes[2].paths[first] = { c1: { x: 20, y: 30 }, c2: { x: 30, y: 30 } };
+
+    const next = moveEntities(d, 0, [first], shove, "stationary");
+    // The run into scene 2 now starts 8 m away; its destination never moved.
+    expect(next.scenes[2].paths[first]).toEqual({ c1: { x: 20, y: 22 }, c2: { x: 30, y: 30 } });
+  });
+
+  it("bends a curve by what the clamp allowed, not by what was asked", () => {
+    const d = still(2);
+    d.scenes[0].positions[first] = { x: 40, y: 2 };
+    d.scenes[1].positions[first] = { x: 40, y: 2 };
+    d.scenes[1].paths[first] = { c1: { x: 20, y: 30 }, c2: { x: 30, y: 30 } };
+
+    const next = moveEntities(d, 0, [first], { x: 0, y: -8 }, "stationary");
+
+    // The token stops at the touchline 2 m away, so the curve follows 2 m.
+    expect(next.scenes[1].positions[first]).toEqual({ x: 40, y: 0 });
+    expect(next.scenes[1].paths[first]).toEqual({ c1: { x: 20, y: 28 }, c2: { x: 30, y: 28 } });
+  });
+
+  it("judges each scene against the one before it, so a second nudge behaves like the first", () => {
+    // The player is parked through scenes 0-2 and has a run into scene 3. Two
+    // nudges of 5 m: the first must stop at scene 2, and the second must not
+    // suddenly capture scene 3 because the gap happens to have closed.
+    const d = still(4);
+    const y = d.scenes[0].positions[first].y;
+    d.scenes[3].positions[first] = { x: d.scenes[3].positions[first].x, y: y + 5 };
+
+    const once = nudgeEntities(d, 0, [first], 5, "y", "stationary");
+    expect(once.scenes[2].positions[first].y).toBeCloseTo(y + 5);
+    expect(once.scenes[3].positions[first].y).toBeCloseTo(y + 5);
+
+    // Scene 3 is now where the player already stands, so the run into it is gone
+    // and it travels with the rest — the same answer either nudge arrives at.
+    const twice = nudgeEntities(once, 0, [first], 5, "y", "stationary");
+    expect(twice.scenes[2].positions[first].y).toBeCloseTo(y + 10);
+    expect(twice.scenes[3].positions[first].y).toBeCloseTo(y + 10);
+  });
+
+  it("bends the pass line when the player who releases it moves", () => {
+    const d = still(2);
+    const passer = d.teams[0].players[9].id;
+    const receiver = d.teams[0].players[8].id;
+    d.scenes[0].carrier = passer;
+    delete d.scenes[0].ballPos;
+    d.scenes[1].carrier = receiver;
+    delete d.scenes[1].ballPos;
+    d.scenes[1].ballPath = { c1: { x: 20, y: 30 }, c2: { x: 30, y: 30 } };
+
+    // The passer is the only end of the line that moves — the ball has no stored
+    // position of its own at either scene, so nothing names it in the shifts.
+    const next = moveEntities(d, 0, [passer], { x: 0, y: -8 }, "scene");
+
+    expect(next.scenes[1].ballPath).toEqual({ c1: { x: 20, y: 22 }, c2: { x: 30, y: 30 } });
+  });
+
+  it("leaves the pass line alone when neither end of it moved", () => {
+    const d = still(2);
+    const passer = d.teams[0].players[9].id;
+    const bystander = d.teams[0].players[2].id;
+    d.scenes[0].carrier = passer;
+    delete d.scenes[0].ballPos;
+    d.scenes[1].carrier = passer;
+    delete d.scenes[1].ballPos;
+    d.scenes[1].ballPath = { c1: { x: 20, y: 30 }, c2: { x: 30, y: 30 } };
+
+    const next = moveEntities(d, 0, [bystander], { x: 0, y: -8 }, "scene");
+    expect(next.scenes[1].ballPath).toBe(d.scenes[1].ballPath);
+  });
+
+  it("carries a loose ball, and stops where it is picked up", () => {
+    const d = still(4);
+    const holder = d.teams[0].players[9].id;
+    d.scenes[3].carrier = holder;
+    delete d.scenes[3].ballPos;
+    const before = d.scenes[0].ballPos!;
+
+    const next = moveEntities(d, 0, [BALL_ID], { x: 5, y: 0 }, "stationary");
+
+    for (const i of [0, 1, 2]) {
+      expect(next.scenes[i].ballPos!.x).toBeCloseTo(before.x + 5);
+    }
+    expect(next.scenes[3].carrier).toBe(holder);
+    expect(next.scenes[3].ballPos).toBeUndefined();
+  });
+});
+
 describe("nudgeEntities", () => {
   it("shifts a line downfield without touching the cross-pitch axis", () => {
     const back4 = doc.links[0].members;
@@ -138,6 +300,17 @@ describe("nudgeEntities", () => {
     for (const id of back4) {
       expect(next.scenes[0].positions[id].x).toBeCloseTo(doc.scenes[0].positions[id].x + 5);
       expect(next.scenes[0].positions[id].y).toBeCloseTo(doc.scenes[0].positions[id].y);
+    }
+  });
+
+  it("carries forward like a drag does", () => {
+    let d = createBoardDoc();
+    d = addSceneAfter(d, 0);
+    const back4 = d.links[0].members;
+
+    const next = nudgeEntities(d, 0, back4, 5, "x", "stationary");
+    for (const id of back4) {
+      expect(next.scenes[1].positions[id].x).toBeCloseTo(d.scenes[1].positions[id].x + 5);
     }
   });
 });

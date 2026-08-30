@@ -137,8 +137,10 @@ hatch, but CI owns the real deploy.
   7 to 12 passes through 1 on the way, so refusing a taken 1 refuses the edit before the second
   digit exists. Retyping a pace of 10 as 20 is worse: it passes through the empty string, which
   no document can hold, so a fully controlled input snaps back mid-edit. Every numeric field
-  holds its own text, commits only what is valid, and restores on blur — `NumberField` in
-  `Timeline.tsx` and the label-size field in `DrawPanel.tsx`.
+  holds its own text, commits only what is valid, and restores on blur — use
+  `components/ui/NumberField.tsx` rather than writing another one. `SizeField` in `DrawPanel.tsx`
+  is the one remaining copy: it is an unlabelled inline variant for a toolbar row, and it also
+  does not track a value changing underneath it.
 - **Two players on one shirt share an id**, since an id is `<team>-<number>`, and the second
   overwrites the first in every scene's positions. A formation's own numbers never collide; a
   squad carried into a new shape can. `buildTeam` moves the loser to the lowest free shirt —
@@ -147,6 +149,21 @@ hatch, but CI owns the real deploy.
 - **A formation change keeps the squad and drops that side's links** (D32). Seeded links are
   appended, so keeping the old ones stacks a stale connector under the new one. Link ownership
   is read from the OLD team: a carried squad keeps its ids, so the prune would not catch them.
+- **A carry is judged scene-by-scene, never against the scene being edited.** A drag or a nudge
+  applies its delta to every following scene the entity does not travel into (D41). Deciding that
+  by comparing each scene to the EDITED one makes the boundary depend on a distance the edit is
+  itself changing — a second nudge in the same direction then captures a scene the first stopped
+  at. Compare each scene to the one before it and the boundary is stable under the carry.
+- **A curve's controls are absolute pitch coordinates**, so an endpoint that moves without them
+  warps the run. `c1` follows the start, `c2` follows the end, and both follow what the clamp
+  ALLOWED rather than what was asked, or a token stopped by the touchline drags its curve past it.
+- **A wait is not a shorter travel.** `Scene.delay` holds an entity at its start; `Scene.travel`
+  changes how long its run takes. The window fits the latest `delay + travel`, not the longest
+  single run (D42) — and flow mode ignores both, because everyone keeps step.
+- **A ghost is drawn from the scene, not from a frame.** `RenderView.ghosts` names scene indices
+  and the renderer reads their stored positions directly; only the ball needs `ballAt`, because a
+  carried ball has no stored position. In 3D they go through `billboard()` like everything else
+  upright, or they land squashed into the grass.
 - **In flow mode the timings are derived from the positions**, so any edit retimes the
   animation and slides the scrubber into the middle of a transition. The board then draws
   interpolated positions — a dragged player lags the cursor — while the edit lands on the scene

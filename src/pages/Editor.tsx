@@ -3,7 +3,7 @@ import type { AnnotationDash, BoardDoc, PitchView, Tool } from "@/board/types";
 import { BALL_ID, DEFAULT_PITCH_VIEW } from "@/board/types";
 import { BoardCanvas } from "@/components/BoardCanvas";
 import { TeamControls } from "@/components/TeamControls";
-import { ViewControls } from "@/components/ViewControls";
+import { ViewControls, type Ghosts } from "@/components/ViewControls";
 import { Section } from "@/components/ui/Section";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
@@ -23,7 +23,7 @@ import { ShareDialog } from "@/components/ShareDialog";
 import { LinkPanel } from "@/components/LinkPanel";
 import { DrawPanel } from "@/components/DrawPanel";
 import { Timeline } from "@/components/Timeline";
-import { nudgeEntities } from "@/board/interaction";
+import { nudgeEntities, type Carry } from "@/board/interaction";
 import { useHistory, type Change } from "@/lib/history";
 import { useAutosave } from "@/lib/useAutosave";
 import { AUTOSAVE_MS, loadBoard, saveBoard } from "@/share/local";
@@ -51,12 +51,18 @@ import { useCloudBoard } from "@/lib/useCloudBoard";
 import { useI18n } from "@/i18n/context";
 import type { Message } from "@/i18n/core";
 import { clearLinks, createLink } from "@/board/links";
-import { annotationsOf, deleteAnnotation, sceneRange } from "@/board/annotations";
+import {
+  annotationsOf,
+  deleteAnnotation,
+  duplicateAnnotation,
+  sceneRange,
+} from "@/board/annotations";
 import { concealedPlayers } from "@/board/render";
 import {
   isRunHidden,
   sceneStartSeconds,
   setCarrier,
+  setDelay,
   setPath,
   setRunHidden,
   setTravel,
@@ -204,6 +210,26 @@ export function Editor({ initialDoc }: Props = {}) {
   // Scene 0 has no incoming transition, so there is no run to shape there.
   const editScene = activeScene > 0 ? activeScene : undefined;
 
+  // Reference outlines of the neighbouring scenes. Next by default: the run
+  // arrows already draw where everyone came FROM, so a ghost behind is mostly
+  // the tails again — and a player who does not move has no arrow at all, which
+  // is exactly the one a ghost of the next scene reveals, sitting under them.
+  const [ghosts, setGhosts] = useState<Ghosts>({ before: false, after: true });
+
+  // How far a move reaches forward. Editing state, not the document: it is how
+  // you are working, not part of what a board is.
+  const [carry, setCarry] = useState<Carry>("stationary");
+
+  const ghostScenes = useMemo(() => {
+    // Nothing to place anything against while it is running, and an outline
+    // behind a moving board is noise.
+    if (playing) return undefined;
+    const out: number[] = [];
+    if (ghosts.before && activeScene > 0) out.push(activeScene - 1);
+    if (ghosts.after && activeScene + 1 < doc.scenes.length) out.push(activeScene + 1);
+    return out.length > 0 ? out : undefined;
+  }, [ghosts, playing, activeScene, doc.scenes.length]);
+
   // Players on a hidden team drop out of the selection rather than being cleared
   // from it: a nudge must not move tokens nobody can see, but unhiding the team
   // should give you your selection back. Players who have been deleted drop out
@@ -319,11 +345,14 @@ export function Editor({ initialDoc }: Props = {}) {
   };
 
   const onNudge = useCallback(
-    (metres: number, axis: "x" | "y") => {
+    (metres: number, axis: "x" | "y", mode: Carry) => {
       if (visible.size === 0) return;
       // Held arrow keys collapse into one undo step per direction, the same way
       // a drag does.
-      setDoc(nudgeEntities(doc, activeScene, visible, metres, axis), `nudge:${axis}:${metres}`);
+      setDoc(
+        nudgeEntities(doc, activeScene, visible, metres, axis, mode),
+        `nudge:${axis}:${metres}:${mode}`,
+      );
     },
     [doc, visible, activeScene, setDoc],
   );
@@ -363,6 +392,27 @@ export function Editor({ initialDoc }: Props = {}) {
     if (!ann) return;
     const [start, end] = sceneRange(doc, ann);
     if (activeScene < start || activeScene > end) selectScene(start);
+  };
+
+  /**
+   * Copy the selected shape and move on to the copy.
+   *
+   * Selecting the copy rather than leaving the original selected is what makes a
+   * duplicate useful: the next thing you do — drag it somewhere, retype the label —
+   * is meant for the new one. It lands directly after the original, so it is found
+   * by index rather than by searching for an id this side does not mint.
+   */
+  const onDuplicateAnnotation = (id: string) => {
+    const ann = annotationsOf(doc).find((a) => a.id === id);
+    if (!ann) return;
+    const next = duplicateAnnotation(
+      doc,
+      id,
+      ann.name ? t("doc.shapeCopy", { name: ann.name }) : undefined,
+    );
+    const copy = annotationsOf(next)[annotationsOf(next).findIndex((a) => a.id === id) + 1];
+    setDoc(next);
+    if (copy) revealAnnotation(copy.id);
   };
 
   const onCreateLink = () => {
@@ -419,6 +469,13 @@ export function Editor({ initialDoc }: Props = {}) {
     setDoc(next);
     clearEditorState();
     setShareOpen(false);
+  };
+
+  const onDelayChange = (ms: number | null) => {
+    if (editScene === undefined) return;
+    let next = doc;
+    for (const id of visible) next = setDelay(next, editScene, id, ms);
+    setDoc(next, `delay:${editScene}`);
   };
 
   const onTravelChange = (ms: number | null) => {
@@ -505,11 +562,14 @@ export function Editor({ initialDoc }: Props = {}) {
       const move = map[e.key];
       if (!move) return;
       e.preventDefault();
-      onNudge(move[0], move[1]);
+      // Alt confines the move to this scene; without it the edit carries into
+      // every following scene the selection does not already travel into.
+      onNudge(move[0], move[1], e.altKey ? "scene" : carry);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [
+    carry,
     onNudge,
     pending,
     shareOpen,
@@ -618,6 +678,8 @@ export function Editor({ initialDoc }: Props = {}) {
               onChange={setPitchView}
               doc={doc}
               onTokenScaleChange={(tokenScale) => setDoc({ ...doc, tokenScale }, "token-scale")}
+              ghosts={ghosts}
+              onGhostsChange={setGhosts}
             />
           </Section>
 
@@ -677,6 +739,7 @@ export function Editor({ initialDoc }: Props = {}) {
               onDashChange={setDrawDash}
               selected={annotation}
               onSelect={setAnnotation}
+              onDuplicate={onDuplicateAnnotation}
               focusText={focusText}
             />
           </Section>
@@ -711,6 +774,9 @@ export function Editor({ initialDoc }: Props = {}) {
               onRename={(id, label) => setDoc(setPlayerLabel(doc, id, label), `label:${id}`)}
               onRenumber={(id, n) => setDoc(setPlayerNumber(doc, id, n), `number:${id}`)}
               onTravelChange={onTravelChange}
+              onDelayChange={onDelayChange}
+              carry={carry}
+              onCarryChange={setCarry}
               onRemovePlayer={(id) => setDoc(removePlayer(doc, id))}
               runsHidden={runsHidden}
               onRunsHiddenChange={onRunsHiddenChange}
@@ -817,11 +883,13 @@ export function Editor({ initialDoc }: Props = {}) {
               t={time}
               sceneIndex={activeScene}
               editScene={editScene}
+              ghosts={ghostScenes}
               pitchView={pitchView}
               selection={visible}
               onSelectionChange={setSelection}
               onDocChange={setDoc}
               onEditName={onEditName}
+              carry={carry}
               tool={tool}
               onToolChange={setTool}
               drawColor={drawColor}
@@ -834,6 +902,7 @@ export function Editor({ initialDoc }: Props = {}) {
 
           <Timeline
             doc={doc}
+            view={pitchView}
             onDocChange={setDoc}
             activeScene={activeScene}
             onActiveSceneChange={selectScene}
@@ -889,6 +958,7 @@ export function Editor({ initialDoc }: Props = {}) {
                 sceneIndex={activeScene}
                 selected={annotation}
                 onSelect={revealAnnotation}
+                onDuplicate={onDuplicateAnnotation}
               />
             </div>
           )}

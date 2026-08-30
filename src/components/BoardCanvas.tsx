@@ -25,6 +25,7 @@ import {
   hitTestLink,
   moveEntities,
   type AnnotationHandleHit,
+  type Carry,
   type HandleHit,
 } from "@/board/interaction";
 import {
@@ -44,6 +45,10 @@ type Props = {
   sceneIndex: number;
   /** Scene whose incoming runs are editable; undefined on scene 0. */
   editScene?: number;
+  /** Scenes outlined faintly behind the board, for reference while placing. */
+  ghosts?: readonly number[];
+  /** How far a move reaches forward through the scenes. Alt overrides it. */
+  carry?: Carry;
   pitchView?: PitchView;
   selection: ReadonlySet<string>;
   onSelectionChange: (next: Set<string>) => void;
@@ -69,7 +74,7 @@ type Props = {
 };
 
 type Drag =
-  | { kind: "move"; last: Vec2 }
+  | { kind: "move"; last: Vec2; carry: Carry }
   | { kind: "handle"; hit: HandleHit }
   | { kind: "marquee"; a: Vec2; b: Vec2; additive: boolean }
   /** Dragging a new shape out. `start` is the anchor; `ann` is the live preview. */
@@ -83,6 +88,8 @@ export function BoardCanvas({
   t,
   sceneIndex,
   editScene,
+  ghosts,
+  carry = "stationary",
   pitchView = DEFAULT_PITCH_VIEW,
   selection,
   onSelectionChange,
@@ -169,6 +176,7 @@ export function BoardCanvas({
       selection,
       hover,
       editScene,
+      ghosts,
       marquee: drag?.kind === "marquee" ? { a: drag.a, b: drag.b } : null,
       annotationSelection,
       draft: drag?.kind === "draw" ? drag.ann : null,
@@ -181,6 +189,7 @@ export function BoardCanvas({
     hover,
     drag,
     editScene,
+    ghosts,
     pitchView,
     annotationSelection,
     live,
@@ -263,7 +272,10 @@ export function BoardCanvas({
       if (!selection.has(hit.id)) {
         onSelectionChange(applySelection(selection, hit, e.shiftKey));
       }
-      setDrag({ kind: "move", last: p });
+      // Decided once, at the grab. Reading the modifier per pointermove would
+      // let the carry stop mid-gesture, stranding the scenes it had already
+      // taken along at wherever the cursor happened to be.
+      setDrag({ kind: "move", last: p, carry: e.altKey ? "scene" : carry });
       return;
     }
 
@@ -352,8 +364,8 @@ export function BoardCanvas({
     if (drag.kind === "move") {
       const delta = { x: p.x - drag.last.x, y: p.y - drag.last.y };
       if (delta.x !== 0 || delta.y !== 0) {
-        onDocChange(moveEntities(doc, sceneIndex, selection, delta), dragKey());
-        setDrag({ kind: "move", last: p });
+        onDocChange(moveEntities(doc, sceneIndex, selection, delta, drag.carry), dragKey());
+        setDrag({ kind: "move", last: p, carry: drag.carry });
       }
       return;
     }

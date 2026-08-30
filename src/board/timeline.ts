@@ -37,21 +37,36 @@ export type Resolved = {
 /**
  * How long the travel into a scene actually takes.
  *
- * `transitionMs` is the baseline every entity uses. An entity given its own time
- * in `travel` may take longer, and the scene stretches to fit its slowest mover —
- * otherwise a deliberately slow run would be cut off mid-stride.
+ * `transitionMs` is the baseline every entity uses. An entity may take longer
+ * (`travel`) or set off later (`delay`), and the scene stretches to fit whoever
+ * ARRIVES LAST — otherwise a deliberately slow or deliberately late run would be
+ * cut off mid-stride.
  */
 export function sceneTravelMs(scene: Scene): number {
   let longest = scene.transitionMs;
-  if (scene.travel) {
-    for (const ms of Object.values(scene.travel)) if (ms > longest) longest = ms;
+
+  // An entity is done when its own wait and its own run are both over, so the
+  // window is measured from zero to the last arrival rather than to the longest
+  // single run.
+  for (const id of new Set([
+    ...Object.keys(scene.travel ?? {}),
+    ...Object.keys(scene.delay ?? {}),
+  ])) {
+    const ends = entityDelayMs(scene, id) + entityTravelMs(scene, id);
+    if (ends > longest) longest = ends;
   }
+
   return longest;
 }
 
 /** Travel time for one entity into a scene, falling back to the scene baseline. */
 export function entityTravelMs(scene: Scene, entityId: string): number {
   return scene.travel?.[entityId] ?? scene.transitionMs;
+}
+
+/** How long an entity waits before setting off into a scene. Zero by default. */
+export function entityDelayMs(scene: Scene, entityId: string): number {
+  return scene.delay?.[entityId] ?? 0;
 }
 
 // ---------------------------------------------------------------- flow mode
@@ -227,8 +242,8 @@ function bezierFor(entityId: string, r: Resolved): Bezier | null {
  * Where one entity is within the scene's travel window, 0..1.
  *
  * `r.u` runs over the whole window, which is as long as the slowest mover needs.
- * An entity with a shorter time of its own finishes early and waits at its
- * destination.
+ * An entity holds at its start until its own delay is up, then runs at its own
+ * pace and waits at its destination once it arrives.
  */
 export function progressOf(entityId: string, r: Resolved, doc?: BoardDoc): number {
   // Flow mode sets the pace for the whole board, so a per-entity override would
@@ -238,7 +253,10 @@ export function progressOf(entityId: string, r: Resolved, doc?: BoardDoc): numbe
   const window = sceneTravelMs(r.to);
   const own = entityTravelMs(r.to, entityId);
   if (window <= 0 || own <= 0) return 1;
-  return Math.min((r.u * window) / own, 1);
+
+  const elapsed = r.u * window - entityDelayMs(r.to, entityId);
+  if (elapsed <= 0) return 0;
+  return Math.min(elapsed / own, 1);
 }
 
 export function positionAt(entityId: string, r: Resolved, doc: BoardDoc): Vec2 {

@@ -50,6 +50,11 @@ export const pt: Dictionary = {
   "view.horizontal": "Horizontal",
   "view.flat": "Plano",
   "view.3d": "3D",
+  "view.ghosts": "Cenas fantasma",
+  "view.ghosts.before": "Anterior",
+  "view.ghosts.after": "Seguinte",
+  "view.ghosts.hint":
+    "Contorna onde cada jogador está na cena vizinha. Um jogador cujo contorno fica por baixo dele é um que não se mexe.",
   "view.playerSize": "Tamanho dos jogadores",
   "view.halfHint":
     "Meio campo é mais alto do que comprido, pelo que na horizontal fica com a mesma altura do campo inteiro e espaço de cada lado. Na vertical preenche o quadro.",
@@ -155,6 +160,7 @@ export const pt: Dictionary = {
   "doc.board": "Quadro sem nome",
   "doc.scene": "Cena {n}",
   "doc.sceneCopy": "{name} (cópia)",
+  "doc.shapeCopy": "{name} (cópia)",
   "doc.home": "Casa",
   "doc.away": "Fora",
 
@@ -164,6 +170,9 @@ export const pt: Dictionary = {
   "timeline.flow.on":
     "Um só movimento contínuo: nada fica parado entre cenas e cada cena dura o que a sua corrida mais longa precisar",
   "timeline.flow.off": "Voltar aos tempos de deslocação e de espera por cena",
+  "timeline.thumbs": "Pré-visualização das cenas",
+  "timeline.thumbs.on": "Mostrar uma pré-visualização de cada cena",
+  "timeline.thumbs.off": "Apenas os nomes",
   "timeline.addScene": "Adicionar cena",
   "timeline.scene": "Cena",
   "timeline.pace": "Ritmo",
@@ -188,6 +197,19 @@ export const pt: Dictionary = {
     "Clique num jogador para o selecionar, duplo clique para lhe mudar o nome. Shift+clique para juntar, ou arraste sobre a relva vazia para marcar uma área. As setas deslocam; com shift, 5 m. O espaço reproduz.",
   "inspect.selected": "{count} selecionados",
   "inspect.clear": "limpar",
+  "inspect.carry": "Levar o movimento",
+  "inspect.carry.scene": "Só esta cena",
+  "inspect.carry.scene.hint": "Move a seleção aqui e mais nada. Carrega em Alt para o fazer sem mudar a definição.",
+  "inspect.carry.stationary": "Enquanto parado",
+  "inspect.carry.stationary.hint":
+    "Leva o movimento para todas as cenas seguintes em que a seleção ainda não corre, para que quem está parado fique parado no sítio novo.",
+  "inspect.carry.all": "Todas as cenas",
+  "inspect.carry.all.hint":
+    "Desloca a seleção em todas as cenas seguintes, mantendo tudo o que faz a partir daí e movendo-o em conjunto.",
+  "inspect.delay": "Esperar antes de arrancar",
+  "inspect.delay.together": "Arrancar com os outros",
+  "inspect.delay.hint":
+    "Mantém este jogador parado por um instante e só depois corre. Uma cena passa a conter uma sequência — o extremo arranca, o lateral sobrepõe-se por trás.",
   "inspect.travelTime": "Tempo de deslocação",
   "inspect.matchScene": "igualar à cena",
   "inspect.travel.default": "s — valor da cena",
@@ -273,8 +295,16 @@ export const pt: Dictionary = {
   "draw.label.aria": "Texto da etiqueta",
   "draw.size.aria": "Tamanho da etiqueta",
   "draw.size.title": "Tamanho da etiqueta, em percentagem do valor por omissão",
+  "draw.bg": "Fundo",
+  "draw.bg.none": "Nenhum",
+  "draw.bg.noneAria": "Sem fundo por trás da etiqueta",
+  "draw.bg.aria": "Fundo em {color}",
+  "draw.bg.opacity": "Opacidade do fundo",
+  "draw.bg.opacity.title":
+    "Quão sólido é o painel por trás das palavras. Abaixo de metade o contorno escuro regressa, porque só o painel já não destaca o texto da relva.",
   "draw.from": "De",
   "draw.to": "Até",
+  "draw.duplicate": "Duplicar forma",
   "draw.delete": "Apagar forma",
 
   // ---------------------------------------------------------------- shapes
@@ -304,6 +334,7 @@ export const pt: Dictionary = {
   "drawn.rename.away": "Mudar o nome — clicar também salta para lá",
   "drawn.showShape": "Mostrar a forma",
   "drawn.hideShape": "Ocultar a forma",
+  "drawn.duplicate": "Duplicar {label}",
   "drawn.delete": "Apagar {label}",
   "drawn.visibleFrom": "Visível a partir de",
   "drawn.visibleTo": "Visível até",

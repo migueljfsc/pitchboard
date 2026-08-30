@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  DUPLICATE_OFFSET,
   MARK_WIDTH,
+  TEXT_BG_ALPHA,
   TEXT_SCALE_MAX,
   TEXT_SCALE_MIN,
   TEXT_SIZE,
@@ -12,6 +14,7 @@ import {
   deleteAnnotation,
   draftAnnotation,
   dragAnnotationHandle,
+  duplicateAnnotation,
   isVisibleAt,
   moveAnnotation,
   polylineLength,
@@ -21,6 +24,7 @@ import {
   simplify,
   straightCurve,
   strokePoints,
+  textBgAlpha,
   textExtent,
   textLines,
   textSize,
@@ -414,6 +418,55 @@ describe("schema", () => {
   });
 });
 
+describe("duplicate", () => {
+  it("puts the copy directly after the original, offset from it", () => {
+    let doc = board();
+    const original = arrow(doc);
+    doc = duplicateAnnotation(addAnnotation(doc, original), original.id);
+
+    const [first, copy] = doc.annotations! as Extract<Annotation, { kind: "arrow" }>[];
+    expect(first.id).toBe(original.id);
+    expect(copy.id).not.toBe(original.id);
+    expect(copy.a).toEqual(at(20 + DUPLICATE_OFFSET, 20 + DUPLICATE_OFFSET));
+    expect(copy.b).toEqual(at(40 + DUPLICATE_OFFSET, 20 + DUPLICATE_OFFSET));
+  });
+
+  it("keeps the range and the style, and names the copy when given a name", () => {
+    let doc = board(3);
+    const original = { ...arrow(doc, doc.scenes[1].id, doc.scenes[2].id), name: "press" };
+    doc = duplicateAnnotation(addAnnotation(doc, original), original.id, "press copy");
+
+    const copy = doc.annotations![1];
+    expect(copy.name).toBe("press copy");
+    expect([copy.from, copy.to, copy.color]).toEqual([
+      original.from,
+      original.to,
+      original.color,
+    ]);
+  });
+
+  it("deep-copies a pen stroke rather than sharing its points", () => {
+    let doc = board();
+    const pen = draftAnnotation(doc, "pen", doc.scenes[0].id, at(0, 0), at(0, 0), {
+      color: "#fff",
+      points: [at(10, 10), at(20, 20)],
+    });
+    doc = duplicateAnnotation(addAnnotation(doc, pen), pen.id);
+
+    const [first, copy] = doc.annotations! as Extract<Annotation, { kind: "pen" }>[];
+    expect(first.points).toEqual([at(10, 10), at(20, 20)]);
+    expect(copy.points).toEqual([
+      at(10 + DUPLICATE_OFFSET, 10 + DUPLICATE_OFFSET),
+      at(20 + DUPLICATE_OFFSET, 20 + DUPLICATE_OFFSET),
+    ]);
+  });
+
+  it("leaves the document alone when the id is not there", () => {
+    const doc = addAnnotation(board(), arrow(board()));
+    expect(duplicateAnnotation(doc, "nope")).toBe(doc);
+  });
+});
+
 describe("label size", () => {
   const label = (size?: number): Extract<Annotation, { kind: "text" }> => ({
     id: "t1",
@@ -437,6 +490,13 @@ describe("label size", () => {
   it("clamps rather than trusting the value — an imported board is untrusted", () => {
     expect(textSize(label(99))).toBe(TEXT_SIZE * TEXT_SCALE_MAX);
     expect(textSize(label(0))).toBe(TEXT_SIZE * TEXT_SCALE_MIN);
+  });
+
+  it("falls back to the default panel opacity, and clamps what it is given", () => {
+    expect(textBgAlpha(label())).toBe(TEXT_BG_ALPHA);
+    expect(textBgAlpha({ ...label(), bgOpacity: 0.4 })).toBe(0.4);
+    expect(textBgAlpha({ ...label(), bgOpacity: 9 })).toBe(1);
+    expect(textBgAlpha({ ...label(), bgOpacity: -1 })).toBe(0);
   });
 
   it("grows the selection box with the label, so a big one is still grabbable", () => {

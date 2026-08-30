@@ -145,7 +145,7 @@ export function addPlayer(doc: BoardDoc, teamIndex: 0 | 1): BoardDoc {
 /**
  * Remove a player, and every trace of them.
  *
- * Positions, runs and travel overrides go from all scenes; links lose them and
+ * Positions, runs, travel overrides and waits go from all scenes; links lose them and
  * are dropped if fewer than two members remain. A scene where they were carrying
  * the ball gets the ball back as a loose one, where they were standing — the
  * schema requires ballPos exactly when there is no carrier.
@@ -173,6 +173,13 @@ export function removePlayer(doc: BoardDoc, id: string): BoardDoc {
       delete travel[id];
       if (Object.keys(travel).length === 0) delete next.travel;
       else next.travel = travel;
+    }
+
+    if (scene.delay) {
+      const delay = { ...scene.delay };
+      delete delay[id];
+      if (Object.keys(delay).length === 0) delete next.delay;
+      else next.delay = delay;
     }
 
     if (scene.carrier === id) {

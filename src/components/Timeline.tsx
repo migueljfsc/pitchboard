@@ -9,9 +9,12 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  Images,
   Repeat,
 } from "lucide-react";
-import type { BoardDoc } from "@/board/types";
+import type { BoardDoc, PitchView } from "@/board/types";
+import { SceneThumb, THUMB_WIDTH } from "@/components/SceneThumb";
+import { NumberField } from "@/components/ui/NumberField";
 import {
   addSceneAfter,
   canShoot as canShootInto,
@@ -39,6 +42,8 @@ import { cn } from "@/lib/utils";
 
 type Props = {
   doc: BoardDoc;
+  /** Framing the strip previews through, so a tile matches the board above it. */
+  view: PitchView;
   onDocChange: Change<BoardDoc>;
   activeScene: number;
   /** `doc` is passed when the change accompanies an edit, because the caller's
@@ -54,6 +59,7 @@ type Props = {
 
 export function Timeline({
   doc,
+  view,
   onDocChange,
   activeScene,
   onActiveSceneChange,
@@ -67,6 +73,9 @@ export function Timeline({
   const { t } = useI18n();
   const total = totalSeconds(doc);
   const scene = doc.scenes[activeScene];
+  // Strip presentation, so it stays here: it is not a view of the board and not
+  // part of the document.
+  const [thumbs, setThumbs] = useState(true);
 
   // Where the playhead actually is, which parts company with the selected scene
   // the moment playback starts — starting play drops the selection back to
@@ -139,6 +148,20 @@ export function Timeline({
           <Waves size={14} />
         </button>
 
+        <button
+          type="button"
+          onClick={() => setThumbs(!thumbs)}
+          aria-label={t("timeline.thumbs")}
+          aria-pressed={thumbs}
+          title={thumbs ? t("timeline.thumbs.off") : t("timeline.thumbs.on")}
+          className={cn(
+            "flex size-8 shrink-0 items-center justify-center rounded-md border transition",
+            thumbs ? "border-accent text-accent" : "border-ink-600 text-ink-400 hover:text-ink-200",
+          )}
+        >
+          <Images size={14} />
+        </button>
+
         <input
           type="range"
           min={0}
@@ -172,6 +195,7 @@ export function Timeline({
               type="button"
               onClick={() => onActiveSceneChange(i)}
               aria-current={isLive ? "true" : undefined}
+              style={thumbs ? { width: THUMB_WIDTH + 20 } : undefined}
               className={cn(
                 "flex min-w-28 shrink-0 flex-col items-start gap-0.5 rounded-md border px-2.5 py-1.5 text-left transition",
                 i === activeScene
@@ -182,7 +206,13 @@ export function Timeline({
                 isLive && i !== activeScene && "border-accent/50 bg-accent/5",
               )}
             >
-              <span className={cn("text-xs font-medium", isLive ? "text-white" : "text-ink-200")}>
+              {thumbs && <SceneThumb doc={doc} index={i} view={view} />}
+              <span
+                className={cn(
+                  "max-w-full truncate text-xs font-medium",
+                  isLive ? "text-white" : "text-ink-200",
+                )}
+              >
                 {s.name}
               </span>
               <span className="font-mono text-[11px] text-ink-400">
@@ -358,68 +388,6 @@ function Duration({
       unit="s"
       onCommit={(v) => onChange(v * 1000)}
     />
-  );
-}
-
-/**
- * A numeric field that holds its own text.
- *
- * A fully controlled number input cannot be emptied. Retyping 10 as 20 goes
- * through "1" and then "", and neither is a value the document can hold, so the
- * field snaps back mid-edit and the second digit never lands. This keeps
- * whatever is typed and commits only what is inside the range; blur puts it back
- * to what the document actually says, so an abandoned edit leaves nothing
- * behind. Same shape as the label-size field in DrawPanel.
- */
-function NumberField({
-  label,
-  title,
-  value,
-  min,
-  max,
-  step,
-  unit,
-  decimals = 0,
-  onCommit,
-}: {
-  label: string;
-  /** Hover text for the whole control, where the rule is worth more than a caption. */
-  title?: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  unit: string;
-  decimals?: number;
-  onCommit: (value: number) => void;
-}) {
-  /** null while the field is showing the committed value rather than a draft. */
-  const [draft, setDraft] = useState<string | null>(null);
-  const text = draft ?? (decimals > 0 ? value.toFixed(decimals) : String(value));
-
-  return (
-    <label className="flex flex-col gap-1" title={title}>
-      <span className="text-[11px] uppercase tracking-wide text-ink-400">{label}</span>
-      <div className="flex items-center gap-1">
-        <input
-          type="number"
-          min={min}
-          max={max}
-          step={step}
-          value={text}
-          onChange={(e) => {
-            setDraft(e.target.value);
-            const n = Number(e.target.value);
-            if (e.target.value.trim() !== "" && Number.isFinite(n) && n >= min && n <= max) {
-              onCommit(n);
-            }
-          }}
-          onBlur={() => setDraft(null)}
-          className="w-16 rounded-md border border-ink-600 bg-ink-900 px-2 py-1 font-mono text-xs text-ink-200 outline-none focus:border-accent"
-        />
-        <span className="text-[11px] text-ink-400">{unit}</span>
-      </div>
-    </label>
   );
 }
 

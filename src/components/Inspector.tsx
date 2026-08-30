@@ -3,9 +3,18 @@ import { UserMinus } from "lucide-react";
 import type { BoardDoc, Player } from "@/board/types";
 import { BALL_ID } from "@/board/types";
 import { displayName, shirtClash } from "@/board/players";
-import { entityTravelMs, sceneTravelMs } from "@/board/timeline";
+import type { Carry } from "@/board/interaction";
+import { entityDelayMs, entityTravelMs, sceneTravelMs } from "@/board/timeline";
 import { cn } from "@/lib/utils";
+import { NumberField } from "@/components/ui/NumberField";
 import { useI18n } from "@/i18n/context";
+import type { Message } from "@/i18n/core";
+
+const CARRY_MODES = [
+  { mode: "scene", key: "inspect.carry.scene" },
+  { mode: "stationary", key: "inspect.carry.stationary" },
+  { mode: "all", key: "inspect.carry.all" },
+] as const satisfies readonly { mode: Carry; key: string }[];
 
 type Props = {
   doc: BoardDoc;
@@ -18,6 +27,10 @@ type Props = {
   onRename: (playerId: string, label: string) => void;
   onRenumber: (playerId: string, number: number) => void;
   onTravelChange: (ms: number | null) => void;
+  onDelayChange: (ms: number | null) => void;
+  /** How far a move of this selection reaches forward through the scenes. */
+  carry: Carry;
+  onCarryChange: (carry: Carry) => void;
   onRemovePlayer: (playerId: string) => void;
   /** True when every selected entity has its run arrow hidden in this scene. */
   runsHidden: boolean;
@@ -41,6 +54,9 @@ export function Inspector({
   onRename,
   onRenumber,
   onTravelChange,
+  onDelayChange,
+  carry,
+  onCarryChange,
   onRemovePlayer,
   runsHidden,
   onRunsHiddenChange,
@@ -84,6 +100,9 @@ export function Inspector({
   const sceneMs = scene?.transitionMs ?? 0;
   const ownMs = only && scene ? entityTravelMs(scene, only) : sceneMs;
   const overridden = only !== null && scene?.travel?.[only] !== undefined;
+  // A wait is per-entity too, and zero unless one was set.
+  const ownDelayMs = only && scene ? entityDelayMs(scene, only) : 0;
+  const waits = only !== null && ownDelayMs > 0;
 
   return (
     <div className="flex flex-col gap-3.5">
@@ -115,44 +134,97 @@ export function Inspector({
         </p>
       )}
 
+      {/* Read when a drag or a nudge lands, so it has to be visible BEFORE one —
+          which is exactly when something is selected. A mode you cannot see is a
+          mode you forget you set. See D41. */}
+      {doc.scenes.length > 1 && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[11px] uppercase tracking-wide text-ink-400">
+            {t("inspect.carry")}
+          </span>
+          <div className="flex gap-1">
+            {CARRY_MODES.map(({ mode, key }) => (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={carry === mode}
+                title={t(`${key}.hint` as Message["key"])}
+                onClick={() => onCarryChange(mode)}
+                className={cn(
+                  "flex-1 rounded border px-1 py-1.5 text-[11px] transition",
+                  carry === mode
+                    ? "border-accent text-accent"
+                    : "border-ink-600 text-ink-400 hover:text-ink-200",
+                )}
+              >
+                {t(key)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Flow mode paces the whole board, so a per-entity time has nothing to
           override — hidden rather than shown doing nothing. */}
       {canEditPaths && scene && !doc.flow && (
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-baseline justify-between">
-            <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("inspect.travelTime")}</span>
-            {overridden && (
-              <button
-                type="button"
-                onClick={() => onTravelChange(null)}
-                className="text-[11px] text-ink-300 underline-offset-2 hover:text-white hover:underline"
-              >
-                {t("inspect.matchScene")}
-              </button>
-            )}
-          </div>
-          <div className="flex items-center gap-1.5">
-            <input
-              type="number"
-              min={0}
-              max={60}
-              step={0.1}
-              value={(ownMs / 1000).toFixed(1)}
-              onChange={(e) => onTravelChange(Number(e.target.value) * 1000)}
-              className="w-16 rounded border border-ink-600 bg-ink-900 px-2 py-1 font-mono text-xs text-ink-200 outline-none transition hover:border-ink-400 focus:border-accent"
-            />
-            <span className="text-[11px] text-ink-400">
-              {t(overridden ? "inspect.travel.unit" : "inspect.travel.default")}
-            </span>
-          </div>
-          <p className="text-[11px] leading-relaxed text-ink-300">
-            {t("inspect.travel.hint", { seconds: (sceneTravelMs(scene) / 1000).toFixed(1) })}
-          </p>
+        <div className="flex flex-col gap-2.5">
+          <NumberField
+            label={t("inspect.travelTime")}
+            title={t("inspect.travel.hint", {
+              seconds: (sceneTravelMs(scene) / 1000).toFixed(1),
+            })}
+            value={ownMs / 1000}
+            min={0}
+            max={60}
+            step={0.1}
+            decimals={1}
+            unit={t(overridden ? "inspect.travel.unit" : "inspect.travel.default")}
+            onCommit={(seconds) => onTravelChange(seconds * 1000)}
+            action={
+              overridden && (
+                <button
+                  type="button"
+                  onClick={() => onTravelChange(null)}
+                  className="normal-case tracking-normal text-ink-300 underline-offset-2 hover:text-white hover:underline"
+                >
+                  {t("inspect.matchScene")}
+                </button>
+              )
+            }
+          />
+
+          {/* A wait is what lets one scene hold a sequence instead of two scenes
+              existing only to order it — see D42. */}
+          <NumberField
+            label={t("inspect.delay")}
+            title={t("inspect.delay.hint")}
+            value={ownDelayMs / 1000}
+            min={0}
+            max={60}
+            step={0.1}
+            decimals={1}
+            unit={t("inspect.travel.unit")}
+            onCommit={(seconds) => onDelayChange(seconds * 1000)}
+            action={
+              waits && (
+                <button
+                  type="button"
+                  onClick={() => onDelayChange(null)}
+                  className="normal-case tracking-normal text-ink-300 underline-offset-2 hover:text-white hover:underline"
+                >
+                  {t("inspect.delay.together")}
+                </button>
+              )
+            }
+          />
         </div>
       )}
 
       {only && (
-        <div className="flex flex-col gap-1.5">
+        // The rule sits on the group rather than on each control: a title on an
+        // ancestor is what a child without one shows, so the whole block explains
+        // itself on hover without repeating the sentence three times.
+        <div className="flex flex-col gap-1.5" title={t("inspect.ball.hint")}>
           <span className="text-[11px] uppercase tracking-wide text-ink-400">
             {t("inspect.ball", { scene: scene?.name ?? "" })}
           </span>
@@ -160,9 +232,6 @@ export function Inspector({
             label={carries ? t("inspect.ball.release") : t("inspect.ball.give", { who: nameOf(only) })}
             onClick={() => onCarrierChange(carries ? null : only)}
           />
-          <p className="text-[11px] leading-relaxed text-ink-300">
-            {t("inspect.ball.hint")}
-          </p>
         </div>
       )}
 
@@ -178,7 +247,7 @@ export function Inspector({
       )}
 
       {canEditPaths && (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5" title={t("inspect.run.hint")}>
           <span className="text-[11px] uppercase tracking-wide text-ink-400">
             {t("inspect.run", { scene: scene?.name ?? "" })}
           </span>
@@ -187,9 +256,6 @@ export function Inspector({
             label={t(runsHidden ? "inspect.showRuns" : "inspect.hideRuns")}
             onClick={() => onRunsHiddenChange(!runsHidden)}
           />
-          <p className="text-[11px] leading-relaxed text-ink-300">
-            {t("inspect.run.hint")}
-          </p>
         </div>
       )}
     </div>
