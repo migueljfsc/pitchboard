@@ -125,6 +125,11 @@ hatch, but CI owns the real deploy.
   members; an annotation is fixed geometry that depends on nobody. Do not merge them.
 - **An annotation's scene range is stored as scene ids**, never indices — reordering scenes must
   carry the drawing with them. `deleteScene` prunes dangling ranges rather than dropping shapes.
+- **A text label is the one annotation that is not in pitch space.** It stays upright while the
+  board turns, so on a vertical board its lines run along pitch y and stack along pitch x —
+  which is why `boundsOf`, `annotationHandles`, `dragAnnotationHandle` and `hitTestAnnotation`
+  all take `rotated`. It defaults to the flat case, so forgetting it fails quietly and only on
+  a rotated board: the box, the width handle and the grab area sit ninety degrees off the words.
 - **Formation slots pair by ORDER, not by id.** `buildTeam` mints `<team>-<number>` ids, but
   renumbering a player keeps their id — so after a renumber those ids no longer match the squad.
   Anything mapping a fresh build onto an existing team walks both lists by index.

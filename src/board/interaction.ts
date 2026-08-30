@@ -20,7 +20,6 @@ import {
   annotationHandles,
   boundsOf,
   strokePoints,
-  textSize,
   visibleAt,
   type AnnotationHandle,
 } from "./annotations";
@@ -149,13 +148,14 @@ export function hitTestAnnotationHandle(
   sceneIndex: number,
   selected: string | null,
   p: Vec2,
+  rotated = false,
   margin = 0.35,
 ): AnnotationHandleHit | null {
   if (!selected) return null;
   const ann = visibleAt(doc, sceneIndex).find((a) => a.id === selected);
   if (!ann) return null;
 
-  for (const handle of annotationHandles(ann)) {
+  for (const handle of annotationHandles(ann, rotated)) {
     if (dist(p, handle.at) <= HANDLE_RADIUS + margin) return { id: ann.id, which: handle.which };
   }
   return null;
@@ -173,18 +173,19 @@ export function hitTestAnnotation(
   sceneIndex: number,
   p: Vec2,
   layer: AnnotationLayer,
+  rotated = false,
   margin = 0.35,
 ): Annotation | null {
   const list = visibleAt(doc, sceneIndex);
   for (let i = list.length - 1; i >= 0; i--) {
     const ann = list[i];
     if (layerOf(ann) !== layer) continue;
-    if (annotationCovers(ann, p, margin)) return ann;
+    if (annotationCovers(ann, p, margin, rotated)) return ann;
   }
   return null;
 }
 
-function annotationCovers(ann: Annotation, p: Vec2, margin: number): boolean {
+function annotationCovers(ann: Annotation, p: Vec2, margin: number, rotated: boolean): boolean {
   if (ann.kind === "rect" || ann.kind === "ellipse") {
     const { x, y, w, h } = boundsOf(ann);
     const cx = x + w / 2;
@@ -199,12 +200,12 @@ function annotationCovers(ann: Annotation, p: Vec2, margin: number): boolean {
   }
 
   if (ann.kind === "text") {
-    // Text is drawn upright, so its box is not axis-aligned on a rotated board
-    // and a rectangle in pitch space would be wrong there. A radius covering the
-    // longer side is orientation-independent and over-grabs only the corners.
-    const size = textSize(ann);
-    const reach = Math.max(size * 0.7, ann.text.length * size * 0.3);
-    return dist(p, ann.at) <= reach + margin;
+    // The box the words are actually in, turned with the board. It used to be a
+    // radius over the whole string, which grabbed empty grass under a short label
+    // and was wildly wrong once a label could wrap: length stopped predicting
+    // width the moment a second line existed.
+    const { w, h } = boundsOf(ann, rotated);
+    return Math.abs(p.x - ann.at.x) <= w / 2 + margin && Math.abs(p.y - ann.at.y) <= h / 2 + margin;
   }
 
   const points = strokePoints(ann);

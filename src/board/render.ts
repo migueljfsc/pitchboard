@@ -53,6 +53,7 @@ import {
   textSize,
   visibleAt,
   wavy,
+  type AnnotationHandle,
 } from "./annotations";
 import {
   buildArcTable,
@@ -151,7 +152,7 @@ export function drawBoard(
 
   if (view.interactive && view.annotationSelection) {
     const selected = marks.find((a) => a.id === view.annotationSelection);
-    if (selected) drawAnnotationChrome(ctx, selected);
+    if (selected) drawAnnotationChrome(ctx, selected, view.rotated);
   }
 
   if (view.interactive && view.marquee) {
@@ -859,9 +860,15 @@ function drawAnnotationText(
   });
 }
 
-/** Editor chrome for the selected shape: a dotted box and its grab handles. */
-function drawAnnotationChrome(ctx: Ctx, ann: Annotation): void {
-  const { x, y, w, h } = boundsOf(ann);
+/**
+ * Editor chrome for the selected shape: a dotted box and its grab handles.
+ *
+ * `rotated` reaches the geometry rather than the canvas: a label turns with the
+ * board while staying upright, so its box and its width handle have to turn with
+ * it. Everything else is drawn in pitch space and ignores the flag.
+ */
+function drawAnnotationChrome(ctx: Ctx, ann: Annotation, rotated: boolean): void {
+  const { x, y, w, h } = boundsOf(ann, rotated);
 
   ctx.save();
   ctx.setLineDash([0.7, 0.7]);
@@ -870,15 +877,39 @@ function drawAnnotationChrome(ctx: Ctx, ann: Annotation): void {
   ctx.strokeRect(x - 0.7, y - 0.7, w + 1.4, h + 1.4);
   ctx.restore();
 
-  for (const handle of annotationHandles(ann)) {
-    ctx.beginPath();
-    ctx.arc(handle.at.x, handle.at.y, HANDLE_RADIUS * 0.8, 0, Math.PI * 2);
-    ctx.fillStyle = "#fbbf24";
-    ctx.fill();
-    ctx.lineWidth = 0.12;
-    ctx.strokeStyle = "rgba(0,0,0,0.6)";
-    ctx.stroke();
+  for (const handle of annotationHandles(ann, rotated)) drawAnnotationHandle(ctx, handle);
+}
+
+/**
+ * One grab point of the selected shape.
+ *
+ * Square when it resizes, round when it moves — on the board itself that shape is
+ * the only cue that a text label can be widened at all, since nothing else says so.
+ * Drawn at the radius it is hit-tested at rather than smaller, so the target is the
+ * size it looks, and ringed dark-then-white because amber alone is a colour the
+ * drawing underneath is free to be using too.
+ */
+function drawAnnotationHandle(ctx: Ctx, handle: AnnotationHandle): void {
+  const { x, y } = handle.at;
+
+  ctx.beginPath();
+  if (handle.which === "w") {
+    const side = HANDLE_RADIUS * 1.9;
+    ctx.rect(x - side / 2, y - side / 2, side, side);
+  } else {
+    ctx.arc(x, y, HANDLE_RADIUS, 0, Math.PI * 2);
   }
+
+  // Widest stroke first: each later one is centred on the same path, so they nest
+  // into a rim rather than replacing each other.
+  ctx.strokeStyle = "rgba(0,0,0,0.65)";
+  ctx.lineWidth = 0.26;
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(255,255,255,0.95)";
+  ctx.lineWidth = 0.13;
+  ctx.stroke();
+  ctx.fillStyle = "#fbbf24";
+  ctx.fill();
 }
 
 // ---------------------------------------------------------------- paths

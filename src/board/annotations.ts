@@ -274,11 +274,24 @@ export function textExtent(ann: TextAnnotation): { w: number; h: number } {
   };
 }
 
-/** Corners of a two-point shape, normalised so a backwards drag still works. */
-export function boundsOf(ann: Annotation): { x: number; y: number; w: number; h: number } {
+/**
+ * Corners of a two-point shape, normalised so a backwards drag still works.
+ *
+ * `rotated` is the board's framing, and only a label cares about it: text stays
+ * upright while the board turns, so on a vertical board its lines run along pitch
+ * y and stack along pitch x. Every other shape is drawn in pitch space and looks
+ * the same either way. Pass it wherever a rotated board is possible — the default
+ * is the flat case, and getting it wrong misplaces only the chrome, quietly.
+ */
+export function boundsOf(
+  ann: Annotation,
+  rotated = false,
+): { x: number; y: number; w: number; h: number } {
   if (ann.kind === "text") {
     // Drawn centred on `at`, so the box straddles it.
-    const { w, h } = textExtent(ann);
+    const e = textExtent(ann);
+    const w = rotated ? e.h : e.w;
+    const h = rotated ? e.w : e.h;
     return { x: ann.at.x - w / 2, y: ann.at.y - h / 2, w, h };
   }
   if (!isSegment(ann)) {
@@ -448,16 +461,22 @@ export type AnnotationHandle = { which: "a" | "b" | "c1" | "c2" | "at" | "w"; at
  * A pen stroke has none: reshaping a scribble vertex by vertex is worse than
  * redrawing it.
  */
-export function annotationHandles(ann: Annotation): AnnotationHandle[] {
+export function annotationHandles(ann: Annotation, rotated = false): AnnotationHandle[] {
   if (ann.kind === "pen") return [];
   if (ann.kind === "text") {
-    // Two: one to move it, one on the right edge to set the box width. The width handle is
-    // what makes a second line possible at all, so it is offered as soon as a label is
-    // selected rather than hidden behind a mode.
+    // Two: one to move it, one on the far end of the line to set the box width. The width
+    // handle is what makes a second line possible at all, so it is offered as soon as a
+    // label is selected rather than hidden behind a mode.
+    //
+    // "Far end of the line", not "right", because the words turn with the board and the
+    // handle has to sit where the last character does.
     const { w } = textExtent(ann);
+    const edge = rotated
+      ? { x: ann.at.x, y: ann.at.y + w / 2 }
+      : { x: ann.at.x + w / 2, y: ann.at.y };
     return [
       { which: "at", at: ann.at },
-      { which: "w", at: { x: ann.at.x + w / 2, y: ann.at.y } },
+      { which: "w", at: edge },
     ];
   }
 
@@ -479,11 +498,14 @@ export function dragAnnotationHandle(
   ann: Annotation,
   which: AnnotationHandle["which"],
   to: Vec2,
+  rotated = false,
 ): Partial<Annotation> {
   if (ann.kind === "text") {
-    // Doubled, because the box is centred on `at` — the edge moves half as far as the width.
+    // Along the line of the text, which is pitch y on a vertical board. Doubled, because
+    // the box is centred on `at` — the edge moves half as far as the width.
     if (which === "w") {
-      return { width: clamp((to.x - ann.at.x) * 2, TEXT_WIDTH_MIN, TEXT_WIDTH_MAX) };
+      const reach = rotated ? to.y - ann.at.y : to.x - ann.at.x;
+      return { width: clamp(reach * 2, TEXT_WIDTH_MIN, TEXT_WIDTH_MAX) };
     }
     return { at: to };
   }

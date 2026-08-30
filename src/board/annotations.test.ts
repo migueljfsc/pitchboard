@@ -587,4 +587,35 @@ describe("text boxes", () => {
   it("still moves on the `at` handle", () => {
     expect(dragAnnotationHandle(label(), "at", { x: 1, y: 2 })).toEqual({ at: { x: 1, y: 2 } });
   });
+
+  // A label stays upright while the board turns, so on a vertical board its lines run along
+  // pitch y. The geometry has to turn with the words or the box and its handle sit ninety
+  // degrees from the label they belong to.
+  it("turns its box and its width handle with a vertical board", () => {
+    const ann = label({ width: 20 });
+    const flat = boundsOf(ann);
+    const vertical = boundsOf(ann, true);
+    expect(vertical.w).toBeCloseTo(flat.h, 6);
+    expect(vertical.h).toBeCloseTo(flat.w, 6);
+
+    expect(annotationHandles(ann, true).find((h) => h.which === "w")?.at).toEqual({
+      x: 50,
+      y: 40,
+    });
+  });
+
+  it("reads a rotated resize drag along pitch y, and ignores the other axis", () => {
+    const ann = label({ width: 20 });
+    expect(dragAnnotationHandle(ann, "w", { x: 50, y: 45 }, true)).toEqual({ width: 30 });
+    expect(dragAnnotationHandle(ann, "w", { x: 999, y: 45 }, true)).toEqual({ width: 30 });
+  });
+
+  it("takes a click where the words are, not where they would be unrotated", () => {
+    let doc = board();
+    doc = addAnnotation(doc, { ...label({ width: 20 }), from: doc.scenes[0].id });
+    // Eight metres up the pitch: inside a vertical label, well outside a flat one.
+    const along = at(50, 38);
+    expect(hitTestAnnotation(doc, 0, along, "mark", true)?.id).toBe("t1");
+    expect(hitTestAnnotation(doc, 0, along, "mark")).toBeNull();
+  });
 });

@@ -108,10 +108,27 @@ export function BoardCanvas({
    */
   const live = interactive && !pitchView.tilt;
 
+  /**
+   * Framing the pointer is working in.
+   *
+   * Labels stay upright while the board turns, so their box, their width handle
+   * and the drag that sets it all run along pitch y on a vertical board. Every
+   * hit test that can land on a label has to be told which way it is standing.
+   */
+  const rotated = framingOf(pitchView).rotated;
+
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [hover, setHover] = useState<string | null>(null);
+  /**
+   * What the pointer is over, when it is over a control point.
+   *
+   * Separate from `hover`, which is the entity under the pointer and feeds the
+   * renderer. This one only picks the cursor — a handle is drawn on top of
+   * whatever it edits, so it wins the cursor without stealing the highlight.
+   */
+  const [grip, setGrip] = useState<"grab" | "resize" | null>(null);
   const [drag, setDrag] = useState<Drag>(null);
 
   // Track the element's CSS size; the viewport is derived from it, never stored.
@@ -204,7 +221,13 @@ export function BoardCanvas({
 
     // The selected shape's own handles come first, above even run handles: they
     // are drawn on top of everything and are the most deliberate target there is.
-    const annHandle = hitTestAnnotationHandle(doc, annotationScene(), annotationSelection, p);
+    const annHandle = hitTestAnnotationHandle(
+      doc,
+      annotationScene(),
+      annotationSelection,
+      p,
+      rotated,
+    );
     if (annHandle) {
       setDrag({ kind: "ann-handle", hit: annHandle });
       return;
@@ -225,7 +248,7 @@ export function BoardCanvas({
 
     // Marks are drawn above the tokens, so they take a click from one. Zones are
     // drawn below and are tested after. Hit-testing mirrors the draw order.
-    const mark = hitTestAnnotation(doc, scene, p, "mark");
+    const mark = hitTestAnnotation(doc, scene, p, "mark", rotated);
     if (mark) {
       selectAnnotation(mark.id);
       setDrag({ kind: "ann-move", id: mark.id, last: p });
@@ -244,7 +267,7 @@ export function BoardCanvas({
       return;
     }
 
-    const zone = hitTestAnnotation(doc, scene, p, "zone");
+    const zone = hitTestAnnotation(doc, scene, p, "zone", rotated);
     if (zone) {
       selectAnnotation(zone.id);
       setDrag({ kind: "ann-move", id: zone.id, last: p });
@@ -298,7 +321,24 @@ export function BoardCanvas({
     const p = pointFrom(e);
 
     if (!drag) {
-      setHover(tool === "select" ? (hitTest(doc, frameAt(doc, t), p)?.id ?? null) : null);
+      if (tool !== "select") {
+        setHover(null);
+        setGrip(null);
+        return;
+      }
+      // Same order as pointerdown: the shape's own handles, then run handles,
+      // then the tokens. The cursor has to promise what the click will do.
+      const annHandle = hitTestAnnotationHandle(
+        doc,
+        annotationScene(),
+        annotationSelection,
+        p,
+        rotated,
+      );
+      const onHandle =
+        annHandle ?? (editScene === undefined ? null : hitTestHandle(doc, editScene, selection, p));
+      setGrip(annHandle?.which === "w" ? "resize" : onHandle ? "grab" : null);
+      setHover(hitTest(doc, frameAt(doc, t), p)?.id ?? null);
       return;
     }
 
@@ -331,7 +371,7 @@ export function BoardCanvas({
       const ann = (doc.annotations ?? []).find((a) => a.id === drag.hit.id);
       if (!ann) return;
       onDocChange(
-        updateAnnotation(doc, ann.id, dragAnnotationHandle(ann, drag.hit.which, p)),
+        updateAnnotation(doc, ann.id, dragAnnotationHandle(ann, drag.hit.which, p, rotated)),
         dragKey(),
       );
       return;
@@ -427,26 +467,38 @@ export function BoardCanvas({
     if (!sticky) onToolChange?.("select");
   };
 
+  /**
+   * The pointer's job, as a CSS cursor.
+   *
+   * The width handle resizes along the pitch's x-axis, which is down the screen
+   * once the board is stood on end — so the arrows follow the framing rather than
+   * the document, or they point across the one direction the drag cannot go.
+   */
+  const cursor = (): string => {
+    if (!live) return "default";
+    if (tool !== "select") return "crosshair";
+    const resize = rotated ? "ns-resize" : "ew-resize";
+    if (drag?.kind === "ann-handle") return drag.hit.which === "w" ? resize : "grabbing";
+    if (drag?.kind === "move" || drag?.kind === "handle" || drag?.kind === "ann-move") {
+      return "grabbing";
+    }
+    if (grip === "resize") return resize;
+    return grip === "grab" || hover ? "grab" : "default";
+  };
+
   return (
     <div ref={wrapRef} className="h-full w-full">
       <canvas
         ref={canvasRef}
         className="block touch-none select-none"
-        style={{
-          cursor: !live
-            ? "default"
-            : tool !== "select"
-              ? "crosshair"
-              : drag?.kind === "move" || drag?.kind === "handle" || drag?.kind === "ann-move"
-                ? "grabbing"
-                : hover
-                  ? "grab"
-                  : "default",
-        }}
+        style={{ cursor: cursor() }}
         onPointerDown={live ? onPointerDown : undefined}
         onPointerMove={live ? onPointerMove : undefined}
         onPointerUp={live ? onPointerUp : undefined}
-        onPointerLeave={() => setHover(null)}
+        onPointerLeave={() => {
+          setHover(null);
+          setGrip(null);
+        }}
         onDoubleClick={live ? onDoubleClick : undefined}
       />
     </div>
