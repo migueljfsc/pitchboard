@@ -32,7 +32,13 @@ on:
       - "wrangler.jsonc"
       - "package.json"
       - "pnpm-lock.yaml"
+      # The build gates run lint and typecheck, so what configures them is part of the
+      # deploy. pnpm-workspace.yaml is on this list because leaving it off meant the fix
+      # for a failed deploy did not itself trigger one.
+      - "pnpm-workspace.yaml"
       - "vite.config.ts"
+      - "tsconfig*.json"
+      - "eslint.config.js"
       - ".github/workflows/deploy-worker.yml"
   workflow_dispatch:
 

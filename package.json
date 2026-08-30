@@ -10,10 +10,11 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "pnpm types && tsc -b && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "typecheck": "tsc -b --noEmit",
+    "types": "wrangler types",
+    "typecheck": "pnpm types && tsc -b --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -45,6 +46,7 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.8.0",
     "vite": "^8.1.5",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "wrangler": "4.127.0"
   }
 }

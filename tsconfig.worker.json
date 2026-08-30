@@ -1,0 +1,28 @@
+{
+  // The Worker is not the app: no DOM, no React, and its globals come from
+  // worker-configuration.d.ts rather than from @types/node. Without this project
+  // `tsc -b` never looked at worker/ at all — the one part of the tree that CI
+  // deploys straight to production.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "skipLibCheck": true,
+
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+
+    // Ambient types are the generated bindings only; pulling in @types/node here
+    // would let worker code reference globals the runtime does not have.
+    "types": []
+  },
+  "include": ["worker", "worker-configuration.d.ts"]
+}

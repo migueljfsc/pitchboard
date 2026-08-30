@@ -3,13 +3,11 @@
  * layer ahead of this script (see `run_worker_first` in wrangler.jsonc), so a page load
  * never reaches here and never counts against the free tier's request budget.
  *
- * Bindings declared in wrangler.jsonc but not yet used (DB, SNAPSHOTS) are deliberately
- * absent from `Env`: they get their real types from `wrangler types` when the endpoints
- * that touch them land, rather than hand-written stand-ins that would then conflict.
+ * `Env` is ambient, generated from wrangler.jsonc by `wrangler types` into
+ * worker-configuration.d.ts — which is gitignored and rebuilt by the `types` script that
+ * both typecheck and build run first. Adding a binding to wrangler.jsonc is therefore the
+ * only place a binding is declared; there is no hand-written mirror to drift from it.
  */
-interface Env {
-  ASSETS: { fetch(request: Request): Promise<Response> };
-}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
