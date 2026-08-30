@@ -1126,10 +1126,23 @@ not return the value on import — but only by relying on the resource never cre
 is a property of history rather than of the config. Out of tofu entirely, the secret has nowhere to
 leak to, and a bad plan can no longer take out the credential the plan itself is holding.
 
-**Everything else stays IaC.** This is the one exception, alongside secrets, which live in
-`wrangler secret put` for the same reason. Rate limiting is a second, involuntary one: WAF rate
-limiting rules are zone-scoped and this project has no zone, so the only available control is the
-Workers `ratelimit` binding, which Cloudflare exposes solely through the wrangler config.
+**Everything else stays IaC**, and where it cannot be, the reason is written down rather than
+assumed. Three things sit outside the stack. Secrets, which live in `wrangler secret put`, for the
+reason above. Rate limiting, because WAF rate limiting rules are zone-scoped and this project has
+no zone — the only available control is the Workers `ratelimit` binding, which Cloudflare exposes
+solely through the wrangler config. And the deploy itself, which confirms D8 with a harder
+argument than D8 originally had: a Worker serving static assets is deployed by registering a
+manifest of file hashes, uploading the bodies, and only then PUTting the script against a
+completion JWT that expires in one hour. `cloudflare_workers_script` accepts nothing but that
+finished token. Terraform cannot make the first two calls, cannot bundle the script, and cannot
+hold an hour-long credential in state across a plan and an apply.
+
+The requirement underneath the request — that deploys come from CI and not from somebody's
+laptop — is real, and was genuinely unmet while the first Worker deploy was manual.
+`.github/workflows/deploy-worker.yml` answers it: versioned, reviewed, gated on the same
+`cloudflare-production` environment as the applies, and running the same lint/typecheck/test
+gates as Pages. Declarative and reproducible were always the point; a `.tf` file was only ever
+one way to get there.
 
 ---
 

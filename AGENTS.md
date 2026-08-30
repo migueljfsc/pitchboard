@@ -41,7 +41,10 @@ Everything else is negotiable. These are not.
   drops frames).
 - **Immutable share snapshots.** No accounts, no edit keys, no authorisation model.
 - **OpenTofu owns durable infra; wrangler owns the deploy.** Do not add
-  `cloudflare_workers_script` to the stack.
+  `cloudflare_workers_script` to the stack. This is not a preference: deploying a Worker with
+  static assets needs a completion JWT that Cloudflare expires after an hour, obtained by
+  hashing and uploading `dist/` first, and Terraform can neither produce it nor hold it in
+  state. CI deploys via `.github/workflows/deploy-worker.yml` (D40).
 
 ## Non-goals for v1 — do not build
 

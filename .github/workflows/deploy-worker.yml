@@ -1,0 +1,95 @@
+name: deploy-worker
+
+# Builds the SPA and deploys it, with the API Worker, to Cloudflare.
+#
+# WHY THIS IS NOT OPENTOFU (D8, D40). Deploying a Worker that serves static assets is a
+# three-call sequence: register a manifest of file hashes, upload the file bodies in buckets,
+# then PUT the script referencing a completion JWT that Cloudflare expires after one hour.
+# `cloudflare_workers_script` can only accept that finished token. Terraform cannot perform
+# the first two calls, cannot bundle worker/index.ts, and a one-hour token is not a value that
+# can live in state and be re-planned. The stack owns the durable resources; this owns the
+# deploy, and the split is technical rather than stylistic.
+#
+# The Pages deploy in deploy.yml runs in parallel and is untouched — D39 keeps it alive so
+# existing links resolve while the Worker proves itself. The two differ in one build input:
+# Pages serves from a /pitchboard/ base, the Worker serves from the root.
+#
+# Required GitHub secrets (same two the terraform workflow uses):
+#   CLOUDFLARE_API_TOKEN    — needs Account · Workers Scripts · Edit and Account · D1 · Edit
+#   CLOUDFLARE_ACCOUNT_ID
+#
+# The token is hand-managed in the dashboard, deliberately (D40), so adding the Workers
+# Scripts scope is a manual step rather than a plan.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "worker/**"
+      - "public/**"
+      - "index.html"
+      - "wrangler.jsonc"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "vite.config.ts"
+      - ".github/workflows/deploy-worker.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never let two deploys race; queue rather than cancel a half-finished one.
+concurrency:
+  group: deploy-worker
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Add required reviewers to this environment in repo settings to gate deploys.
+    environment:
+      name: cloudflare-production
+      url: https://pitchboard.migueljfscardoso.workers.dev
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.9.0
+
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # The same gates CI runs, so a broken build never reaches production.
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+      # The Worker serves from the root; the default /pitchboard/ base is for Pages.
+      - run: pnpm build
+        env:
+          PITCHBOARD_BASE: /
+
+      # Schema before code, so a new version never meets a table it predates.
+      # Migrations are forward-only and must be additive: this runs unattended, and the
+      # environment gate above is the only thing standing between a DROP and production.
+      - name: Apply D1 migrations
+        uses: cloudflare/wrangler-action@v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4.127.0"
+          command: d1 migrations apply pitchboard-prod --remote
+
+      - name: Deploy Worker
+        uses: cloudflare/wrangler-action@v4.0.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4.127.0"
+          command: deploy
