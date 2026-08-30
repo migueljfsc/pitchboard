@@ -1,2 +1,7 @@
+# wrangler pulls workerd, whose postinstall fetches the runtime binary. pnpm 10 refuses
+# unapproved build scripts and exits non-zero, which fails the deploy workflow at the point
+# wrangler-action installs wrangler — an error about a build script, reported as a failed
+# migration.
 allowBuilds:
   esbuild: true
+  workerd: true
