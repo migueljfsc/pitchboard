@@ -19,6 +19,18 @@ import {
   parseOauthCookie,
   timingSafeEqual,
 } from "./lib/google";
+import {
+  createBoard,
+  createProject,
+  deleteBoard,
+  deleteProject,
+  getBoard,
+  listBoards,
+  listProjects,
+  renameProject,
+  updateBoard,
+  type Ctx,
+} from "./lib/boards";
 import { fail, json } from "./lib/http";
 import {
   clearedSessionCookie,
@@ -122,7 +134,39 @@ export default {
       }
 
       default:
-        return fail("not_implemented", 501);
+        return dispatch(env, request, url, now);
     }
   },
 };
+
+/**
+ * Everything that needs a signed-in user. Ids are matched by shape, so a malformed one is a
+ * 404 before it reaches the database rather than a query that was never going to match.
+ */
+const ID = "([A-Za-z0-9_-]{22})";
+
+const ROUTES: Array<{ method: string; pattern: RegExp; handle: (ctx: Ctx, ...p: string[]) => Promise<Response> }> = [
+  { method: "GET", pattern: new RegExp(`^/api/projects$`), handle: listProjects },
+  { method: "POST", pattern: new RegExp(`^/api/projects$`), handle: createProject },
+  { method: "PATCH", pattern: new RegExp(`^/api/projects/${ID}$`), handle: renameProject },
+  { method: "DELETE", pattern: new RegExp(`^/api/projects/${ID}$`), handle: deleteProject },
+  { method: "GET", pattern: new RegExp(`^/api/projects/${ID}/boards$`), handle: listBoards },
+  { method: "POST", pattern: new RegExp(`^/api/projects/${ID}/boards$`), handle: createBoard },
+  { method: "GET", pattern: new RegExp(`^/api/boards/${ID}$`), handle: getBoard },
+  { method: "PUT", pattern: new RegExp(`^/api/boards/${ID}$`), handle: updateBoard },
+  { method: "DELETE", pattern: new RegExp(`^/api/boards/${ID}$`), handle: deleteBoard },
+];
+
+async function dispatch(env: Env, request: Request, url: URL, now: number): Promise<Response> {
+  for (const route of ROUTES) {
+    const match = route.pattern.exec(url.pathname);
+    if (!match || route.method !== request.method) continue;
+
+    // Authenticated last, so an unknown path never costs a session lookup.
+    const user = await resolveSession(env, request, now);
+    if (!user) return fail("unauthorized", 401);
+
+    return route.handle({ env, request, user, now }, ...match.slice(1));
+  }
+  return fail("not_found", 404);
+}
