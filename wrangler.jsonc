@@ -1,0 +1,41 @@
+{
+  // Deploy: PITCHBOARD_BASE=/ pnpm build && wrangler deploy
+  //
+  // The Worker serves the SPA from dist/ as static assets — free, unlimited, and outside
+  // the 100k requests/day free-tier budget. Only the paths named in run_worker_first
+  // invoke the script and consume that budget, which is why it is an array of patterns
+  // and not `true`: `true` would meter every page load as well.
+  //
+  // Needs wrangler >= 4.20.0 for the array form of run_worker_first.
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "pitchboard",
+  "main": "./worker/index.ts",
+  "compatibility_date": "2026-08-30",
+
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+
+  // Ids come from `tofu output` after the first apply — the one manual step D8 accepted
+  // in exchange for OpenTofu never owning the script.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pitchboard",
+      "database_id": "<from tofu output d1_database_id>",
+      "migrations_dir": "./worker/migrations"
+    }
+  ],
+
+  "kv_namespaces": [
+    {
+      "binding": "SNAPSHOTS",
+      "id": "<from tofu output kv_snapshots_namespace_id>"
+    }
+  ],
+
+  "observability": { "enabled": true }
+}
