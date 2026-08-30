@@ -37,7 +37,7 @@ worth settling before the first one.
 ## Prerequisites
 
 1. **API token** (provider auth) — created and edited **by hand**, deliberately not managed by
-   this stack; see the header of `api_token.tf` for why. Cloudflare → My Profile → API Tokens,
+   this stack; see D40 in [`docs/decisions.md`](../../../docs/decisions.md) for why. Cloudflare → My Profile → API Tokens,
    with:
    - Account · Workers R2 Storage · Edit
    - Account · D1 · Edit

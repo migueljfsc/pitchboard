@@ -1100,6 +1100,37 @@ above land, and a hash weaker than the standard asks for. Every one of those is 
 than an oversight, and none of them is load-bearing for the thing being demonstrated, which is
 that a board can be saved, grouped and found again.
 
+## D40 — OpenTofu does not own the credential it authenticates with
+
+The Cloudflare API token that this stack presents was, briefly, a `cloudflare_account_token`
+resource inside the stack. It is now created and edited by hand in the dashboard, and only its
+scopes are documented here.
+
+**What went wrong.** The resource listed the permission groups the stack needs — R2, D1, KV — and
+omitted API Tokens read/write, because nothing in the stack needed them. The apply did exactly what
+it was asked: it rewrote the live token to that set, which stripped the token's ability to read
+*itself*. Every plan afterwards died in the refresh phase with
+`GET /accounts/*/tokens/* → 403 code 9109`, before reaching the apply that would have granted the
+permission back. Adding the missing groups to the config could not fix it, because the config was
+now unreachable. It had to be broken from outside tofu.
+
+**The general rule, which is the reason this is written down.** A self-managing credential can only
+be widened out of band, never narrowed safely — the apply that narrows it is the last one that can
+run. This is not specific to Cloudflare, and it is not fixed by `prevent_destroy`: nothing was
+destroyed here. The token simply went blind to itself, which no lifecycle rule models.
+
+**What falls out of the fix, and is worth having anyway.** `value` on that resource is computed and
+sensitive, so a create would have written an account-wide credential into the R2 state bucket and
+turned read access to that bucket into account access. Import avoided that, because Cloudflare does
+not return the value on import — but only by relying on the resource never creating anything, which
+is a property of history rather than of the config. Out of tofu entirely, the secret has nowhere to
+leak to, and a bad plan can no longer take out the credential the plan itself is holding.
+
+**Everything else stays IaC.** This is the one exception, alongside secrets, which live in
+`wrangler secret put` for the same reason. Rate limiting is a second, involuntary one: WAF rate
+limiting rules are zone-scoped and this project has no zone, so the only available control is the
+Workers `ratelimit` binding, which Cloudflare exposes solely through the wrangler config.
+
 ---
 
 ## Invariants
