@@ -3,6 +3,13 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.11.0 (2026-08-30)
+
+### Feat
+
+- **worker**: serve the spa and scaffold the api surface
+- **infra**: opentofu stack for r2, d1 and kv on cloudflare
+
 ## v0.10.0 (2026-08-29)
 
 ### Feat
