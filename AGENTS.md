@@ -83,9 +83,19 @@ src/App.tsx               picks Viewer or Editor from the hash; no router
 src/pages/Viewer.tsx      read-only playback of a shared board, with fork
 src/board/migrate.ts      version dispatch, run before validation on every load
 src/components/           React chrome; ui/ holds shadcn-style primitives
-worker/                   Cloudflare Worker — /api/boards + static passthrough
-infrastructure/terraform/cloudflare/    OpenTofu stack
+infrastructure/           everything that runs or provisions Cloudflare
+  terraform/cloudflare/   OpenTofu — R2, D1, KV. Durable resources only
+  worker/                 the Worker: config, source, migrations
+    wrangler.jsonc        paths inside resolve against THIS file, not the cwd
+    index.ts              the router; /api/* only, assets are served ahead of it
+    lib/                  session, google, users, crypto, http
+    migrations/           D1 schema, applied by CI before the script is deployed
 ```
+
+The Worker lives under `infrastructure/` because it is the deploy that OpenTofu cannot own
+(D40), not because it is configuration — `lib/` is real application logic and is tested like
+it. `pnpm types` regenerates its ambient bindings; `pnpm deploy:worker` is the local dry-run
+escape hatch, but CI owns the real deploy.
 
 `src/board/types.ts` is the canonical schema, in the same spirit as `cv.ts` in `portfolio` and
 `site.ts` in `motorcycle-journey`. Components never redefine document shape.

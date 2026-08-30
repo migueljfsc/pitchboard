@@ -6,7 +6,7 @@ name: deploy-worker
 # three-call sequence: register a manifest of file hashes, upload the file bodies in buckets,
 # then PUT the script referencing a completion JWT that Cloudflare expires after one hour.
 # `cloudflare_workers_script` can only accept that finished token. Terraform cannot perform
-# the first two calls, cannot bundle worker/index.ts, and a one-hour token is not a value that
+# the first two calls, cannot bundle the script, and a one-hour token is not a value that
 # can live in state and be re-planned. The stack owns the durable resources; this owns the
 # deploy, and the split is technical rather than stylistic.
 #
@@ -26,10 +26,9 @@ on:
     branches: [main]
     paths:
       - "src/**"
-      - "worker/**"
+      - "infrastructure/worker/**"
       - "public/**"
       - "index.html"
-      - "wrangler.jsonc"
       - "package.json"
       - "pnpm-lock.yaml"
       # The build gates run lint and typecheck, so what configures them is part of the
@@ -90,7 +89,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: "4.127.0"
-          command: d1 migrations apply pitchboard-prod --remote
+          command: d1 migrations apply pitchboard-prod --remote --config infrastructure/worker/wrangler.jsonc
 
       - name: Deploy Worker
         uses: cloudflare/wrangler-action@v4.0.0
@@ -98,4 +97,4 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: "4.127.0"
-          command: deploy
+          command: deploy --config infrastructure/worker/wrangler.jsonc

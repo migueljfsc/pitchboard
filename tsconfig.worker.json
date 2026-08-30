@@ -1,7 +1,7 @@
 {
   // The Worker is not the app: no DOM, no React, and its globals come from
   // worker-configuration.d.ts rather than from @types/node. Without this project
-  // `tsc -b` never looked at worker/ at all — the one part of the tree that CI
+  // `tsc -b` never looked at the Worker at all — the one part of the tree that CI
   // deploys straight to production.
   "compilerOptions": {
     "target": "ES2022",
@@ -24,5 +24,5 @@
     // would let worker code reference globals the runtime does not have.
     "types": []
   },
-  "include": ["worker", "worker-configuration.d.ts"]
+  "include": ["infrastructure/worker"]
 }

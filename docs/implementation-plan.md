@@ -299,7 +299,7 @@ Goal: a link you can send someone.
 2. [x] **`share/urlcodec.ts`** — `#d=<base64url(deflate-raw(json))>` via native
    `CompressionStream`, with a length budget check. D33.
 3. [ ] **`share/api.ts`** — client for the Worker endpoints.
-4. [ ] **`worker/index.ts`** — `POST /api/boards`, `GET /api/boards/:id`, static passthrough.
+4. [ ] **`infrastructure/worker/index.ts`** — `POST /api/boards`, `GET /api/boards/:id`, static passthrough.
 5. [x] **`pages/Viewer.tsx`** — read-only playback of a shared board, with "fork to edit", chosen
    by `App.tsx` from the hash. No router: a fragment needs none, and needs no rewrite rules on a
    static host either.
@@ -352,7 +352,7 @@ backend.
 **Payload size** — measured, and the answer is above.
 
 **Schema drift between client and Worker.** Not yet live: there is no Worker. When there is, it
-imports the same `schema.ts`. Do not let a second validator appear in `worker/`.
+imports the same `schema.ts`. Do not let a second validator appear in `infrastructure/worker/`.
 
 ---
 

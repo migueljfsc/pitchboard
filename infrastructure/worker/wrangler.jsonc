@@ -1,5 +1,9 @@
 {
-  // Deploy: PITCHBOARD_BASE=/ pnpm build && wrangler deploy
+  // Deployed by .github/workflows/deploy-worker.yml, never by hand.
+// Locally:  PITCHBOARD_BASE=/ pnpm build && pnpm deploy:worker --dry-run
+//
+// Paths here resolve against THIS file, not the working directory — which is why
+// the asset directory climbs back out to the repo root where vite writes it.
   //
   // The Worker serves the SPA from dist/ as static assets — free, unlimited, and outside
   // the 100k requests/day free-tier budget. Only the paths named in run_worker_first
@@ -7,13 +11,13 @@
   // and not `true`: `true` would meter every page load as well.
   //
   // Needs wrangler >= 4.20.0 for the array form of run_worker_first.
-  "$schema": "./node_modules/wrangler/config-schema.json",
+  "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "pitchboard",
-  "main": "./worker/index.ts",
+  "main": "./index.ts",
   "compatibility_date": "2026-08-30",
 
   "assets": {
-    "directory": "./dist",
+    "directory": "../../dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*"]
@@ -27,7 +31,7 @@
       "binding": "DB",
       "database_name": "pitchboard-prod",
       "database_id": "2ec8251e-61e8-4262-aefc-ee5c1aa2f7fe",
-      "migrations_dir": "./worker/migrations"
+      "migrations_dir": "./migrations"
     }
   ],
 
