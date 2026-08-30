@@ -19,7 +19,8 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
 
-    "baseUrl": ".",
+    // No baseUrl: it is deprecated in TS 6 and removed in TS 7 (TS5101). Path
+    // mappings resolve relative to this file without it.
     "paths": { "@/*": ["./src/*"] }
   },
   "include": ["src"]
