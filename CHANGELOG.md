@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.12.0 (2026-08-30)
+
+### Feat
+
+- **infra**: serve r2 media bucket publicly via managed r2.dev domain
+
 ## v0.11.1 (2026-08-30)
 
 ### Fix
