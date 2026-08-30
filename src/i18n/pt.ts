@@ -389,6 +389,12 @@ export const pt: Dictionary = {
   "account.error.unknown": "O início de sessão não foi concluído. Tenta novamente.",
   "account.error.dismiss": "Dispensar",
 
+  // ---------------------------------------------------------------- adopt
+  "adopt.title": "Guardar este quadro na tua conta?",
+  "adopt.message": "Tens um quadro em curso neste navegador. Guardá-lo na tua conta permite abri-lo em qualquer lado. De qualquer forma, continua neste navegador.",
+  "adopt.confirm": "Guardar",
+  "adopt.project": "Os meus quadros",
+
   // ---------------------------------------------------------------- boards
   "boards.title": "Quadros",
   "boards.title.hint": "Os teus quadros e projetos guardados",
@@ -409,6 +415,11 @@ export const pt: Dictionary = {
   "boards.count.other": "{count} quadros",
   "boards.open": "Abrir",
   "boards.delete": "Eliminar",
+  "boards.publish": "Publicar ligação",
+  "boards.published": "Ligação copiada",
+  "boards.unpublish": "Retirar ligação",
+  "boards.publish.hint": "Uma ligação curta que qualquer pessoa pode abrir. Voltar a publicar mantém a mesma ligação.",
+  "boards.error.slug_unavailable": "Não foi possível criar a ligação agora. Tenta novamente.",
   "boards.status.saving": "A guardar…",
   "boards.status.saved": "Guardado",
   "boards.openConfirm.title": "Abrir este quadro?",
@@ -430,6 +441,8 @@ export const pt: Dictionary = {
   "boards.error.offline": "Não foi possível contactar o servidor. O teu quadro continua guardado neste navegador.",
   "boards.error.unknown": "Isso não resultou. O teu quadro continua guardado neste navegador.",
 
+  "share.opening": "A abrir o quadro partilhado…",
+  "share.missing": "Essa ligação já não leva a um quadro.",
   // ---------------------------------------------------------------- viewer
   "viewer.shared": "Quadro partilhado",
   "viewer.fork": "Copiar para editar",

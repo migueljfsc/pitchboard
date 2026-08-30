@@ -45,6 +45,7 @@ import { cn } from "@/lib/utils";
 import { LocaleSwitch } from "@/components/LocaleSwitch";
 import { AccountMenu } from "@/components/AccountMenu";
 import { BoardsPanel } from "@/components/BoardsPanel";
+import { AdoptBoardPrompt } from "@/components/AdoptBoardPrompt";
 import { useAccount } from "@/lib/useAccount";
 import { useCloudBoard } from "@/lib/useCloudBoard";
 import { useI18n } from "@/i18n/context";
@@ -583,6 +584,11 @@ export function Editor({ initialDoc }: Props = {}) {
 
           <LocaleSwitch />
           {accountState.account && <BoardsPanel cloud={cloud} boardName={doc.name} />}
+          <AdoptBoardPrompt
+            cloud={cloud}
+            boardName={doc.name}
+            signedIn={accountState.account !== null}
+          />
           {/* A link outlives a session in localStorage, so signing out drops it here —
               otherwise the next person to use this browser inherits a pointer into an
               account that is no longer theirs. Composed at the call site rather than in an

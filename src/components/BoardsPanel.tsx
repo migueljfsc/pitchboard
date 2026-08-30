@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, FolderOpen, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, FolderOpen, Link2, Plus, Trash2 } from "lucide-react";
 
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useI18n } from "@/i18n/context";
@@ -26,6 +26,9 @@ import {
   deleteProject,
   listBoards,
   listProjects,
+  publishBoard,
+  shareUrl,
+  unpublishBoard,
 } from "@/share/api";
 
 /** Codes the Worker emits for these routes; anything else reads as the generic line. */
@@ -36,6 +39,7 @@ const KNOWN = new Set([
   "invalid_document",
   "not_found",
   "offline",
+  "slug_unavailable",
 ]);
 
 const codeOf = (error: unknown) =>
@@ -55,6 +59,7 @@ export function BoardsPanel({ cloud, boardName }: { cloud: CloudBoard; boardName
   const [newName, setNewName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
+  const [copied, setCopied] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
   const reload = useCallback(async () => {
@@ -152,7 +157,42 @@ export function BoardsPanel({ cloud, boardName }: { cloud: CloudBoard; boardName
     }
   };
 
+  /**
+   * Publishing and copying are one action. The slug is only useful once it is on a clipboard,
+   * and a two-step "publish, now copy" is a step nobody wants and one they can forget.
+   *
+   * The clipboard can refuse — a background tab, an embedded frame, a denied permission — and
+   * SharePanel already treats that as routine rather than exceptional. Here the link is
+   * published either way, so a refusal costs the copy and not the link.
+   */
+  const publish = async () => {
+    if (!cloud.link) return;
+    try {
+      const slug = await publishBoard(cloud.link.boardId);
+      await navigator.clipboard.writeText(shareUrl(slug)).catch(() => undefined);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 4000);
+      setError(null);
+    } catch (cause) {
+      setError(codeOf(cause));
+    }
+  };
+
+  const withdraw = async () => {
+    if (!cloud.link) return;
+    try {
+      await unpublishBoard(cloud.link.boardId);
+      setBoards({});
+      setError(null);
+    } catch (cause) {
+      setError(codeOf(cause));
+    }
+  };
+
   const linkedProject = projects?.find((p) => p.id === cloud.link?.projectId);
+  const publishedSlug = (boards[cloud.link?.projectId ?? ""] ?? []).find(
+    (b) => b.id === cloud.link?.boardId,
+  )?.share_slug;
 
   return (
     <div ref={root} className="relative shrink-0">
@@ -187,8 +227,15 @@ export function BoardsPanel({ cloud, boardName }: { cloud: CloudBoard; boardName
                 : t("boards.unsaved")}
             </p>
             {cloud.link && (
-              <div className="mt-1.5 flex gap-1.5">
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
                 <Small onClick={() => void cloud.saveNow()}>{t("boards.saveNow")}</Small>
+                <Small onClick={() => void publish()} title={t("boards.publish.hint")}>
+                  {copied ? <Check size={11} /> : <Link2 size={11} />}
+                  {t(copied ? "boards.published" : "boards.publish")}
+                </Small>
+                {publishedSlug && (
+                  <Small onClick={() => void withdraw()}>{t("boards.unpublish")}</Small>
+                )}
                 <Small onClick={cloud.detach}>{t("boards.detach")}</Small>
               </div>
             )}
@@ -336,11 +383,20 @@ const Dot = ({ className }: { className: string }) => (
   <span className={cn("ml-0.5 h-1.5 w-1.5 shrink-0 rounded-full", className)} aria-hidden />
 );
 
-function Small({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+function Small({
+  onClick,
+  title,
+  children,
+}: {
+  onClick: () => void;
+  title?: string;
+  children: React.ReactNode;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
+      title={title}
       className="flex shrink-0 items-center gap-1 rounded border border-ink-600 px-1.5 py-0.5 text-[10px] text-ink-300 transition hover:border-accent hover:text-white"
     >
       {children}

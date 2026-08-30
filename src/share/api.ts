@@ -170,3 +170,28 @@ export async function saveBoard(
 export async function deleteBoard(id: string): Promise<void> {
   await call(`/boards/${id}`, { method: "DELETE" });
 }
+
+// --- sharing -----------------------------------------------------------------------------
+
+/**
+ * Publishing writes a new immutable snapshot and re-aims the board's slug at it, so the link
+ * is stable across republishes. An already-published board keeps the slug it has — otherwise
+ * republishing would break every link the author has already sent.
+ */
+export async function publishBoard(id: string): Promise<string> {
+  const { slug } = await call<{ slug: string }>(`/boards/${id}/publish`, { method: "POST" });
+  return slug;
+}
+
+export async function unpublishBoard(id: string): Promise<void> {
+  await call(`/boards/${id}/publish`, { method: "DELETE" });
+}
+
+/** The one route that answers without a session. Returns only what was published. */
+export async function fetchShare(slug: string): Promise<{ name: string; doc: string }> {
+  const { share } = await call<{ share: { name: string; doc: string } }>(`/shares/${slug}`);
+  return share;
+}
+
+/** Where a slug is read back. Absolute, because the point of it is to be sent to someone. */
+export const shareUrl = (slug: string): string => `${window.location.origin}/s/${slug}`;

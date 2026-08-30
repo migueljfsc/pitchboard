@@ -397,6 +397,12 @@ export const en = {
   "account.error.unknown": "Sign-in did not complete. Please try again.",
   "account.error.dismiss": "Dismiss",
 
+  // ---------------------------------------------------------------- adopt
+  "adopt.title": "Keep this board in your account?",
+  "adopt.message": "You have a board in progress in this browser. Saving it to your account means you can open it anywhere. Either way it stays in this browser.",
+  "adopt.confirm": "Save it",
+  "adopt.project": "My boards",
+
   // ---------------------------------------------------------------- boards
   "boards.title": "Boards",
   "boards.title.hint": "Your saved boards and projects",
@@ -417,6 +423,11 @@ export const en = {
   "boards.count.other": "{count} boards",
   "boards.open": "Open",
   "boards.delete": "Delete",
+  "boards.publish": "Publish link",
+  "boards.published": "Link copied",
+  "boards.unpublish": "Withdraw link",
+  "boards.publish.hint": "A short link anyone can open. Republishing keeps the same link.",
+  "boards.error.slug_unavailable": "Could not make a link just now. Try again.",
   "boards.status.saving": "Saving…",
   "boards.status.saved": "Saved",
   "boards.openConfirm.title": "Open this board?",
@@ -438,6 +449,8 @@ export const en = {
   "boards.error.offline": "Could not reach the server. Your board is still saved in this browser.",
   "boards.error.unknown": "That did not work. Your board is still saved in this browser.",
 
+  "share.opening": "Opening the shared board…",
+  "share.missing": "That link does not lead to a board any more.",
   // ---------------------------------------------------------------- viewer
   "viewer.shared": "Shared board",
   "viewer.fork": "Fork to edit",

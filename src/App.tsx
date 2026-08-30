@@ -3,6 +3,8 @@ import type { BoardDoc } from "@/board/types";
 import { Editor } from "@/pages/Editor";
 import { Viewer } from "@/pages/Viewer";
 import { decodeBoard, readHash, readView, withoutHash, type DecodeOutcome } from "@/share/urlcodec";
+import { fetchShare } from "@/share/api";
+import { parseStoredDoc } from "@/share/cloud";
 import { useI18n } from "@/i18n/context";
 
 /**
@@ -20,10 +22,25 @@ import { useI18n } from "@/i18n/context";
  * Forking clears the hash and drops into the editor with a local copy. The link
  * still holds the original, so there is nothing to overwrite and no permission
  * to grant — the whole of D7's authorisation model.
+ *
+ * There is a second kind of share link, for boards saved to an account: `/s/<slug>`,
+ * short enough to read down a phone. It is a PATH rather than a fragment, which is
+ * the only reason this file knows about paths at all — and it is still not a router.
+ * A path is one more thing the address can be, read once, because changing one is a
+ * page load rather than an event. It resolves only on the Worker, which serves
+ * index.html for unknown paths; the GitHub Pages deploy has no such rewrite and no
+ * server to ask, which is correct, since that host has no accounts either.
  */
+const SHARE_PATH = /\/s\/([2-9bcdfghjkmnpqrstvwxz]{8})$/;
+
 export function App() {
   const { t, tm } = useI18n();
   const [hash, setHash] = useState(() => window.location.hash);
+  const [slug, setSlug] = useState<string | null>(
+    () => SHARE_PATH.exec(window.location.pathname)?.[1] ?? null,
+  );
+  /** The published board, or "missing" once the server has said so. */
+  const [shared, setShared] = useState<BoardDoc | "missing" | null>(null);
   const [forked, setForked] = useState<BoardDoc | null>(null);
   /** The last decode, tagged with the payload it came from. */
   const [opened, setOpened] = useState<{ payload: string; outcome: DecodeOutcome } | null>(null);
@@ -50,12 +67,67 @@ export function App() {
     };
   }, [payload]);
 
+  useEffect(() => {
+    if (!slug) return;
+    let live = true;
+    void fetchShare(slug)
+      .then((share) => {
+        // A published document is validated exactly like one from a file or the hash: the
+        // server stores it opaquely, and `schema.ts` is the only validator (D31).
+        const doc = parseStoredDoc(share.doc);
+        if (live) setShared(doc ?? "missing");
+      })
+      .catch(() => {
+        if (live) setShared("missing");
+      });
+    return () => {
+      live = false;
+    };
+  }, [slug]);
+
+  /** Leave the share path behind, so a fork lands in a plain editor at the root. */
+  const clearPath = () => {
+    window.history.replaceState(null, "", "/");
+    setSlug(null);
+    setShared(null);
+  };
+
   /** Drop the payload from the address, and from this component's view of it. */
   const clearHash = () => {
     window.history.replaceState(null, "", withoutHash(window.location.href));
     // replaceState fires no hashchange, so the listener above will not see this.
     setHash("");
   };
+
+  if (slug && !shared) return <Splash>{t("share.opening")}</Splash>;
+
+  if (shared === "missing") {
+    return (
+      <Splash tone="bad">
+        {t("share.missing")}
+        <button
+          type="button"
+          onClick={clearPath}
+          className="mt-4 block rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-ink-900 transition hover:brightness-110"
+        >
+          {t("app.newBoard")}
+        </button>
+      </Splash>
+    );
+  }
+
+  if (shared) {
+    return (
+      <Viewer
+        key={slug}
+        doc={shared}
+        onFork={() => {
+          setForked(shared);
+          clearPath();
+        }}
+      />
+    );
+  }
 
   if (payload && !outcome) return <Splash>{t("app.opening")}</Splash>;
 

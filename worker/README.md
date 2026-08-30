@@ -13,6 +13,7 @@ lib/
   google.ts        OAuth: authorize URL, PKCE, code exchange, claim validation
   users.ts         external identity to account, link rather than duplicate
   boards.ts        projects and boards; ownership is a WHERE clause, never a check
+  shares.ts        publishing to /s/<slug>, and the one public read
   limits.ts        per-user quotas — D39 wanted them shipping with the feature
   crypto.ts        ids, session tokens, SHA-256 — no password KDF lives here
   http.ts          JSON responses, all no-store
@@ -32,7 +33,8 @@ The free tier refuses work rather than billing, so the limits are the design con
 - **D1: 5M row reads, 100k row writes per day.** Session renewal slides only once a session
   has lost more than a day of life, which caps it at one write per session per day.
 - **KV: 100k reads but only 1,000 writes per day.** Writes are the scarce thing, so KV holds
-  published snapshots — written once, then only read — and never per-request state.
+  published snapshots — written once, then only read — and never per-request state. A publish
+  is one write; the OAuth state that could have gone there is a cookie for exactly this reason.
 
 ## Bindings
 
@@ -77,3 +79,22 @@ PITCHBOARD_BASE=/ pnpm build && pnpm deploy:worker --dry-run
 
 `PITCHBOARD_BASE=/` matters: the default build targets the `/pitchboard/` base path that
 GitHub Pages serves from, and the Worker serves from the root.
+
+## The two share links
+
+They do not meet, and that is deliberate.
+
+| | anonymous | account |
+|---|---|---|
+| address | `#d=<deflated board>` | `/s/<slug>` |
+| where the board lives | in the URL | KV, behind a snapshot row |
+| does the server see it | **no** — browsers never send a fragment | yes |
+| changes when republished | there is nothing to republish | yes, the slug re-aims |
+| works on GitHub Pages | yes | no, and cannot |
+
+The anonymous one predates accounts and is untouched by any of this (D33). The account one
+exists because a link you can read down a phone is worth having, and it publishes an immutable
+snapshot while keeping the slug stable — so sending the link again is never necessary (D39).
+
+`GET /api/shares/:slug` is the only route in the Worker that answers without a session. It
+returns the published document and the board's name, and nothing about who published it.

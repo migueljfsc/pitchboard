@@ -32,6 +32,8 @@ import {
   type Ctx,
 } from "./lib/boards";
 import { fail, json } from "./lib/http";
+import { publishBoard, readShare, unpublishBoard } from "./lib/shares";
+import { SLUG_LENGTH } from "./lib/limits";
 import {
   clearedSessionCookie,
   createSession,
@@ -127,14 +129,21 @@ export default {
         // Two Set-Cookie headers — the session is issued and the OAuth scratch is dropped.
         // Cookies are the one header that must not be folded into a comma-separated value,
         // so this appends rather than building an object literal.
-        const headers = new Headers({ location: `${url.origin}/`, "cache-control": "no-store" });
+        // `?welcome=1` marks a sign-in that has JUST happened, which the client cannot work
+        // out for itself: after the redirect the page loads fresh, and a returning visitor
+        // with a thirty-day cookie looks identical to someone who signed in a second ago.
+        // It is what lets the offer to save the local board appear once rather than nag.
+        const headers = new Headers({
+          location: `${url.origin}/?welcome=1`,
+          "cache-control": "no-store",
+        });
         headers.append("set-cookie", sessionCookie(token, SESSION_TTL_S));
         headers.append("set-cookie", clearedOauthCookie());
         return new Response(null, { status: 302, headers });
       }
 
       default:
-        return dispatch(env, request, url, now);
+        return (await publicRoute(env, request, url)) ?? (await dispatch(env, request, url, now));
     }
   },
 };
@@ -144,6 +153,19 @@ export default {
  * 404 before it reaches the database rather than a query that was never going to match.
  */
 const ID = "([A-Za-z0-9_-]{22})";
+const SLUG = `([2-9bcdfghjkmnpqrstvwxz]{${SLUG_LENGTH}})`;
+
+/**
+ * The unauthenticated surface, checked before anything that needs a session. Exactly one
+ * route: reading a published board. Everything else answers 401 to a stranger.
+ */
+const SHARE_ROUTE = new RegExp(`^/api/shares/${SLUG}$`);
+
+async function publicRoute(env: Env, request: Request, url: URL): Promise<Response | null> {
+  const match = SHARE_ROUTE.exec(url.pathname);
+  if (!match || request.method !== "GET") return null;
+  return readShare(env, match[1]);
+}
 
 const ROUTES: Array<{ method: string; pattern: RegExp; handle: (ctx: Ctx, ...p: string[]) => Promise<Response> }> = [
   { method: "GET", pattern: new RegExp(`^/api/projects$`), handle: listProjects },
@@ -155,6 +177,8 @@ const ROUTES: Array<{ method: string; pattern: RegExp; handle: (ctx: Ctx, ...p: 
   { method: "GET", pattern: new RegExp(`^/api/boards/${ID}$`), handle: getBoard },
   { method: "PUT", pattern: new RegExp(`^/api/boards/${ID}$`), handle: updateBoard },
   { method: "DELETE", pattern: new RegExp(`^/api/boards/${ID}$`), handle: deleteBoard },
+  { method: "POST", pattern: new RegExp(`^/api/boards/${ID}/publish$`), handle: publishBoard },
+  { method: "DELETE", pattern: new RegExp(`^/api/boards/${ID}/publish$`), handle: unpublishBoard },
 ];
 
 async function dispatch(env: Env, request: Request, url: URL, now: number): Promise<Response> {

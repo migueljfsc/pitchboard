@@ -22,3 +22,17 @@ export const MAX_DOC_BYTES = 256 * 1024;
 
 /** Long enough for "Sunday vs Old Boys — second half press", short enough to render. */
 export const MAX_NAME_CHARS = 100;
+
+/**
+ * Share slugs.
+ *
+ * Eight characters from an alphabet with no vowels and no look-alikes: it cannot accidentally
+ * spell a word, and it survives being read down a phone or written on a whiteboard, which is
+ * the entire point of having it instead of the self-contained `#d=` link.
+ *
+ * 27^8 is about 2.8e11. Collisions are handled by retrying against the unique index rather
+ * than by trusting the arithmetic.
+ */
+export const SLUG_ALPHABET = "23456789bcdfghjkmnpqrstvwxz";
+export const SLUG_LENGTH = 8;
+export const SLUG_ATTEMPTS = 5;
