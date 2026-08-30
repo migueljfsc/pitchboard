@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.20.1 (2026-08-30)
+
+### Fix
+
+- deleting a board withdraws the links published from it
+
 ## v0.20.0 (2026-08-30)
 
 ### Feat
