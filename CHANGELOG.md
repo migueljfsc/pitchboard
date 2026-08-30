@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.24.0 (2026-08-30)
+
+### Feat
+
+- **draw**: text labels get a box, so they wrap
+
 ## v0.23.1 (2026-08-30)
 
 ### Fix
