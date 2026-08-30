@@ -44,3 +44,12 @@ repos:
         files: \.(ts|tsx)$
         pass_filenames: false
         require_serial: true
+
+      # Formatting only. `tofu validate` needs a provider download and the state
+      # backend, so it stays in the terraform workflow rather than blocking a commit.
+      - id: tofu-fmt
+        name: tofu fmt
+        entry: tofu fmt
+        language: system
+        files: \.(tf|tfvars)$
+        require_serial: true

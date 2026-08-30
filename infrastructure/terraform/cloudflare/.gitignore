@@ -1,0 +1,12 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+crash.log
+crash.*.log
+
+# Never commit real secrets / overrides
+*.auto.tfvars
+override.tf
+override.tf.json
+*_override.tf

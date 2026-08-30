@@ -35,3 +35,18 @@ updates:
     commit-message:
       prefix: ci
       include: scope
+
+  # OpenTofu provider pins in the Cloudflare stack.
+  - package-ecosystem: terraform
+    directory: "/infrastructure/terraform/cloudflare"
+    schedule:
+      interval: weekly
+      day: sunday
+      time: "20:00"
+      timezone: Europe/Lisbon
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
