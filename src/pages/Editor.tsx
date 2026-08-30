@@ -43,7 +43,8 @@ import {
 import { cn } from "@/lib/utils";
 import { LocaleSwitch } from "@/components/LocaleSwitch";
 import { AccountMenu } from "@/components/AccountMenu";
-import { BoardsPanel } from "@/components/BoardsPanel";
+import { BoardsLibrary } from "@/components/BoardsLibrary";
+import { SaveBoardButton } from "@/components/SaveBoardButton";
 import { AdoptBoardPrompt } from "@/components/AdoptBoardPrompt";
 import { useAccount } from "@/lib/useAccount";
 import { useCloudBoard } from "@/lib/useCloudBoard";
@@ -578,9 +579,11 @@ export function Editor({ initialDoc }: Props = {}) {
             {t("share.dialog")}
           </button>
 
+          {accountState.account && <SaveBoardButton cloud={cloud} boardName={doc.name} />}
+
           <span className="mx-1 h-5 w-px bg-ink-600" />
 
-          {accountState.account && <BoardsPanel cloud={cloud} boardName={doc.name} />}
+          {accountState.account && <BoardsLibrary cloud={cloud} />}
           <AdoptBoardPrompt
             cloud={cloud}
             boardName={doc.name}

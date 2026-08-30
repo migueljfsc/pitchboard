@@ -23,6 +23,11 @@ export interface BoardSummary {
   updated_at: number;
 }
 
+/** A board's row plus the project it sits in — what the library lists. */
+export interface StoredBoardSummary extends BoardSummary {
+  project_id: string;
+}
+
 export interface StoredBoard extends BoardSummary {
   project_id: string;
   /** The serialised `BoardDoc`. Validated on arrival by the caller, never by the server. */
@@ -137,8 +142,15 @@ export async function deleteProject(id: string): Promise<void> {
 
 // --- boards -----------------------------------------------------------------------------
 
-export async function listBoards(projectId: string): Promise<BoardSummary[]> {
-  const { boards } = await call<{ boards: BoardSummary[] }>(`/projects/${projectId}/boards`);
+/**
+ * Every board on the account, metadata only.
+ *
+ * One request for the whole library rather than one per project. The list is capped at 200
+ * rows by the Worker's own limit, and holding it whole is what lets the view search across
+ * projects and show a move the moment it lands, without a per-folder cache to keep in step.
+ */
+export async function listAllBoards(): Promise<StoredBoardSummary[]> {
+  const { boards } = await call<{ boards: StoredBoardSummary[] }>("/boards");
   return boards;
 }
 
@@ -176,8 +188,46 @@ export async function saveBoard(
   return board.version;
 }
 
+/**
+ * Moving a board between projects. The document is not involved, so neither is its version —
+ * this cannot conflict with an edit in flight, and does not bump what the editor holds.
+ */
+export async function moveBoard(id: string, projectId: string): Promise<void> {
+  await call(`/boards/${id}`, { method: "PATCH", body: JSON.stringify({ project_id: projectId }) });
+}
+
+/**
+ * Duplicating a stored board, into the project it already lives in. The document is copied
+ * server-side and never travels; the name comes from here because the Worker has no locale.
+ */
+export async function copyBoard(id: string, name: string): Promise<BoardSummary> {
+  const { board } = await call<{ board: BoardSummary }>(`/boards/${id}/copy`, {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+  return board;
+}
+
 export async function deleteBoard(id: string): Promise<void> {
   await call(`/boards/${id}`, { method: "DELETE" });
+}
+
+/** Moving a selection. One transaction on the server, so it cannot half-happen. */
+export async function moveBoards(ids: string[], projectId: string): Promise<number> {
+  const { moved } = await call<{ moved: number }>("/boards", {
+    method: "PATCH",
+    body: JSON.stringify({ ids, project_id: projectId }),
+  });
+  return moved;
+}
+
+/** Deleting a selection. The ids ride in the body — a hundred of them do not fit in a URL. */
+export async function deleteBoards(ids: string[]): Promise<number> {
+  const { deleted } = await call<{ deleted: number }>("/boards", {
+    method: "DELETE",
+    body: JSON.stringify({ ids }),
+  });
+  return deleted;
 }
 
 // --- sharing -----------------------------------------------------------------------------

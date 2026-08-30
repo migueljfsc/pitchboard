@@ -54,8 +54,11 @@ export interface CloudBoard {
   status: SyncStatus;
   open: (boardId: string) => Promise<void>;
   /** First save only — creates the row, then the address points at it. */
-  saveInto: (projectId: string, name: string) => Promise<void>;
-  saveNow: () => Promise<void>;
+  saveInto: (projectId: string, name: string) => Promise<boolean>;
+  /** True when the server took it. A caller that says "Saved" has to know it did. */
+  saveNow: () => Promise<boolean>;
+  /** The open board moved projects. Bookkeeping only — the move already happened. */
+  relocate: (projectId: string) => void;
   acceptRemote: () => Promise<void>;
   overwriteRemote: () => Promise<void>;
 }
@@ -109,8 +112,8 @@ export function useCloudBoard(
   }, [signedIn, wanted, setDoc]);
 
   const push = useCallback(
-    async (value: BoardDoc, force?: number) => {
-      if (!board || !signedIn) return;
+    async (value: BoardDoc, force?: number): Promise<boolean> => {
+      if (!board || !signedIn) return false;
       setStatus({ kind: "saving" });
       try {
         const version = await saveRemote(
@@ -121,14 +124,16 @@ export function useCloudBoard(
         );
         setBoard({ ...board, version, name: value.name });
         setStatus({ kind: "saved", at: Date.now() });
+        return true;
       } catch (error) {
         if (error instanceof ApiError && error.status === 409) {
           // The server says which version it holds, so the choice offered is a real one
           // rather than a guess about who is ahead.
           setStatus({ kind: "conflict", version: error.version ?? board.version });
-          return;
+          return false;
         }
         setStatus({ kind: "error", code: error instanceof ApiError ? error.code : "offline" });
+        return false;
       }
     },
     [board, signedIn],
@@ -164,21 +169,34 @@ export function useCloudBoard(
 
   /** The only thing that ever creates a row. Everything after it is an update. */
   const saveInto = useCallback(
-    async (projectId: string, name: string) => {
+    async (projectId: string, name: string): Promise<boolean> => {
       setStatus({ kind: "saving" });
       try {
         const row = await createBoard(projectId, name, serialiseDoc(doc));
         setBoard({ id: row.id, projectId, version: row.version, name: row.name });
         goToBoard(row.id);
         setStatus({ kind: "saved", at: Date.now() });
+        return true;
       } catch (error) {
         setStatus({ kind: "error", code: error instanceof ApiError ? error.code : "offline" });
+        return false;
       }
     },
     [doc],
   );
 
   const saveNow = useCallback(() => push(doc), [push, doc]);
+
+  /**
+   * Follow a move that has already landed on the server.
+   *
+   * Local state only. Re-fetching to pick up the new project would replace the document under
+   * the editor — and with it whatever has not been autosaved yet — to learn one field that the
+   * caller already knows, since it is the one that asked for the move.
+   */
+  const relocate = useCallback((projectId: string) => {
+    setBoard((current) => (current ? { ...current, projectId } : current));
+  }, []);
 
   const acceptRemote = useCallback(async () => {
     if (board) await open(board.id);
@@ -189,5 +207,5 @@ export function useCloudBoard(
     if (status.kind === "conflict") await push(doc, status.version);
   }, [push, doc, status]);
 
-  return { board, status, open, saveInto, saveNow, acceptRemote, overwriteRemote };
+  return { board, status, open, saveInto, saveNow, relocate, acceptRemote, overwriteRemote };
 }

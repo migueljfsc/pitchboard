@@ -19,6 +19,7 @@ import { fail, json } from "./http";
 import { newId } from "./crypto";
 import {
   MAX_BOARDS_PER_USER,
+  MAX_BULK_IDS,
   MAX_DOC_BYTES,
   MAX_NAME_CHARS,
   MAX_PROJECTS_PER_USER,
@@ -63,6 +64,21 @@ export function cleanDoc(value: unknown): string | null {
     return null;
   }
   return value;
+}
+
+/**
+ * The id list of a bulk operation.
+ *
+ * ALL OR NOTHING on shape: one malformed id refuses the whole request rather than being
+ * dropped quietly, because a selection that half-moves is worse than one that does not move.
+ * Ownership is not checked here — it stays in the WHERE clause of every statement, so an id
+ * belonging to somebody else matches nothing instead of being filtered in advance.
+ */
+function cleanIds(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  if (value.length === 0 || value.length > MAX_BULK_IDS) return null;
+  const ok = value.every((v) => typeof v === "string" && /^[A-Za-z0-9_-]{22}$/.test(v));
+  return ok ? [...new Set(value as string[])] : null;
 }
 
 async function count(env: Env, sql: string, ...binds: unknown[]): Promise<number> {
@@ -151,6 +167,25 @@ export async function listBoards({ env, user }: Ctx, projectId: string): Promise
   return json({ boards: results });
 }
 
+/**
+ * Every board the user has, metadata only.
+ *
+ * What a library view needs: it shows "all boards", searches across projects, and derives each
+ * project's contents from this one list rather than fetching per project — which is a request
+ * per expanded folder, and a cache to keep in step with the moves the same view is making.
+ * The cap is 200 boards per account, so this is small by construction.
+ */
+export async function listAllBoards({ env, user }: Ctx): Promise<Response> {
+  const { results } = await env.DB.prepare(
+    `SELECT id, project_id, name, version, share_slug, created_at, updated_at
+       FROM boards WHERE user_id = ?
+      ORDER BY updated_at DESC`,
+  )
+    .bind(user.id)
+    .all();
+  return json({ boards: results });
+}
+
 export async function createBoard(ctx: Ctx, projectId: string): Promise<Response> {
   const payload = await body(ctx.request);
   const name = cleanName(payload?.name);
@@ -235,6 +270,149 @@ export async function updateBoard(ctx: Ctx, id: string): Promise<Response> {
   }
 
   return json({ board: { id, version: version + 1, updated_at: ctx.now } });
+}
+
+/**
+ * Move a board to another project.
+ *
+ * BOTH halves of the ownership question are in the WHERE clause — the board is yours, and so
+ * is the project it is going into. Checking the destination separately would be the same query
+ * written so that forgetting the check files a board under a stranger's project, where they
+ * would then see it listed. "Not yours" and "not there" answer the same 404 as everywhere else.
+ *
+ * The version is deliberately not bumped: a move does not touch the document, and bumping it
+ * would 409 the open editor's next autosave over a change it did not make.
+ */
+export async function moveBoard(ctx: Ctx, id: string): Promise<Response> {
+  const payload = await body(ctx.request);
+  const projectId = typeof payload?.project_id === "string" ? payload.project_id : null;
+  if (!projectId) return fail("invalid_project", 400);
+
+  const result = await ctx.env.DB.prepare(
+    `UPDATE boards SET project_id = ?, updated_at = ?
+      WHERE id = ? AND user_id = ?
+        AND EXISTS (SELECT 1 FROM projects WHERE id = ? AND user_id = ?)`,
+  )
+    .bind(projectId, ctx.now, id, ctx.user.id, projectId, ctx.user.id)
+    .run();
+
+  if (result.meta.changes === 0) return fail("not_found", 404);
+
+  // Only the destination is touched. The project's timestamp orders the list and something
+  // did just land there; the one it left is unchanged in every way a reader can see, since
+  // the board count in `listProjects` is counted live rather than stored.
+  await ctx.env.DB.prepare("UPDATE projects SET updated_at = ? WHERE id = ? AND user_id = ?")
+    .bind(ctx.now, projectId, ctx.user.id)
+    .run();
+
+  return json({ board: { id, project_id: projectId, updated_at: ctx.now } });
+}
+
+/**
+ * Duplicate a board into the project it already lives in.
+ *
+ * INSERT ... SELECT, so the document never travels. Pulling a quarter-megabyte board down to
+ * the browser and posting it straight back would spend two requests and the CPU budget moving
+ * bytes the database is already holding.
+ *
+ * THE COPY IS NOT PUBLISHED. `share_slug` is unique per board, so carrying it over would either
+ * trip the index or re-aim a link the author has already given out at a board they did not send.
+ * A copy starts private and can be published on its own terms.
+ *
+ * The name arrives from the client because the Worker has no locale (D38) — "(copy)" is a word,
+ * and words are the browser's job.
+ */
+export async function copyBoard(ctx: Ctx, id: string): Promise<Response> {
+  const payload = await body(ctx.request);
+  const name = cleanName(payload?.name);
+  if (!name) return fail("invalid_name", 400);
+
+  const existing = await count(
+    ctx.env,
+    "SELECT count(*) n FROM boards WHERE user_id = ?",
+    ctx.user.id,
+  );
+  if (existing >= MAX_BOARDS_PER_USER) return fail("board_limit_reached", 409);
+
+  const copy = newId();
+  const result = await ctx.env.DB.prepare(
+    `INSERT INTO boards (id, project_id, user_id, name, doc, version, created_at, updated_at)
+     SELECT ?, project_id, user_id, ?, doc, 1, ?, ?
+       FROM boards WHERE id = ? AND user_id = ?`,
+  )
+    .bind(copy, name, ctx.now, ctx.now, id, ctx.user.id)
+    .run();
+
+  if (result.meta.changes === 0) return fail("not_found", 404);
+
+  // Found through the copy, which is the only id this side knows and is already filtered by
+  // owner — the project it landed in is one board heavier and belongs at the top of the list.
+  await ctx.env.DB.prepare(
+    `UPDATE projects SET updated_at = ?
+      WHERE id = (SELECT project_id FROM boards WHERE id = ? AND user_id = ?) AND user_id = ?`,
+  )
+    .bind(ctx.now, copy, ctx.user.id, ctx.user.id)
+    .run();
+
+  return json({ board: { id: copy, name, version: 1, updated_at: ctx.now } }, 201);
+}
+
+/**
+ * Move a selection of boards into one project.
+ *
+ * One `batch`, which D1 runs as a single transaction — so a selection cannot end up half in
+ * one project and half in another because the network gave up in the middle. Every statement
+ * carries the same two-sided ownership guard as the single move, so an id that is not yours
+ * matches nothing rather than being trusted because it arrived in a list.
+ */
+export async function moveBoards(ctx: Ctx): Promise<Response> {
+  const payload = await body(ctx.request);
+  const ids = cleanIds(payload?.ids);
+  const projectId = typeof payload?.project_id === "string" ? payload.project_id : null;
+  if (!ids) return fail("invalid_selection", 400);
+  if (!projectId) return fail("invalid_project", 400);
+
+  const results = await ctx.env.DB.batch(
+    ids.map((id) =>
+      ctx.env.DB.prepare(
+        `UPDATE boards SET project_id = ?, updated_at = ?
+          WHERE id = ? AND user_id = ?
+            AND EXISTS (SELECT 1 FROM projects WHERE id = ? AND user_id = ?)`,
+      ).bind(projectId, ctx.now, id, ctx.user.id, projectId, ctx.user.id),
+    ),
+  );
+
+  const moved = results.reduce((n, r) => n + (r.meta.changes ?? 0), 0);
+  if (moved === 0) return fail("not_found", 404);
+
+  await ctx.env.DB.prepare("UPDATE projects SET updated_at = ? WHERE id = ? AND user_id = ?")
+    .bind(ctx.now, projectId, ctx.user.id)
+    .run();
+
+  return json({ moved });
+}
+
+/**
+ * Delete a selection of boards, and the share links they were published under.
+ *
+ * The ids arrive in the body rather than the query string: a hundred of them is 2,300
+ * characters of URL, and a proxy truncating that would delete a prefix of what was asked for.
+ * A body is the only place a list of this size is safe.
+ */
+export async function deleteBoards(ctx: Ctx): Promise<Response> {
+  const payload = await body(ctx.request);
+  const ids = cleanIds(payload?.ids);
+  if (!ids) return fail("invalid_selection", 400);
+
+  const results = await ctx.env.DB.batch(
+    ids.map((id) =>
+      ctx.env.DB.prepare("DELETE FROM boards WHERE id = ? AND user_id = ?").bind(id, ctx.user.id),
+    ),
+  );
+
+  const deleted = results.reduce((n, r) => n + (r.meta.changes ?? 0), 0);
+  if (deleted === 0) return fail("not_found", 404);
+  return json({ deleted });
 }
 
 /** Deleting a board takes its share link with it: the slug lives on this row. */

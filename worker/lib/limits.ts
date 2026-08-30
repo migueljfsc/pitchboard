@@ -14,6 +14,15 @@ export const MAX_PROJECTS_PER_USER = 25;
 export const MAX_BOARDS_PER_USER = 200;
 
 /**
+ * How many boards one bulk move or delete may name.
+ *
+ * A selection is made by hand, so a hundred is already far past any real gesture — it is here
+ * to bound the batch, which is a single D1 transaction and therefore a single unit of work
+ * that has to finish inside a request.
+ */
+export const MAX_BULK_IDS = 100;
+
+/**
  * A board document, serialised. The share-link codec budgets 8,000 characters of *compressed*
  * base64url (URL_BUDGET), so a real board is tens of kilobytes uncompressed. A quarter of a
  * megabyte is far above anything the editor produces and far below D1's response ceiling.
