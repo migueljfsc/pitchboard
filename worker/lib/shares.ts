@@ -40,6 +40,28 @@ export function newSlug(): string {
   return out.join("");
 }
 
+/**
+ * Removes the published bodies for a set of boards, before their rows go.
+ *
+ * A foreign key cascade reaches D1 and stops there — KV knows nothing about it — so anything
+ * that deletes a board has to come through here first or leave bodies nobody can reach and
+ * nothing will collect. The ids are read BEFORE the delete for exactly that reason: after the
+ * cascade there is nothing left to ask.
+ *
+ * Each removal is a KV write against a budget of 1,000 a day. That is the right way round:
+ * publishing is the rare act and deleting rarer still.
+ */
+export async function purgeSnapshotsFor(env: Env, boardIds: string[]): Promise<void> {
+  if (boardIds.length === 0) return;
+  const places = boardIds.map(() => "?").join(",");
+  const { results } = await env.DB.prepare(
+    `SELECT id FROM snapshots WHERE board_id IN (${places})`,
+  )
+    .bind(...boardIds)
+    .all<{ id: string }>();
+  await Promise.all(results.map((row) => env.SNAPSHOTS.delete(keyFor(row.id))));
+}
+
 export async function publishBoard(ctx: Ctx, id: string): Promise<Response> {
   const board = await ctx.env.DB.prepare(
     "SELECT id, doc, share_slug FROM boards WHERE id = ? AND user_id = ?",
