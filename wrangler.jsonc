@@ -20,12 +20,13 @@
   },
 
   // Ids come from `tofu output` after the first apply — the one manual step D8 accepted
-  // in exchange for OpenTofu never owning the script.
+  // in exchange for OpenTofu never owning the script. They are stable for the life of
+  // the resources and are identifiers, not secrets.
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "pitchboard",
-      "database_id": "<from tofu output d1_database_id>",
+      "database_name": "pitchboard-prod",
+      "database_id": "2ec8251e-61e8-4262-aefc-ee5c1aa2f7fe",
       "migrations_dir": "./worker/migrations"
     }
   ],
@@ -33,7 +34,7 @@
   "kv_namespaces": [
     {
       "binding": "SNAPSHOTS",
-      "id": "<from tofu output kv_snapshots_namespace_id>"
+      "id": "50f27ed9eeed47c7ac28252b54d040d7"
     }
   ],
 
