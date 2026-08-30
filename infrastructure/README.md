@@ -1,12 +1,17 @@
 # Infrastructure
 
-Everything that provisions or runs Pitchboard on Cloudflare. Two directories, split by who
-owns the thing rather than by what technology builds it.
+Provisioning for Pitchboard's Cloudflare account. One stack:
+[`terraform/cloudflare/`](terraform/cloudflare/) owns the R2 bucket, the D1 database and the
+KV namespace, applied by `.github/workflows/terraform.yml`.
 
-| | owns | applied by |
-|---|---|---|
-| [`terraform/cloudflare/`](terraform/cloudflare/) | R2 bucket, D1 database, KV namespace — the durable resources | `.github/workflows/terraform.yml` |
-| [`worker/`](worker/) | the Worker: config, source, D1 migrations | `.github/workflows/deploy-worker.yml` |
+## Where the Worker is
+
+Not here — it is in [`worker/`](../worker/) at the repository root, with `wrangler.jsonc`
+beside it. It is application code: sessions, OAuth, account linking, the board API. It is
+tested like application code and it belongs with the application.
+
+What *is* infrastructure is the deploy, and that turned out to be a workflow rather than a
+directory: `.github/workflows/deploy-worker.yml` builds, migrates and ships it.
 
 ## Why the Worker is not in the OpenTofu stack
 
@@ -30,6 +35,6 @@ Two other things sit outside the stack for their own reasons, both in D40:
 
 ## Nothing here is deployed by hand
 
-Both directories are applied by CI on a push to `main`, both gated on the
+The stack and the Worker are both applied by CI on a push to `main`, both gated on the
 `cloudflare-production` environment. `wrangler deploy` from a laptop is how `main` and
 production drift, which is the problem `deploy-worker.yml` exists to solve.

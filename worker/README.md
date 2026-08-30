@@ -3,13 +3,17 @@
 Serves the SPA and the `/api/*` surface at
 https://pitchboard.migueljfscardoso.workers.dev.
 
+`wrangler.jsonc` sits at the repository root, beside `package.json` — it is the project's
+deploy config, and its paths resolve against itself.
+
 ```
-wrangler.jsonc     bindings and asset routing; paths resolve against THIS file
 index.ts           the router — /api/* only
 lib/
   session.ts       the cookie, the row it points at, lazy expiry, sliding renewal
   google.ts        OAuth: authorize URL, PKCE, code exchange, claim validation
   users.ts         external identity to account, link rather than duplicate
+  boards.ts        projects and boards; ownership is a WHERE clause, never a check
+  limits.ts        per-user quotas — D39 wanted them shipping with the feature
   crypto.ts        ids, session tokens, SHA-256 — no password KDF lives here
   http.ts          JSON responses, all no-store
 secrets.d.ts       the secrets wrangler.jsonc cannot hold, merged into Env
@@ -44,8 +48,8 @@ Ids come from `tofu output` after the stack's first apply. They are identifiers,
 Not in `wrangler.jsonc`, not in OpenTofu, not in state:
 
 ```sh
-wrangler secret put GOOGLE_CLIENT_ID     --config infrastructure/worker/wrangler.jsonc
-wrangler secret put GOOGLE_CLIENT_SECRET --config infrastructure/worker/wrangler.jsonc
+wrangler secret put GOOGLE_CLIENT_ID
+wrangler secret put GOOGLE_CLIENT_SECRET
 ```
 
 They survive a deploy, so this is a one-time step. Their types live in `secrets.d.ts`, which
@@ -59,7 +63,7 @@ it predates. `0002` drops and rebuilds two tables, which was safe only because t
 and is stated loudly in its header; from `0003` onward they must be additive.
 
 ```sh
-wrangler d1 migrations apply pitchboard-prod --remote --config infrastructure/worker/wrangler.jsonc
+wrangler d1 migrations apply pitchboard-prod --remote
 ```
 
 ## Deploying

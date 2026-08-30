@@ -13,11 +13,11 @@
     "build": "pnpm types && tsc -b && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "types": "wrangler types --config infrastructure/worker/wrangler.jsonc infrastructure/worker/worker-configuration.d.ts",
+    "types": "wrangler types worker/worker-configuration.d.ts",
     "typecheck": "pnpm types && tsc -b --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "deploy:worker": "wrangler deploy --config infrastructure/worker/wrangler.jsonc"
+    "deploy:worker": "wrangler deploy"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.0",

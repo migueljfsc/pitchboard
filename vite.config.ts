@@ -21,6 +21,6 @@ export default defineConfig(({ command }) => ({
     environment: "node",
     // The Worker's pure helpers — cookie parsing, the renewal predicate — are the same
     // kind of small numerical logic the engine tests, and `pnpm test` gates the deploy.
-    include: ["src/**/*.test.ts", "infrastructure/worker/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "worker/**/*.test.ts"],
   },
 }));
