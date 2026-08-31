@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.29.0 (2026-08-31)
+
+### Feat
+
+- **editor**: passes you can bend and loft, and a way to present the board
+
 ## v0.28.0 (2026-08-30)
 
 ### Feat
