@@ -64,7 +64,8 @@ src/board/                the engine — zero React, zero DOM
   pitch.ts                IFAB dimensions table + markings
   geometry.ts             bezier, arc-length LUT, easing
   timeline.ts             (doc, t) → resolved positions, incl. ball carrier
-  links.ts                connector geometry + distances
+  links.ts                connector geometry + distances, and when a link shows
+  range.ts                scene ranges — shared by links and annotations, owned by neither
   annotations.ts          the coach's drawing — shapes, scene ranges, hit geometry
   projection.ts           the 3D view — one fixed camera, and the ground warp
   render.ts               drawBoard() — the one renderer
@@ -85,7 +86,7 @@ src/board/migrate.ts      version dispatch, run before validation on every load
 src/components/           React chrome; ui/ holds shadcn-style primitives
 worker/                   Cloudflare Worker — the API, and the SPA's static passthrough
   index.ts                the router; /api/* only, assets are served ahead of it
-  lib/                    session, google, users, boards, crypto, http, limits
+  lib/                    session, google, users, boards, presets, crypto, http, limits
   migrations/             D1 schema, applied by CI before the script is deployed
 wrangler.jsonc            bindings and asset routing; the ONLY place a binding is declared
 infrastructure/terraform/cloudflare/    OpenTofu — R2, D1, KV. Durable resources only
@@ -125,6 +126,20 @@ hatch, but CI owns the real deploy.
   members; an annotation is fixed geometry that depends on nobody. Do not merge them.
 - **An annotation's scene range is stored as scene ids**, never indices — reordering scenes must
   carry the drawing with them. `deleteScene` prunes dangling ranges rather than dropping shapes.
+- **A link's range is optional at BOTH ends, and an annotation's is not.** Absent means the open
+  end, so a link with neither shows on every scene — which is what every link written before
+  ranges existed means, and why no migration was owed (D47). Anything treating a link's `from`
+  as required makes those links vanish from every board already published. The rule lives in
+  `range.ts` and not in `annotations.ts`: links must not import annotations, and `scenes.ts`
+  cannot hold it because it imports `annotations.ts` and would close a cycle.
+- **A highlight does NOT carry forward, and a position does** (D41 vs D47). A drag reaches into
+  the scenes nobody meant anything by because a position stands until something changes it.
+  Attention is about one moment; `setHighlight` touches the one scene it is given, and making it
+  behave like a nudge would put a glow on scenes the coach never looked at.
+- **The halo is a billboard, drawn in a pass of its own.** In 3D it goes through `billboard()`
+  like everything else upright, or it lands as an ellipse squashed into the grass. And it is
+  drawn for every entity BEFORE any token rather than beside its own — tokens overlap, so a halo
+  drawn with its token sits on top of the neighbour drawn a moment earlier.
 - **A text label is the one annotation that is not in pitch space.** It stays upright while the
   board turns, so on a vertical board its lines run along pitch y and stack along pitch x —
   which is why `boundsOf`, `annotationHandles`, `dragAnnotationHandle` and `hitTestAnnotation`
@@ -222,6 +237,11 @@ hatch, but CI owns the real deploy.
   Pitchboard open fires `hashchange` and nothing else, so anything reading the hash once at mount
   silently ignores the link. `replaceState` fires no event at all — clearing the hash in code has
   to update the state too (D33).
+- **There is only ever ONE squad library.** Signed in it is the account's; signed out it is the
+  browser's; nothing writes both (D46). A cache in `localStorage` "just in case", or an offline
+  fallback that lets saving carry on locally, rebuilds the second library the whole design
+  avoids — and the merge has no answer, because the same squad edited on two sides is two
+  squads. That is also why adoption clears the local copy, and only once every preset landed.
 - **Anything read from `localStorage` is untrusted input** — it survives app versions and can be
   hand-edited in devtools. Validate it and discard what fails; never repair it (D31).
 - **A stored preset names players by shirt number, never by id.** Ids are minted per board and a

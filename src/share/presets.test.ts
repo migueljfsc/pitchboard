@@ -12,12 +12,16 @@ import {
   PRESETS_KEY,
   addPreset,
   applyPreset,
+  clearPresets,
   deletePreset,
+  libraryFromRows,
   loadPresets,
   presetFrom,
+  presetFromRow,
   renamePreset,
   replaceable,
   savePresets,
+  serialisePreset,
   updatePreset,
   type PresetLibrary,
 } from "./presets";
@@ -334,5 +338,75 @@ describe("persistence", () => {
       removeItem: () => {},
     };
     expect(savePresets([], angry)).toBe(false);
+  });
+});
+
+// The account's copy. The row owns the id and the label; the body is the squad, and it is
+// trusted no further than the browser's own library is (D31).
+describe("serialisePreset and presetFromRow", () => {
+  const row = (preset: ReturnType<typeof presetFrom>, id = "row-id", label = preset.label) => ({
+    id,
+    label,
+    body: serialisePreset(preset),
+  });
+
+  it("round-trips a squad through a row", () => {
+    const preset = presetFrom(namedBoard(), 0, [], "Our first XI");
+    const back = presetFromRow(row(preset));
+    expect(back).toEqual({ ...preset, id: "row-id" });
+  });
+
+  it("keeps the identity out of the body", () => {
+    const preset = presetFrom(namedBoard(), 0, [], "Our first XI");
+    const body: unknown = JSON.parse(serialisePreset(preset));
+    expect(body).not.toHaveProperty("id");
+    expect(body).not.toHaveProperty("label");
+  });
+
+  // A hand-written body must not be able to rename or re-address itself: the row is where
+  // both live, and the row is what the server enforces.
+  it("lets the row win over anything the body claims", () => {
+    const preset = presetFrom(namedBoard(), 0, [], "Our first XI");
+    const smuggled = JSON.stringify({ ...preset, id: "theirs", label: "Theirs" });
+    expect(presetFromRow({ id: "mine", label: "Mine", body: smuggled })).toMatchObject({
+      id: "mine",
+      label: "Mine",
+    });
+  });
+
+  it("discards a row that is not a squad", () => {
+    expect(presetFromRow({ id: "a", label: "A", body: "{not json" })).toBeNull();
+    expect(presetFromRow({ id: "a", label: "A", body: "[]" })).toBeNull();
+    expect(presetFromRow({ id: "a", label: "A", body: '"squad"' })).toBeNull();
+    expect(presetFromRow({ id: "a", label: "A", body: '{"formation":42}' })).toBeNull();
+  });
+
+  it("discards a row with no name, since a preset is a squad WITH a label", () => {
+    const preset = presetFrom(namedBoard(), 0, [], "Our first XI");
+    expect(presetFromRow(row(preset, "row-id", ""))).toBeNull();
+  });
+
+  // One bad row costs that squad, not the library.
+  it("keeps the rows that parsed, in the order they arrived", () => {
+    const doc = namedBoard();
+    const first = presetFrom(doc, 0, [], "First");
+    const third = presetFrom(doc, 0, [], "Third");
+    const library = libraryFromRows([
+      row(first, "a"),
+      { id: "b", label: "Broken", body: "{" },
+      row(third, "c"),
+    ]);
+    expect(library.map((p) => p.label)).toEqual(["First", "Third"]);
+    expect(library.map((p) => p.id)).toEqual(["a", "c"]);
+  });
+});
+
+describe("clearPresets", () => {
+  it("leaves the browser with no library at all, not an empty one", () => {
+    const store = memoryStore();
+    savePresets([presetFrom(namedBoard(), 0, [])], store);
+    clearPresets(store);
+    expect(store.getItem(PRESETS_KEY)).toBeNull();
+    expect(loadPresets(store)).toEqual([]);
   });
 });

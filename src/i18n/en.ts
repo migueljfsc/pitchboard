@@ -261,6 +261,12 @@ export const en = {
     "The ball follows whoever holds it. Handing it to someone else in the next scene makes a pass, and giving it out carries through the scenes that follow until something else happens to it.",
   "inspect.ballName": "Ball",
   "inspect.remove": "Remove {who}",
+  "inspect.highlight": "Highlight — {scene}",
+  "inspect.highlight.on": "Highlight selection",
+  "inspect.highlight.off": "Remove highlight",
+  "inspect.highlight.on.hint": "Glow around these players on this scene only.",
+  "inspect.highlight.off.hint": "Stop them glowing on this scene.",
+  "inspect.highlight.colour": "Highlight in {color}",
   "inspect.remove.hint": "Takes this player off the board, in every scene.",
   "inspect.run": "Run — {scene}",
   "inspect.straighten": "Straighten",
@@ -422,6 +428,9 @@ export const en = {
   "links.addSelected.none": "Select players to add",
   "links.addSelected.title": "Adds the players selected on the board to this link.",
   "links.delete": "Delete link",
+  "links.scenes": "Scenes",
+  "links.visibleFrom": "Scene {name} first appears on",
+  "links.visibleTo": "Last scene {name} appears on",
 
   // ---------------------------------------------------------- squad presets
   "preset.label": "Squad preset",
@@ -437,6 +446,8 @@ export const en = {
   "preset.rename": "Name of saved squad {label}",
   "preset.delete": "Delete squad {label}",
   "preset.defaultName": "Squad",
+  "preset.loading": "Loading your squads…",
+  "preset.offline": "Your squads are saved to your account, which cannot be reached right now.",
 
   // ------------------------------------------------------- engine messages
   // Returned by pure modules as keys, resolved by whoever is showing them.
@@ -469,6 +480,13 @@ export const en = {
   "preset.invalid": "That preset does not describe a valid team.",
   "preset.failed": "Could not apply that preset.",
 
+  "preset.error.preset_limit_reached": "You have reached the limit on saved squads.",
+  "preset.error.invalid_name": "A squad's name runs from one to sixty characters.",
+  "preset.error.invalid_preset": "That squad could not be saved.",
+  "preset.error.not_found": "That squad is no longer there.",
+  "preset.error.offline": "Could not reach the server, so your squads were left as they were.",
+  "preset.error.unknown": "That did not work, so your squads were left as they were.",
+
   // --------------------------------------------------------------- account
   "account.signIn": "Sign in",
   "account.signIn.google": "Continue with Google",
@@ -483,9 +501,11 @@ export const en = {
   "account.error.dismiss": "Dismiss",
 
   // ---------------------------------------------------------------- adopt
-  "adopt.title": "Keep this board in your account?",
-  "adopt.message": "You have a board in progress in this browser. Saving it to your account means you can open it anywhere. Either way it stays in this browser.",
-  "adopt.confirm": "Save it",
+  "adopt.title": "Keep what is in this browser?",
+  "adopt.message.board": "You have a board in progress in this browser. Saving it to your account means you can open it anywhere. Either way it stays in this browser.",
+  "adopt.message.squads": "You have squads saved in this browser. Copying them to your account means you can use them anywhere; they are then kept there rather than here.",
+  "adopt.message.both": "You have a board in progress and squads saved in this browser. Copying them to your account means you can reach them anywhere. The board stays in this browser either way; the squads are then kept on your account.",
+  "adopt.confirm": "Save to my account",
   "adopt.project": "My boards",
 
   // ---------------------------------------------------------------- boards

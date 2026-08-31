@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { SHAFT_INTO_HEAD, SHOT_OFFSET, drawBoard } from "./render";
+import { HALO_REACH, SHAFT_INTO_HEAD, SHOT_OFFSET, drawBoard } from "./render";
 import { HEAD_LENGTH } from "./annotations";
 import { ballRadius, tokenRadius } from "./pitch";
 import { PITCH, PITCH_PADDING, TEAM_NAME_OFFSET } from "./pitch";
 import { frameAt } from "./timeline";
 import { createRecordingCtx } from "./recording-ctx";
 import { createBoardDoc } from "@/formations";
-import { addSceneAfter, setCarrier, setRunHidden, setShot } from "./scenes";
+import { updateLink } from "./links";
+import { addSceneAfter, setCarrier, setHighlight, setRunHidden, setShot } from "./scenes";
 import { fitViewport, viewMatrix } from "./geometry";
 import { BALL_ID, type RenderView } from "./types";
 
@@ -598,5 +599,103 @@ describe("the ball's own line", () => {
     expect(turnover.r.log).not.toContain("setLineDash([1.4,1])");
     // Still drawn, though — the ball really did travel.
     expect(turnover.r.count("stroke")).toBeGreaterThan(moving().r.count("stroke"));
+  });
+});
+
+describe("highlight halos", () => {
+  const AMBER = "#f59e0b";
+  const lit = (ids: string[]) => setHighlight(createBoardDoc(), 0, ids, AMBER);
+
+  /** Each halo opens with its own gradient, so counting those counts the glows. */
+  const halos = (log: string[]) => log.filter((e) => e.startsWith("createRadialGradient(")).length;
+
+  it("draws nothing when nobody is highlighted", () => {
+    const r = createRecordingCtx();
+    drawBoard(r.ctx, createBoardDoc(), 0, view());
+    expect(halos(r.log)).toBe(0);
+  });
+
+  it("draws one per highlighted entity", () => {
+    const r = createRecordingCtx();
+    drawBoard(r.ctx, lit(["home-2", "home-5"]), 0, view());
+    expect(halos(r.log)).toBe(2);
+  });
+
+  // Tokens overlap, so a halo drawn beside its own token would sit on top of a
+  // neighbour drawn a moment earlier. It goes under, in a pass of its own.
+  it("puts the halo under its own token", () => {
+    const doc = lit(["home-2"]);
+    const at = doc.scenes[0].positions["home-2"];
+    const r = createRecordingCtx();
+    drawBoard(r.ctx, doc, 0, view());
+
+    // The recorder rounds every number to three places, so the test has to as well
+    // or a position of 18.900000000000002 never matches its own log line.
+    const n = (v: number) => String(Math.round(v * 1000) / 1000);
+    const radius = tokenRadius(doc);
+    const arcAt = (r2: number) => `arc(${n(at.x)},${n(at.y)},${n(r2)},0,6.283)`;
+
+    const halo = r.log.indexOf(arcAt(radius * HALO_REACH));
+    const token = r.log.indexOf(arcAt(radius));
+
+    expect(halo).toBeGreaterThanOrEqual(0);
+    expect(token).toBeGreaterThanOrEqual(0);
+    expect(halo).toBeLessThan(token);
+  });
+
+  it("takes the colour it was given", () => {
+    const r = createRecordingCtx();
+    drawBoard(r.ctx, lit(["home-2"]), 0, view());
+    expect(r.log.some((e) => e.startsWith('addColorStop(0,"rgba(245, 158, 11'))).toBe(true);
+  });
+
+  // Unlike a ghost, a halo is IN the document — so it belongs in the export too.
+  it("reaches an export", () => {
+    const r = createRecordingCtx();
+    drawBoard(r.ctx, lit(["home-2"]), 0, view({ interactive: false }));
+    expect(halos(r.log)).toBe(1);
+  });
+
+  it("lights the ball, as hiddenRuns takes it", () => {
+    const withBall = setCarrier(createBoardDoc(), 0, "home-2");
+    const r = createRecordingCtx();
+    drawBoard(r.ctx, setHighlight(withBall, 0, [BALL_ID], AMBER), 0, view());
+    expect(halos(r.log)).toBe(1);
+  });
+});
+
+describe("links per scene", () => {
+  /** A link's dark under-stroke — one per link drawn, and nothing else uses it. */
+  const links = (log: string[]) => log.filter((e) => e === 'strokeStyle="rgba(0,0,0,0.35)"').length;
+
+  const twoScenes = () => addSceneAfter(createBoardDoc(), 0);
+
+  it("draws every unranged link on every scene", () => {
+    const doc = twoScenes();
+    const first = createRecordingCtx();
+    drawBoard(first.ctx, doc, 0, view());
+    expect(links(first.log)).toBe(doc.links.length);
+    expect(doc.links.length).toBeGreaterThan(0);
+  });
+
+  it("leaves out a link the scene is outside of", () => {
+    let doc = twoScenes();
+    const second = doc.scenes[1].id;
+    for (const link of doc.links) doc = updateLink(doc, link.id, { from: second, to: second });
+
+    const r = createRecordingCtx();
+    drawBoard(r.ctx, doc, 0, view());
+    expect(links(r.log)).toBe(0);
+  });
+
+  it("draws it again once the timeline reaches its scene", () => {
+    let doc = twoScenes();
+    const second = doc.scenes[1].id;
+    for (const link of doc.links) doc = updateLink(doc, link.id, { from: second, to: second });
+
+    const r = createRecordingCtx();
+    // Well into the closing hold on scene 2.
+    drawBoard(r.ctx, doc, 99, view());
+    expect(links(r.log)).toBe(doc.links.length);
   });
 });

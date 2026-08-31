@@ -10,6 +10,7 @@ import {
   ballLift,
   transitionInto,
   frameAt,
+  highlightAt,
   positionAt,
   resolveAt,
   sceneTimings,
@@ -621,5 +622,71 @@ describe("per-scene pace", () => {
   it("still validates with a per-scene pace on it", () => {
     const doc = setScenePace(runs(20, 20), 1, 18.5);
     expect(boardDocSchema.safeParse(doc).success).toBe(true);
+  });
+});
+
+// A highlight is interpolated rather than switched. `Resolved.index` is the scene
+// being travelled INTO, so anything keyed off it alone snaps on the instant the
+// transition starts — which reads as a rendering fault on a glow.
+describe("highlightAt", () => {
+  const AMBER = "#f59e0b";
+  const BLUE = "#2563eb";
+  /** Two scenes, lighting whoever each names. `before` is scene 1, `after` scene 2. */
+  const lit = (after: Record<string, string>, before?: Record<string, string>) =>
+    twoScene((a, b) => {
+      if (before) a.highlight = before;
+      b.highlight = after;
+    });
+
+  it("is null where nothing is lit", () => {
+    const doc = twoScene();
+    expect(highlightAt("home-2", resolveAt(doc, 0))).toBeNull();
+  });
+
+  it("is full strength during a hold on a scene that lights it", () => {
+    const doc = lit({ "home-2": AMBER });
+    // 1 s hold, 2 s transition, then the closing hold.
+    const glow = highlightAt("home-2", resolveAt(doc, 3.4));
+    expect(glow).toEqual({ strength: 1, color: AMBER });
+  });
+
+  it("rises across the transition into the scene that lights it", () => {
+    const doc = lit({ "home-2": AMBER });
+    const start = highlightAt("home-2", resolveAt(doc, 1.05));
+    const middle = highlightAt("home-2", resolveAt(doc, 2));
+    const end = highlightAt("home-2", resolveAt(doc, 2.95));
+
+    expect(start!.strength).toBeLessThan(0.1);
+    expect(middle!.strength).toBeCloseTo(0.5, 2);
+    expect(end!.strength).toBeGreaterThan(0.9);
+  });
+
+  it("falls across a transition out of the scene that lit it", () => {
+    const doc = twoScene((a) => {
+      a.highlight = { "home-2": AMBER };
+    });
+    expect(highlightAt("home-2", resolveAt(doc, 0.5))!.strength).toBe(1);
+    expect(highlightAt("home-2", resolveAt(doc, 2))!.strength).toBeCloseTo(0.5, 2);
+    // Fully out by the far side, which is a null rather than a zero-strength glow.
+    expect(highlightAt("home-2", resolveAt(doc, 3.4))).toBeNull();
+  });
+
+  it("holds full strength across a transition both ends light", () => {
+    const doc = lit({ "home-2": AMBER }, { "home-2": AMBER });
+    expect(highlightAt("home-2", resolveAt(doc, 2))!.strength).toBe(1);
+  });
+
+  // Cross-fading two hues would spend the whole transition showing a third colour
+  // neither scene asked for.
+  it("takes the destination's colour when the two disagree", () => {
+    const doc = lit({ "home-2": BLUE }, { "home-2": AMBER });
+    expect(highlightAt("home-2", resolveAt(doc, 2))!.color).toBe(BLUE);
+  });
+
+  it("keeps the departing colour while fading out", () => {
+    const doc = twoScene((a) => {
+      a.highlight = { "home-2": AMBER };
+    });
+    expect(highlightAt("home-2", resolveAt(doc, 2))!.color).toBe(AMBER);
   });
 });

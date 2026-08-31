@@ -181,6 +181,13 @@ export function removePlayer(doc: BoardDoc, id: string): BoardDoc {
       else next.delay = delay;
     }
 
+    if (scene.highlight) {
+      const highlight = { ...scene.highlight };
+      delete highlight[id];
+      if (Object.keys(highlight).length === 0) delete next.highlight;
+      else next.highlight = highlight;
+    }
+
     if (scene.carrier === id) {
       next.carrier = null;
       // The ball drops where they stood. With no position to drop it at, the

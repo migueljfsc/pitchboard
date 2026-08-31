@@ -7,6 +7,7 @@ import { contrastOn } from "@/lib/color";
 import type { Change } from "@/lib/history";
 import { SquadPresets } from "@/components/SquadPresets";
 import type { PresetLibrary } from "@/share/presets";
+import type { PresetSource } from "@/lib/usePresets";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n/context";
 
@@ -19,6 +20,7 @@ type Props = {
   direction: Direction;
   onAddPlayer: (teamIndex: 0 | 1) => void;
   presets: PresetLibrary;
+  presetSource: PresetSource;
   onSavePreset: (teamIndex: 0 | 1, label: string) => void;
   onApplyPreset: (teamIndex: 0 | 1, id: string) => void;
   onRenamePreset: (id: string, label: string) => void;
@@ -34,6 +36,7 @@ export function TeamControls({
   direction,
   onAddPlayer,
   presets,
+  presetSource,
   onSavePreset,
   onApplyPreset,
   onRenamePreset,
@@ -105,6 +108,7 @@ export function TeamControls({
         doc={doc}
         teamIndex={teamIndex}
         presets={presets}
+        source={presetSource}
         onSave={onSavePreset}
         onApply={onApplyPreset}
         onRename={onRenamePreset}

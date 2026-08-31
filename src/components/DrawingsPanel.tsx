@@ -9,6 +9,7 @@ import {
   updateAnnotation,
 } from "@/board/annotations";
 import { KIND_ICON, KIND_KEY, describeAnnotation } from "@/components/ui/kinds";
+import { SceneSelect } from "@/components/ui/SceneSelect";
 import type { Change } from "@/lib/history";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n/context";
@@ -445,38 +446,6 @@ function DropLine({ className }: { className: string }) {
         className,
       )}
     />
-  );
-}
-
-function SceneSelect({
-  title,
-  doc,
-  value,
-  allowEnd,
-  onChange,
-}: {
-  title: string;
-  doc: BoardDoc;
-  value: string | null;
-  allowEnd?: boolean;
-  onChange: (id: string | null) => void;
-}) {
-  const { t } = useI18n();
-  return (
-    <select
-      value={value ?? ""}
-      aria-label={title}
-      title={title}
-      onChange={(e) => onChange(e.target.value || null)}
-      className="min-w-0 flex-1 rounded border border-ink-600 bg-ink-900 px-1 py-0.5 text-[11px] text-ink-300 outline-none focus:border-accent"
-    >
-      {allowEnd && <option value="">{t("drawn.end")}</option>}
-      {doc.scenes.map((s) => (
-        <option key={s.id} value={s.id}>
-          {s.name}
-        </option>
-      ))}
-    </select>
   );
 }
 

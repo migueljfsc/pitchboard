@@ -94,7 +94,12 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 export async function fetchAccount(): Promise<Account | null> {
   try {
     const { user } = await call<{ user: Account }>("/me");
-    return user;
+    // Coalesced, not returned raw: a 200 with no `user` in it is not this Worker
+    // answering. The Vite dev server serves index.html for every unknown path, so in
+    // development /api/me is a 200 whose body does not parse — which arrived here as
+    // `undefined`, and `undefined !== null` had the whole editor believing it was
+    // signed in to an account that cannot be reached.
+    return user ?? null;
   } catch (error) {
     if (error instanceof ApiError && (error.status === 401 || error.status === 0)) return null;
     throw error;
@@ -228,6 +233,47 @@ export async function deleteBoards(ids: string[]): Promise<number> {
     body: JSON.stringify({ ids }),
   });
   return deleted;
+}
+
+// --- squad presets ------------------------------------------------------------------------
+
+/**
+ * A saved squad's row. The body is the serialised setup team — validated on arrival by
+ * `presets.ts`, never by the server, which is the same division boards follow.
+ */
+export interface StoredPreset {
+  id: string;
+  label: string;
+  body: string;
+  created_at: number;
+  updated_at: number;
+}
+
+/**
+ * The whole library in one request. Presets are small and capped at fifty, so the bodies
+ * come back with the list rather than a fetch per squad.
+ */
+export async function listPresets(): Promise<StoredPreset[]> {
+  const { presets } = await call<{ presets: StoredPreset[] }>("/presets");
+  return presets;
+}
+
+/** The id comes back minted by the server; the one the client held was list-scoped. */
+export async function createPreset(label: string, body: string): Promise<StoredPreset> {
+  const { preset } = await call<{ preset: StoredPreset }>("/presets", {
+    method: "POST",
+    body: JSON.stringify({ label, body }),
+  });
+  return preset;
+}
+
+/** A whole update — renaming and re-saving the squad are the same request. */
+export async function savePreset(id: string, label: string, body: string): Promise<void> {
+  await call(`/presets/${id}`, { method: "PUT", body: JSON.stringify({ label, body }) });
+}
+
+export async function deletePreset(id: string): Promise<void> {
+  await call(`/presets/${id}`, { method: "DELETE" });
 }
 
 // --- sharing -----------------------------------------------------------------------------

@@ -7,6 +7,7 @@ import type { Carry } from "@/board/interaction";
 import { entityDelayMs, entityTravelMs, sceneTravelMs } from "@/board/timeline";
 import { cn } from "@/lib/utils";
 import { NumberField } from "@/components/ui/NumberField";
+import { PALETTE } from "@/components/ui/palette";
 import { useI18n } from "@/i18n/context";
 import type { Message } from "@/i18n/core";
 
@@ -36,6 +37,12 @@ type Props = {
   /** True when every selected entity has its run arrow hidden in this scene. */
   runsHidden: boolean;
   onRunsHiddenChange: (hidden: boolean) => void;
+  /** True when every selected entity is lit in this scene. */
+  highlighted: boolean;
+  /** The colour the next halo takes — editor state, like the drawing colour. */
+  highlightColor: string;
+  /** A colour lights the selection in this colour; null puts the halos out. */
+  onHighlightChange: (color: string | null) => void;
   /**
    * Bumped to put the cursor in the name field — a double-click on the board.
    * A counter rather than a boolean so renaming the same player twice in a row
@@ -61,6 +68,9 @@ export function Inspector({
   onRemovePlayer,
   runsHidden,
   onRunsHiddenChange,
+  highlighted,
+  highlightColor,
+  onHighlightChange,
   focusName,
 }: Props) {
   const { t } = useI18n();
@@ -245,6 +255,38 @@ export function Inspector({
           />
         </div>
       )}
+
+      {/* Unlike the run block, this is offered on scene 0 too: there is no run
+          into the first scene, but there is certainly someone to watch in it.
+
+          A swatch both lights the selection and becomes the colour the next one
+          takes — the rule the drawing colour already follows. Nothing here
+          carries forward: a highlight is about this moment (D47). */}
+      <div className="flex flex-col gap-1.5">
+        <span className="text-[11px] uppercase tracking-wide text-ink-400">
+          {t("inspect.highlight", { scene: scene?.name ?? "" })}
+        </span>
+        <SmallButton
+          label={t(highlighted ? "inspect.highlight.off" : "inspect.highlight.on")}
+          title={t(highlighted ? "inspect.highlight.off.hint" : "inspect.highlight.on.hint")}
+          onClick={() => onHighlightChange(highlighted ? null : highlightColor)}
+        />
+        <div className="flex flex-wrap items-center gap-1">
+          {PALETTE.map((c) => (
+            <button
+              key={c}
+              type="button"
+              aria-label={t("inspect.highlight.colour", { color: c })}
+              onClick={() => onHighlightChange(c)}
+              className={cn(
+                "size-4 rounded-full ring-1 transition",
+                highlightColor === c ? "ring-2 ring-accent" : "ring-white/15 hover:ring-white/40",
+              )}
+              style={{ background: c }}
+            />
+          ))}
+        </div>
+      </div>
 
       {/* Last, and on its own. Removing a player belongs to neither the ball nor
           the run, and sitting under either read as part of it. */}

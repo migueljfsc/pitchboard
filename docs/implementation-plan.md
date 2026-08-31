@@ -27,6 +27,8 @@ before any React touches it, and every phase ends at a state you can look at.
 | — | Accounts, projects and saved boards on a Worker + D1 + KV (D39) |
 | — | The 3D view (D34), half-pitch and vertical framing, kit patterns, EN/PT (D38) |
 | — | Carry-forward editing (D41), per-entity waits (D42), ball handover (D43, D44) |
+| — | Squad presets follow the account rather than the browser (D46) |
+| — | Links with a scene range, and per-scene player highlights (D47) |
 
 Everything above is complete and covered by tests. The per-phase task lists and build notes were
 retired once they stopped describing anything a reader has to decide; what outlived them is in

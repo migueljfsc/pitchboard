@@ -32,28 +32,17 @@ import { nudgeEntities, type Carry } from "@/board/interaction";
 import { useHistory, type Change } from "@/lib/history";
 import { useAutosave } from "@/lib/useAutosave";
 import { AUTOSAVE_MS, loadBoard, saveBoard } from "@/share/local";
-import {
-  addPreset,
-  applyPreset,
-  deletePreset,
-  loadPresets,
-  presetFrom,
-  renamePreset,
-  replaceable,
-  savePresets,
-  updatePreset,
-  type PresetLibrary,
-  type SquadPreset,
-} from "@/share/presets";
+import { applyPreset, presetFrom, replaceable, type SquadPreset } from "@/share/presets";
 import { cn } from "@/lib/utils";
 import { MODIFIER } from "@/lib/platform";
 import { LocaleSwitch } from "@/components/LocaleSwitch";
 import { AccountMenu } from "@/components/AccountMenu";
 import { BoardsLibrary } from "@/components/BoardsLibrary";
 import { SaveBoardButton } from "@/components/SaveBoardButton";
-import { AdoptBoardPrompt } from "@/components/AdoptBoardPrompt";
+import { AdoptLocalPrompt } from "@/components/AdoptLocalPrompt";
 import { useAccount } from "@/lib/useAccount";
 import { useCloudBoard } from "@/lib/useCloudBoard";
+import { usePresets } from "@/lib/usePresets";
 import { useI18n } from "@/i18n/context";
 import type { Message } from "@/i18n/core";
 import { clearLinks, createLink } from "@/board/links";
@@ -65,11 +54,13 @@ import {
 } from "@/board/annotations";
 import { concealedPlayers } from "@/board/render";
 import {
+  isHighlighted,
   isRunHidden,
   pathOf,
   sceneStartSeconds,
   setCarrier,
   setDelay,
+  setHighlight,
   setPath,
   setRunHidden,
   setTravel,
@@ -146,8 +137,9 @@ export function Editor({ initialDoc }: Props = {}) {
 
   // Squad presets live outside the document: they are a library the board draws
   // from, not part of what the board IS. Nothing about them is undoable, and
-  // none of it reaches an export or a share link.
-  const [presets, setPresets] = useState<PresetLibrary>(() => loadPresets());
+  // none of it reaches an export or a share link. Where the library lives —
+  // this browser or the account — is `usePresets`'s question, asked below once
+  // there is an account state to ask it with.
   const [presetError, setPresetError] = useState<Message | null>(null);
 
   // Drawing. The tool owns what a drag on the grass does; colour and dash are
@@ -155,6 +147,10 @@ export function Editor({ initialDoc }: Props = {}) {
   const [tool, setTool] = useState<Tool>("select");
   const [sticky, setSticky] = useState(false);
   const [drawColor, setDrawColor] = useState("#f59e0b");
+  // The colour the next halo takes, and the one a swatch restyles the lit ones to.
+  // Editor state, exactly like the drawing colour: it is how you are working, not
+  // part of what the board is.
+  const [highlightColor, setHighlightColor] = useState("#f59e0b");
   const [drawDash, setDrawDash] = useState<AnnotationDash>("solid");
   const [annotation, setAnnotation] = useState<string | null>(null);
   const [drawOpen, setDrawOpen] = useState(false);
@@ -205,6 +201,11 @@ export function Editor({ initialDoc }: Props = {}) {
   // useAccount() calls would be two /api/me requests that can disagree.
   const accountState = useAccount();
   const cloud = useCloudBoard(doc, setDoc, accountState.account !== null);
+  const library = usePresets(accountState.account !== null, accountState.loading);
+
+  // Applying a preset fails here; saving, renaming and deleting one fail inside the library.
+  // Both are about the same panel and there is only ever one of them, so they share a line.
+  const libraryError = presetError ?? library.error;
 
   const undo = useCallback(() => {
     pinScrubber(undoHistory(), chosenScene);
@@ -305,37 +306,29 @@ export function Editor({ initialDoc }: Props = {}) {
     [doc],
   );
 
-  // The library is written through on every change rather than in an effect, so
-  // a failed write cannot leave the list on screen disagreeing with storage.
-  const commitPresets = useCallback((next: PresetLibrary) => {
-    setPresets(next);
-    savePresets(next);
-  }, []);
-
   const onSavePreset = (teamIndex: 0 | 1, label: string) => {
-    const preset = presetFrom(doc, teamIndex, presets, label);
+    const preset = presetFrom(doc, teamIndex, library.presets, label);
 
     // The same name in the same shape is the same squad being saved again. A
     // different shape under that name is a separate preset, so it just adds.
-    const replacing = replaceable(presets, preset.label, preset.formation);
+    const replacing = replaceable(library.presets, preset.label, preset.formation);
     if (replacing) {
       setPending({ kind: "preset", preset, replacing });
       return;
     }
 
-    commitPresets(addPreset(presets, preset));
+    library.add(preset);
     setPresetError(null);
   };
 
-  /** Keeps the replaced preset's id, so it stays where it was in the list. */
   const replacePreset = (preset: SquadPreset, replacing: SquadPreset) => {
-    commitPresets(updatePreset(presets, { ...preset, id: replacing.id }));
+    library.replace(preset, replacing);
     setPresetError(null);
     setPending(null);
   };
 
   const onApplyPreset = (teamIndex: 0 | 1, id: string) => {
-    const preset = presets.find((p) => p.id === id);
+    const preset = library.presets.find((p) => p.id === id);
     if (!preset) return;
     const outcome = applyPreset(doc, teamIndex, preset);
     if (!outcome.ok) {
@@ -536,6 +529,17 @@ export function Editor({ initialDoc }: Props = {}) {
     setDoc(next);
   };
 
+  // activeScene, not editScene: there is no run into the first scene, but there is
+  // certainly someone worth watching in it. Every selected entity, for the same
+  // reason the run toggle asks for every one — half-lit would read as "off".
+  const highlighted =
+    visible.size > 0 && [...visible].every((id) => isHighlighted(doc.scenes[activeScene], id));
+
+  const onHighlightChange = (color: string | null) => {
+    if (color) setHighlightColor(color);
+    setDoc(setHighlight(doc, activeScene, visible, color));
+  };
+
   // Arrow keys nudge the selection: 1 m, or 5 m with shift. Space toggles playback.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -724,10 +728,11 @@ export function Editor({ initialDoc }: Props = {}) {
           <span className="mx-1 h-5 w-px bg-ink-600" />
 
           {accountState.account && <BoardsLibrary cloud={cloud} />}
-          <AdoptBoardPrompt
+          <AdoptLocalPrompt
             cloud={cloud}
             boardName={doc.name}
             signedIn={accountState.account !== null}
+            presets={library}
           />
           {/* Signing out resets the editor: the board you had while signed in is not the
               board the next person to open this browser should find. Composed at the call
@@ -783,20 +788,21 @@ export function Editor({ initialDoc }: Props = {}) {
                     onFormationChange={onFormationChange}
                     direction={directions[i]}
                     onAddPlayer={(index) => setDoc(addPlayer(doc, index))}
-                    presets={presets}
+                    presets={library.presets}
+                    presetSource={library.source}
                     onSavePreset={onSavePreset}
                     onApplyPreset={onApplyPreset}
-                    onRenamePreset={(id, label) => commitPresets(renamePreset(presets, id, label))}
-                    onDeletePreset={(id) => commitPresets(deletePreset(presets, id))}
+                    onRenamePreset={library.rename}
+                    onDeletePreset={library.remove}
                   />
                 </div>
               ))}
-              {presetError && (
+              {libraryError && (
                 <p
                   role="alert"
                   className="rounded border border-red-500/50 bg-red-500/10 px-2 py-1.5 text-[11px] leading-relaxed text-red-300"
                 >
-                  {tm(presetError)}
+                  {tm(libraryError)}
                 </p>
               )}
             </div>
@@ -862,6 +868,9 @@ export function Editor({ initialDoc }: Props = {}) {
               onRemovePlayer={(id) => setDoc(removePlayer(doc, id))}
               runsHidden={runsHidden}
               onRunsHiddenChange={onRunsHiddenChange}
+              highlighted={highlighted}
+              highlightColor={highlightColor}
+              onHighlightChange={onHighlightChange}
               focusName={focusName}
             />
           </Section>

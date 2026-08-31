@@ -42,12 +42,13 @@ import {
   ballLift,
   displayCurve,
   frameAt,
+  highlightAt,
   transitionInto,
   type Frame,
   type Resolved,
 } from "./timeline";
 import { ballCurve, ballTravelBetween, isRunHidden } from "./scenes";
-import { linkColor, linkGeometry, type LinkGeometry } from "./links";
+import { linkColor, linkGeometry, linksOn, type LinkGeometry } from "./links";
 import {
   DASH_PATTERN,
   HEAD_LENGTH,
@@ -141,6 +142,11 @@ export function drawBoard(
   drawGhosts(ctx, doc, view, view.rotated);
 
   const scale = tokenScaleOf(doc);
+
+  // Under the tokens, in one pass — see halosOn.
+  for (const halo of halosOn(doc, frame)) {
+    drawHighlight(ctx, halo.at, TOKEN_RADIUS * scale, halo.color, halo.strength);
+  }
 
   for (const team of doc.teams) {
     if (team.hidden) continue;
@@ -536,6 +542,15 @@ function drawBillboards(
     billboard(ctx, p, projectPitch(p, groundView, proj), draw),
   );
 
+  // Billboarded like everything else that must stay round: a halo drawn into the
+  // ground layer would land as an ellipse squashed into the grass. Under the
+  // standing tokens, and unsorted, for the same reason the ghosts are.
+  for (const halo of halosOn(doc, frame)) {
+    billboard(ctx, halo.at, projectPitch(halo.at, groundView, proj), () =>
+      drawHighlight(ctx, halo.at, TOKEN_RADIUS * scale, halo.color, halo.strength),
+    );
+  }
+
   const standing: { at: Projected; draw: () => void }[] = [];
 
   for (const team of doc.teams) {
@@ -755,6 +770,71 @@ function upright(ctx: Ctx, at: Vec2, rotated: boolean, draw: () => void): void {
   ctx.restore();
 }
 
+// ------------------------------------------------------------ highlights
+
+/** How far the glow reaches past the token, in token radii. Exported for the tests. */
+export const HALO_REACH = 2.6;
+/** Alpha at the token's edge, at full strength. */
+const HALO_ALPHA = 0.7;
+
+/** A halo resolved for one entity: where it sits, what colour, how bright. */
+type Halo = { at: Vec2; color: string; strength: number };
+
+/**
+ * Every glow on this frame, players first and the ball last.
+ *
+ * A list rather than a draw call per token, because tokens overlap and a halo
+ * drawn beside its own token would sit on top of a neighbour drawn a moment
+ * earlier. They all go down in one pass underneath.
+ *
+ * The ball gets a token-sized halo rather than a ball-sized one: the mark says
+ * "look here" and means the same thing whatever it is marking.
+ */
+function halosOn(doc: BoardDoc, frame: Frame): Halo[] {
+  const out: Halo[] = [];
+
+  for (const team of doc.teams) {
+    if (team.hidden) continue;
+    for (const player of team.players) {
+      const glow = highlightAt(player.id, frame.resolved);
+      const at = frame.positions[player.id];
+      if (glow && at) out.push({ at, color: glow.color, strength: glow.strength });
+    }
+  }
+
+  const ball = frame.ball;
+  if (ball) {
+    const glow = highlightAt(BALL_ID, frame.resolved);
+    if (glow) out.push({ at: ball, color: glow.color, strength: glow.strength });
+  }
+
+  return out;
+}
+
+/**
+ * The glow marking a key player for this scene.
+ *
+ * A soft falloff rather than a ring: the board already draws a ring for selection
+ * and another for hover, and a third would read as a third selection state rather
+ * than as emphasis.
+ *
+ * NO PULSE. `drawBoard` is handed `t` and could animate one deterministically, but
+ * a glow that changes every frame is precisely what makes a GIF's palette crawl
+ * (D29) — and it would be drawing attention to itself rather than to the player.
+ */
+function drawHighlight(ctx: Ctx, p: Vec2, radius: number, color: string, strength: number): void {
+  const outer = radius * HALO_REACH;
+  const glow = ctx.createRadialGradient(p.x, p.y, radius * 0.55, p.x, p.y, outer);
+  glow.addColorStop(0, withAlpha(color, HALO_ALPHA * strength));
+  glow.addColorStop(0.45, withAlpha(color, HALO_ALPHA * 0.4 * strength));
+  glow.addColorStop(1, withAlpha(color, 0));
+
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, outer, 0, Math.PI * 2);
+  ctx.fillStyle = glow;
+  ctx.fill();
+}
+
 // ---------------------------------------------------------------- links
 
 /** Ids of players on hidden teams. Shared by rendering and hit-testing. */
@@ -769,12 +849,15 @@ export function concealedPlayers(doc: BoardDoc): Set<string> {
 /**
  * Connectors between grouped players, recomputed from their current interpolated
  * positions so the shape deforms live as the animation runs.
+ *
+ * Only the ones this scene shows. `resolved.index` is the scene being travelled
+ * into, which is the same instant annotations switch on, so a link and a zone
+ * ranged to the same scene arrive together (D47).
  */
 function drawLinks(ctx: Ctx, doc: BoardDoc, frame: Frame, rotated: boolean): void {
   const concealed = concealedPlayers(doc);
 
-  for (const link of doc.links) {
-    if (link.hidden) continue;
+  for (const link of linksOn(doc, frame.resolved.index)) {
     // A link whose players are all on a hidden team goes with them.
     if (link.members.every((m) => concealed.has(m))) continue;
     const g = linkGeometry(link, frame.resolved, doc);

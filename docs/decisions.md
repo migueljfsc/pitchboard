@@ -261,6 +261,74 @@ got to in the air.
 trajectory rather than the ball following one, it would have to be un-drawn from the
 flat board where the ball is already in the air, and it does not animate.
 
+## D46 — A squad follows the account, and there is only ever one library
+Squad presets shipped in M10 as a `localStorage` library and stayed there through D39, so a
+coach's boards followed their account and their XIs followed their browser. Signed in, the
+library is now the account's: `presets` in D1, one row per preset.
+
+**One row per preset, not the library as a blob.** The editor holds the library in memory for
+a whole session, so a whole-library write always carries a list that may be stale — and
+deleting someone's squad because the other tab had not seen it yet is a silent loss with no
+conflict to detect. A row per preset makes two devices touching two different squads two
+independent writes. No version and no 409 either: a preset is one squad, replaced whole, and
+there is nothing to merge when two devices edit the same one.
+
+**One library at a time.** Signed in, nothing is written to `localStorage` — not even as a
+cache. Which is why adoption CLEARS the browser's copy, and why the offline case shows nothing
+rather than falling back to it: a second library is one nobody is reading and everybody
+eventually has to merge, and a squad saved into it is one the coach looks for on their other
+machine and does not find. An empty list saying the account cannot be reached is the honest
+answer.
+
+**Adoption is offered once per sign-in and deduped by name and shape** — `replaceable`, the
+same rule a re-save uses. It is offered again after signing out and back in, so without the
+dedupe a decline followed by local edits would leave two of every squad. The browser's copy is
+cleared only if every preset landed; a partial adoption keeps it and the next offer finishes
+the job.
+
+**The body is stored opaquely**, checked for size and well-formedness only, exactly as
+`boards.doc` is. `presetSchema` validates in the browser, where it has to run anyway — a preset
+still arrives from `localStorage` with no server involved (D31). The id and label are the row's
+own columns, so a hand-written body cannot rename or re-address itself.
+
+## D47 — Links have a scene range; attention does not carry
+Two ways of saying "this, here", built on the same idea and deliberately not on the same field.
+
+**A link gets the range an annotation already had** — `from` and `to`, scene IDS so reordering
+carries the unit along. Both ends are OPTIONAL, unlike an annotation's: a link written before
+ranges existed has neither, and neither means every scene, which is exactly what those links
+have always done. No migration, and every `#d=` link published before this still opens saying
+what it said. The rule itself moved to `board/range.ts` rather than being imported out of
+`annotations.ts` — links importing annotations is the first step toward the merge AGENTS.md
+forbids, and `scenes.ts` could not hold it because it already imports `annotations.ts` and
+would have closed a cycle.
+
+**A highlight is `Scene.highlight`, a record of entity id to colour.** A record and not a list
+because it carries a value, which is the distinction `travel` and `delay` already make against
+`hiddenRuns`. It is per scene and per entity, which is the axis the thing actually varies on —
+a player is in every scene, and what changes is whether they matter in this one.
+
+**It does not carry forward** (D41 does not apply). A position is a fact that stands until
+something changes it, so a drag reaching into the scenes nobody meant anything by is right.
+Attention is about one moment, and copying it forward would say something the coach did not.
+
+**The glow is interpolated, not switched.** `Resolved.index` is the scene being travelled INTO,
+so anything keyed off it alone appears the instant a transition starts. That is right for a
+zone and wrong for a halo, where it reads as a rendering fault — so strength rides the same
+easing the positions do and the glow comes up as the player arrives. During a hold the two
+scenes are the same one and `u` is 1, so it collapses to on-or-off with no special case. Where
+the two ends disagree on colour the destination wins: cross-fading two hues would spend the
+whole transition showing a third colour neither scene asked for.
+
+**A halo, not a ring, and never a pulse.** The board already draws a ring for selection and
+another for hover; a third would read as a third selection state rather than as emphasis. It is
+drawn in the billboard pass, or it lands squashed into the grass in 3D, and in one pass under
+all the tokens rather than beside each — tokens overlap, and a halo drawn with its own token
+would sit on top of a neighbour drawn a moment earlier. `drawBoard` is handed `t` and could
+animate a pulse deterministically, but a glow that changes every frame is precisely what makes
+a GIF's palette crawl (D29).
+
+
 ---
 
 ## Invariants

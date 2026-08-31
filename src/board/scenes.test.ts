@@ -5,6 +5,8 @@ import {
   ballTravelBetween,
   canLoft,
   canShoot,
+  highlightOf,
+  isHighlighted,
   isRunHidden,
   defaultCurve,
   deleteScene,
@@ -16,6 +18,7 @@ import {
   pathOf,
   sceneStartSeconds,
   setCarrier,
+  setHighlight,
   setLoft,
   setPath,
   setRunHidden,
@@ -610,5 +613,67 @@ describe("ballTravelBetween", () => {
 
   it("is none for a loose ball nobody has moved", () => {
     expect(pair(addSceneAfter(base(), 0))).toBe("none");
+  });
+});
+
+describe("setHighlight", () => {
+  const AMBER = "#f59e0b";
+  const BLUE = "#2563eb";
+
+  it("lights a whole selection at once", () => {
+    const doc = setHighlight(createBoardDoc(), 0, ["home-2", "home-5"], AMBER);
+    expect(isHighlighted(doc.scenes[0], "home-2")).toBe(true);
+    expect(isHighlighted(doc.scenes[0], "home-5")).toBe(true);
+    expect(highlightOf(doc.scenes[0], "home-2")).toBe(AMBER);
+  });
+
+  it("recolours without unlighting", () => {
+    let doc = setHighlight(createBoardDoc(), 0, ["home-2"], AMBER);
+    doc = setHighlight(doc, 0, ["home-2"], BLUE);
+    expect(highlightOf(doc.scenes[0], "home-2")).toBe(BLUE);
+  });
+
+  it("puts a selection out with null, and drops the key once nothing is lit", () => {
+    let doc = setHighlight(createBoardDoc(), 0, ["home-2"], AMBER);
+    doc = setHighlight(doc, 0, ["home-2"], null);
+    expect(isHighlighted(doc.scenes[0], "home-2")).toBe(false);
+    // Absent rather than empty, so a scene with nothing lit serialises exactly as
+    // it did before the field existed.
+    expect(doc.scenes[0].highlight).toBeUndefined();
+  });
+
+  it("leaves the others lit when one is put out", () => {
+    let doc = setHighlight(createBoardDoc(), 0, ["home-2", "home-5"], AMBER);
+    doc = setHighlight(doc, 0, ["home-2"], null);
+    expect(isHighlighted(doc.scenes[0], "home-5")).toBe(true);
+  });
+
+  // Never carried forward: attention is about one moment, unlike a position (D47).
+  it("touches only the scene it was given", () => {
+    const two = addSceneAfter(createBoardDoc(), 0);
+    const doc = setHighlight(two, 0, ["home-2"], AMBER);
+    expect(isHighlighted(doc.scenes[1], "home-2")).toBe(false);
+  });
+
+  it("is the same object when nothing would change", () => {
+    const doc = setHighlight(createBoardDoc(), 0, ["home-2"], AMBER);
+    expect(setHighlight(doc, 0, ["home-2"], AMBER)).toBe(doc);
+    expect(setHighlight(doc, 0, ["home-5"], null)).toBe(doc);
+    expect(setHighlight(doc, 0, [], AMBER)).toBe(doc);
+  });
+
+  it("ignores a scene the board does not have", () => {
+    const doc = createBoardDoc();
+    expect(setHighlight(doc, 9, ["home-2"], AMBER)).toBe(doc);
+  });
+
+  it("takes the ball, as hiddenRuns does", () => {
+    const doc = setHighlight(createBoardDoc(), 0, [BALL_ID], AMBER);
+    expect(isHighlighted(doc.scenes[0], BALL_ID)).toBe(true);
+  });
+
+  it("still validates", () => {
+    const doc = setHighlight(createBoardDoc(), 0, ["home-2"], AMBER);
+    expect(boardDocSchema.safeParse(doc).success).toBe(true);
   });
 });

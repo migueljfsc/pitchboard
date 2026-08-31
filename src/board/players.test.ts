@@ -9,7 +9,7 @@ import {
   shirtClash,
   teamOf,
 } from "./players";
-import { setCarrier, setPath, setTravel } from "./scenes";
+import { setCarrier, setHighlight, setPath, setTravel } from "./scenes";
 import { createLink } from "./links";
 import { createBoardDoc } from "@/formations";
 import { boardDocSchema } from "./schema";
@@ -303,5 +303,21 @@ describe("shirtClash", () => {
     const worn = new Set(doc.teams[0].players.map((x) => x.number));
     const free = [...Array(100).keys()].find((n) => !worn.has(n))!;
     expect(shirtClash(doc, p.id, free)).toBeNull();
+  });
+});
+
+describe("removePlayer and the highlight", () => {
+  it("takes the departing player's halo with them", () => {
+    const doc = setHighlight(createBoardDoc(), 0, ["home-2", "home-5"], "#f59e0b");
+    const after = removePlayer(doc, "home-2");
+    expect(after.scenes[0].highlight).toEqual({ "home-5": "#f59e0b" });
+    expect(boardDocSchema.safeParse(after).success).toBe(true);
+  });
+
+  // Absent rather than empty, so a scene with nothing lit serialises exactly as it
+  // did before the field existed.
+  it("drops the key when they were the only one lit", () => {
+    const doc = setHighlight(createBoardDoc(), 0, ["home-2"], "#f59e0b");
+    expect(removePlayer(doc, "home-2").scenes[0].highlight).toBeUndefined();
   });
 });

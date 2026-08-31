@@ -9,6 +9,7 @@
 
 import type { BoardDoc, Link, LinkStyle, Vec2 } from "./types";
 import { positionAt, type Resolved } from "./timeline";
+import { isVisibleIn, repairRange } from "./range";
 
 export type LinkEdge = { a: Vec2; b: Vec2; mid: Vec2; metres: number };
 
@@ -272,6 +273,35 @@ export function replaceTeamLinks(doc: BoardDoc, index: 0 | 1, resolved: Link[]):
   const kept = doc.links.filter((l) => !owns(l));
   const at = firstAt < 0 ? kept.length : firstAt;
   return [...kept.slice(0, at), ...resolved, ...kept.slice(at)];
+}
+
+/**
+ * Links drawn on a scene, in document order — which is draw order.
+ *
+ * A link with no range is on every scene, so a board that has never touched the
+ * control behaves exactly as it did before there was one (D47).
+ */
+export const linksOn = (doc: BoardDoc, sceneIndex: number): Link[] =>
+  doc.links.filter((l) => isVisibleIn(doc, l, sceneIndex));
+
+/**
+ * Pull every link's range back onto scenes that exist.
+ *
+ * What deleting a scene owes a link that named it: the link is kept and its range
+ * repaired. Dropping the link instead would lose a unit because one end of when it
+ * showed went away — the same rule `pruneAnnotations` follows for a drawing.
+ */
+export function pruneLinkRanges(doc: BoardDoc): BoardDoc {
+  if (doc.links.length === 0) return doc;
+
+  let changed = false;
+  const links = doc.links.map((link) => {
+    const repaired = repairRange(doc, link);
+    if (repaired !== link) changed = true;
+    return repaired;
+  });
+
+  return changed ? withLinks(doc, links) : doc;
 }
 
 export function pruneLinks(doc: BoardDoc): BoardDoc {

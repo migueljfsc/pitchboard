@@ -24,7 +24,9 @@ import {
   removeMember,
   updateLink,
 } from "@/board/links";
+import { sceneSpan } from "@/board/range";
 import { PALETTE } from "@/components/ui/palette";
+import { SceneSelect } from "@/components/ui/SceneSelect";
 import type { Change } from "@/lib/history";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n/context";
@@ -202,7 +204,8 @@ function LinkRow({
   onDragEnd: () => void;
   i18n: I18n;
 }) {
-  const { t } = i18n;
+  const { t, tn } = i18n;
+  const span = sceneSpan(doc, link);
   // Which member chip is in the air, and which GAP it would land in — 0 before the
   // first, n after the last. Local, because only one row is expanded at a time.
   const [lift, setLift] = useState<number | null>(null);
@@ -380,6 +383,36 @@ function LinkRow({
               ))}
             </div>
           </div>
+
+          {/* Ids, not indices, so reordering scenes carries the unit's span along.
+              A link that has never been ranged shows the first scene to the end,
+              which is what it has always meant (D47). */}
+          {doc.scenes.length > 1 && (
+            <div>
+              <span className="text-[11px] uppercase tracking-wide text-ink-400">
+                {t("links.scenes")}
+              </span>
+              <div className="mt-1 flex items-center gap-1">
+                <SceneSelect
+                  title={t("links.visibleFrom", { name: link.name })}
+                  doc={doc}
+                  value={link.from ?? doc.scenes[0]?.id}
+                  onChange={(id) => id && onChange({ from: id })}
+                />
+                <span className="shrink-0 text-[11px] text-ink-500">→</span>
+                <SceneSelect
+                  title={t("links.visibleTo", { name: link.name })}
+                  doc={doc}
+                  value={link.to}
+                  allowEnd
+                  onChange={(id) => onChange({ to: id })}
+                />
+                <span className="ml-auto shrink-0 font-mono text-[11px] text-ink-500">
+                  {tn("drawn.span", span[1] - span[0] + 1)}
+                </span>
+              </div>
+            </div>
+          )}
 
           <div>
             <span className="text-[11px] uppercase tracking-wide text-ink-400">

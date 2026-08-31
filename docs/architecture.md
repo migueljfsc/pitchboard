@@ -346,6 +346,17 @@ The glued offset points along the carrier's direction of travel (falling back to
 downfield offset when stationary) so the ball sits ahead of the player and the token's number
 stays readable.
 
+### Highlights
+
+`Scene.highlight` is a record of entity id to halo colour: who matters in this scene, and what
+colour to say it in. It sits beside `carrier`, `travel` and `delay` because that is the axis it
+varies on — a player is in every scene, and what changes is whether they matter in this one.
+
+`highlightAt(id, resolved)` interpolates the strength on the same easing the positions use, so
+the glow comes up as the player arrives rather than snapping on when the transition starts. It
+never carries forward, which is the one place it deliberately parts company with a drag (D41 vs
+D47).
+
 ---
 
 ## 6. Links
@@ -366,6 +377,11 @@ linkGeometry(link: Link, resolved: Resolved, doc: BoardDoc): {
 - `polygon` — closed path.
 - `filled` — closed path plus translucent fill. The enclosed area visibly collapses and expands,
   which is the clearest read of a unit compressing or getting stretched.
+
+A link also carries a **scene range** — `from` and `to`, the same pair an annotation has and the
+same rule, in `board/range.ts` so neither module has to import the other. Both ends are optional
+here and neither means the open end, so a link that has never been ranged shows on every scene
+exactly as links always did (D47).
 
 `showDistances` labels each edge at its midpoint in metres. Distances come straight from the
 pitch-metre coordinates — no conversion, which is a large part of why the coordinate system is
@@ -548,7 +564,9 @@ Three layers:
    a document per pointermove and a `localStorage` write is synchronous on the main thread), plus
    explicit `.json` import/export, plus **squad presets** (`share/presets.ts`) — a named library
    of one-team setups, reusing `setupTeamSchema` so a preset and a hand-written setup file are the
-   same shape. See D30 and D31.
+   same shape. See D30 and D31. The library is the browser's only while nobody is signed in:
+   signed in it is the account's, one row per preset, and `lib/usePresets.ts` is the seam that
+   picks between the two. There is never one of each (D46).
    The JSON half shipped early, in `src/share/json.ts`. It accepts two shapes, told apart by
    `version`: a whole `BoardDoc`, and a much shorter **setup** document naming a formation, an
    eleven and its units. A setup is built into a board and then validated *as* a board, so

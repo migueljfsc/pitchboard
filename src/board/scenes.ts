@@ -18,6 +18,7 @@ import {
   totalDurationMs,
 } from "./timeline";
 import { pruneAnnotations, straightCurve } from "./annotations";
+import { pruneLinkRanges } from "./links";
 import { SAME_PLACE, distance, type Bezier } from "./geometry";
 import type { Carry } from "./interaction";
 import { teamOf } from "./players";
@@ -143,9 +144,10 @@ export function duplicateScene(doc: BoardDoc, index: number, name?: string): Boa
 export function deleteScene(doc: BoardDoc, index: number): BoardDoc {
   if (doc.scenes.length <= 1 || !doc.scenes[index]) return doc;
   const scenes = doc.scenes.filter((_, i) => i !== index);
-  // Annotations reference scenes by id, so one just deleted leaves a dangling
-  // range. Pruning pulls it back rather than discarding the drawing.
-  return pruneAnnotations(replace(doc, scenes));
+  // Annotations and links both reference scenes by id, so one just deleted leaves
+  // a dangling range on either. Pruning pulls it back rather than discarding the
+  // drawing or the unit.
+  return pruneLinkRanges(pruneAnnotations(replace(doc, scenes)));
 }
 
 export function moveScene(doc: BoardDoc, from: number, to: number): BoardDoc {
@@ -362,6 +364,61 @@ export function setRunHidden(
 
 export function isRunHidden(scene: Scene | undefined, entityId: string): boolean {
   return scene?.hiddenRuns?.includes(entityId) ?? false;
+}
+
+/**
+ * Glow a group of entities in scene `index`, or stop glowing them.
+ *
+ * Takes the whole selection rather than one id, because that is the gesture: the
+ * two players who matter here are picked together and lit together. A `color` of
+ * null clears them.
+ *
+ * NEVER CARRIES FORWARD, unlike a drag or a nudge (D41). A position is a fact that
+ * stands until something changes it; attention is about one moment, and copying it
+ * into the following scenes would say something the coach did not (D47).
+ */
+export function setHighlight(
+  doc: BoardDoc,
+  index: number,
+  entityIds: Iterable<string>,
+  color: string | null,
+): BoardDoc {
+  const scene = doc.scenes[index];
+  if (!scene) return doc;
+
+  const ids = [...entityIds];
+  if (ids.length === 0) return doc;
+
+  const current = scene.highlight ?? {};
+  const highlight = { ...current };
+  for (const id of ids) {
+    if (color === null) delete highlight[id];
+    else highlight[id] = color;
+  }
+
+  const keys = Object.keys(highlight);
+  const same =
+    keys.length === Object.keys(current).length && keys.every((k) => current[k] === highlight[k]);
+  if (same) return doc;
+
+  // Drop the key once empty, so a scene with nothing lit serialises exactly as it
+  // did before the field existed.
+  const next: Scene = { ...scene };
+  if (keys.length === 0) delete next.highlight;
+  else next.highlight = highlight;
+
+  const scenes = doc.scenes.slice();
+  scenes[index] = next;
+  return replace(doc, scenes);
+}
+
+export function isHighlighted(scene: Scene | undefined, entityId: string): boolean {
+  return scene?.highlight?.[entityId] !== undefined;
+}
+
+/** The halo colour set for an entity on a scene, or null where it is not lit. */
+export function highlightOf(scene: Scene | undefined, entityId: string): string | null {
+  return scene?.highlight?.[entityId] ?? null;
 }
 
 /**

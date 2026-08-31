@@ -254,6 +254,12 @@ export const pt: Dictionary = {
     "A bola acompanha quem a tem. Entregá-la a outro jogador na cena seguinte faz um passe, e dar a bola segue pelas cenas seguintes até algo mais lhe acontecer.",
   "inspect.ballName": "Bola",
   "inspect.remove": "Remover {who}",
+  "inspect.highlight": "Destaque — {scene}",
+  "inspect.highlight.on": "Destacar seleção",
+  "inspect.highlight.off": "Retirar destaque",
+  "inspect.highlight.on.hint": "Halo à volta destes jogadores, apenas nesta cena.",
+  "inspect.highlight.off.hint": "Deixar de os destacar nesta cena.",
+  "inspect.highlight.colour": "Destacar a {color}",
   "inspect.remove.hint": "Retira este jogador do quadro, em todas as cenas.",
   "inspect.run": "Corrida — {scene}",
   "inspect.straighten": "Endireitar",
@@ -416,6 +422,9 @@ export const pt: Dictionary = {
   "links.addSelected.none": "Selecione jogadores para juntar",
   "links.addSelected.title": "Junta a esta unidade os jogadores selecionados no quadro.",
   "links.delete": "Apagar ligação",
+  "links.scenes": "Cenas",
+  "links.visibleFrom": "Primeira cena em que {name} aparece",
+  "links.visibleTo": "Última cena em que {name} aparece",
 
   // ---------------------------------------------------------- squad presets
   "preset.label": "Plantel guardado",
@@ -431,6 +440,8 @@ export const pt: Dictionary = {
   "preset.rename": "Nome do plantel guardado {label}",
   "preset.delete": "Apagar o plantel {label}",
   "preset.defaultName": "Plantel",
+  "preset.loading": "A carregar os seus planteis…",
+  "preset.offline": "Os seus planteis estão guardados na sua conta, que de momento não está acessível.",
 
   // ------------------------------------------------------- engine messages
   "migrate.notABoard": "Isto não é um quadro do Pitchboard.",
@@ -462,6 +473,13 @@ export const pt: Dictionary = {
   "preset.invalid": "Esta predefinição não descreve uma equipa válida.",
   "preset.failed": "Não foi possível aplicar esta predefinição.",
 
+  "preset.error.preset_limit_reached": "Atingiu o limite de planteis guardados.",
+  "preset.error.invalid_name": "O nome de um plantel tem de um a sessenta caracteres.",
+  "preset.error.invalid_preset": "Não foi possível guardar este plantel.",
+  "preset.error.not_found": "Este plantel já não existe.",
+  "preset.error.offline": "Não foi possível contactar o servidor, por isso os seus planteis ficaram como estavam.",
+  "preset.error.unknown": "Não resultou, por isso os seus planteis ficaram como estavam.",
+
   // --------------------------------------------------------------- account
   "account.signIn": "Entrar",
   "account.signIn.google": "Continuar com Google",
@@ -476,9 +494,11 @@ export const pt: Dictionary = {
   "account.error.dismiss": "Dispensar",
 
   // ---------------------------------------------------------------- adopt
-  "adopt.title": "Guardar este quadro na sua conta?",
-  "adopt.message": "Tem um quadro em curso neste navegador. Guardá-lo na sua conta permite abri-lo em qualquer lado. De qualquer forma, continua neste navegador.",
-  "adopt.confirm": "Guardar",
+  "adopt.title": "Guardar o que está neste navegador?",
+  "adopt.message.board": "Tem um quadro em curso neste navegador. Guardá-lo na sua conta permite abri-lo em qualquer lado. De qualquer forma, continua neste navegador.",
+  "adopt.message.squads": "Tem planteis guardados neste navegador. Copiá-los para a sua conta permite usá-los em qualquer lado; passam então a ficar na conta e não aqui.",
+  "adopt.message.both": "Tem um quadro em curso e planteis guardados neste navegador. Copiá-los para a sua conta permite aceder-lhes em qualquer lado. O quadro continua neste navegador; os planteis passam a ficar na conta.",
+  "adopt.confirm": "Guardar na minha conta",
   "adopt.project": "Os meus quadros",
 
   // ---------------------------------------------------------------- boards

@@ -45,3 +45,22 @@ export const MAX_NAME_CHARS = 100;
 export const SLUG_ALPHABET = "23456789bcdfghjkmnpqrstvwxz";
 export const SLUG_LENGTH = 8;
 export const SLUG_ATTEMPTS = 5;
+
+/**
+ * Squad presets, per account.
+ *
+ * Mirrors `MAX_PRESETS` in `src/share/presets.ts`, which chose it as well above what anyone
+ * will keep. It was a cap on an origin's 5 MB quota there and is a cap on a free tier here,
+ * but the number that matters is the one a coach would notice, and fifty is not it.
+ */
+export const MAX_PRESETS_PER_USER = 50;
+
+/**
+ * A preset, serialised. A squad is thirty players at most, each a number and a name, plus a
+ * kit and a handful of units — a couple of kilobytes. Sixteen leaves room for long names in
+ * a language that spends bytes on accents, and refuses anything that is not a squad.
+ */
+export const MAX_PRESET_BYTES = 16 * 1024;
+
+/** Mirrors `MAX_PRESET_LABEL` in `src/share/presets.ts`. */
+export const MAX_PRESET_LABEL_CHARS = 60;

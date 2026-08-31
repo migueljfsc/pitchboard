@@ -21,6 +21,7 @@ import type {
   Vec2,
 } from "./types";
 import { clamp, cubicAt, distanceToSegment, type Bezier } from "./geometry";
+import { isVisibleIn, repairRange, sceneSpan } from "./range";
 
 /** Stroke width in metres, so it scales with the pitch at any export size. */
 export const MARK_WIDTH = 0.42;
@@ -86,24 +87,17 @@ const withAnnotations = (doc: BoardDoc, annotations: Annotation[]): BoardDoc => 
  * The scene index range an annotation covers, inclusive.
  *
  * Stored as scene ids rather than indices so reordering scenes carries the
- * drawing with them instead of leaving it pinned to a slot. An id that no longer
- * exists falls back to the open end of the timeline, which keeps a document
- * renderable even if pruning has not run yet.
+ * drawing with them instead of leaving it pinned to a slot. The rule itself lives
+ * in `range.ts`, because links answer the same question and must not have to
+ * import this module to ask it. These two keep their annotation-shaped signatures
+ * so every caller reads the way it always did.
  */
 export function sceneRange(doc: BoardDoc, ann: Annotation): [number, number] {
-  const last = doc.scenes.length - 1;
-  const fromIndex = doc.scenes.findIndex((s) => s.id === ann.from);
-  const toIndex = ann.to === null ? last : doc.scenes.findIndex((s) => s.id === ann.to);
-  const start = fromIndex < 0 ? 0 : fromIndex;
-  const end = toIndex < 0 ? last : toIndex;
-  // A range stored backwards still describes the scenes between its ends.
-  return start <= end ? [start, end] : [end, start];
+  return sceneSpan(doc, ann);
 }
 
 export function isVisibleAt(doc: BoardDoc, ann: Annotation, sceneIndex: number): boolean {
-  if (ann.hidden) return false;
-  const [start, end] = sceneRange(doc, ann);
-  return sceneIndex >= start && sceneIndex <= end;
+  return isVisibleIn(doc, ann, sceneIndex);
 }
 
 /** Annotations drawn on a scene, in document order — which is z-order. */
@@ -581,17 +575,11 @@ export function pruneAnnotations(doc: BoardDoc): BoardDoc {
   const list = annotationsOf(doc);
   if (list.length === 0) return doc;
 
-  const live = new Set(doc.scenes.map((s) => s.id));
-  const first = doc.scenes[0]?.id;
-  if (first === undefined) return doc;
-
   let changed = false;
   const next = list.map((ann) => {
-    const from = live.has(ann.from) ? ann.from : first;
-    const to = ann.to === null || live.has(ann.to) ? ann.to : null;
-    if (from === ann.from && to === ann.to) return ann;
-    changed = true;
-    return { ...ann, from, to };
+    const repaired = repairRange(doc, ann);
+    if (repaired !== ann) changed = true;
+    return repaired;
   });
 
   return changed ? withAnnotations(doc, next) : doc;

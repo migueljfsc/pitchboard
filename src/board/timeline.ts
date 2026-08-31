@@ -409,6 +409,37 @@ export function ballAt(r: Resolved, doc: BoardDoc): Vec2 | null {
 }
 
 /** Resolved board state at an instant — everything the renderer needs. */
+/** A halo, resolved at an instant: how bright, and what colour. */
+export type Highlight = { strength: number; color: string };
+
+/**
+ * The glow on an entity at this instant, or null.
+ *
+ * INTERPOLATED, not switched. `Resolved.index` is the scene being travelled INTO,
+ * so anything keyed off it alone appears the moment the transition starts — which
+ * is right for a zone appearing and wrong for a glow, where it reads as a
+ * rendering fault. Strength rides the same easing the positions do, so the halo
+ * comes up as the player arrives and fades as they leave.
+ *
+ * During a hold `from` and `to` are the same scene and `u` is 1, so this collapses
+ * to plain on-or-off with no special case.
+ *
+ * The colour is the destination's where there is one, because that is the state
+ * being moved towards. Cross-fading two hues would spend the whole transition
+ * showing a third colour that neither scene asked for.
+ */
+export function highlightAt(entityId: string, r: Resolved): Highlight | null {
+  const before = r.from.highlight?.[entityId];
+  const after = r.to.highlight?.[entityId];
+  if (before === undefined && after === undefined) return null;
+
+  const eased = easeInOutCubic(r.u);
+  const strength = (before === undefined ? 0 : 1 - eased) + (after === undefined ? 0 : eased);
+  if (strength <= 0) return null;
+
+  return { strength, color: after ?? before ?? "" };
+}
+
 export type Frame = {
   positions: Record<string, Vec2>;
   /** `null` before the ball is first given to anyone — see D44. */

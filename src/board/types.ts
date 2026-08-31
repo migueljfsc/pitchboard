@@ -107,6 +107,20 @@ export type Scene = {
    * it means nothing where the ball does not fly (D45).
    */
   loft?: boolean;
+  /**
+   * Entities glowing in this scene, each with the colour of its halo. The ball
+   * may be one, as it may be in `hiddenRuns`.
+   *
+   * A record rather than a list of ids, because a highlight carries a value where
+   * a hidden run does not — the same distinction `travel` and `delay` already make
+   * on this type.
+   *
+   * PER SCENE, AND NEVER CARRIED FORWARD. What a highlight says is "watch these
+   * two, here", and that is a claim about one moment: copying it into the scenes
+   * after it says something the coach did not (D47). A drag carries because a
+   * position is a fact that persists until something changes it; attention is not.
+   */
+  highlight?: Record<string, string>;
 };
 
 export type LinkStyle = "chain" | "polygon" | "filled";
@@ -126,6 +140,18 @@ export type Link = {
   showDistances: boolean;
   /** Hidden links stay in the document but are not drawn. */
   hidden?: boolean;
+  /**
+   * Scene id this link first appears on. Absent means the first scene.
+   *
+   * Both ends are optional, unlike an annotation's, which are required — a link
+   * written before ranges existed has neither, and neither means "every scene",
+   * which is exactly what those links have always done. So no migration is owed
+   * and every share link published before this still opens saying what it said.
+   * The rule itself is in `range.ts`; see D47.
+   */
+  from?: string;
+  /** Last scene id it appears on. Null or absent runs to the end of the timeline. */
+  to?: string | null;
 };
 
 /**

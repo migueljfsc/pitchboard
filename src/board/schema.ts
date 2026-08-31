@@ -48,6 +48,7 @@ const scene = z.object({
   speed: z.number().min(MIN_FLOW_SPEED).max(MAX_FLOW_SPEED).optional(),
   shot: z.boolean().optional(),
   loft: z.boolean().optional(),
+  highlight: z.record(z.string(), z.string().min(1)).optional(),
 });
 
 const link = z.object({
@@ -58,6 +59,11 @@ const link = z.object({
   color: z.string().min(1).optional(),
   showDistances: z.boolean(),
   hidden: z.boolean().optional(),
+  /** Scene ids, checked against the real scene list by the refinement below.
+   *  Both optional — absent is the open end, which is what every link predating
+   *  ranges means (D47). */
+  from: z.string().min(1).optional(),
+  to: z.string().min(1).nullable().optional(),
 });
 
 const annotationBase = {
@@ -169,19 +175,30 @@ export const boardDocSchema = boardDocShape.superRefine((doc, ctx) => {
     }
   });
 
+  // A scene range names scenes by id, so an id naming nothing is a range that
+  // resolves to the open end and quietly means something else. Annotations and
+  // links carry the same range and get the same check.
   const sceneIds = new Set(doc.scenes.map((s) => s.id));
-  doc.annotations?.forEach((a, i) => {
+  const checkRange = (
+    what: "annotation" | "link",
+    field: "annotations" | "links",
+    range: { from?: string; to?: string | null },
+    i: number,
+  ) => {
     for (const key of ["from", "to"] as const) {
-      const id = a[key];
-      if (id !== null && !sceneIds.has(id)) {
+      const id = range[key];
+      if (id !== null && id !== undefined && !sceneIds.has(id)) {
         ctx.addIssue({
           code: "custom",
-          message: `annotation ${key} references scene ${id}, which does not exist`,
-          path: ["annotations", i, key],
+          message: `${what} ${key} references scene ${id}, which does not exist`,
+          path: [field, i, key],
         });
       }
     }
-  });
+  };
+
+  doc.annotations?.forEach((a, i) => checkRange("annotation", "annotations", a, i));
+  doc.links.forEach((l, i) => checkRange("link", "links", l, i));
 
   doc.links.forEach((l, i) => {
     l.members.forEach((m, j) => {

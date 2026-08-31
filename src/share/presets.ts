@@ -23,7 +23,7 @@ import {
   setupTeamSchema,
   teamToSetup,
 } from "./json";
-import { browserStore, keyFor, read, write, type Store } from "./storage";
+import { browserStore, keyFor, read, remove, write, type Store } from "./storage";
 import { msg, type Message } from "@/i18n/core";
 
 export const PRESETS_KEY = keyFor("squads");
@@ -66,6 +66,62 @@ export function savePresets(
 ): boolean {
   return write(store, PRESETS_KEY, presets);
 }
+
+/**
+ * Forget the browser's library.
+ *
+ * Called once, after it has been copied into an account: from then on the account IS the
+ * library, and a second copy left behind would be a library nobody is writing to and everybody
+ * would eventually have to merge.
+ */
+export function clearPresets(store: Store | null = browserStore()): void {
+  remove(store, PRESETS_KEY);
+}
+
+// ------------------------------------------------------- the account's copy
+
+/**
+ * A preset without its identity — what an account row's `body` holds.
+ *
+ * The id and the label are the row's own columns: the id because the server mints it, and the
+ * label because it is the one part the server has an opinion about. What is left is exactly a
+ * setup team, which is what a preset has always been (D30).
+ */
+export function serialisePreset(preset: SquadPreset): string {
+  // Spread and remove, rather than naming the fields that stay: a preset is whatever a setup
+  // team is, and listing them here is the trap that drops the next one added (D32, D37).
+  const team: Record<string, unknown> = { ...preset };
+  delete team.id;
+  delete team.label;
+  return JSON.stringify(team);
+}
+
+/**
+ * A stored row back into a preset, or null.
+ *
+ * A document from an account gets no more trust than one from `localStorage`: the server
+ * stores it opaquely and validates only its size, so this is where it is checked (D31). The
+ * row's own id and label win over anything the body claims — the body is not supposed to carry
+ * either, and a hand-written one that does must not be able to rename or re-address itself.
+ */
+export function presetFromRow(row: { id: string; label: string; body: string }): SquadPreset | null {
+  let team: unknown;
+  try {
+    team = JSON.parse(row.body);
+  } catch {
+    return null;
+  }
+  if (typeof team !== "object" || team === null || Array.isArray(team)) return null;
+
+  const parsed = presetSchema.safeParse({ ...team, id: row.id, label: row.label });
+  return parsed.success ? (parsed.data as SquadPreset) : null;
+}
+
+/** The rows that parsed, in the order they arrived. One bad row costs that squad, not the library. */
+export const libraryFromRows = (
+  rows: { id: string; label: string; body: string }[],
+): PresetLibrary =>
+  rows.map(presetFromRow).filter((p): p is SquadPreset => p !== null);
 
 // ------------------------------------------------------------------ editing
 // All pure: the caller persists the result, so an undo or a failed write cannot

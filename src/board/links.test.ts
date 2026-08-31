@@ -12,11 +12,14 @@ import {
   moveLink,
   moveMember,
   perimeter,
+  linksOn,
+  pruneLinkRanges,
   pruneLinks,
   removeMember,
   updateLink,
 } from "./links";
 import { resolveAt } from "./timeline";
+import { addSceneAfter, deleteScene } from "./scenes";
 import { hitTestLink } from "./interaction";
 import { createBoardDoc } from "@/formations";
 import { boardDocSchema } from "./schema";
@@ -455,5 +458,77 @@ describe("clearLinks", () => {
 
   it("still validates", () => {
     expect(boardDocSchema.safeParse(clearLinks(createBoardDoc())).success).toBe(true);
+  });
+});
+
+// A link's scene range — the same machinery an annotation's uses, and tested here
+// for the part that is the link's own: that a link without one is on every scene.
+describe("links per scene", () => {
+  /** Three scenes and one link, which starts unranged. */
+  function ranged(): BoardDoc {
+    let doc = board([A, B], "chain", {});
+    doc = addSceneAfter(doc, 0);
+    doc = addSceneAfter(doc, 1);
+    return doc;
+  }
+
+  it("draws a link with no range on every scene", () => {
+    const doc = ranged();
+    expect(doc.scenes.map((_, i) => linksOn(doc, i).length)).toEqual([1, 1, 1]);
+  });
+
+  it("draws a ranged link only inside its span", () => {
+    const doc = ranged();
+    const scoped = updateLink(doc, "l1", { from: doc.scenes[1].id, to: doc.scenes[1].id });
+    expect(scoped.scenes.map((_, i) => linksOn(scoped, i).length)).toEqual([0, 1, 0]);
+  });
+
+  it("runs an open end to the last scene", () => {
+    const doc = ranged();
+    const scoped = updateLink(doc, "l1", { from: doc.scenes[1].id, to: null });
+    expect(scoped.scenes.map((_, i) => linksOn(scoped, i).length)).toEqual([0, 1, 1]);
+  });
+
+  it("leaves a hidden link out wherever it is ranged", () => {
+    const doc = updateLink(ranged(), "l1", { hidden: true });
+    expect(doc.scenes.map((_, i) => linksOn(doc, i).length)).toEqual([0, 0, 0]);
+  });
+
+  it("carries the range through a scene reorder, because it is stored as ids", () => {
+    const doc = ranged();
+    const wanted = doc.scenes[2].id;
+    const scoped = updateLink(doc, "l1", { from: wanted, to: wanted });
+    const moved = { ...scoped, scenes: [scoped.scenes[2], scoped.scenes[0], scoped.scenes[1]] };
+    expect(moved.scenes.map((_, i) => linksOn(moved, i).length)).toEqual([1, 0, 0]);
+  });
+
+  it("still validates with a range on it", () => {
+    const doc = ranged();
+    const scoped = updateLink(doc, "l1", { from: doc.scenes[1].id, to: doc.scenes[2].id });
+    expect(boardDocSchema.safeParse(scoped).success).toBe(true);
+  });
+
+  it("refuses a range naming a scene the board does not have", () => {
+    const scoped = updateLink(ranged(), "l1", { from: "no-such-scene" });
+    expect(boardDocSchema.safeParse(scoped).success).toBe(false);
+  });
+});
+
+describe("pruneLinkRanges", () => {
+  it("keeps the link and repairs the range when its scene goes", () => {
+    let doc = board([A, B], "chain", {});
+    doc = addSceneAfter(doc, 0);
+    const scoped = updateLink(doc, "l1", { from: doc.scenes[1].id, to: doc.scenes[1].id });
+
+    const after = deleteScene(scoped, 1);
+    expect(after.links).toHaveLength(1);
+    expect(after.links[0].from).toBe(after.scenes[0].id);
+    expect(after.links[0].to).toBeNull();
+    expect(boardDocSchema.safeParse(after).success).toBe(true);
+  });
+
+  it("is the same object when every range is already live", () => {
+    const doc = board([A, B], "chain", {});
+    expect(pruneLinkRanges(doc)).toBe(doc);
   });
 });

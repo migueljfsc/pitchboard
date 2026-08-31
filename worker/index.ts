@@ -40,6 +40,12 @@ import {
   updateBoard,
   type Ctx,
 } from "./lib/boards";
+import {
+  createPreset,
+  deletePreset,
+  listPresets,
+  savePreset,
+} from "./lib/presets";
 import { fail, json } from "./lib/http";
 import { publishBoard, readShare, unpublishBoard } from "./lib/shares";
 import { SLUG_LENGTH } from "./lib/limits";
@@ -204,6 +210,10 @@ const ROUTES: Array<{ method: string; pattern: RegExp; handle: (ctx: Ctx, ...p: 
   { method: "DELETE", pattern: new RegExp(`^/api/boards/${ID}$`), handle: deleteBoard },
   { method: "POST", pattern: new RegExp(`^/api/boards/${ID}/publish$`), handle: publishBoard },
   { method: "DELETE", pattern: new RegExp(`^/api/boards/${ID}/publish$`), handle: unpublishBoard },
+  { method: "GET", pattern: new RegExp(`^/api/presets$`), handle: listPresets },
+  { method: "POST", pattern: new RegExp(`^/api/presets$`), handle: createPreset },
+  { method: "PUT", pattern: new RegExp(`^/api/presets/${ID}$`), handle: savePreset },
+  { method: "DELETE", pattern: new RegExp(`^/api/presets/${ID}$`), handle: deletePreset },
 ];
 
 async function dispatch(env: Env, request: Request, url: URL, now: number): Promise<Response> {

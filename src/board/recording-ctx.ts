@@ -27,6 +27,20 @@ const fmt = (v: unknown): string => {
   return String(v);
 };
 
+/**
+ * A stand-in for CanvasGradient. Its stops are logged like everything else, and it
+ * names itself so `fillStyle=gradient` reads in the log rather than `[object
+ * Object]`.
+ */
+function gradient(log: string[]): CanvasGradient {
+  return {
+    addColorStop: (offset: number, color: string) => {
+      log.push(`addColorStop(${fmt(offset)},${fmt(color)})`);
+    },
+    toString: () => "gradient",
+  } as unknown as CanvasGradient;
+}
+
 export function createRecordingCtx(): Recording {
   const log: string[] = [];
 
@@ -36,9 +50,12 @@ export function createRecordingCtx(): Recording {
       get(_t, prop: string) {
         return (...args: unknown[]) => {
           log.push(`${prop}(${args.map(fmt).join(",")})`);
-          // measureText is the only method whose return value the renderer could
-          // use; give it a plausible shape so nothing explodes if that changes.
+          // Two methods hand back something the renderer then uses. Returning
+          // undefined for either is a crash rather than a missing log line.
           if (prop === "measureText") return { width: 0 };
+          if (prop === "createRadialGradient" || prop === "createLinearGradient") {
+            return gradient(log);
+          }
           return undefined;
         };
       },
