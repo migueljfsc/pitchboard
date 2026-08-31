@@ -5,6 +5,7 @@ import {
   Plus,
   Copy,
   Crosshair,
+  Spline,
   Waves,
   Trash2,
   ChevronLeft,
@@ -17,12 +18,14 @@ import { SceneThumb, THUMB_WIDTH } from "@/components/SceneThumb";
 import { NumberField } from "@/components/ui/NumberField";
 import {
   addSceneAfter,
+  canLoft as canLoftInto,
   canShoot as canShootInto,
   deleteScene,
   duplicateScene,
   moveScene,
   renameScene,
   setSceneTiming,
+  setLoft,
   setShot,
   totalSeconds,
   setScenePace,
@@ -90,6 +93,7 @@ export function Timeline({
   }, [live.index, playing]);
 
   const canShoot = canShootInto(doc, activeScene);
+  const canLoft = canLoftInto(doc, activeScene);
   // What each scene is really worth, which is not its own fields in flow mode.
   const timing = sceneTimings(doc);
   const flow = doc.flow;
@@ -219,6 +223,7 @@ export function Timeline({
                 {i > 0 ? `${(timing[i].travelMs / 1000).toFixed(1)}s` : ""}
                 {timing[i].holdMs > 0 && `${i > 0 ? " → " : ""}${(timing[i].holdMs / 1000).toFixed(1)}s`}
                 {s.shot && <span className="ml-1 text-accent">{t("timeline.shotMark")}</span>}
+                {s.loft && <span className="ml-1 text-accent">{t("timeline.loftMark")}</span>}
               </span>
               <span className="mt-1 h-0.5 w-full overflow-hidden rounded-full bg-ink-600/70">
                 <span
@@ -314,6 +319,30 @@ export function Timeline({
               >
                 <Crosshair size={13} />
                 {t("timeline.shot")}
+              </button>
+            </label>
+          )}
+
+          {activeScene > 0 && (
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] uppercase tracking-wide text-ink-400">
+                {t("timeline.loft")}
+              </span>
+              <button
+                type="button"
+                disabled={!canLoft}
+                aria-pressed={scene.loft ?? false}
+                onClick={() => onDocChange(setLoft(doc, activeScene, !scene.loft))}
+                title={canLoft ? t("timeline.loft.can") : t("timeline.loft.cannot")}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition disabled:opacity-45",
+                  scene.loft
+                    ? "border-accent text-accent"
+                    : "border-ink-600 text-ink-300 enabled:hover:border-ink-400 enabled:hover:text-white",
+                )}
+              >
+                <Spline size={13} />
+                {t("timeline.loft.label")}
               </button>
             </label>
           )}

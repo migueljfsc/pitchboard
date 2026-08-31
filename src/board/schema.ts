@@ -47,6 +47,7 @@ const scene = z.object({
   hiddenRuns: z.array(z.string().min(1)).max(64).optional(),
   speed: z.number().min(MIN_FLOW_SPEED).max(MAX_FLOW_SPEED).optional(),
   shot: z.boolean().optional(),
+  loft: z.boolean().optional(),
 });
 
 const link = z.object({

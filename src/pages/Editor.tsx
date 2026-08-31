@@ -8,6 +8,10 @@ import { Section } from "@/components/ui/Section";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
   Download,
+  Keyboard,
+  Pause,
+  Play,
+  Presentation,
   Share2,
   PanelRightClose,
   PanelRightOpen,
@@ -19,6 +23,7 @@ import {
 import { Inspector } from "@/components/Inspector";
 import { DrawingsPanel } from "@/components/DrawingsPanel";
 import { ExportDialog } from "@/components/ExportDialog";
+import { ShortcutsDialog } from "@/components/ShortcutsDialog";
 import { ShareDialog } from "@/components/ShareDialog";
 import { LinkPanel } from "@/components/LinkPanel";
 import { DrawPanel } from "@/components/DrawPanel";
@@ -41,6 +46,7 @@ import {
   type SquadPreset,
 } from "@/share/presets";
 import { cn } from "@/lib/utils";
+import { MODIFIER } from "@/lib/platform";
 import { LocaleSwitch } from "@/components/LocaleSwitch";
 import { AccountMenu } from "@/components/AccountMenu";
 import { BoardsLibrary } from "@/components/BoardsLibrary";
@@ -60,6 +66,7 @@ import {
 import { concealedPlayers } from "@/board/render";
 import {
   isRunHidden,
+  pathOf,
   sceneStartSeconds,
   setCarrier,
   setDelay,
@@ -131,6 +138,10 @@ export function Editor({ initialDoc }: Props = {}) {
   const [exportOpen, setExportOpen] = useState(false);
   const [selectionOpen, setSelectionOpen] = useState(true);
   const [drawingsOpen, setDrawingsOpen] = useState(false);
+  // Presenting is a way of looking at the board, so it is editor state and
+  // never reaches the document — the same rule the framing follows (D12).
+  const [present, setPresent] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [focusName, setFocusName] = useState(0);
 
   // Squad presets live outside the document: they are a library the board draws
@@ -499,7 +510,10 @@ export function Editor({ initialDoc }: Props = {}) {
    */
   const canStraighten =
     editScene !== undefined &&
-    [...visible].some((id) => doc.scenes[editScene]?.paths[id] != null);
+    [...visible].some((id) => {
+      const scene = doc.scenes[editScene];
+      return scene !== undefined && pathOf(scene, id) != null;
+    });
 
   const onClearPaths = () => {
     if (editScene === undefined) return;
@@ -542,12 +556,37 @@ export function Editor({ initialDoc }: Props = {}) {
       if (e.target instanceof HTMLElement && ["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName)) return;
       // A dialog owns the keyboard while it is up — Space must not start
       // playback behind it, and Escape belongs to the dialog.
-      if (pending || shareOpen || exportOpen) return;
+      if (pending || shareOpen || exportOpen || shortcutsOpen) return;
+
+      // Escape leaves presenting first: there is no tool armed in there, and
+      // getting out is the only thing the key can usefully mean.
+      if (e.key === "Escape" && present) {
+        setPresent(false);
+        return;
+      }
 
       // Escape disarms a drawing tool before anything else looks at the key.
       if (e.key === "Escape") {
         setTool("select");
         setAnnotation(null);
+        return;
+      }
+
+      // The conventional key for "what can I press?", and the list it opens says
+      // so, so the shortcut is discoverable from the thing it opens.
+      if (e.key === "?") {
+        e.preventDefault();
+        setShortcutsOpen(true);
+        return;
+      }
+
+      // Step through the scenes. The arrows are spoken for by the nudge, and the
+      // brackets sit next to each other under the same hand.
+      if (e.key === "[" || e.key === "]") {
+        const to = activeScene + (e.key === "]" ? 1 : -1);
+        if (to < 0 || to >= doc.scenes.length) return;
+        e.preventDefault();
+        selectScene(to);
         return;
       }
 
@@ -589,6 +628,10 @@ export function Editor({ initialDoc }: Props = {}) {
     playing,
     setPlayback,
     annotation,
+    activeScene,
+    selectScene,
+    present,
+    shortcutsOpen,
     doc,
     setDoc,
     undo,
@@ -600,7 +643,11 @@ export function Editor({ initialDoc }: Props = {}) {
       {/* The board itself — what it is called, and every way it leaves the app.
           A top bar rather than a sidebar section because none of it is editing:
           it is the same handful of actions whatever you are doing below, and
-          hunting for them behind a collapsed panel was the wrong trade. */}
+          hunting for them behind a collapsed panel was the wrong trade.
+
+          Gone while presenting, along with both rails: what is left is the board
+          and the means to play it. */}
+      {!present && (
       <header className="flex shrink-0 items-center gap-2 border-b border-ink-700 bg-ink-800 px-4 py-2">
         <h1 className="shrink-0 text-sm font-semibold tracking-tight text-white">{t("app.name")}</h1>
 
@@ -615,7 +662,7 @@ export function Editor({ initialDoc }: Props = {}) {
         <div className="ml-auto flex shrink-0 items-center gap-2">
           <HistoryButton
             label={t("history.undo")}
-            hint={t("history.undo.hint", { keys: `${modifier}Z` })}
+            hint={t("history.undo.hint", { keys: `${MODIFIER}Z` })}
             disabled={!canUndo}
             onClick={undo}
           >
@@ -623,7 +670,7 @@ export function Editor({ initialDoc }: Props = {}) {
           </HistoryButton>
           <HistoryButton
             label={t("history.redo")}
-            hint={t("history.redo.hint", { keys: `${modifier}⇧Z` })}
+            hint={t("history.redo.hint", { keys: `${MODIFIER}⇧Z` })}
             disabled={!canRedo}
             onClick={redo}
           >
@@ -631,6 +678,27 @@ export function Editor({ initialDoc }: Props = {}) {
           </HistoryButton>
 
           <span className="mx-1 h-5 w-px bg-ink-600" />
+
+          <button
+            type="button"
+            onClick={() => setShortcutsOpen(true)}
+            aria-label={t("shortcuts.open")}
+            title={t("shortcuts.open.title")}
+            className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
+          >
+            <Keyboard size={14} />
+            {t("shortcuts.open")}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setPresent(true)}
+            title={t("present.enter.title")}
+            className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
+          >
+            <Presentation size={14} />
+            {t("present.enter")}
+          </button>
 
           <button
             type="button"
@@ -681,8 +749,10 @@ export function Editor({ initialDoc }: Props = {}) {
           <LocaleSwitch />
         </div>
       </header>
+      )}
 
       <div className="flex min-h-0 flex-1">
+        {!present && (
         <aside className="flex w-64 shrink-0 flex-col overflow-y-auto border-r border-ink-700 bg-ink-800">
           <Section title={t("section.view")} defaultOpen={false}>
             <ViewControls
@@ -816,6 +886,7 @@ export function Editor({ initialDoc }: Props = {}) {
             </button>
           </div>
         </aside>
+        )}
 
         {pending?.kind === "reset" && (
           <ConfirmDialog
@@ -879,6 +950,8 @@ export function Editor({ initialDoc }: Props = {}) {
           />
         )}
 
+        {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
+
         {exportOpen && (
           <ExportDialog
             doc={doc}
@@ -893,8 +966,9 @@ export function Editor({ initialDoc }: Props = {}) {
             <BoardCanvas
               doc={doc}
               t={time}
+              interactive={!present}
               sceneIndex={activeScene}
-              editScene={editScene}
+              editScene={present ? undefined : editScene}
               ghosts={ghostScenes}
               pitchView={pitchView}
               selection={visible}
@@ -912,23 +986,36 @@ export function Editor({ initialDoc }: Props = {}) {
             />
           </div>
 
-          <Timeline
-            doc={doc}
-            view={pitchView}
-            onDocChange={setDoc}
-            activeScene={activeScene}
-            onActiveSceneChange={selectScene}
-            time={time}
-            onTimeChange={setTime}
-            playing={playing}
-            onPlayingChange={setPlayback}
-            loop={loop}
-            onLoopChange={setLoop}
-          />
+          {present ? (
+            <PresentBar
+              scene={doc.scenes[activeScene]?.name ?? ""}
+              time={time}
+              total={total}
+              playing={playing}
+              onPlayingChange={setPlayback}
+              onTimeChange={setTime}
+              onExit={() => setPresent(false)}
+            />
+          ) : (
+            <Timeline
+              doc={doc}
+              view={pitchView}
+              onDocChange={setDoc}
+              activeScene={activeScene}
+              onActiveSceneChange={selectScene}
+              time={time}
+              onTimeChange={setTime}
+              playing={playing}
+              onPlayingChange={setPlayback}
+              loop={loop}
+              onLoopChange={setLoop}
+            />
+          )}
         </main>
 
         {/* Everything drawn, and where it appears. Collapsed by default — an empty
             rail is 256px of pitch given away for nothing. */}
+        {!present && (
         <aside
           className={cn(
             "flex shrink-0 flex-col overflow-y-auto border-l border-ink-700 bg-ink-800 transition-[width]",
@@ -975,19 +1062,76 @@ export function Editor({ initialDoc }: Props = {}) {
             </div>
           )}
         </aside>
+        )}
       </div>
     </div>
   );
 }
 
 /**
- * Shown in the shortcut hints. Read once from the platform rather than per
- * render — it cannot change while the page is open.
+ * The only chrome left while presenting: what scene you are on, and the means to
+ * play it. Deliberately not the Timeline — a scene strip you cannot edit from is
+ * a row of buttons that do nothing, and the point of the mode is the board.
  */
-const modifier =
-  typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)
-    ? "\u2318"
-    : "Ctrl+";
+function PresentBar({
+  scene,
+  time,
+  total,
+  playing,
+  onPlayingChange,
+  onTimeChange,
+  onExit,
+}: {
+  scene: string;
+  time: number;
+  total: number;
+  playing: boolean;
+  onPlayingChange: (playing: boolean) => void;
+  onTimeChange: (t: number) => void;
+  onExit: () => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="flex shrink-0 items-center gap-3 border-t border-ink-700 bg-ink-800 px-4 py-2.5">
+      <button
+        type="button"
+        onClick={() => onPlayingChange(!playing)}
+        aria-label={t(playing ? "viewer.pause" : "viewer.play")}
+        title={t(playing ? "viewer.pause" : "viewer.play")}
+        className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-ink-900 transition hover:brightness-110"
+      >
+        {playing ? <Pause size={15} /> : <Play size={15} />}
+      </button>
+
+      <span className="w-32 shrink-0 truncate text-xs text-ink-200">{scene}</span>
+
+      <input
+        type="range"
+        min={0}
+        max={Math.max(total, 0.001)}
+        step={0.01}
+        value={Math.min(time, total)}
+        onChange={(e) => onTimeChange(Number(e.target.value))}
+        aria-label={t("timeline.scrub")}
+        className="h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-ink-600 accent-accent"
+      />
+
+      <span className="shrink-0 font-mono text-[11px] text-ink-400">
+        {time.toFixed(1)}s / {total.toFixed(1)}s
+      </span>
+
+      <button
+        type="button"
+        onClick={onExit}
+        title={t("present.exit.title")}
+        className="shrink-0 rounded-md border border-ink-600 px-2.5 py-1.5 text-xs text-ink-300 transition hover:border-accent hover:text-white"
+      >
+        {t("present.exit")}
+      </button>
+    </div>
+  );
+}
+
 
 function HistoryButton({
   label,

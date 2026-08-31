@@ -319,6 +319,33 @@ function gluedTo(carrier: string, r: Resolved, doc: BoardDoc): Vec2 {
   return { x: at.x + dir.x * glue, y: at.y + dir.y * glue };
 }
 
+/** Height of a lofted ball at the top of its flight, in metres. */
+export const LOFT_APEX = 7;
+/**
+ * How much bigger a lofted ball is drawn at that apex, on the flat board.
+ *
+ * Double. Height read from directly above is only ever an inference from size, so
+ * the change has to be large enough to be unmistakable in a single frame — a ball
+ * a tenth bigger is a ball you have to be told about.
+ */
+export const LOFT_GROWTH = 1.0;
+
+/**
+ * How far off the ground the ball is, 0 at the turf and 1 at the apex.
+ *
+ * A parabola over the ball's raw progress, NOT over the eased position: a struck
+ * ball decelerates across the ground while its height still answers to gravity,
+ * so easing the arc would have it hang at the far post. Zero unless the scene
+ * being travelled into is marked lofted (D45).
+ */
+export function ballLift(r: Resolved, doc: BoardDoc): number {
+  if (!r.moving || r.to.loft !== true) return 0;
+  // The same progress the lofted ball crosses the ground at, so the apex falls at
+  // the midpoint of the flight in space as well as in time.
+  const u = progressOf(BALL_ID, r, doc);
+  return 4 * u * (1 - u);
+}
+
 /**
  * The ball is derived, never stored, while carried. A pass is a carrier change —
  * there is no pass object.
@@ -363,11 +390,17 @@ export function ballAt(r: Resolved, doc: BoardDoc): Vec2 | null {
   const end = toCarrier ? gluedTo(toCarrier, arrival, doc) : r.to.ballPos;
   if (!start || !end) return end ?? start ?? null;
 
-  // A pass is struck hard and decelerates; easing it in like a jogging player
-  // looks wrong immediately. The ball honours its own travel override too.
-  // The ball keeps its own easing in flow mode: a struck ball really does
+  // A pass along the ground is struck hard and decelerates; easing it in like a
+  // jogging player looks wrong immediately. The ball honours its own travel
+  // override too, and keeps this easing in flow mode: a struck ball really does
   // decelerate, and that is its motion rather than a seam between scenes.
-  const eased = easeOutQuad(progressOf(BALL_ID, r, doc));
+  //
+  // A LOFTED ball does not. What slows a ground pass is the turf, and a ball in
+  // the air is not touching it — its horizontal speed is very nearly constant all
+  // the way. Decelerating it instead lands it beside the receiver at the top of
+  // its arc, where it hangs and then drops straight down (D45).
+  const u = progressOf(BALL_ID, r, doc);
+  const eased = r.to.loft === true ? u : easeOutQuad(u);
   const curve = r.to.ballPath;
   if (!curve) return lerpVec(start, end, eased);
 

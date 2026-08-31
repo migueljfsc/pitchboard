@@ -3,16 +3,20 @@ import {
   DEFAULT_HOLD_MS,
   addSceneAfter,
   ballTravelBetween,
+  canLoft,
   canShoot,
   isRunHidden,
   defaultCurve,
   deleteScene,
-  pruneShots,
+  pruneBallFlags,
   duplicateScene,
   moveScene,
   renameScene,
+  ballCurve,
+  pathOf,
   sceneStartSeconds,
   setCarrier,
+  setLoft,
   setPath,
   setRunHidden,
   setSceneTiming,
@@ -22,6 +26,8 @@ import {
 import { boardDocSchema } from "./schema";
 import { createBoardDoc } from "@/formations";
 import { distanceToSegment } from "./geometry";
+import { transitionInto } from "./timeline";
+import { BALL_ID } from "./types";
 import type { BoardDoc } from "./types";
 
 const base = () => createBoardDoc();
@@ -238,6 +244,63 @@ describe("setCarrier", () => {
   });
 });
 
+describe("the ball's own curve", () => {
+  /** A pass: HOME_9 has it, HOME_10 receives it a scene later. */
+  const passed = () => {
+    let doc = setCarrier(base(), 0, HOME_9);
+    doc = addSceneAfter(doc, 0);
+    return setCarrier(doc, 1, HOME_10);
+  };
+  // The travel INTO scene 1, which is where a ball's line lives — at rest
+  // nothing is moving and there is no journey to bend.
+  const into = (doc: BoardDoc) => transitionInto(doc, 1)!;
+
+  it("kept in ballPath, never in paths — the ball has no run to hang one on", () => {
+    const curve = { c1: { x: 40, y: 10 }, c2: { x: 60, y: 10 } };
+    const doc = setPath(passed(), 1, BALL_ID, curve);
+
+    expect(doc.scenes[1].ballPath).toEqual(curve);
+    expect(doc.scenes[1].paths[BALL_ID]).toBeUndefined();
+    expect(pathOf(doc.scenes[1], BALL_ID)).toEqual(curve);
+    expect(valid(doc)).toBe(true);
+  });
+
+  it("straightens through the same door it was bent with", () => {
+    let doc = setPath(passed(), 1, BALL_ID, { c1: { x: 40, y: 10 }, c2: { x: 60, y: 10 } });
+    doc = setPath(doc, 1, BALL_ID, null);
+    expect(doc.scenes[1].ballPath).toBeNull();
+    expect(pathOf(doc.scenes[1], BALL_ID)).toBeNull();
+  });
+
+  it("offers a straight curve to bend before one is stored", () => {
+    const doc = passed();
+    const b = ballCurve(doc, into(doc))!;
+    expect(b).not.toBeNull();
+    // The synthesised controls sit on the line between the ends.
+    expect(distanceToSegment(b.c1, b.p0, b.p1)).toBeLessThan(1e-6);
+    expect(distanceToSegment(b.c2, b.p0, b.p1)).toBeLessThan(1e-6);
+  });
+
+  it("hands back the stored curve once one is drawn", () => {
+    const curve = { c1: { x: 40, y: 10 }, c2: { x: 60, y: 10 } };
+    const doc = setPath(passed(), 1, BALL_ID, curve);
+    const b = ballCurve(doc, into(doc))!;
+    expect(b.c1).toEqual(curve.c1);
+    expect(b.c2).toEqual(curve.c2);
+  });
+
+  it("has no curve for a dribble — the ball is carried, not played", () => {
+    let doc = setCarrier(base(), 0, HOME_9);
+    doc = setCarrier(addSceneAfter(doc, 0), 1, HOME_9);
+    expect(ballCurve(doc, into(doc))).toBeNull();
+  });
+
+  it("has no curve where there is no ball at all", () => {
+    const doc = addSceneAfter(base(), 0);
+    expect(ballCurve(doc, into(doc))).toBeNull();
+  });
+});
+
 describe("setPath", () => {
   it("sets and clears a curve", () => {
     let doc = addSceneAfter(base(), 0);
@@ -356,6 +419,58 @@ describe("canShoot", () => {
   });
 });
 
+describe("loft", () => {
+  /** A pass into scene 1: HOME_9 has it, HOME_10 receives it. */
+  const passed = () => {
+    let doc = setCarrier(base(), 0, HOME_9);
+    doc = addSceneAfter(doc, 0);
+    return setCarrier(doc, 1, HOME_10);
+  };
+
+  it("is offered for a pass, where a shot is not", () => {
+    const doc = passed();
+    expect(canLoft(doc, 1)).toBe(true);
+    expect(canShoot(doc, 1)).toBe(false);
+  });
+
+  it("is offered for a loose ball too", () => {
+    let doc = setCarrier(base(), 0, HOME_9);
+    doc = setCarrier(addSceneAfter(doc, 0), 1, null);
+    expect(canLoft(doc, 1)).toBe(true);
+  });
+
+  it("is refused for a dribble, and on the first scene", () => {
+    let doc = setCarrier(base(), 0, HOME_9);
+    doc = setCarrier(addSceneAfter(doc, 0), 1, HOME_9);
+    expect(canLoft(doc, 1)).toBe(false);
+    expect(canLoft(doc, 0)).toBe(false);
+  });
+
+  it("sets and clears, and stays valid", () => {
+    let doc = setLoft(passed(), 1, true);
+    expect(doc.scenes[1].loft).toBe(true);
+    expect(valid(doc)).toBe(true);
+
+    doc = setLoft(doc, 1, false);
+    expect("loft" in doc.scenes[1]).toBe(false);
+  });
+
+  it("is dropped when the travel it described stops existing", () => {
+    const doc = setLoft(passed(), 1, true);
+    // The receiver gives it back: a dribble, and nothing left to loft.
+    const stalled = setCarrier(doc, 1, HOME_9);
+    expect(stalled.scenes[1].loft).toBeUndefined();
+  });
+
+  it("survives alongside a shot — a chip at goal is both", () => {
+    let doc = setCarrier(base(), 0, HOME_9);
+    doc = setCarrier(addSceneAfter(doc, 0), 1, null);
+    doc = setLoft(setShot(doc, 1, true), 1, true);
+    expect([doc.scenes[1].shot, doc.scenes[1].loft]).toEqual([true, true]);
+    expect(valid(doc)).toBe(true);
+  });
+});
+
 describe("setShot", () => {
   /** A ball struck at goal: carried in scene 0, loose and moved in scene 1. */
   const struck = () => {
@@ -435,7 +550,7 @@ describe("a shot does not outlive the ball's travel", () => {
     scenes[0] = { ...scenes[0], carrier: null, ballPos: { x: 100, y: 34 } };
     const stalled = { ...doc, scenes };
     expect(canShoot(stalled, 1)).toBe(false);
-    expect(pruneShots(stalled).scenes[1].shot).toBeUndefined();
+    expect(pruneBallFlags(stalled).scenes[1].shot).toBeUndefined();
   });
 
   it("clears on a scene that is no longer second", () => {

@@ -233,6 +233,34 @@ into a ball that visibly snapped back to the halfway line in scene 4 — which i
 and this is the other half of it. A ball that appears for the first time appears on its new
 holder rather than flying in from the centre, and arriving is not a travel: it cannot be a shot.
 
+## D45 — A lofted ball is a scene flag, drawn twice
+`Scene.loft` marks the ball's travel into a scene as leaving the ground — a cross, a
+chip, a clipped diagonal. A flag on the travel rather than a shape, exactly like `shot`
+(D24), and pruned by the same pass when the travel it describes stops existing.
+
+**Two flags, not one enum.** A chip at goal is both lofted and a shot, and the gates
+differ: a shot needs a LOOSE travel, a loft needs only that the ball left someone's
+feet. Only a dribble is excluded from both, and for the same reason it has no line.
+
+**A lofted ball flies at a constant speed.** What slows a ground pass is the turf, and
+a ball in the air is not touching it, so `ballAt` drops its `easeOutQuad` for a lofted
+one. This is not a detail: with the deceleration left in, the ball covers three
+quarters of the distance by the time the arc peaks, arrives beside the receiver still
+at full height, hangs there and drops vertically. Constant speed puts the apex at the
+midpoint of the flight in space as well as in time, which is what makes it read as a
+trajectory. The height itself is a plain parabola over that same progress.
+
+**Two drawings of one fact.** From above there is nowhere for height to go but into
+the size of the thing, so the flat board doubles the ball at the apex — a change small
+enough to be subtle is one the viewer has to be told about, which defeats the point. In 3D the height is real —
+`project(sx, sy, up)` lifts it, the shadow stays on the grass, and the gap between them
+is what reads as height. Depth-sorting still uses where it stands, not where it has
+got to in the air.
+
+**Rejected — a fixed arc drawn on the pitch.** A drawn parabola is a picture of a
+trajectory rather than the ball following one, it would have to be un-drawn from the
+flat board where the ball is already in the air, and it does not animate.
+
 ---
 
 ## Invariants

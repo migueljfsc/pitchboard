@@ -101,6 +101,12 @@ export type Scene = {
    * coaching convention uses.
    */
   shot?: boolean;
+  /**
+   * The ball's travel into this scene leaves the ground — a cross, a chip, a
+   * clipped diagonal. Like `shot`, it describes the travel and not the scene, so
+   * it means nothing where the ball does not fly (D45).
+   */
+  loft?: boolean;
 };
 
 export type LinkStyle = "chain" | "polygon" | "filled";

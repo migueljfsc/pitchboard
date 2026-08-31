@@ -16,6 +16,7 @@ import { BALL_ID } from "./types";
 import { ballRadius, tokenRadius } from "./pitch";
 import { displayCurve, transitionInto, type Frame, type Resolved } from "./timeline";
 import { linkGeometry } from "./links";
+import { ballCurve } from "./scenes";
 import {
   MARK_WIDTH,
   annotationHandles,
@@ -50,7 +51,9 @@ export function hitTestHandle(
   if (!edit) return null;
 
   for (const id of selection) {
-    const b = displayCurve(id, edit);
+    // The ball is derived, so it has no run to read a curve from — its line into
+    // the scene is the pass, and that is where its handles are.
+    const b = id === BALL_ID ? ballCurve(doc, edit) : displayCurve(id, edit);
     if (!b) continue;
     for (const which of ["c2", "c1"] as const) {
       if (dist(p, b[which]) <= HANDLE_RADIUS + margin) return { id, which };
@@ -71,7 +74,7 @@ export function dragHandle(
 ): PathCurve | null {
   const edit = transitionInto(doc, editScene);
   if (!edit) return null;
-  const b = displayCurve(hit.id, edit);
+  const b = hit.id === BALL_ID ? ballCurve(doc, edit) : displayCurve(hit.id, edit);
   if (!b) return null;
   return hit.which === "c1" ? { c1: to, c2: b.c2 } : { c1: b.c1, c2: to };
 }

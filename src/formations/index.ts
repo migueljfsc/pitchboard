@@ -14,7 +14,7 @@
 
 import type { BoardDoc, Link, LinkStyle, Player, Team, TeamPattern, Vec2 } from "@/board/types";
 import { pruneLinks, replaceTeamLinks } from "@/board/links";
-import { pruneShots } from "@/board/scenes";
+import { pruneBallFlags } from "@/board/scenes";
 
 export type FormationLine = {
   /** Shown in the seeded link's name, e.g. "Back 4". */
@@ -402,10 +402,10 @@ export function applyFormation(doc: BoardDoc, teamIndex: 0 | 1, spec: TeamSpec):
   const links = replaceTeamLinks(doc, teamIndex, built.links);
 
   // pruneLinks drops any link still referencing a player who has just gone, and
-  // discards ones left with fewer than two members. pruneShots does the same for
+  // discards ones left with fewer than two members. pruneBallFlags does the same for
   // a strike whose ball no longer travels — a carrier who has just been rebuilt
   // away is nulled above, which can leave two scenes holding the ball still.
-  return pruneShots(pruneLinks({ ...doc, teams, scenes, links }));
+  return pruneBallFlags(pruneLinks({ ...doc, teams, scenes, links }));
 }
 
 /**

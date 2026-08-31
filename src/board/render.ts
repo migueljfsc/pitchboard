@@ -35,8 +35,18 @@ import {
   type Ctx,
   type PitchTheme,
 } from "./pitch";
-import { ballAt, displayCurve, frameAt, transitionInto, type Frame, type Resolved } from "./timeline";
-import { ballTravelBetween, isRunHidden } from "./scenes";
+import {
+  LOFT_APEX,
+  LOFT_GROWTH,
+  ballAt,
+  ballLift,
+  displayCurve,
+  frameAt,
+  transitionInto,
+  type Frame,
+  type Resolved,
+} from "./timeline";
+import { ballCurve, ballTravelBetween, isRunHidden } from "./scenes";
 import { linkColor, linkGeometry, type LinkGeometry } from "./links";
 import {
   DASH_PATTERN,
@@ -47,7 +57,6 @@ import {
   ZONE_ALPHA,
   annotationHandles,
   boundsOf,
-  straightCurve,
   strokePoints,
   TEXT_LINE_H,
   textBgAlpha,
@@ -148,9 +157,11 @@ export function drawBoard(
     }
   }
 
-  // No ball until one is given to somebody (D44).
+  // No ball until one is given to somebody (D44). A lofted one grows: from above
+  // there is nowhere for height to go but into the size of the thing (D45).
   if (frame.ball) {
-    drawBall(ctx, frame.ball, ballRadius(doc), {
+    const lift = ballLift(frame.resolved, doc);
+    drawBall(ctx, frame.ball, ballRadius(doc) * (1 + LOFT_GROWTH * lift), {
       selected: view.selection?.has(BALL_ID) ?? false,
       hovered: view.interactive && view.hover === BALL_ID,
     });
@@ -305,9 +316,9 @@ function clipToProjectedHalf(
 }
 
 /** Where a pitch position lands on screen once the camera has had it. */
-function projectPitch(p: Vec2, groundView: Viewport, proj: Projection): Projected {
+function projectPitch(p: Vec2, groundView: Viewport, proj: Projection, up = 0): Projected {
   const s = toScreen(p, groundView);
-  return proj.project(s.x, s.y);
+  return proj.project(s.x, s.y, up);
 }
 
 // ----------------------------------------------------------------- the goals
@@ -553,17 +564,23 @@ function drawBillboards(
   const ball = frame.ball;
   if (ball) {
     const ballR = ballRadius(doc);
-    const ballAtScreen = projectPitch(ball, groundView, proj);
+    // Here the height is real, so the ball is projected at it and the shadow stays
+    // on the grass — the gap between them is what says how high it is. Depth is
+    // sorted by where it stands, not by where it has got to in the air.
+    const ground = projectPitch(ball, groundView, proj);
+    const lift = ballLift(frame.resolved, doc);
+    const air = lift > 0 ? projectPitch(ball, groundView, proj, LOFT_APEX * lift) : ground;
     standing.push({
-      at: ballAtScreen,
-      draw: () =>
-        billboard(ctx, ball, ballAtScreen, () => {
-          drawGroundShadow(ctx, ball, ballR);
+      at: ground,
+      draw: () => {
+        billboard(ctx, ball, ground, () => drawGroundShadow(ctx, ball, ballR));
+        billboard(ctx, ball, air, () =>
           drawBall(ctx, ball, ballR, {
             selected: view.selection?.has(BALL_ID) ?? false,
             hovered: view.interactive && view.hover === BALL_ID,
-          });
-        }),
+          }),
+        );
+      },
     });
   }
 
@@ -1090,17 +1107,21 @@ function drawPaths(ctx: Ctx, doc: BoardDoc, frame: Frame, view: RenderView): voi
 
   // The ball line is not gated on selection: a pass or a shot is the point of
   // the scene, and having to select the ball to see one hides the thing being
-  // explained.
+  // explained. Its handles ARE, like every other set.
   drawBallPath(ctx, doc, edit);
+  if (view.selection?.has(BALL_ID) && !isRunHidden(scene, BALL_ID)) {
+    const b = ballCurve(doc, edit);
+    if (b) drawHandles(ctx, b);
+  }
 }
 
 /** White reads over grass, both kits and the ball itself. */
 const BALL_PATH_COLOR = "#ffffff";
-const BALL_PATH_WIDTH = 0.32;
-/** Below this the ball has barely moved and a line would be noise. */
-const MIN_BALL_TRAVEL = 1.5;
+/** Thinner than a drawn mark: the ball's line is a statement of fact about the
+ *  play, not something the coach drew, and it should not shout over the runs. */
+const BALL_PATH_WIDTH = 0.24;
 /** Half the gap between the two rails of a shot. */
-export const SHOT_OFFSET = 0.26;
+export const SHOT_OFFSET = 0.22;
 /**
  * How far the shaft runs INTO the arrowhead before stopping, in metres.
  *
@@ -1128,19 +1149,12 @@ export const SHAFT_INTO_HEAD = 0.35;
 function drawBallPath(ctx: Ctx, doc: BoardDoc, r: Resolved): void {
   if (isRunHidden(doc.scenes[r.index], BALL_ID)) return;
 
+  // One definition of the curve, shared with the hit-test that bends it.
+  const b = ballCurve(doc, r);
+  if (!b) return;
   const travel = ballTravelBetween(doc, r.from, r.to);
-  if (travel === "none") return;
-
-  // Endpoints come from the function that actually moves the ball, sampled at
-  // both ends of the travel, so the line is the journey rather than a guess at
-  // it — carrier glue and per-entity travel included.
-  const start = ballAt({ ...r, u: 0 }, doc);
-  const end = ballAt({ ...r, u: 1 }, doc);
-  if (!start || !end) return;
-  if (Math.hypot(end.x - start.x, end.y - start.y) < MIN_BALL_TRAVEL) return;
-
-  const curve = r.to.ballPath ?? straightCurve(start, end);
-  const b: Bezier = { p0: start, c1: curve.c1, c2: curve.c2, p1: end };
+  const start = b.p0;
+  const end = b.p1;
 
   const table = buildArcTable(b);
   const sample = (length: number): Vec2[] => {
@@ -1171,7 +1185,7 @@ function drawBallPath(ctx: Ctx, doc: BoardDoc, r: Resolved): void {
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
   if (travel === "pass" && !shot) ctx.setLineDash(DASH_PATTERN);
-  for (const rail of rails) strokePolyline(ctx, rail, "rgba(0,0,0,0.4)", BALL_PATH_WIDTH + 0.14);
+  for (const rail of rails) strokePolyline(ctx, rail, "rgba(0,0,0,0.4)", BALL_PATH_WIDTH + 0.12);
   for (const rail of rails) strokePolyline(ctx, rail, BALL_PATH_COLOR, BALL_PATH_WIDTH);
   ctx.restore();
 
@@ -1426,7 +1440,59 @@ function drawBall(ctx: Ctx, p: Vec2, radius: number, state: TokenState): void {
   ctx.strokeStyle = "rgba(0,0,0,0.7)";
   ctx.lineWidth = 0.1;
   ctx.stroke();
+
+  drawBallPanels(ctx, p, radius, k);
 }
+
+/**
+ * The black centre panel and its seams — a football rather than a white dot.
+ *
+ * Drawn rather than set as an emoji: `drawBoard` has to emit the same pixels in a
+ * worker as on screen (the first invariant), and a colour-emoji glyph is whatever
+ * font the machine happens to carry — Apple's, Noto's or Segoe's, at whatever
+ * baseline. Five lines and a pentagon are the same everywhere and stay sharp at
+ * export resolution.
+ *
+ * It turns with the board on a vertical pitch. A pentagon has no up, so nothing
+ * is lost by letting it.
+ */
+function drawBallPanels(ctx: Ctx, p: Vec2, radius: number, k: number): void {
+  const inner = radius * 0.4;
+  const corner = (i: number): Vec2 => {
+    // Point-up, so the seams fall symmetrically about the vertical.
+    const a = -Math.PI / 2 + (i * 2 * Math.PI) / 5;
+    return { x: Math.cos(a), y: Math.sin(a) };
+  };
+
+  ctx.beginPath();
+  for (let i = 0; i < 5; i++) {
+    const c = corner(i);
+    const x = p.x + c.x * inner;
+    const y = p.y + c.y * inner;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fillStyle = BALL_PANEL_COLOR;
+  ctx.fill();
+
+  // Out to the rim from each corner. The circle's own stroke crops them, which is
+  // what makes them read as seams rather than as spokes.
+  ctx.beginPath();
+  for (let i = 0; i < 5; i++) {
+    const c = corner(i);
+    ctx.moveTo(p.x + c.x * inner, p.y + c.y * inner);
+    ctx.lineTo(p.x + c.x * radius, p.y + c.y * radius);
+  }
+  ctx.strokeStyle = BALL_PANEL_COLOR;
+  ctx.lineWidth = 0.085 * k;
+  ctx.lineCap = "round";
+  ctx.stroke();
+  ctx.lineCap = "butt";
+}
+
+/** Near-black rather than black: the same ink the darkest kit uses. */
+const BALL_PANEL_COLOR = "#18181b";
 
 function drawMarquee(ctx: Ctx, a: Vec2, b: Vec2): void {
   const x = Math.min(a.x, b.x);

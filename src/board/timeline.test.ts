@@ -7,6 +7,8 @@ import {
   scenePace,
   ballAt,
   ballGlue,
+  ballLift,
+  transitionInto,
   frameAt,
   positionAt,
   resolveAt,
@@ -316,6 +318,61 @@ describe("ball — a pass is a carrier change", () => {
       b.ballPath = { c1: { x: 20, y: 60 }, c2: { x: 50, y: 60 } };
     });
     expect(ballIn(doc, resolveAt(doc, 2)).y).toBeGreaterThan(40);
+  });
+});
+
+describe("loft", () => {
+  const lofted = (on: boolean) => {
+    const doc = twoScene((a, b) => carried(a, b, HOME_9, HOME_10));
+    if (on) doc.scenes[1].loft = true;
+    return doc;
+  };
+
+  it("is flat on the ground unless the scene says otherwise", () => {
+    const doc = lofted(false);
+    for (const t of [1, 1.5, 2, 2.5, 3]) {
+      expect(ballLift(resolveAt(doc, t), doc)).toBe(0);
+    }
+  });
+
+  it("rises to its peak halfway and lands", () => {
+    const doc = lofted(true);
+    const start = sceneStartSeconds(doc, 0) + doc.scenes[0].holdMs / 1000;
+    const end = sceneStartSeconds(doc, 1);
+
+    expect(ballLift(resolveAt(doc, start), doc)).toBeCloseTo(0, 5);
+    expect(ballLift(resolveAt(doc, (start + end) / 2), doc)).toBeCloseTo(1, 2);
+    expect(ballLift(resolveAt(doc, end), doc)).toBeCloseTo(0, 5);
+  });
+
+  it("is on the ground again once the scene is at rest", () => {
+    const doc = lofted(true);
+    expect(ballLift(resolveAt(doc, sceneStartSeconds(doc, 1) + 0.1), doc)).toBe(0);
+  });
+
+  it("never leaves the ground on a scene the ball does not travel into", () => {
+    const doc = lofted(true);
+    expect(ballLift(resolveAt(doc, 0), doc)).toBe(0);
+  });
+
+  /** How far along its flight the ball is, as a fraction of the whole travel. */
+  const covered = (doc: BoardDoc, u: number): number => {
+    const r = transitionInto(doc, 1)!;
+    const start = ballIn(doc, { ...r, u: 0 });
+    const end = ballIn(doc, { ...r, u: 1 });
+    const at = ballIn(doc, { ...r, u });
+    return Math.hypot(at.x - start.x, at.y - start.y) / Math.hypot(end.x - start.x, end.y - start.y);
+  };
+
+  it("crosses the ground at a constant speed, so the apex is halfway", () => {
+    // A ball in the air is not touching the turf that slows a ground pass. Half
+    // the flight is half the distance, which is where the arc peaks.
+    expect(covered(lofted(true), 0.5)).toBeCloseTo(0.5, 2);
+  });
+
+  it("still decelerates when it stays on the ground", () => {
+    // easeOutQuad: three quarters of the way there at half the time.
+    expect(covered(lofted(false), 0.5)).toBeCloseTo(0.75, 2);
   });
 });
 

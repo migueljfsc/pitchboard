@@ -6,17 +6,19 @@
  */
 
 import type { BoardDoc, PathCurve, Scene, Vec2 } from "./types";
+import { BALL_ID } from "./types";
 import {
   MAX_FLOW_SPEED,
   MIN_FLOW_SPEED,
   ballAt,
   hasBall,
   resolveAt,
+  type Resolved,
   sceneTimings,
   totalDurationMs,
 } from "./timeline";
-import { pruneAnnotations } from "./annotations";
-import { SAME_PLACE, distance } from "./geometry";
+import { pruneAnnotations, straightCurve } from "./annotations";
+import { SAME_PLACE, distance, type Bezier } from "./geometry";
 import type { Carry } from "./interaction";
 import { teamOf } from "./players";
 
@@ -35,21 +37,27 @@ export const DEFAULT_HOLD_MS = 800;
  * in the strip, still shows the toggle lit while disabled, and quietly becomes a
  * shot again the moment the ball is released.
  */
-const replace = (doc: BoardDoc, scenes: Scene[]): BoardDoc => pruneShots({ ...doc, scenes });
+const replace = (doc: BoardDoc, scenes: Scene[]): BoardDoc => pruneBallFlags({ ...doc, scenes });
 
 /**
- * Clear `shot` wherever the ball does not travel into the scene.
+ * Clear `shot` and `loft` wherever the travel they describe no longer exists.
  *
- * Scene 0 included: there is nothing for the ball to arrive from.
+ * Scene 0 included: there is nothing for the ball to arrive from. The two flags
+ * have different gates — a shot needs a LOOSE travel, a loft needs only that the
+ * ball leaves someone's feet — so each is asked its own question.
  */
-export function pruneShots(doc: BoardDoc): BoardDoc {
+export function pruneBallFlags(doc: BoardDoc): BoardDoc {
   let changed = false;
 
   const scenes = doc.scenes.map((scene, i) => {
-    if (scene.shot !== true || canShoot(doc, i)) return scene;
+    const dropShot = scene.shot === true && !canShoot(doc, i);
+    const dropLoft = scene.loft === true && !canLoft(doc, i);
+    if (!dropShot && !dropLoft) return scene;
+
     changed = true;
     const next = { ...scene };
-    delete next.shot;
+    if (dropShot) delete next.shot;
+    if (dropLoft) delete next.loft;
     return next;
   });
 
@@ -397,13 +405,26 @@ export function ballTravelBetween(doc: BoardDoc, from: Scene, to: Scene): BallTr
  * so it is the one thing a shot is not; a ball that never leaves its carrier has
  * no travel to mark at all.
  *
- * This is the single source for both the toggle's enabled state and pruneShots.
+ * This is the single source for both the toggle's enabled state and pruneBallFlags.
  * They were two rules once, and a shot flag outliving its shot is what that cost.
  */
 export function canShoot(doc: BoardDoc, index: number): boolean {
   const to = doc.scenes[index];
   const from = doc.scenes[index - 1];
   return !!to && !!from && ballTravelBetween(doc, from, to) === "loose";
+}
+
+/**
+ * Can the ball's arrival into this scene be lofted?
+ *
+ * Any travel qualifies, pass or loose: a cross, a chip and a clearance are all
+ * balls that leave the ground. Only a dribble is excluded, and it is excluded for
+ * the reason it has no line either — the ball never left anyone's feet.
+ */
+export function canLoft(doc: BoardDoc, index: number): boolean {
+  const to = doc.scenes[index];
+  const from = doc.scenes[index - 1];
+  return !!to && !!from && ballTravelBetween(doc, from, to) !== "none";
 }
 
 /** Mark the ball's travel into scene `index` as a strike at goal. */
@@ -442,6 +463,20 @@ export function setShot(doc: BoardDoc, index: number, shot: boolean): BoardDoc {
   return replace(doc, scenes);
 }
 
+/** Lift the ball's travel into scene `index` off the ground, or put it back. */
+export function setLoft(doc: BoardDoc, index: number, loft: boolean): BoardDoc {
+  const scene = doc.scenes[index];
+  if (!scene || (scene.loft ?? false) === loft) return doc;
+
+  const next: Scene = { ...scene };
+  if (loft) next.loft = true;
+  else delete next.loft;
+
+  const scenes = doc.scenes.slice();
+  scenes[index] = next;
+  return replace(doc, scenes);
+}
+
 /** Set or clear the curve an entity travels along into scene `index`. */
 export function setPath(
   doc: BoardDoc,
@@ -452,13 +487,50 @@ export function setPath(
   const scene = doc.scenes[index];
   if (!scene) return doc;
 
+  const scenes = doc.scenes.slice();
+  // The ball's curve lives in its own field, because the ball has no entry in
+  // `positions` to key one off — it is derived from its carrier (D4). Routing it
+  // here rather than at the call sites is what keeps "straighten" and "bend"
+  // agreeing about where a ball's curve is kept.
+  if (entityId === BALL_ID) {
+    scenes[index] = { ...scene, ballPath: curve };
+    return replace(doc, scenes);
+  }
+
   const paths = { ...scene.paths };
   if (curve) paths[entityId] = curve;
   else delete paths[entityId];
 
-  const scenes = doc.scenes.slice();
   scenes[index] = { ...scene, paths };
   return replace(doc, scenes);
+}
+
+/** The stored curve for an entity travelling into `scene`, if it has been bent. */
+export function pathOf(scene: Scene, entityId: string): PathCurve | null | undefined {
+  return entityId === BALL_ID ? scene.ballPath : scene.paths[entityId];
+}
+
+/** Below this the ball has barely moved, and a line would be noise. */
+export const MIN_BALL_TRAVEL = 1.5;
+
+/**
+ * The ball's line into a scene, as a bezier.
+ *
+ * The one definition of that curve, shared by the renderer that draws it and the
+ * hit-test that lets you bend it — endpoints sampled from `ballAt` at both ends of
+ * the travel, so carrier glue and travel overrides are included rather than
+ * reimplemented. Null when there is no line: a dribble carries the ball rather
+ * than playing it, and a ball that barely moves has nothing worth drawing.
+ */
+export function ballCurve(doc: BoardDoc, r: Resolved): Bezier | null {
+  if (ballTravelBetween(doc, r.from, r.to) === "none") return null;
+
+  const p0 = ballAt({ ...r, u: 0 }, doc);
+  const p1 = ballAt({ ...r, u: 1 }, doc);
+  if (!p0 || !p1 || distance(p0, p1) < MIN_BALL_TRAVEL) return null;
+
+  const curve = r.to.ballPath ?? straightCurve(p0, p1);
+  return { p0, c1: curve.c1, c2: curve.c2, p1 };
 }
 
 /**

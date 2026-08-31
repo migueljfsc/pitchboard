@@ -173,7 +173,7 @@ hatch, but CI owns the real deploy.
   for that reason — see D27.
 - **`Scene.shot` must not outlive the travel it describes.** It marks the ball's arrival, so
   setting a carrier invalidates it on that scene AND the next, and deleting or reordering a scene
-  invalidates it for a neighbour. `pruneShots` runs inside `replace` for that reason. `canShoot`
+  invalidates it for a neighbour. `pruneBallFlags` runs inside `replace` for that reason. `canShoot`
   is the only rule for whether a strike is possible — gate and flag disagreeing is what let one
   go stale (D24).
 - **Giving the ball away carries forward.** `setCarrier` takes the same `Carry` a drag does: the
@@ -186,6 +186,12 @@ hatch, but CI owns the real deploy.
   the hit-test and the ghosts all have to check (D44). A ball appearing for the first time appears
   on its new holder rather than travelling in, and arriving is not a travel, so it cannot be a
   shot. The schema's only rule is that a scene never holds both a carrier and a `ballPos`.
+- **`Scene.loft` is the second flag on the same travel.** It lifts the ball off the ground
+  and, like `shot`, means nothing where the ball does not fly — so `pruneBallFlags` asks
+  each its own question (`canShoot` needs a loose travel, `canLoft` only a travel at all)
+  and both can be set at once (D45). A lofted ball also drops `ballAt`'s `easeOutQuad`:
+  the turf is what slows a ground pass, and leaving the deceleration in lands the ball
+  beside the receiver at the top of its arc, where it hangs and then falls straight down.
 - **A dribble is not a pass.** The ball is glued to its carrier, so it moves as far as they
   run. Anything deciding what the ball *did* must read the carrier change (`ballTravelBetween`),
   never the distance the ball covered.
