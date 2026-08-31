@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.30.0 (2026-08-31)
+
+### Feat
+
+- **editor**: squads that follow your account, links per scene, and players you can light up
+
 ## v0.29.0 (2026-08-31)
 
 ### Feat
