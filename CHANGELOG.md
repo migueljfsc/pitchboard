@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.32.0 (2026-08-31)
+
+### Feat
+
+- **editor**: the board can be worked on in 3D — players, runs and the drawing
+
 ## v0.31.0 (2026-08-31)
 
 ### Feat
