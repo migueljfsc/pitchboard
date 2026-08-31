@@ -475,6 +475,24 @@ setting up consecutive scenes, and painful without it.
 Editing only ever mutates the **current scene's** `positions`. Dragging a player never
 retroactively changes an earlier scene.
 
+### Interaction under the camera
+
+The angled view takes pointer input too, and splits hit-testing the way it splits drawing (D48).
+Two gates: `live` is any input at all, `canPlace` is editing by position — drags, run handles,
+drawing and moving shapes — and only the flat board has the second.
+
+| Where it lies | How it is tested |
+|---|---|
+| On the grass — zones, connectors, the marquee | `unprojectPitch`, then the flat tests unchanged |
+| Standing — token, ball, text label | `unbillboard`, in the metre space it was drawn in |
+
+`unproject` is the ground map rearranged rather than searched, so the first row is exact; the
+second is what keeps a token's grab area the size it looks, near camera and far. `cameraFor`
+builds the one camera that both the renderer and the hit tests use.
+
+The 3D draw order is not the flat one, so the hit-test order differs too: only text stands above
+the players, while the rest of its layer is in the ground image beneath them.
+
 ---
 
 ## 9. Export

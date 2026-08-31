@@ -1,10 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { applySelection, entitiesInRect, hitTest, moveEntities, nudgeEntities } from "./interaction";
+import {
+  applySelection,
+  entitiesInRect,
+  hitTest,
+  hitTestGroundAnnotation,
+  hitTestTilted,
+  hitTestTiltedText,
+  moveEntities,
+  nudgeEntities,
+} from "./interaction";
+import { cameraFor, projectPitch } from "./projection";
+import { PITCH, tokenRadius } from "./pitch";
+import { addAnnotation } from "./annotations";
 import { addSceneAfter } from "./scenes";
 import { TOKEN_RADIUS } from "./render";
 import { frameAt } from "./timeline";
 import { createBoardDoc } from "@/formations";
-import { BALL_ID, type BoardDoc, type Vec2 } from "./types";
+import { BALL_ID, type Annotation, type BoardDoc, type Vec2 } from "./types";
 
 const doc = createBoardDoc();
 const frame = frameAt(doc, 0);
@@ -341,5 +353,120 @@ describe("applySelection", () => {
   it("clears on an empty plain click, and preserves on an empty shift-click", () => {
     expect(applySelection(new Set(["a"]), null, false).size).toBe(0);
     expect([...applySelection(new Set(["a"]), null, true)]).toEqual(["a"]);
+  });
+});
+
+// Under the camera a token is a BILLBOARD: its pixels are nowhere near the grass
+// beneath it, so it is hit-tested where it is drawn (D48).
+describe("hitTestTilted", () => {
+  const cam = cameraFor(PITCH, "full", 1000, 700, 1);
+  const screenOf = (id: string, dx = 0, dy = 0) => {
+    const at = projectPitch(frame.positions[id], cam);
+    return { x: at.x + dx, y: at.y + dy };
+  };
+
+  it("finds a player under the pointer", () => {
+    expect(hitTestTilted(doc, frame, screenOf(first), cam)).toEqual({
+      kind: "token",
+      id: first,
+    });
+  });
+
+  it("finds nobody on empty grass", () => {
+    // The far corner of the pitch, which no formation puts anyone in.
+    const at = projectPitch({ x: 2, y: 2 }, cam);
+    expect(hitTestTilted(doc, frame, { x: at.x, y: at.y }, cam)).toBeNull();
+  });
+
+  it("finds nobody off the top of the frame, where there is no ground", () => {
+    expect(hitTestTilted(doc, frame, { x: 500, y: -5000 }, cam)).toBeNull();
+  });
+
+  /**
+   * The whole point of testing in screen space. A token is drawn the same size in
+   * METRES wherever it stands, so the pixels it covers shrink with depth — and the
+   * grab area has to shrink with them, or the far end of the pitch becomes a soup
+   * of overlapping targets.
+   */
+  it("grabs a nearer player from further away in pixels than a distant one", () => {
+    const near = doc.teams[0].players[0].id;
+    const far = doc.teams[1].players[0].id;
+    const nearScale = projectPitch(frame.positions[near], cam).scale;
+    const farScale = projectPitch(frame.positions[far], cam).scale;
+    expect(nearScale).toBeGreaterThan(farScale);
+
+    // Between the two reaches: inside the near token's circle, outside the far
+    // one's. `tokenRadius` and not the bare constant — the default board already
+    // scales its tokens up, and the bare radius lands inside both. No margin, so
+    // this is about the depth scale and nothing else.
+    const px = (tokenRadius(doc) * (nearScale + farScale)) / 2;
+    expect(hitTestTilted(doc, frame, screenOf(near, px, 0), cam, 0)?.id).toBe(near);
+    expect(hitTestTilted(doc, frame, screenOf(far, px, 0), cam, 0)).toBeNull();
+  });
+
+  // Nearest is what covers the others, and the renderer draws in that order.
+  it("gives the click to the nearer of two overlapping players", () => {
+    const a = doc.teams[0].players[1].id;
+    const b = doc.teams[0].players[2].id;
+    const stacked: BoardDoc = {
+      ...doc,
+      scenes: [
+        {
+          ...doc.scenes[0],
+          positions: {
+            ...doc.scenes[0].positions,
+            [a]: { x: 40, y: 34 },
+            [b]: { x: 42, y: 34 },
+          },
+        },
+      ],
+    };
+    const f = frameAt(stacked, 0);
+    // teams[0] defends x = 0, so the SMALLER x is nearer the camera.
+    const at = projectPitch({ x: 41, y: 34 }, cam);
+    expect(hitTestTilted(stacked, f, { x: at.x, y: at.y }, cam)?.id).toBe(a);
+  });
+
+  it("takes the ball", () => {
+    const withBall: BoardDoc = {
+      ...doc,
+      scenes: [{ ...doc.scenes[0], carrier: null, ballPos: { x: 52.5, y: 34 } }],
+    };
+    const f = frameAt(withBall, 0);
+    const at = projectPitch({ x: 52.5, y: 34 }, cam);
+    expect(hitTestTilted(withBall, f, { x: at.x, y: at.y }, cam)).toEqual({
+      kind: "ball",
+      id: BALL_ID,
+    });
+  });
+});
+
+describe("hitTestTiltedText", () => {
+  const cam = cameraFor(PITCH, "full", 1000, 700, 1);
+  const label: Annotation = {
+    id: "ann-1",
+    kind: "text",
+    from: doc.scenes[0].id,
+    to: null,
+    color: "#ffffff",
+    at: { x: 30, y: 20 },
+    text: "Press here",
+  };
+  const labelled = addAnnotation(doc, label);
+
+  it("finds a label where it is drawn, not where its anchor lies on the grass", () => {
+    const at = projectPitch({ x: 30, y: 20 }, cam);
+    expect(hitTestTiltedText(labelled, 0, { x: at.x, y: at.y }, cam)).not.toBeNull();
+  });
+
+  it("finds nothing well away from it", () => {
+    const at = projectPitch({ x: 80, y: 60 }, cam);
+    expect(hitTestTiltedText(labelled, 0, { x: at.x, y: at.y }, cam)).toBeNull();
+  });
+
+  // Text is a billboard and everything else in its layer lies on the grass, so the
+  // two are hit-tested in different spaces and must not both claim a label.
+  it("is the only thing that answers for a label — the ground pass skips it", () => {
+    expect(hitTestGroundAnnotation(labelled, 0, { x: 30, y: 20 }, "mark")).toBeNull();
   });
 });

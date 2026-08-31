@@ -14,7 +14,14 @@
 import type { Annotation, BoardDoc, Link, PathCurve, Scene, Vec2 } from "./types";
 import { BALL_ID } from "./types";
 import { ballRadius, tokenRadius } from "./pitch";
-import { displayCurve, transitionInto, type Frame, type Resolved } from "./timeline";
+import {
+  LOFT_APEX,
+  ballLift,
+  displayCurve,
+  transitionInto,
+  type Frame,
+  type Resolved,
+} from "./timeline";
 import { linkGeometry } from "./links";
 import { ballCurve } from "./scenes";
 import {
@@ -27,6 +34,7 @@ import {
 } from "./annotations";
 import { HANDLE_RADIUS, concealedPlayers } from "./render";
 import { SAME_PLACE, clamp, distanceToSegment } from "./geometry";
+import { projectPitch, unbillboard, unprojectPitch, type Camera } from "./projection";
 
 export type HitTarget = { kind: "token" | "ball"; id: string } | null;
 
@@ -180,10 +188,45 @@ export function hitTestAnnotation(
   rotated = false,
   margin = 0.35,
 ): Annotation | null {
+  return topmostAnnotation(doc, sceneIndex, p, margin, rotated, (a) => layerOf(a) === layer);
+}
+
+/**
+ * The same test, minus text — for the 3D view.
+ *
+ * Under the camera a label is a BILLBOARD and everything else in its layer lies on
+ * the grass, so the two are hit-tested in different spaces and cannot share a pass.
+ * Text goes through `hitTestTiltedText`; this is what is left.
+ */
+export function hitTestGroundAnnotation(
+  doc: BoardDoc,
+  sceneIndex: number,
+  p: Vec2,
+  layer: AnnotationLayer,
+  margin = 0.35,
+): Annotation | null {
+  return topmostAnnotation(
+    doc,
+    sceneIndex,
+    p,
+    margin,
+    false,
+    (a) => layerOf(a) === layer && a.kind !== "text",
+  );
+}
+
+function topmostAnnotation(
+  doc: BoardDoc,
+  sceneIndex: number,
+  p: Vec2,
+  margin: number,
+  rotated: boolean,
+  accept: (ann: Annotation) => boolean,
+): Annotation | null {
   const list = visibleAt(doc, sceneIndex);
   for (let i = list.length - 1; i >= 0; i--) {
     const ann = list[i];
-    if (layerOf(ann) !== layer) continue;
+    if (!accept(ann)) continue;
     if (annotationCovers(ann, p, margin, rotated)) return ann;
   }
   return null;
@@ -219,6 +262,103 @@ function annotationCovers(ann: Annotation, p: Vec2, margin: number, rotated: boo
   }
   return false;
 }
+
+// --------------------------------------------------------------- the 3D view
+//
+// Under the camera the board splits in two, and so does hit-testing.
+//
+// Anything lying on the GRASS — markings, zones, connectors, the sweep of a
+// marquee — is tested by turning the pointer back into a place on the pitch
+// (`unprojectPitch`) and handing it to the flat tests above, unchanged. The ground
+// map inverts exactly, so those answers are exact.
+//
+// Anything STANDING — a token, the ball, a text label — is not on the grass at all.
+// Its pixels are a billboard drawn at the projected ground point and scaled by
+// depth, so it is tested in the space it was DRAWN in (`unbillboard`). That is what
+// keeps the grab area the size it looks: a metre near the camera is many more
+// pixels than a metre at the far touchline, which is the objection that kept the
+// 3D view read-only, and it disappears the moment the target is the pixels (D48).
+
+/** How near a click has to land, in metres of the billboard's own scale. */
+const TILTED_MARGIN = 0.25;
+
+/**
+ * Topmost entity under a SCREEN point, or null.
+ *
+ * Nearest wins, because nearest is what covers the others: `drawBillboards` sorts
+ * by projected y and draws in that order, so the largest y is on top. A lofted ball
+ * is tested where it is drawn — up in the air — rather than at the shadow it is
+ * sorted by.
+ */
+export function hitTestTilted(
+  doc: BoardDoc,
+  frame: Frame,
+  screen: Vec2,
+  cam: Camera,
+  margin = TILTED_MARGIN,
+): HitTarget {
+  const hits: { hit: NonNullable<HitTarget>; depth: number }[] = [];
+
+  const consider = (hit: NonNullable<HitTarget>, anchor: Vec2, reach: number, up: number) => {
+    const at = projectPitch(anchor, cam, up);
+    if (!Number.isFinite(at.scale) || at.scale <= 0) return;
+    if (dist(unbillboard(screen, at, anchor), anchor) > reach) return;
+    // Sorted by where it STANDS, exactly as the draw order is.
+    hits.push({ hit, depth: up === 0 ? at.y : projectPitch(anchor, cam).y });
+  };
+
+  const reach = tokenRadius(doc) + margin;
+  for (const team of doc.teams) {
+    if (team.hidden) continue;
+    for (const player of team.players) {
+      const pos = frame.positions[player.id];
+      if (pos) consider({ kind: "token", id: player.id }, pos, reach, 0);
+    }
+  }
+
+  if (frame.ball) {
+    const lift = ballLift(frame.resolved, doc);
+    consider(
+      { kind: "ball", id: BALL_ID },
+      frame.ball,
+      ballRadius(doc) + margin,
+      lift > 0 ? LOFT_APEX * lift : 0,
+    );
+  }
+
+  if (hits.length === 0) return null;
+  return hits.reduce((a, b) => (b.depth >= a.depth ? b : a)).hit;
+}
+
+/**
+ * Topmost text label under a SCREEN point, or null.
+ *
+ * A label is the one annotation that stands up off the grass — squashed type is
+ * unreadable, so it is billboarded like a token. Unbillboarding puts the pointer
+ * back into the label's own metre space, where the existing box test applies
+ * unchanged; `rotated` is false in there, because a billboard's axes are the
+ * screen's however the board is turned underneath.
+ */
+export function hitTestTiltedText(
+  doc: BoardDoc,
+  sceneIndex: number,
+  screen: Vec2,
+  cam: Camera,
+  margin = TILTED_MARGIN,
+): Annotation | null {
+  const list = visibleAt(doc, sceneIndex);
+  for (let i = list.length - 1; i >= 0; i--) {
+    const ann = list[i];
+    if (ann.kind !== "text") continue;
+    const at = projectPitch(ann.at, cam);
+    if (!Number.isFinite(at.scale) || at.scale <= 0) continue;
+    if (annotationCovers(ann, unbillboard(screen, at, ann.at), margin, false)) return ann;
+  }
+  return null;
+}
+
+/** The place on the grass under a screen point. NaN above the horizon, where there is none. */
+export const tiltedPitchPoint = (screen: Vec2, cam: Camera): Vec2 => unprojectPitch(screen, cam);
 
 /** Player ids whose token centre falls inside the rectangle spanned by `a` and `b`. */
 export function entitiesInRect(doc: BoardDoc, frame: Frame, a: Vec2, b: Vec2): string[] {

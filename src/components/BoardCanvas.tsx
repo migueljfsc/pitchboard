@@ -11,7 +11,7 @@ import type { Annotation, BoardDoc, PitchView, Tool, Vec2 } from "@/board/types"
 import type { Change } from "@/lib/history";
 import { BALL_ID, DEFAULT_PITCH_VIEW } from "@/board/types";
 import { fitViewport, toPitch } from "@/board/geometry";
-import { framingOf } from "@/board/projection";
+import { cameraFor, framingOf, unprojectPitch } from "@/board/projection";
 import { drawBoard } from "@/board/render";
 import { frameAt } from "@/board/timeline";
 import {
@@ -21,8 +21,11 @@ import {
   hitTest,
   hitTestAnnotation,
   hitTestAnnotationHandle,
+  hitTestGroundAnnotation,
   hitTestHandle,
   hitTestLink,
+  hitTestTilted,
+  hitTestTiltedText,
   moveEntities,
   type AnnotationHandleHit,
   type Carry,
@@ -105,15 +108,32 @@ export function BoardCanvas({
   interactive = true,
 }: Props) {
   /**
-   * The angled view is presentation only — the board is edited flat (D34).
+   * Two gates, not one (D48).
    *
-   * One gate covers it, because the renderer already drops every piece of editor
-   * chrome for `interactive: false` and the pointer handlers hang off the same
-   * flag. Dragging a player through a perspective map would work, but the grab
-   * margins stop matching what you see: a metre near the camera is a lot more
-   * pixels than a metre at the far touchline.
+   * `live` is any pointer input at all, and the angled view now has it: selecting,
+   * shift-selecting, sweeping a marquee, clicking a connector, clicking empty grass
+   * to clear. Everything the panels then offer — link, colours, highlight, kit,
+   * rename, restyle a shape — is an edit to the document and never cared which way
+   * the board was being looked at.
+   *
+   * `canPlace` is editing by POSITION: dragging entities, run handles, drawing and
+   * moving shapes. That stays flat. The old objection was grab margins — a metre
+   * near the camera is a lot more pixels than a metre at the far touchline — and it
+   * is an objection to dragging, not to clicking: a hit test can be run against the
+   * pixels a billboard actually occupies, and `hitTestTilted` is.
    */
-  const live = interactive && !pitchView.tilt;
+  const live = interactive;
+  const canPlace = interactive && !pitchView.tilt;
+  const tilted = !!framingOf(pitchView).tilt;
+
+  /**
+   * What a drag on empty grass does, given where we are.
+   *
+   * A tool left armed in 2D would otherwise make every click in 3D do nothing at
+   * all. It falls back to select there and is picked straight back up on the way
+   * out, which is better than a live tool that quietly refuses.
+   */
+  const activeTool: Tool = canPlace ? tool : "select";
 
   /**
    * Framing the pointer is working in.
@@ -195,13 +215,52 @@ export function BoardCanvas({
     live,
   ]);
 
+  /** Where the pointer is on the canvas, in CSS pixels. What a billboard is tested with. */
+  const screenFrom = (e: React.MouseEvent<HTMLCanvasElement>): Vec2 => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+
+  /**
+   * The camera the pointer is looking through — the same one the renderer builds,
+   * from the same helper, so a hit test cannot drift from what was drawn.
+   */
+  const cameraFrom = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return cameraFor(
+      doc.pitch,
+      pitchView.half,
+      rect.width,
+      rect.height,
+      window.devicePixelRatio || 1,
+    );
+  };
+
+  /**
+   * The place on the GRASS under the pointer.
+   *
+   * Tilted, that is the camera run backwards; flat, it is the plain viewport. Every
+   * test below that works in pitch metres — connectors, zones, the marquee — takes
+   * this and needs to know nothing else about the view.
+   */
   const pointFrom = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>): Vec2 => {
       const rect = e.currentTarget.getBoundingClientRect();
+      const at = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      if (framingOf(pitchView).tilt) {
+        const cam = cameraFor(
+          doc.pitch,
+          pitchView.half,
+          rect.width,
+          rect.height,
+          window.devicePixelRatio || 1,
+        );
+        return unprojectPitch(at, cam);
+      }
       const view = fitViewport(rect.width, rect.height, doc.pitch.length, doc.pitch.width, pitchView);
-      return toPitch({ x: e.clientX - rect.left, y: e.clientY - rect.top }, view);
+      return toPitch(at, view);
     },
-    [doc.pitch.length, doc.pitch.width, pitchView],
+    [doc.pitch, pitchView],
   );
 
   /** Scene the annotations are keyed to — the one being played into. */
@@ -223,37 +282,85 @@ export function BoardCanvas({
     e.currentTarget.setPointerCapture(e.pointerId);
 
     // A drawing tool takes the whole gesture: no selecting, no marquee.
-    if (tool !== "select") {
+    if (activeTool !== "select") {
       startDrawing(p);
       return;
     }
 
-    // The selected shape's own handles come first, above even run handles: they
-    // are drawn on top of everything and are the most deliberate target there is.
-    const annHandle = hitTestAnnotationHandle(
-      doc,
-      annotationScene(),
-      annotationSelection,
-      p,
-      rotated,
-    );
-    if (annHandle) {
-      setDrag({ kind: "ann-handle", hit: annHandle });
-      return;
-    }
-
-    // Control handles win over tokens: they can overlap one, and they are the
-    // smaller, more deliberate target.
-    if (editScene !== undefined) {
-      const handle = hitTestHandle(doc, editScene, selection, p);
-      if (handle) {
-        setDrag({ kind: "handle", hit: handle });
+    // Handles are grabbed, and a grab is positional. Neither kind exists in 3D,
+    // which is also why neither is drawn there.
+    if (canPlace) {
+      // The selected shape's own handles come first, above even run handles: they
+      // are drawn on top of everything and are the most deliberate target there is.
+      const annHandle = hitTestAnnotationHandle(
+        doc,
+        annotationScene(),
+        annotationSelection,
+        p,
+        rotated,
+      );
+      if (annHandle) {
+        setDrag({ kind: "ann-handle", hit: annHandle });
         return;
+      }
+
+      // Control handles win over tokens: they can overlap one, and they are the
+      // smaller, more deliberate target.
+      if (editScene !== undefined) {
+        const handle = hitTestHandle(doc, editScene, selection, p);
+        if (handle) {
+          setDrag({ kind: "handle", hit: handle });
+          return;
+        }
       }
     }
 
     const frame = frameAt(doc, t);
     const scene = frame.resolved.index;
+
+    if (tilted) {
+      const cam = cameraFrom(e);
+      const screen = screenFrom(e);
+
+      // Draw order, read backwards — and it is not the flat one. A label stands up
+      // off the grass and is drawn last of all, so it takes a click first; the
+      // other marks lie IN the ground layer, under the players, and are tested
+      // after them rather than before.
+      const label = hitTestTiltedText(doc, scene, screen, cam);
+      if (label) {
+        selectAnnotation(label.id);
+        return;
+      }
+
+      const standing = hitTestTilted(doc, frame, screen, cam);
+      if (standing) {
+        onAnnotationSelect?.(null);
+        onSelectionChange(applySelection(selection, standing, e.shiftKey));
+        return;
+      }
+
+      for (const layer of ["mark", "zone"] as const) {
+        const ann = hitTestGroundAnnotation(doc, scene, p, layer);
+        if (ann) {
+          selectAnnotation(ann.id);
+          return;
+        }
+      }
+
+      const unit = hitTestLink(doc, frame.resolved, p);
+      if (unit) {
+        onAnnotationSelect?.(null);
+        onSelectionChange(new Set(e.shiftKey ? [...selection, ...unit.members] : unit.members));
+        return;
+      }
+
+      onAnnotationSelect?.(null);
+      if (!e.shiftKey) onSelectionChange(new Set());
+      // In pitch metres, like the flat one: the corners were turned back into
+      // places on the grass, so the sweep is an area of pitch and warps with it.
+      setDrag({ kind: "marquee", a: p, b: p, additive: e.shiftKey });
+      return;
+    }
 
     // Marks are drawn above the tokens, so they take a click from one. Zones are
     // drawn below and are tested after. Hit-testing mirrors the draw order.
@@ -312,15 +419,15 @@ export function BoardCanvas({
    * immediately and hands the panel the cursor for its content.
    */
   const startDrawing = (p: Vec2) => {
-    if (tool === "select") return;
+    if (activeTool === "select") return;
     const sceneId = doc.scenes[annotationScene()]?.id ?? doc.scenes[0].id;
-    const ann = draftAnnotation(doc, tool, sceneId, p, p, {
+    const ann = draftAnnotation(doc, activeTool, sceneId, p, p, {
       color: drawColor,
       dash: drawDash,
       points: [p],
     });
 
-    if (tool === "text") {
+    if (activeTool === "text") {
       onDocChange(addAnnotation(doc, ann));
       onAnnotationSelect?.(ann.id);
       onToolChange?.("select");
@@ -333,9 +440,15 @@ export function BoardCanvas({
     const p = pointFrom(e);
 
     if (!drag) {
-      if (tool !== "select") {
+      if (activeTool !== "select") {
         setHover(null);
         setGrip(null);
+        return;
+      }
+      if (tilted) {
+        // No handles to promise, so no grip — only what a click would select.
+        setGrip(null);
+        setHover(hitTestTilted(doc, frameAt(doc, t), screenFrom(e), cameraFrom(e))?.id ?? null);
         return;
       }
       // Same order as pointerdown: the shape's own handles, then run handles,
@@ -422,8 +535,11 @@ export function BoardCanvas({
    * when exactly one is selected.
    */
   const onDoubleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!onEditName || tool !== "select") return;
-    const hit = hitTest(doc, frameAt(doc, t), pointFrom(e));
+    if (!onEditName || activeTool !== "select") return;
+    const frame = frameAt(doc, t);
+    const hit = tilted
+      ? hitTestTilted(doc, frame, screenFrom(e), cameraFrom(e))
+      : hitTest(doc, frame, pointFrom(e));
     if (!hit || hit.id === BALL_ID) return;
     onSelectionChange(new Set([hit.id]));
     onEditName(hit.id);
@@ -488,7 +604,7 @@ export function BoardCanvas({
    */
   const cursor = (): string => {
     if (!live) return "default";
-    if (tool !== "select") return "crosshair";
+    if (activeTool !== "select") return "crosshair";
     const resize = rotated ? "ns-resize" : "ew-resize";
     if (drag?.kind === "ann-handle") return drag.hit.which === "w" ? resize : "grabbing";
     if (drag?.kind === "move" || drag?.kind === "handle" || drag?.kind === "ann-move") {

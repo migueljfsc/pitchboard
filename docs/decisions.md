@@ -329,6 +329,43 @@ animate a pulse deterministically, but a glow that changes every frame is precis
 a GIF's palette crawl (D29).
 
 
+## D48 — The 3D view is selectable; it is still not placeable
+D34 made the angled view presentation only, and the reason given was grab margins: a metre
+near the camera is many more pixels than a metre at the far touchline. That is an objection to
+DRAGGING, and it was applied to the whole pointer surface — so a selection made in 2D survived
+into 3D with no way to clear it, and nothing could be picked or acted on there at all.
+
+One gate becomes two. `live` is any pointer input, which the angled view now has: click,
+shift-click, marquee, click a connector to take its members, click empty grass to clear,
+double-click to rename. `canPlace` is editing by POSITION — dragging entities, run handles,
+drawing and moving shapes — and that stays flat. Everything the panels offer is an edit to the
+document and never cared how the board was being looked at, so linking, colours, kit,
+highlights and restyling a shape all followed for free.
+
+**The board splits in two, and so does hit-testing.** Anything lying on the GRASS — zones,
+connectors, the sweep of a marquee — is tested by turning the pointer back into a place on the
+pitch and handing it to the flat tests unchanged. Anything STANDING — a token, the ball, a text
+label — is a billboard whose pixels are nowhere near the grass beneath it, and is tested in the
+space it was drawn in. That second half is what answers the grab-margin objection rather than
+working around it: the target is the pixels, so the grab area is the size it looks at either
+end of the pitch.
+
+**The ground map inverts exactly.** `rawY = b·C/(d − b·S)` rearranges to `b = R·d/(C + R·S)`,
+so `unproject` is one expression rather than a search. Above the horizon it returns NaN, because
+there is no ground there and a click must not come back as if there were.
+
+**One camera.** `cameraFor` is built by the renderer and by every hit test, from the same call.
+Rebuilding it beside the pointer handling would be a second answer to "where is this player on
+screen", and the two would drift the way preview and export would.
+
+**The marquee is a region of the PITCH, not of the screen.** Its corners are unprojected as they
+are dragged, so it lies on the grass, warps with it, and `entitiesInRect` needs no 3D of its own.
+
+**A shape is selectable and restylable, not movable.** Handles are not drawn under the camera
+and not tested for: a grab point that cannot be dragged is a promise the view does not keep. A
+draw tool left armed in 2D falls back to select in 3D rather than making every click do nothing.
+
+
 ---
 
 ## Invariants

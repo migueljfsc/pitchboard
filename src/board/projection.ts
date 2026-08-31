@@ -26,8 +26,9 @@
  * mesh — and it is why there are no seams to hide.
  */
 
-import type { PitchView } from "./types";
-import type { Ctx } from "./pitch";
+import type { PitchHalf, PitchView, Vec2, Viewport } from "./types";
+import { PITCH_PADDING, type Ctx } from "./pitch";
+import { fitViewport, halfRange, toPitch, toScreen } from "./geometry";
 
 /** Camera tilt off vertical, in degrees. 0 would be the flat top-down board. */
 export const TILT = 43;
@@ -92,6 +93,11 @@ export type Projection = {
    * the grass rather than shapes painted on it.
    */
   project: (sx: number, sy: number, up?: number) => Projected;
+  /**
+   * A destination point in CSS pixels back to ground-layer pixels — `project` at
+   * `up = 0`, run backwards. NaN above the horizon, where there is no ground.
+   */
+  unproject: (x: number, y: number) => { sx: number; sy: number };
 };
 
 /** Where a ground point landed, and how big a metre is once it gets there. */
@@ -205,6 +211,93 @@ export function projectionFor(
         scale,
       };
     },
+    unproject: (x, y) => {
+      // Solved, not searched. rawY = b·C/(d − b·S), so R·(d − b·S) = b·C gives
+      // b = R·d/(C + R·S) — one expression, exact, and the reason the pointer can
+      // be turned back into a place on the grass at all.
+      const rawY = (y - top) / fit + y0;
+      const denominator = GROUND_SQUASH + rawY * SIN;
+
+      // The horizon, where depth reaches zero. It sits about six pitch lengths
+      // beyond the far goal, so no real canvas reaches it — but a click above it
+      // has no point on the ground under it, and must not come back as one.
+      if (denominator <= 1e-9) return { sx: NaN, sy: NaN };
+
+      const b = (rawY * d) / denominator;
+      const v = b / contentAlong + 0.5;
+      const scale = depthScale(v);
+
+      return {
+        sx: ((x - width / 2) / (contentAcross * scale) + 0.5) * sourceW,
+        sy: v * sourceH,
+      };
+    },
+  };
+}
+
+/**
+ * The camera for a board, and the flat viewport the ground layer is drawn in.
+ *
+ * ONE definition, shared by the renderer and by every hit test. Rebuilding it
+ * beside the pointer handling would be a second answer to "where is this player on
+ * screen", and the two would drift the way preview and export would.
+ */
+export type Camera = { proj: Projection; groundView: Viewport };
+
+export function cameraFor(
+  pitch: { length: number; width: number },
+  half: PitchHalf,
+  width: number,
+  height: number,
+  deviceScale: number,
+): Camera {
+  const [x0, x1] = halfRange(half, pitch.length);
+  const proj = projectionFor(
+    pitch.width + PITCH_PADDING * 2,
+    x1 - x0 + PITCH_PADDING * 2,
+    width,
+    height,
+    deviceScale,
+  );
+  // Tilt implies a vertical board, so the layer underneath is always the rotated map.
+  const groundView = fitViewport(proj.sourceW, proj.sourceH, pitch.length, pitch.width, {
+    half,
+    rotated: true,
+  });
+  return { proj, groundView };
+}
+
+/** Where a pitch position lands on screen once the camera has had it. */
+export function projectPitch(p: Vec2, cam: Camera, up = 0): Projected {
+  const s = toScreen(p, cam.groundView);
+  return cam.proj.project(s.x, s.y, up);
+}
+
+/**
+ * A screen point back to the place on the GRASS under it.
+ *
+ * Exact for anything lying on the pitch — markings, zones, connectors, the sweep of
+ * a marquee. It says nothing about billboards, which stand up off the ground: a
+ * token's pixels are nowhere near the grass beneath them, and `unbillboard` is what
+ * those are tested with instead.
+ */
+export function unprojectPitch(screen: Vec2, cam: Camera): Vec2 {
+  const g = cam.proj.unproject(screen.x, screen.y);
+  return toPitch({ x: g.sx, y: g.sy }, cam.groundView);
+}
+
+/**
+ * A screen point into the metre space a billboard was drawn in.
+ *
+ * The exact inverse of what `billboard()` sets up: `anchor` lands on `at`, and one
+ * metre is `at.scale` pixels. So a token or a label can be hit-tested by the same
+ * pitch-space geometry that draws it, against the pixels it actually occupies —
+ * which is what keeps the grab area the size it looks, at either end of the pitch.
+ */
+export function unbillboard(screen: Vec2, at: Projected, anchor: Vec2): Vec2 {
+  return {
+    x: anchor.x + (screen.x - at.x) / at.scale,
+    y: anchor.y + (screen.y - at.y) / at.scale,
   };
 }
 

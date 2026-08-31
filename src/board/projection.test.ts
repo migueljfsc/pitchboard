@@ -3,11 +3,16 @@ import {
   CAMERA_DISTANCE,
   GROUND_SQUASH,
   TILT,
+  cameraFor,
   framingOf,
+  projectPitch,
   projectionFor,
   tiltedAspect,
+  unbillboard,
+  unprojectPitch,
 } from "./projection";
 import { PITCH_PADDING } from "./pitch";
+import { PITCH } from "./pitch";
 
 /** A full pitch with its grass band, as the renderer hands it over. */
 const ACROSS = 68 + PITCH_PADDING * 2;
@@ -207,5 +212,98 @@ describe("the camera constants", () => {
     expect(TILT).toBeLessThan(70);
     // Short enough to splay the near touchline would read as a fisheye.
     expect(CAMERA_DISTANCE).toBeGreaterThan(4);
+  });
+});
+
+// The inverse is what lets the pointer become a place on the grass, so the 3D view
+// can be selected in at all (D48). It is solved rather than searched, so it should
+// be exact rather than close.
+describe("unproject", () => {
+  const p = build(1000, 700);
+
+  it("round-trips every corner and the middle of the layer", () => {
+    const corners = [
+      { sx: 0, sy: 0 },
+      { sx: p.sourceW, sy: 0 },
+      { sx: 0, sy: p.sourceH },
+      { sx: p.sourceW, sy: p.sourceH },
+      { sx: p.sourceW / 2, sy: p.sourceH / 2 },
+      { sx: p.sourceW * 0.31, sy: p.sourceH * 0.77 },
+    ];
+
+    for (const point of corners) {
+      const screen = p.project(point.sx, point.sy);
+      const back = p.unproject(screen.x, screen.y);
+      expect(back.sx).toBeCloseTo(point.sx, 6);
+      expect(back.sy).toBeCloseTo(point.sy, 6);
+    }
+  });
+
+  // A row maps to a row, so the inverse must not bend one either.
+  it("puts a screen row back on one source row, whatever the x", () => {
+    const y = (p.top + p.bottom) / 2;
+    const a = p.unproject(10, y);
+    const b = p.unproject(900, y);
+    expect(a.sy).toBeCloseTo(b.sy, 9);
+    expect(a.sx).toBeLessThan(b.sx);
+  });
+
+  it("has no ground above the horizon", () => {
+    // Far enough up the frame to be past where the pitch could ever reach.
+    const back = p.unproject(500, -1e7);
+    expect(Number.isNaN(back.sx)).toBe(true);
+    expect(Number.isNaN(back.sy)).toBe(true);
+  });
+});
+
+describe("cameraFor", () => {
+  const cam = cameraFor(PITCH, "full", 1000, 700, 1);
+
+  it("round-trips a pitch position through the camera", () => {
+    for (const point of [
+      { x: 0, y: 0 },
+      { x: 52.5, y: 34 },
+      { x: 105, y: 68 },
+      { x: 17, y: 61 },
+    ]) {
+      const at = projectPitch(point, cam);
+      const back = unprojectPitch({ x: at.x, y: at.y }, cam);
+      expect(back.x).toBeCloseTo(point.x, 5);
+      expect(back.y).toBeCloseTo(point.y, 5);
+    }
+  });
+
+  it("draws the near end bigger than the far one", () => {
+    // teams[0] defends x=0, which is the BOTTOM of a vertical board — nearest.
+    const near = projectPitch({ x: 5, y: 34 }, cam);
+    const far = projectPitch({ x: 100, y: 34 }, cam);
+    expect(near.scale).toBeGreaterThan(far.scale);
+    expect(near.y).toBeGreaterThan(far.y);
+  });
+});
+
+// The exact inverse of what `billboard()` sets up. This is what keeps a token's
+// grab area the size it looks at either end of the pitch.
+describe("unbillboard", () => {
+  const cam = cameraFor(PITCH, "full", 1000, 700, 1);
+
+  it("returns the anchor for a click dead on the projected point", () => {
+    const anchor = { x: 30, y: 20 };
+    const at = projectPitch(anchor, cam);
+    const back = unbillboard({ x: at.x, y: at.y }, at, anchor);
+    expect(back.x).toBeCloseTo(anchor.x, 9);
+    expect(back.y).toBeCloseTo(anchor.y, 9);
+  });
+
+  it("measures a metre as more pixels near the camera than far from it", () => {
+    const near = { x: 5, y: 34 };
+    const far = { x: 100, y: 34 };
+    const atNear = projectPitch(near, cam);
+    const atFar = projectPitch(far, cam);
+
+    // The same twenty pixels off centre is a shorter distance in metres up close.
+    const offNear = unbillboard({ x: atNear.x + 20, y: atNear.y }, atNear, near);
+    const offFar = unbillboard({ x: atFar.x + 20, y: atFar.y }, atFar, far);
+    expect(offNear.x - near.x).toBeLessThan(offFar.x - far.x);
   });
 });

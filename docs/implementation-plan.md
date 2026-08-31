@@ -29,6 +29,7 @@ before any React touches it, and every phase ends at a state you can look at.
 | — | Carry-forward editing (D41), per-entity waits (D42), ball handover (D43, D44) |
 | — | Squad presets follow the account rather than the browser (D46) |
 | — | Links with a scene range, and per-scene player highlights (D47) |
+| — | Selection, marquee and restyling in the 3D view (D48) |
 
 Everything above is complete and covered by tests. The per-phase task lists and build notes were
 retired once they stopped describing anything a reader has to decide; what outlived them is in

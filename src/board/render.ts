@@ -18,7 +18,6 @@ import type {
   RenderView,
   TeamPattern,
   Vec2,
-  Viewport,
 } from "./types";
 import { BALL_ID } from "./types";
 import {
@@ -71,22 +70,21 @@ import {
 import {
   buildArcTable,
   clamp,
-  fitViewport,
   halfRange,
   cubicAt,
   cubicTangent,
   reparameterise,
-  toScreen,
   viewMatrix,
   type Bezier,
 } from "./geometry";
 import {
   GROUND_SQUASH,
+  cameraFor,
   drawDepthShading,
-  projectionFor,
+  projectPitch,
   warpGround,
+  type Camera,
   type Projected,
-  type Projection,
 } from "./projection";
 
 export { TOKEN_RADIUS, BALL_RADIUS };
@@ -229,28 +227,22 @@ function drawTilted(
   view: RenderView,
   theme: PitchTheme,
 ): void {
-  const [x0, x1] = halfRange(view.half, doc.pitch.length);
-  const across = doc.pitch.width + PITCH_PADDING * 2;
-  const along = x1 - x0 + PITCH_PADDING * 2;
-
   // The caller's transform carries the device pixel ratio, and the ground layer is
   // a real canvas that has to be allocated in device pixels. Reading it back here
   // is the only way to keep DPR out of RenderView, where it would become a second
   // source of truth for the same number.
   const m = ctx.getTransform();
-  const proj = projectionFor(across, along, view.width, view.height, Math.hypot(m.a, m.b) || 1);
+  // The one camera, built where the hit-tests build theirs. The layer is exactly
+  // the content rect, so it seats corner to corner with no letterbox — the
+  // trapezoid IS the board, and the surround already painted underneath shows
+  // everywhere the trapezoid is not.
+  const cam = cameraFor(doc.pitch, view.half, view.width, view.height, Math.hypot(m.a, m.b) || 1);
+  const { proj, groundView } = cam;
 
   const ground = new OffscreenCanvas(proj.sourceW, proj.sourceH);
   const gctx = ground.getContext("2d");
   if (!gctx) return;
 
-  // The layer is exactly the content rect, so fitViewport seats it corner to
-  // corner with no letterbox — the trapezoid IS the board, and the surround
-  // already painted underneath shows everywhere the trapezoid is not.
-  const groundView = fitViewport(proj.sourceW, proj.sourceH, doc.pitch.length, doc.pitch.width, {
-    half: view.half,
-    rotated: true,
-  });
   gctx.setTransform(...viewMatrix(groundView));
   clipToHalf(gctx, doc, view.half);
 
@@ -268,6 +260,20 @@ function drawTilted(
   // unreadable, and a label is the one annotation nobody imagines painted on turf.
   for (const ann of marks) if (!isZone(ann) && ann.kind !== "text") drawMark(gctx, ann, true);
 
+  if (view.interactive) {
+    // The outline of the selected shape, without its handles. A text label is a
+    // billboard and gets its own, below.
+    const selected = view.annotationSelection
+      ? marks.find((a) => a.id === view.annotationSelection)
+      : undefined;
+    if (selected && selected.kind !== "text") drawAnnotationChrome(gctx, selected, true, false);
+
+    // The marquee is a region of the PITCH here rather than of the screen, so it
+    // lies on the grass and warps with it — and `entitiesInRect` needs no 3D of
+    // its own, because the corners were already turned back into metres.
+    if (view.marquee) drawMarquee(gctx, view.marquee.a, view.marquee.b);
+  }
+
   warpGround(ctx, ground, proj);
   drawDepthShading(ctx, proj);
 
@@ -276,10 +282,10 @@ function drawTilted(
   // would otherwise ignore it — leaving the far half's players standing in the
   // surround above a half-pitch view.
   ctx.save();
-  clipToProjectedHalf(ctx, doc, view.half, groundView, proj);
-  drawGoal(ctx, doc, groundView, proj, -1, theme);
-  drawBillboards(ctx, doc, frame, view, proj, groundView, marks);
-  drawGoal(ctx, doc, groundView, proj, 1, theme);
+  clipToProjectedHalf(ctx, doc, view.half, cam);
+  drawGoal(ctx, doc, cam, -1, theme);
+  drawBillboards(ctx, doc, frame, view, cam, marks);
+  drawGoal(ctx, doc, cam, 1, theme);
   ctx.restore();
 }
 
@@ -294,8 +300,7 @@ function clipToProjectedHalf(
   ctx: Ctx,
   doc: BoardDoc,
   half: PitchHalf,
-  groundView: Viewport,
-  proj: Projection,
+  cam: Camera,
 ): void {
   if (half === "full") return;
 
@@ -313,18 +318,12 @@ function clipToProjectedHalf(
 
   ctx.beginPath();
   corners.forEach((corner, i) => {
-    const p = projectPitch(corner, groundView, proj);
+    const p = projectPitch(corner, cam);
     if (i === 0) ctx.moveTo(p.x, p.y);
     else ctx.lineTo(p.x, p.y);
   });
   ctx.closePath();
   ctx.clip();
-}
-
-/** Where a pitch position lands on screen once the camera has had it. */
-function projectPitch(p: Vec2, groundView: Viewport, proj: Projection, up = 0): Projected {
-  const s = toScreen(p, groundView);
-  return proj.project(s.x, s.y, up);
 }
 
 // ----------------------------------------------------------------- the goals
@@ -372,8 +371,7 @@ const TEAM_NAME_OFFSET_3D = 5.0;
 function drawGoal(
   ctx: Ctx,
   doc: BoardDoc,
-  groundView: Viewport,
-  proj: Projection,
+  cam: Camera,
   dir: 1 | -1,
   theme: PitchTheme,
 ): void {
@@ -386,10 +384,7 @@ function drawGoal(
   const high = P.goalHeight;
   const low = P.goalHeight * NET_DROP;
 
-  const at = (p: Vec3): Projected => {
-    const s = toScreen(p, groundView);
-    return proj.project(s.x, s.y, p.up);
-  };
+  const at = (p: Vec3): Projected => projectPitch(p, cam, p.up);
   const v3 = (x: number, y: number, up: number): Vec3 => ({ x, y, up });
 
   // Netting first, then the frame over the top of it.
@@ -529,8 +524,7 @@ function drawBillboards(
   doc: BoardDoc,
   frame: Frame,
   view: RenderView,
-  proj: Projection,
-  groundView: Viewport,
+  cam: Camera,
   marks: Annotation[],
 ): void {
   const scale = tokenScaleOf(doc);
@@ -539,14 +533,14 @@ function drawBillboards(
   // on the pitch competing for depth. A billboard's axes are the screen's, so it
   // is never rotated in here.
   drawGhosts(ctx, doc, view, false, (p, draw) =>
-    billboard(ctx, p, projectPitch(p, groundView, proj), draw),
+    billboard(ctx, p, projectPitch(p, cam), draw),
   );
 
   // Billboarded like everything else that must stay round: a halo drawn into the
   // ground layer would land as an ellipse squashed into the grass. Under the
   // standing tokens, and unsorted, for the same reason the ghosts are.
   for (const halo of halosOn(doc, frame)) {
-    billboard(ctx, halo.at, projectPitch(halo.at, groundView, proj), () =>
+    billboard(ctx, halo.at, projectPitch(halo.at, cam), () =>
       drawHighlight(ctx, halo.at, TOKEN_RADIUS * scale, halo.color, halo.strength),
     );
   }
@@ -558,7 +552,7 @@ function drawBillboards(
     for (const player of team.players) {
       const p = frame.positions[player.id];
       if (!p) continue;
-      const at = projectPitch(p, groundView, proj);
+      const at = projectPitch(p, cam);
       standing.push({
         at,
         draw: () =>
@@ -582,9 +576,9 @@ function drawBillboards(
     // Here the height is real, so the ball is projected at it and the shadow stays
     // on the grass — the gap between them is what says how high it is. Depth is
     // sorted by where it stands, not by where it has got to in the air.
-    const ground = projectPitch(ball, groundView, proj);
+    const ground = projectPitch(ball, cam);
     const lift = ballLift(frame.resolved, doc);
-    const air = lift > 0 ? projectPitch(ball, groundView, proj, LOFT_APEX * lift) : ground;
+    const air = lift > 0 ? projectPitch(ball, cam, LOFT_APEX * lift) : ground;
     standing.push({
       at: ground,
       draw: () => {
@@ -607,8 +601,15 @@ function drawBillboards(
   // Text over the top of the players, as it is on the flat board.
   for (const ann of marks) {
     if (ann.kind !== "text") continue;
-    const at = projectPitch(ann.at, groundView, proj);
-    billboard(ctx, ann.at, at, () => drawAnnotationText(ctx, ann, false));
+    const at = projectPitch(ann.at, cam);
+    billboard(ctx, ann.at, at, () => {
+      drawAnnotationText(ctx, ann, false);
+      // Inside the billboard, so the outline is the box the words are really in
+      // — and unrotated, because a billboard's axes are the screen's.
+      if (view.interactive && view.annotationSelection === ann.id) {
+        drawAnnotationChrome(ctx, ann, false, false);
+      }
+    });
   }
 }
 
@@ -1099,7 +1100,12 @@ function drawAnnotationText(
  * board while staying upright, so its box and its width handle have to turn with
  * it. Everything else is drawn in pitch space and ignores the flag.
  */
-function drawAnnotationChrome(ctx: Ctx, ann: Annotation, rotated: boolean): void {
+function drawAnnotationChrome(
+  ctx: Ctx,
+  ann: Annotation,
+  rotated: boolean,
+  handles = true,
+): void {
   const { x, y, w, h } = boundsOf(ann, rotated);
 
   ctx.save();
@@ -1109,6 +1115,9 @@ function drawAnnotationChrome(ctx: Ctx, ann: Annotation, rotated: boolean): void
   ctx.strokeRect(x - 0.7, y - 0.7, w + 1.4, h + 1.4);
   ctx.restore();
 
+  // Off in 3D. A grab point that cannot be dragged is a promise the view does not
+  // keep — under the camera a shape is selectable and restylable, not movable (D48).
+  if (!handles) return;
   for (const handle of annotationHandles(ann, rotated)) drawAnnotationHandle(ctx, handle);
 }
 

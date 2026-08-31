@@ -257,6 +257,22 @@ hatch, but CI owns the real deploy.
   a metre, but +y is down the frame however the board is oriented underneath. That is what makes a
   token a circle rather than an ellipse — and it means a pitch-space offset copied into there
   points somewhere else.
+- **The 3D view has TWO interaction gates, not one** (D48). `live` is any pointer input and the
+  angled view has it; `canPlace` is editing by position — drags, run handles, drawing and moving
+  shapes — and only the flat board has that. Collapsing them back into one is how the view ended
+  up holding a selection it could not clear.
+- **Under the camera, hit-testing splits the way drawing does.** Anything on the GRASS is tested
+  by `unprojectPitch` and the ordinary flat tests; anything STANDING — token, ball, text label —
+  is a billboard and is tested with `unbillboard`, in the space it was drawn in. Testing a token
+  against the grass beneath it grabs an ellipse nowhere near the pixels, which is the objection
+  that kept the view read-only in the first place.
+- **The 3D draw order is not the flat one, so neither is the hit-test order.** Flat, marks sit
+  above the tokens. Under the camera only TEXT does — the rest of its layer is in the ground
+  image, under the players. `hitTestGroundAnnotation` exists to leave text out of that pass,
+  because `hitTestTiltedText` has already had it.
+- **There is ONE camera.** `cameraFor` is called by the renderer and by every hit test. Building
+  a projection beside the pointer handling is a second answer to where a player is on screen, and
+  the two drift exactly the way preview and export would.
 - **Tilt implies a vertical board**, so `framingOf` forces it and the rotation control is disabled
   rather than left to disagree. Export follows: `boardAspect` returns the projected aspect, which
   for a full pitch is very nearly square (D34).
