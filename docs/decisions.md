@@ -366,6 +366,63 @@ and not tested for: a grab point that cannot be dragged is a promise the view do
 draw tool left armed in 2D falls back to select in 3D rather than making every click do nothing.
 
 
+## D49 — Players and their runs are edited in 3D; the drawing is not
+D48 opened the angled view to selection and left every positional edit flat. Half of that
+holds and half of it does not, and the line falls between the PLAY and the DRAWING.
+
+**A player moves.** A token is drawn where it stands — `billboard()` puts its centre exactly on
+its projected ground point — so the delta between two unprojected pointer positions moves it
+under the cursor exactly. Nothing in `moveEntities` had to learn about the camera; it already
+took a delta in pitch metres, and that is what it gets.
+
+**A run bends.** Curve handles are pitch coordinates drawn INTO the ground layer, so they warp
+with the grass like everything else on it. `hitTestHandle` and `dragHandle` already spoke pitch
+metres, and the unprojected point is exactly right for both. No new geometry, only a gate.
+
+**The drawing stays flat**, and not for want of an inverse. A freehand stroke sampled through a
+warp is not the stroke that was drawn, and a rectangle held axis-aligned in pitch metres while
+the cursor traces a trapezoid is not the rectangle either. A shape under the camera is
+selectable and restylable — colour, text, size — and that is the whole of it.
+
+**Precision up-pitch is the real cost, and it is accepted rather than solved.** The projected
+full pitch is nearly square, so 105 m along maps to roughly the pixel height that 68 m across
+maps to in width: one pixel up-pitch is about 1.5x more metres than one pixel sideways, and the
+taper adds ~13% at the far end. Placing someone two metres further forward is a twitchier
+movement than sliding them two metres wide. That is what a perspective view costs, every 3D
+editor pays it, and the flat board is one click away for the fine work.
+
+**Above the horizon there is no ground**, and `unproject` says so with NaN. One `onGrass` check
+covers every consumer of a point: a drag holds where it was rather than putting NaN into a
+position, and a gesture released up there commits from its last good move.
+
+
+## D50 — A drawing moves in 3D; only a label's handles stay behind
+D49 drew the line between the play and the drawing, and moving an existing shape turns out to
+sit on the play side of it. Creating one still does not: a freehand stroke sampled through a
+warp is not the stroke that was drawn.
+
+**A shape on the grass moves and resizes.** Zones, arrows, lines and freehand are pitch geometry
+drawn INTO the ground layer, so they warp with it and their grab points warp with them.
+`moveAnnotation` and `dragAnnotationHandle` already took pitch metres, and the unprojected
+pointer is exactly right for both. Nothing new, only a gate.
+
+**A label moves, and its handles do not come with it.** The words are a billboard; its handles
+are computed in pitch metres around the anchor, which under the camera puts them nowhere near
+the type they are supposed to be resizing. So a label under the camera is moved and restyled,
+and widened on the flat board — which is why `drawAnnotationChrome` takes a `handles` switch and
+the tilted path turns it off for text and on for everything else.
+
+**A ground delta moves a label correctly, and the first guess that it would not was wrong.** The
+anchor is a pitch position and the words are drawn at its projection, so moving the anchor by
+what the cursor's own place on the grass moved by puts the label back under the cursor. What a
+ground delta cannot do is keep the GRAB POINT pinned: the offset between cursor and anchor is
+held in metres, and a metre is worth more pixels as the label comes toward the camera, so a
+label grabbed by its corner drifts by the taper — about 13% across the length of the pitch.
+Pinning it exactly would mean carrying the grab offset in screen pixels and re-deriving the
+anchor every frame, which is a second kind of drag for one shape. The drift is smaller than the
+thing being dragged.
+
+
 ---
 
 ## Invariants

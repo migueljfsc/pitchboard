@@ -257,10 +257,20 @@ hatch, but CI owns the real deploy.
   a metre, but +y is down the frame however the board is oriented underneath. That is what makes a
   token a circle rather than an ellipse — and it means a pitch-space offset copied into there
   points somewhere else.
-- **The 3D view has TWO interaction gates, not one** (D48). `live` is any pointer input and the
-  angled view has it; `canPlace` is editing by position — drags, run handles, drawing and moving
-  shapes — and only the flat board has that. Collapsing them back into one is how the view ended
-  up holding a selection it could not clear.
+- **The 3D view has TWO interaction gates, not one** (D48, D49). `live` is any pointer input and
+  the angled view has it, including moving players and shaping their runs; `canDraw` is the
+  coach's DRAWING — making a shape, moving one, dragging its handles — and only the flat board
+  has that. Collapsing them back into one is how the view ended up holding a selection it could
+  not clear.
+- **A label's handles are the one grab that stays flat** (D50). Everything else a coach draws is
+  pitch geometry in the ground layer and warps with it, handles included. A text label is a
+  billboard, so handles computed in pitch metres land nowhere near the words — which is what
+  `drawAnnotationChrome`'s `handles` switch is for, and why the tilted path turns it off for text
+  and on for everything else. Turning it on for text draws grab points on empty grass.
+- **Above the horizon there is no ground, and `unproject` returns NaN.** One NaN reaching a delta
+  puts NaN into a position and the board is gone. `onGrass` is checked once in `BoardCanvas`
+  rather than in each of the six places a point is consumed — a drag holds where it was, and a
+  gesture released up there commits from its last good move.
 - **Under the camera, hit-testing splits the way drawing does.** Anything on the GRASS is tested
   by `unprojectPitch` and the ordinary flat tests; anything STANDING — token, ball, text label —
   is a billboard and is tested with `unbillboard`, in the space it was drawn in. Testing a token

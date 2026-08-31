@@ -30,6 +30,8 @@ before any React touches it, and every phase ends at a state you can look at.
 | — | Squad presets follow the account rather than the browser (D46) |
 | — | Links with a scene range, and per-scene player highlights (D47) |
 | — | Selection, marquee and restyling in the 3D view (D48) |
+| — | Moving players and shaping runs in the 3D view (D49) |
+| — | Moving and resizing the drawing in the 3D view (D50) |
 
 Everything above is complete and covered by tests. The per-phase task lists and build notes were
 retired once they stopped describing anything a reader has to decide; what outlived them is in

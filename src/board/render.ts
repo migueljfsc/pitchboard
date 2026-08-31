@@ -261,12 +261,15 @@ function drawTilted(
   for (const ann of marks) if (!isZone(ann) && ann.kind !== "text") drawMark(gctx, ann, true);
 
   if (view.interactive) {
-    // The outline of the selected shape, without its handles. A text label is a
-    // billboard and gets its own, below.
+    // The selected shape, with its grab points: they are pitch geometry lying in
+    // this layer, so they warp with the grass and can be grabbed like anything else
+    // on it. A text label is a billboard and gets its own outline below — without
+    // handles, because its would be computed in metres while the words stand
+    // somewhere else entirely (D50).
     const selected = view.annotationSelection
       ? marks.find((a) => a.id === view.annotationSelection)
       : undefined;
-    if (selected && selected.kind !== "text") drawAnnotationChrome(gctx, selected, true, false);
+    if (selected && selected.kind !== "text") drawAnnotationChrome(gctx, selected, true);
 
     // The marquee is a region of the PITCH here rather than of the screen, so it
     // lies on the grass and warps with it — and `entitiesInRect` needs no 3D of

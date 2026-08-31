@@ -478,8 +478,11 @@ retroactively changes an earlier scene.
 ### Interaction under the camera
 
 The angled view takes pointer input too, and splits hit-testing the way it splits drawing (D48).
-Two gates: `live` is any input at all, `canPlace` is editing by position — drags, run handles,
-drawing and moving shapes — and only the flat board has the second.
+Two gates: `live` is any input at all — selecting, moving players, shaping their runs, and moving
+or resizing a shape already drawn (D49, D50) — while `canDraw` is MAKING a shape, which stays
+flat. A token is drawn where it
+stands, so it follows the cursor's own place on the grass; a freehand stroke sampled through a
+warp is not the stroke that was drawn.
 
 | Where it lies | How it is tested |
 |---|---|
