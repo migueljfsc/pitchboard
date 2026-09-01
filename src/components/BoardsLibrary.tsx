@@ -18,6 +18,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ChevronDown,
+  ChevronRight,
   Copy,
   FolderInput,
   FolderOpen,
@@ -33,6 +35,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useI18n } from "@/i18n/context";
 import { cn } from "@/lib/utils";
 import type { CloudBoard } from "@/lib/useCloudBoard";
+import { ancestorIds, buildTree, subtreeIds, visibleRows } from "@/lib/projects";
 import {
   ApiError,
   type Project,
@@ -44,11 +47,14 @@ import {
   listAllBoards,
   listProjects,
   moveBoards,
+  moveProject,
 } from "@/share/api";
 
 /** Codes the Worker emits for these routes; anything else reads as the generic line. */
 const KNOWN = new Set([
   "project_limit_reached",
+  "project_too_deep",
+  "project_cycle",
   "board_limit_reached",
   "invalid_name",
   "invalid_document",
@@ -105,6 +111,12 @@ type Pending =
   | { kind: "boards"; ids: string[] }
   | { kind: "project"; id: string; name: string };
 
+/** What a drag is carrying: rows from the board list, or a folder from the rail. */
+type Dragging = { kind: "boards"; ids: string[] } | { kind: "project"; id: string };
+
+/** Where it would land. The root is a target of its own — it un-nests a folder. */
+type DropTarget = { kind: "project"; id: string } | { kind: "root" } | null;
+
 function Library({ cloud, onClose }: Props & { onClose: () => void }) {
   const { t, tn } = useI18n();
   const [projects, setProjects] = useState<Project[] | null>(null);
@@ -118,15 +130,17 @@ function Library({ cloud, onClose }: Props & { onClose: () => void }) {
   const [newName, setNewName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
-  /** Which project row a drag is currently over. */
-  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  /** Which row a drag is currently over. */
+  const [dropTarget, setDropTarget] = useState<DropTarget>(null);
+  /** Folders whose children are on show. Everything starts folded. */
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   /** The "move to" menu, open over the bulk bar. */
   const [picking, setPicking] = useState(false);
   /**
    * What a drag is carrying. Held here rather than in `dataTransfer` because the ids are only
    * readable from that on drop in some browsers, and the rail wants to know during dragover.
    */
-  const dragged = useRef<string[]>([]);
+  const dragged = useRef<Dragging | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -168,18 +182,55 @@ function Library({ cloud, onClose }: Props & { onClose: () => void }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, pending, picking]);
 
+  const tree = useMemo(() => buildTree(projects ?? []), [projects]);
+  const rows = useMemo(() => visibleRows(tree, expanded), [tree, expanded]);
+
+  /**
+   * Selecting a folder shows everything filed under it, not only its own boards.
+   *
+   * A folder that holds nothing but subfolders would otherwise open onto an empty pane,
+   * which is a dead end — and this makes "All boards" the same rule applied at the root
+   * rather than a special case (D51).
+   */
+  const scope = useMemo(
+    () => (active === null ? null : subtreeIds(projects ?? [], active)),
+    [projects, active],
+  );
+
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return (boards ?? []).filter(
       (b) =>
-        (active === null || b.project_id === active) &&
+        (scope === null || scope.has(b.project_id)) &&
         (needle === "" || b.name.toLowerCase().includes(needle)),
     );
-  }, [boards, active, query]);
+  }, [boards, scope, query]);
 
-  /** Counted from the one list, so a move is reflected the moment it lands. */
-  const countIn = (projectId: string) =>
-    (boards ?? []).filter((b) => b.project_id === projectId).length;
+  /**
+   * Counted from the one list, so a move is reflected the moment it lands — and counted
+   * over the subtree, so the number on a folder is what opening it will show.
+   */
+  const countIn = (projectId: string) => {
+    const within = subtreeIds(projects ?? [], projectId);
+    return (boards ?? []).filter((b) => within.has(b.project_id)).length;
+  };
+
+  const activeProject = (projects ?? []).find((p) => p.id === active) ?? null;
+
+  /**
+   * Subfolders a delete would take with it.
+   *
+   * The cascade reaches the whole subtree and every board in it, so the confirmation has to
+   * say so — "and every board inside it" is a lie about a folder that holds four more.
+   */
+  const deletingFolders = (id: string) => subtreeIds(projects ?? [], id).size - 1;
+
+  const toggleFolder = (id: string) =>
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
 
   const nameOf = (id: string) => (boards ?? []).find((b) => b.id === id)?.name ?? "";
 
@@ -216,6 +267,15 @@ function Library({ cloud, onClose }: Props & { onClose: () => void }) {
 
   const showProject = (id: string | null) => {
     setActive(id);
+    // Opening a folder opens the ones above it. Selecting a row that is folded away leaves
+    // the rail showing no selection at all while the right pane changes underneath.
+    if (id !== null) {
+      setExpanded((current) => {
+        const next = new Set(current);
+        for (const parent of ancestorIds(projects ?? [], id)) next.add(parent);
+        return next;
+      });
+    }
     // A selection is made inside one view; carrying it into another means a bulk action on
     // rows nobody can see.
     setSelection(new Set());
@@ -278,6 +338,44 @@ function Library({ cloud, onClose }: Props & { onClose: () => void }) {
     }
   };
 
+  /**
+   * File a folder under another, or back at the root.
+   *
+   * The cycle and depth guards are the Worker's — it is the only place that can see the whole
+   * tree at once, and a client that checked first would still be racing another tab. So this
+   * asks, and reports `project_cycle` or `project_too_deep` like any other refusal.
+   */
+  const refile = async (id: string, parentId: string | null) => {
+    setDropTarget(null);
+    try {
+      await moveProject(id, parentId);
+      // Somewhere to land: a folder dropped into a collapsed one would otherwise vanish.
+      if (parentId !== null) setExpanded((current) => new Set(current).add(parentId));
+      await refresh();
+    } catch (cause) {
+      setError(codeOf(cause));
+    }
+  };
+
+  /** What the drag in flight would do here. The rail is the only thing that accepts a drop. */
+  const dropOn = async (target: DropTarget) => {
+    const carrying = dragged.current;
+    dragged.current = null;
+    setDropTarget(null);
+    if (!carrying || !target) return;
+
+    if (carrying.kind === "boards") {
+      // A board belongs to exactly one project, so the root is not a place to put one.
+      if (target.kind === "root") return;
+      await move(carrying.ids, target.id);
+      return;
+    }
+
+    const parentId = target.kind === "root" ? null : target.id;
+    if (parentId === carrying.id) return;
+    await refile(carrying.id, parentId);
+  };
+
   const confirm = async () => {
     if (!pending) return;
     setPending(null);
@@ -297,12 +395,20 @@ function Library({ cloud, onClose }: Props & { onClose: () => void }) {
         }
         setSelection(new Set());
       } else {
+        // The whole subtree goes, so both questions below are about the subtree and not
+        // about the folder that was clicked. Computed BEFORE the refresh, which is what
+        // removes the rows they are asked of.
+        const going = subtreeIds(projects ?? [], pending.id);
         await deleteProject(pending.id);
-        if (cloud.board?.projectId === pending.id) {
+        // The open board's project may be several levels under the one deleted; the cascade
+        // took the board with it, and leaving the editor pointing at a row that is gone
+        // fails on its next autosave rather than here, where it can be explained.
+        if (cloud.board && going.has(cloud.board.projectId)) {
           window.location.assign("/");
           return;
         }
-        if (active === pending.id) showProject(null);
+        // Likewise the selection: a folder inside the one deleted is not somewhere to stand.
+        if (active !== null && going.has(active)) showProject(null);
       }
       await refresh();
     } catch (cause) {
@@ -310,13 +416,22 @@ function Library({ cloud, onClose }: Props & { onClose: () => void }) {
     }
   };
 
+  /**
+   * A new folder lands inside whichever one is open, and at the root from "All boards".
+   *
+   * Which is what the placeholder says, because it is the one thing here that is modal: the
+   * same typing makes a top-level folder or a subfolder depending on what is selected.
+   */
   const addProject = async () => {
     const name = newName.trim();
     if (!name) return;
     try {
-      await createProject(name);
+      const made = await createProject(name, active);
       setNewName("");
+      // Open the parent, or the folder just made is filed somewhere folded shut.
+      if (active !== null) setExpanded((current) => new Set(current).add(active));
       await refresh();
+      showProject(made.id);
     } catch (cause) {
       setError(codeOf(cause));
     }
@@ -330,11 +445,18 @@ function Library({ cloud, onClose }: Props & { onClose: () => void }) {
    */
   const startDrag = (e: React.DragEvent, id: string) => {
     const ids = selection.has(id) ? [...selection] : [id];
-    dragged.current = ids;
+    dragged.current = { kind: "boards", ids };
     if (!selection.has(id)) setSelection(new Set([id]));
     e.dataTransfer.effectAllowed = "move";
     // Firefox refuses to begin a drag with an empty payload.
     e.dataTransfer.setData("text/plain", ids.join(" "));
+  };
+
+  /** A folder drags too, and carries its whole subtree with it. */
+  const startFolderDrag = (e: React.DragEvent, id: string) => {
+    dragged.current = { kind: "project", id };
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", id);
   };
 
   const failure = error ?? (cloud.status.kind === "error" ? cloud.status.code : null);
@@ -411,11 +533,26 @@ function Library({ cloud, onClose }: Props & { onClose: () => void }) {
           <div className="flex w-52 shrink-0 flex-col border-r border-ink-700">
             <ul className="min-h-0 flex-1 overflow-y-auto p-1.5">
               <li>
+                {/* Also where a folder is dropped to un-nest it: the root is a real place. */}
                 <button
                   type="button"
                   onClick={() => showProject(null)}
+                  onDragOver={(e) => {
+                    if (dragged.current?.kind !== "project") return;
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                    setDropTarget({ kind: "root" });
+                  }}
+                  onDragLeave={() =>
+                    setDropTarget((c) => (c?.kind === "root" ? null : c))
+                  }
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    void dropOn({ kind: "root" });
+                  }}
                   className={cn(
                     "flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-[11px] transition",
+                    dropTarget?.kind === "root" && "ring-1 ring-accent",
                     active === null
                       ? "bg-accent/15 font-medium text-accent"
                       : "text-ink-300 hover:bg-ink-700/50 hover:text-white",
@@ -434,30 +571,74 @@ function Library({ cloud, onClose }: Props & { onClose: () => void }) {
                 </button>
               </li>
 
-              {(projects ?? []).map((project) => (
+              {/* Flat rows, not nested markup: the rail stays one list, so keyboard order and
+                  the drop ring behave exactly as they did before folders nested. Depth is an
+                  indent, and a folded folder's children are simply not in `rows`. */}
+              {rows.map(({ project, depth, hasChildren }) => (
                 <li key={project.id}>
                   <div
+                    draggable
+                    onDragStart={(e) => startFolderDrag(e, project.id)}
+                    onDragEnd={() => {
+                      dragged.current = null;
+                      setDropTarget(null);
+                    }}
                     onDragOver={(e) => {
+                      // A folder cannot be filed inside itself, so it is not a target for its
+                      // own drag. Everything deeper is refused by the Worker, which is the only
+                      // place that can see the whole tree.
+                      if (dragged.current?.kind === "project" && dragged.current.id === project.id) {
+                        return;
+                      }
                       e.preventDefault();
                       e.dataTransfer.dropEffect = "move";
-                      setDropTarget(project.id);
+                      setDropTarget({ kind: "project", id: project.id });
                     }}
-                    onDragLeave={() => setDropTarget((c) => (c === project.id ? null : c))}
+                    onDragLeave={() =>
+                      setDropTarget((c) =>
+                        c?.kind === "project" && c.id === project.id ? null : c,
+                      )
+                    }
                     onDrop={(e) => {
                       e.preventDefault();
-                      void move(dragged.current, project.id);
+                      void dropOn({ kind: "project", id: project.id });
                     }}
+                    style={{ paddingLeft: depth * 12 }}
                     className={cn(
                       "group flex items-center gap-1 rounded pr-1 transition",
-                      dropTarget === project.id && "ring-1 ring-accent",
+                      dropTarget?.kind === "project" &&
+                        dropTarget.id === project.id &&
+                        "ring-1 ring-accent",
                       active === project.id ? "bg-accent/15" : "hover:bg-ink-700/50",
                     )}
                   >
+                    {/* A twisty only where there is something to open, and its own button so
+                        opening a folder is not the same click as looking inside it. */}
+                    {hasChildren ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleFolder(project.id)}
+                        aria-expanded={expanded.has(project.id)}
+                        aria-label={t(
+                          expanded.has(project.id) ? "boards.collapse" : "boards.expand",
+                          { name: project.name },
+                        )}
+                        className="shrink-0 rounded p-0.5 text-ink-400 transition hover:text-white"
+                      >
+                        {expanded.has(project.id) ? (
+                          <ChevronDown size={11} />
+                        ) : (
+                          <ChevronRight size={11} />
+                        )}
+                      </button>
+                    ) : (
+                      <span className="w-[16px] shrink-0" aria-hidden />
+                    )}
                     <button
                       type="button"
                       onClick={() => showProject(project.id)}
                       className={cn(
-                        "flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1 text-left text-[11px] transition",
+                        "flex min-w-0 flex-1 items-center gap-1.5 py-1 pr-2 text-left text-[11px] transition",
                         active === project.id
                           ? "font-medium text-accent"
                           : "text-ink-300 hover:text-white",
@@ -493,7 +674,11 @@ function Library({ cloud, onClose }: Props & { onClose: () => void }) {
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && void addProject()}
-                placeholder={t("boards.newProject.placeholder")}
+                placeholder={
+                  activeProject
+                    ? t("boards.newSubproject.placeholder", { name: activeProject.name })
+                    : t("boards.newProject.placeholder")
+                }
                 aria-label={t("boards.newProject")}
                 className="min-w-0 flex-1 rounded border border-ink-600 bg-ink-900 px-2 py-1 text-[11px] text-ink-200 outline-none transition placeholder:text-ink-500 focus:border-accent"
               />
@@ -626,7 +811,11 @@ function Library({ cloud, onClose }: Props & { onClose: () => void }) {
             pending.kind === "open"
               ? t("boards.openConfirm.message")
               : pending.kind === "project"
-                ? t("boards.deleteProject.message", { name: pending.name })
+                ? deletingFolders(pending.id) === 0
+                  ? t("boards.deleteProject.message", { name: pending.name })
+                  : tn("boards.deleteProject.nested", deletingFolders(pending.id), {
+                      name: pending.name,
+                    })
                 : pending.ids.length === 1
                   ? t("boards.deleteBoard.message", { name: nameOf(pending.ids[0]) })
                   : t("library.deleteBoards.message", { count: pending.ids.length })

@@ -10,7 +10,10 @@
  * sheet cannot get either wrong.
  */
 
+import { useMemo } from "react";
+
 import { useI18n } from "@/i18n/context";
+import { allRows, buildTree } from "@/lib/projects";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/share/api";
 
@@ -26,6 +29,10 @@ export function PickProject({
   placement?: "up" | "down";
 }) {
   const { t } = useI18n();
+  // Every folder, whatever the library happens to have folded shut: this is a place to put
+  // something, and a target you cannot see is a target you cannot pick (D51).
+  const rows = useMemo(() => allRows(buildTree(projects)), [projects]);
+
   return (
     <>
       <div className="fixed inset-0 z-40" onMouseDown={onClose} />
@@ -43,12 +50,13 @@ export function PickProject({
             {t("boards.noProjects")}
           </p>
         ) : (
-          projects.map((project) => (
+          rows.map(({ project, depth }) => (
             <button
               key={project.id}
               type="button"
               onClick={() => onPick(project.id)}
-              className="truncate rounded px-1.5 py-1 text-left text-[11px] text-ink-300 transition hover:bg-ink-700 hover:text-white"
+              style={{ paddingLeft: 6 + depth * 12 }}
+              className="truncate rounded py-1 pr-1.5 text-left text-[11px] text-ink-300 transition hover:bg-ink-700 hover:text-white"
             >
               {project.name}
             </button>

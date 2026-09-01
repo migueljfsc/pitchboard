@@ -599,6 +599,24 @@ Three layers:
    length budget.
 3. **KV share** — for anything larger.
 
+### Projects nest
+
+`projects.parent_id` is a nullable self-reference — an adjacency list, NULL at the root (D51).
+The tree is at most twenty-five rows and the client fetches it whole, so `src/lib/projects.ts`
+derives everything from that one list: the rail, the indentation, the subtree a folder shows,
+and the ancestors a selection has to open.
+
+Two things the Worker has to enforce, because it is the only place that sees the whole tree:
+
+| Guard | Why |
+|---|---|
+| No cycles | A folder filed under its own descendant is reachable from no root — it vanishes rather than moves |
+| Depth ≤ 5 | Measured as the new parent's depth **plus the height of the subtree being carried** |
+
+Both are recursive CTEs with an explicit row bound, so a walk over already-corrupt data stops
+instead of hanging. Deleting a folder cascades through its subfolders and their boards in one
+statement, which is why the confirmation counts the subtree first.
+
 ### Worker API
 
 | Route | Behaviour |

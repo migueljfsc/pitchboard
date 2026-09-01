@@ -64,3 +64,16 @@ export const MAX_PRESET_BYTES = 16 * 1024;
 
 /** Mirrors `MAX_PRESET_LABEL` in `src/share/presets.ts`. */
 export const MAX_PRESET_LABEL_CHARS = 60;
+
+/**
+ * How deep folders may nest, counting the root as depth 0.
+ *
+ * A cap and not an opinion about how people organise: the rail is 220 px wide and every
+ * level costs indentation, so an uncapped tree eventually renders names one character at a
+ * time. Five is more nesting than a season of work needs and still leaves the deepest name
+ * readable.
+ *
+ * It is enforced in BOTH directions on a move — the new parent's depth plus the height of
+ * the subtree being moved — or a deep folder dropped onto a deep parent slips past it.
+ */
+export const MAX_PROJECT_DEPTH = 5;

@@ -423,6 +423,47 @@ anchor every frame, which is a second kind of drag for one shape. The drift is s
 thing being dragged.
 
 
+## D51 — Projects nest, as an adjacency list guarded in the Worker
+D39 gave a user projects and a project boards, one level deep. A season's work does not fit
+that: "Season 24/25 > Away > Set pieces" is the shape, and twenty-five flat folders is the same
+problem with more scrolling.
+
+**One nullable self-reference.** A materialised path or a closure table would buy fast subtree
+queries at the cost of a second structure to keep in step on every move. Not worth it here: the
+whole tree is at most twenty-five rows, the client already fetches it whole and derives
+everything from that one list, and the only questions the server asks of the shape are the two
+guards below. `ALTER TABLE` adds it, because a `REFERENCES` column defaults to NULL — which is
+exactly what an existing project should be.
+
+**Selecting a folder shows everything beneath it**, and the count matches. A folder holding only
+subfolders would otherwise open onto an empty pane, which is a dead end — and this makes "All
+boards" the same rule at the root rather than a special case. The cost is that a board appears
+under every ancestor, so a bulk move from a parent can pull boards out of subfolders. That is
+visible and deliberate.
+
+**Two guards, both in the Worker, because it is the only place that sees the whole tree.** A
+folder filed under its own descendant makes a subtree reachable from no root: it does not move,
+it vanishes. And depth is capped at five, checked on a move as the new parent's depth PLUS THE
+HEIGHT OF THE SUBTREE BEING CARRIED — a deep folder dropped onto a deep parent slips past a
+check that only measures the folder itself. A client cannot do either check honestly: it would
+still be racing another tab.
+
+**The walks are bounded rather than trusted to terminate.** A recursive CTE over data that
+already contains a cycle does not stop, and "the guard prevents that" is the reasoning that
+makes the first corrupt row fatal. Every climb carries `n < MAX_PROJECTS_PER_USER`. Verified
+against SQLite by forcing a cycle with foreign keys off: the walk stops at 25 instead of
+hanging.
+
+**Delete still cascades, and now it recurses** — subfolders through `parent_id`, their boards
+through the cascade `boards.project_id` already had. One statement. What that costs is a
+confirmation that counts the subtree, because "and every board inside it" is a lie about a
+folder holding four more.
+
+**The client tree does not trust the rows.** They arrive over the network, so `buildTree` files
+an orphan at the root rather than dropping a folder and its boards out of the view, and breaks a
+cycle with a visited set rather than recursing until the stack goes.
+
+
 ---
 
 ## Invariants

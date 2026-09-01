@@ -23,6 +23,7 @@ import {
   MAX_DOC_BYTES,
   MAX_NAME_CHARS,
   MAX_PROJECTS_PER_USER,
+  MAX_PROJECT_DEPTH,
 } from "./limits";
 import type { SessionUser } from "./session";
 
@@ -89,10 +90,83 @@ async function count(env: Env, sql: string, ...binds: unknown[]): Promise<number
 }
 
 // --- projects ---------------------------------------------------------------------------
+//
+// Projects nest (D51). Three things guard the shape, and all three live here because the
+// database cannot enforce any of them: SQLite will happily let a folder become its own
+// grandparent, and the result is a subtree nothing can reach and every walk loops through.
+//
+// The walks are bounded explicitly rather than trusted to terminate. A recursive CTE over
+// data that already contains a cycle does not stop, and "this can never happen because the
+// guard prevents it" is exactly the reasoning that makes the first corrupt row fatal.
+
+/** Nothing legitimate climbs further than one row per project the account can hold. */
+const WALK_LIMIT = MAX_PROJECTS_PER_USER;
+
+/** How many ancestors a project has. A folder at the root is 0. */
+async function depthOf(env: Env, userId: string, id: string): Promise<number> {
+  const row = await env.DB.prepare(
+    `WITH RECURSIVE up(id, parent_id, n) AS (
+       SELECT id, parent_id, 0 FROM projects WHERE id = ?1 AND user_id = ?2
+       UNION ALL
+       SELECT p.id, p.parent_id, up.n + 1
+         FROM projects p JOIN up ON p.id = up.parent_id
+        WHERE p.user_id = ?2 AND up.n < ?3
+     )
+     SELECT max(n) AS n FROM up`,
+  )
+    .bind(id, userId, WALK_LIMIT)
+    .first<{ n: number | null }>();
+  return row?.n ?? 0;
+}
+
+/** How far the deepest descendant sits below a project. A folder with no children is 0. */
+async function heightOf(env: Env, userId: string, id: string): Promise<number> {
+  const row = await env.DB.prepare(
+    `WITH RECURSIVE down(id, n) AS (
+       SELECT id, 0 FROM projects WHERE id = ?1 AND user_id = ?2
+       UNION ALL
+       SELECT p.id, down.n + 1
+         FROM projects p JOIN down ON p.parent_id = down.id
+        WHERE p.user_id = ?2 AND down.n < ?3
+     )
+     SELECT max(n) AS n FROM down`,
+  )
+    .bind(id, userId, WALK_LIMIT)
+    .first<{ n: number | null }>();
+  return row?.n ?? 0;
+}
+
+/**
+ * Whether `candidate` is `id` itself or sits somewhere beneath it.
+ *
+ * The cycle guard, asked of a proposed parent. Climbing from the candidate is the cheap
+ * direction: a chain to the root is at most the depth cap, where walking down could be the
+ * whole tree.
+ */
+async function withinSubtree(
+  env: Env,
+  userId: string,
+  id: string,
+  candidate: string,
+): Promise<boolean> {
+  const row = await env.DB.prepare(
+    `WITH RECURSIVE up(id, parent_id, n) AS (
+       SELECT id, parent_id, 0 FROM projects WHERE id = ?1 AND user_id = ?2
+       UNION ALL
+       SELECT p.id, p.parent_id, up.n + 1
+         FROM projects p JOIN up ON p.id = up.parent_id
+        WHERE p.user_id = ?2 AND up.n < ?3
+     )
+     SELECT count(*) AS n FROM up WHERE id = ?4`,
+  )
+    .bind(candidate, userId, WALK_LIMIT, id)
+    .first<{ n: number }>();
+  return (row?.n ?? 0) > 0;
+}
 
 export async function listProjects({ env, user }: Ctx): Promise<Response> {
   const { results } = await env.DB.prepare(
-    `SELECT p.id, p.name, p.created_at, p.updated_at,
+    `SELECT p.id, p.name, p.parent_id, p.created_at, p.updated_at,
             (SELECT count(*) FROM boards b WHERE b.project_id = p.id) AS boards
        FROM projects p
       WHERE p.user_id = ?
@@ -103,40 +177,129 @@ export async function listProjects({ env, user }: Ctx): Promise<Response> {
   return json({ projects: results });
 }
 
+/**
+ * The parent named by a request, checked.
+ *
+ * Returns the id, or `null` for the root, or an error code. Ownership is checked here rather
+ * than left to a WHERE clause because a parent is not the row being written: filing a folder
+ * under a stranger's would silently succeed and then show up in their rail.
+ */
+async function parentFrom(
+  ctx: Ctx,
+  value: unknown,
+): Promise<{ id: string | null } | { error: string }> {
+  if (value === null || value === undefined) return { id: null };
+  if (typeof value !== "string") return { error: "invalid_project" };
+
+  const owns = await count(
+    ctx.env,
+    "SELECT count(*) n FROM projects WHERE id = ? AND user_id = ?",
+    value,
+    ctx.user.id,
+  );
+  if (owns === 0) return { error: "not_found" };
+  return { id: value };
+}
+
 export async function createProject(ctx: Ctx): Promise<Response> {
   const payload = await body(ctx.request);
   const name = cleanName(payload?.name);
   if (!name) return fail("invalid_name", 400);
+
+  const parent = await parentFrom(ctx, payload?.parent_id);
+  if ("error" in parent) return fail(parent.error, parent.error === "not_found" ? 404 : 400);
+
+  if (parent.id !== null) {
+    const depth = await depthOf(ctx.env, ctx.user.id, parent.id);
+    if (depth + 1 > MAX_PROJECT_DEPTH) return fail("project_too_deep", 409);
+  }
 
   const existing = await count(ctx.env, "SELECT count(*) n FROM projects WHERE user_id = ?", ctx.user.id);
   if (existing >= MAX_PROJECTS_PER_USER) return fail("project_limit_reached", 409);
 
   const id = newId();
   await ctx.env.DB.prepare(
-    "INSERT INTO projects (id, user_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+    "INSERT INTO projects (id, user_id, name, parent_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
   )
-    .bind(id, ctx.user.id, name, ctx.now, ctx.now)
+    .bind(id, ctx.user.id, name, parent.id, ctx.now, ctx.now)
     .run();
 
-  return json({ project: { id, name, created_at: ctx.now, updated_at: ctx.now, boards: 0 } }, 201);
+  return json(
+    {
+      project: {
+        id,
+        name,
+        parent_id: parent.id,
+        created_at: ctx.now,
+        updated_at: ctx.now,
+        boards: 0,
+      },
+    },
+    201,
+  );
 }
 
-export async function renameProject(ctx: Ctx, id: string): Promise<Response> {
+/**
+ * Rename a project, re-file it, or both.
+ *
+ * One route for two edits because the client holds the whole project and both are a PATCH of
+ * one row. `parent_id` is read by PRESENCE, not by truthiness: absent means leave it where it
+ * is, and an explicit null means move it to the root — two different requests that a plain
+ * falsiness check would collapse into one.
+ */
+export async function updateProject(ctx: Ctx, id: string): Promise<Response> {
   const payload = await body(ctx.request);
-  const name = cleanName(payload?.name);
-  if (!name) return fail("invalid_name", 400);
+  const renaming = payload?.name !== undefined;
+  const refiling = payload !== null && "parent_id" in payload;
 
+  const name = renaming ? cleanName(payload.name) : null;
+  if (renaming && !name) return fail("invalid_name", 400);
+  if (!renaming && !refiling) return fail("invalid_name", 400);
+
+  let parentId: string | null = null;
+  if (refiling) {
+    const parent = await parentFrom(ctx, payload.parent_id);
+    if ("error" in parent) return fail(parent.error, parent.error === "not_found" ? 404 : 400);
+    parentId = parent.id;
+
+    if (parentId === id) return fail("project_cycle", 409);
+    if (parentId !== null) {
+      // A folder cannot be filed under its own descendant: the subtree would be unreachable
+      // from every root, so it would vanish from the rail rather than move.
+      if (await withinSubtree(ctx.env, ctx.user.id, id, parentId)) {
+        return fail("project_cycle", 409);
+      }
+      // Measured with the subtree it is carrying, not just its own new depth.
+      const depth = await depthOf(ctx.env, ctx.user.id, parentId);
+      const height = await heightOf(ctx.env, ctx.user.id, id);
+      if (depth + 1 + height > MAX_PROJECT_DEPTH) return fail("project_too_deep", 409);
+    }
+  }
+
+  // Every placeholder is NUMBERED. Mixing a bare `?` into a statement that also uses `?N`
+  // is legal SQLite and assigns the bare one "largest index so far, plus one" — which is not
+  // the position it appears in, and silently binds the wrong value.
   const result = await ctx.env.DB.prepare(
-    "UPDATE projects SET name = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+    `UPDATE projects
+        SET name = COALESCE(?1, name),
+            parent_id = CASE WHEN ?2 THEN ?3 ELSE parent_id END,
+            updated_at = ?4
+      WHERE id = ?5 AND user_id = ?6`,
   )
-    .bind(name, ctx.now, id, ctx.user.id)
+    .bind(name, refiling ? 1 : 0, parentId, ctx.now, id, ctx.user.id)
     .run();
 
   if (result.meta.changes === 0) return fail("not_found", 404);
-  return json({ project: { id, name, updated_at: ctx.now } });
+  return json({ project: { id, ...(name ? { name } : {}), ...(refiling ? { parent_id: parentId } : {}), updated_at: ctx.now } });
 }
 
-/** The boards go with it — `boards.project_id` cascades, which is why this is one statement. */
+/**
+ * Delete a project, everything filed under it, and every board in any of them.
+ *
+ * Still one statement. `projects.parent_id` cascades into the subfolders and each of those
+ * cascades into its boards, so the whole thing goes at once — which is why the confirmation
+ * on the other side has to count the subtree rather than just the folder.
+ */
 export async function deleteProject(ctx: Ctx, id: string): Promise<Response> {
   const result = await ctx.env.DB.prepare("DELETE FROM projects WHERE id = ? AND user_id = ?")
     .bind(id, ctx.user.id)

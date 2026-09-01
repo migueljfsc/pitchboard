@@ -86,7 +86,8 @@ src/board/migrate.ts      version dispatch, run before validation on every load
 src/components/           React chrome; ui/ holds shadcn-style primitives
 worker/                   Cloudflare Worker — the API, and the SPA's static passthrough
   index.ts                the router; /api/* only, assets are served ahead of it
-  lib/                    session, google, users, boards, presets, crypto, http, limits
+  lib/                    session, google, users, boards (and the project tree), presets,
+                          crypto, http, limits
   migrations/             D1 schema, applied by CI before the script is deployed
 wrangler.jsonc            bindings and asset routing; the ONLY place a binding is declared
 infrastructure/terraform/cloudflare/    OpenTofu — R2, D1, KV. Durable resources only
@@ -242,6 +243,19 @@ hatch, but CI owns the real deploy.
   fallback that lets saving carry on locally, rebuilds the second library the whole design
   avoids — and the merge has no answer, because the same squad edited on two sides is two
   squads. That is also why adoption clears the local copy, and only once every preset landed.
+- **A recursive CTE over a cycle does not terminate.** Every tree walk in `worker/lib/boards.ts`
+  carries an explicit `n < WALK_LIMIT`, and it is not belt-and-braces: the guards that keep the
+  tree acyclic are in the same file, so trusting them inside the walk means the first corrupt row
+  hangs the request that would have found it (D51).
+- **Never mix a bare `?` with `?N` in one SQL statement.** SQLite gives the bare one "largest
+  index so far, plus one", which is not where it appears — so it binds the wrong value, silently.
+  `updateProject` numbers all six for that reason.
+- **Deleting a project deletes everything under it**, subfolders included, through the
+  self-referencing cascade. The confirmation counts the subtree; a dialog that says "and every
+  board inside it" is lying about a folder that holds four more.
+- **`buildTree` must not trust its rows.** They come over the network and the shape is guarded
+  server-side, so an orphan is filed at the root rather than dropped — losing a folder loses its
+  boards from the view — and a cycle is broken by a visited set rather than recursed into.
 - **Anything read from `localStorage` is untrusted input** — it survives app versions and can be
   hand-edited in devtools. Validate it and discard what fails; never repair it (D31).
 - **A stored preset names players by shirt number, never by id.** Ids are minted per board and a

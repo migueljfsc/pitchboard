@@ -37,8 +37,11 @@ export interface StoredBoard extends BoardSummary {
 export interface Project {
   id: string;
   name: string;
+  /** The folder this one sits in, or null at the root (D51). */
+  parent_id: string | null;
   created_at: number;
   updated_at: number;
+  /** This folder's OWN boards. The subtree total is derived on the client. */
   boards: number;
 }
 
@@ -129,16 +132,29 @@ export async function listProjects(): Promise<Project[]> {
   return projects;
 }
 
-export async function createProject(name: string): Promise<Project> {
+export async function createProject(name: string, parentId?: string | null): Promise<Project> {
   const { project } = await call<{ project: Project }>("/projects", {
     method: "POST",
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, parent_id: parentId ?? null }),
   });
   return project;
 }
 
 export async function renameProject(id: string, name: string): Promise<void> {
   await call(`/projects/${id}`, { method: "PATCH", body: JSON.stringify({ name }) });
+}
+
+/**
+ * Re-file a folder. `null` puts it back at the root.
+ *
+ * `parent_id` is sent always, because the Worker reads it by PRESENCE: leaving it out means
+ * "leave this folder where it is", which is a different request from "move it to the root".
+ */
+export async function moveProject(id: string, parentId: string | null): Promise<void> {
+  await call(`/projects/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ parent_id: parentId }),
+  });
 }
 
 export async function deleteProject(id: string): Promise<void> {

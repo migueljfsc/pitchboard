@@ -36,7 +36,7 @@ import {
   listProjects,
   moveBoard,
   moveBoards,
-  renameProject,
+  updateProject,
   updateBoard,
   type Ctx,
 } from "./lib/boards";
@@ -196,7 +196,7 @@ async function publicRoute(env: Env, request: Request, url: URL): Promise<Respon
 const ROUTES: Array<{ method: string; pattern: RegExp; handle: (ctx: Ctx, ...p: string[]) => Promise<Response> }> = [
   { method: "GET", pattern: new RegExp(`^/api/projects$`), handle: listProjects },
   { method: "POST", pattern: new RegExp(`^/api/projects$`), handle: createProject },
-  { method: "PATCH", pattern: new RegExp(`^/api/projects/${ID}$`), handle: renameProject },
+  { method: "PATCH", pattern: new RegExp(`^/api/projects/${ID}$`), handle: updateProject },
   { method: "DELETE", pattern: new RegExp(`^/api/projects/${ID}$`), handle: deleteProject },
   { method: "GET", pattern: new RegExp(`^/api/projects/${ID}/boards$`), handle: listBoards },
   { method: "POST", pattern: new RegExp(`^/api/projects/${ID}/boards$`), handle: createBoard },
