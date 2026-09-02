@@ -52,9 +52,12 @@ export const en = {
   "present.enter.title": "Fills the window with the board and hides the panels. Esc comes back.",
   "present.exit": "Done",
   "present.exit.title": "Back to editing (Esc)",
+  "bar.import": "Import",
+  "bar.import.title":
+    "Open a board, a setup file, or player tracks measured off video. It replaces what is on the board.",
   "bar.export": "Export",
   "bar.export.title":
-    "MP4, WebM or GIF of the whole animation, or a PNG of the frame on screen — exactly as you see it.",
+    "MP4, WebM or GIF of the whole animation, a PNG of the frame on screen, or the board itself as JSON.",
 
   "history.undo": "Undo",
   "history.redo": "Redo",
@@ -117,7 +120,6 @@ export const en = {
   "share.close": "Close",
   "share.method.link": "Link",
   "share.method.board": "Board link",
-  "share.method.file": "File",
   "share.link.blurb":
     "The whole board travels inside the link, so it never expires and needs no account. Whoever opens it watches a read-only copy, framed as you have it now, and can fork their own. The board rides in the link itself, so the server never sees it.",
   "share.length": "{chars} of {budget} characters",
@@ -160,8 +162,14 @@ export const en = {
   "confirm.preset.action": "Replace squad",
 
   "confirm.import.title": "Replace this board?",
-  "confirm.import.message":
+  "confirm.import.message.board":
     "“{name}” will replace everything on the board — scenes, runs, links and drawings. Undo brings the old board back.",
+  "confirm.import.message.setup":
+    "Both teams are rebuilt from “{name}” — its formations, names, numbers and units — and everything on the board goes with the old ones: scenes, runs, links and drawings. Undo brings the old board back.",
+  "confirm.import.message.tracks.one":
+    "“{name}” was read from video as {count} scene. It replaces everything on the board — scenes, runs, links and drawings. Undo brings the old board back.",
+  "confirm.import.message.tracks.other":
+    "“{name}” was read from video as {count} scenes. It replaces everything on the board — scenes, runs, links and drawings. Undo brings the old board back.",
   "confirm.import.action": "Replace board",
 
   "confirm.cancel": "Cancel",
@@ -172,8 +180,6 @@ export const en = {
   "import.tracks.invalid": "That is not a tracks file this version understands.",
   "import.tracks.empty": "No tracked players in that file were on screen long enough to import.",
   "json.title": "Board JSON",
-  "json.export": "Export",
-  "json.import": "Import",
   "json.close": "Close",
   "json.wholeBoard": "Whole board",
   "json.setupOnly": "Setup only",
@@ -183,13 +189,30 @@ export const en = {
   "json.copy": "Copy",
   "json.copied": "Copied",
   "json.download": "Download",
-  "json.import.hint":
-    "Paste or open a board, a setup file, or player tracks from video. Tracks become a board with a scene wherever the play turns.",
-  "json.import.label": "JSON to import",
-  "json.loadFile": "Load a file",
-  "json.useExample": "Use the example",
   "json.clipboard": "The browser refused clipboard access — select the text and copy it by hand.",
-  "json.replaceBoard": "Replace board",
+
+  // --------------------------------------------------------- import dialog
+  // The file says which of the three it is, so there is no picker — the list is
+  // there because nothing else in the app says a tracks file can be opened at all.
+  "import.dialog.title": "Open a file into this board",
+  "import.close": "Close",
+  "import.kinds": "Three kinds of file open here. Which one it is comes from the file itself.",
+  "import.kind.board": "A board",
+  "import.kind.board.hint": "A whole play — every scene, run, link and drawing. What Export writes.",
+  "import.kind.setup": "A setup",
+  "import.kind.setup.hint":
+    "Formation, names, numbers and units. The team, without the play — short enough to write by hand.",
+  "import.kind.tracks": "Tracks from video",
+  "import.kind.tracks.hint":
+    "Player positions in pitch metres, as football-tracks writes them. A board is built from them, with a scene wherever the play turns.",
+  "import.drop": "Drop a file here",
+  "import.dropping": "Release to open it",
+  "import.loadFile": "Choose a file",
+  "import.file.clear": "Remove",
+  "import.paste": "Or paste a board or a setup. A tracks file is far too large to paste — open it.",
+  "import.label": "JSON to import",
+  "import.useExample": "Use the setup example",
+  "import.replaceBoard": "Replace board",
 
   // --------------------------------------------------- seeded document text
   // What a NEW board is called. Existing boards keep whatever they were named:
@@ -303,6 +326,8 @@ export const en = {
   "export.blurb.webm": "VP9. Smaller than MP4 at the same quality. Plays in browsers; some players want MP4.",
   "export.blurb.gif": "Loops on its own and pastes straight into a chat.",
   "export.blurb.png": "The frame the scrubber is on, at full resolution.",
+  "export.blurb.json":
+    "The board itself, as a file. No server, no account and nothing that expires — open it back here later, or send it to someone who will.",
   "export.phase.palette": "Building the palette",
   "export.phase.render": "Rendering",
   "export.phase.finalise": "Writing the file",

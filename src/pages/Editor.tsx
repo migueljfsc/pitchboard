@@ -18,6 +18,7 @@ import {
   Redo2,
   RotateCcw,
   Undo2,
+  Upload,
   Users,
 } from "lucide-react";
 import { Inspector } from "@/components/Inspector";
@@ -25,6 +26,7 @@ import { DrawingsPanel } from "@/components/DrawingsPanel";
 import { ExportDialog } from "@/components/ExportDialog";
 import { ShortcutsDialog } from "@/components/ShortcutsDialog";
 import { ShareDialog } from "@/components/ShareDialog";
+import { ImportDialog, type ImportKind } from "@/components/ImportDialog";
 import { LinkPanel } from "@/components/LinkPanel";
 import { DrawPanel } from "@/components/DrawPanel";
 import { Timeline } from "@/components/Timeline";
@@ -82,7 +84,8 @@ type Pending =
   | { kind: "positions" }
   | { kind: "links" }
   | { kind: "preset"; preset: SquadPreset; replacing: SquadPreset }
-  | { kind: "import"; doc: BoardDoc };
+  /** `source` is what the file turned out to be, so the confirmation can say. */
+  | { kind: "import"; doc: BoardDoc; source: ImportKind };
 
 type Props = {
   /**
@@ -126,6 +129,7 @@ export function Editor({ initialDoc }: Props = {}) {
   const [pitchView, setPitchView] = useState<PitchView>(DEFAULT_PITCH_VIEW);
   const [pending, setPending] = useState<Pending | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [selectionOpen, setSelectionOpen] = useState(true);
   const [drawingsOpen, setDrawingsOpen] = useState(false);
@@ -472,7 +476,7 @@ export function Editor({ initialDoc }: Props = {}) {
   const importDoc = (next: BoardDoc) => {
     setDoc(next);
     clearEditorState();
-    setShareOpen(false);
+    setImportOpen(false);
   };
 
   const onDelayChange = (ms: number | null) => {
@@ -560,7 +564,7 @@ export function Editor({ initialDoc }: Props = {}) {
       if (e.target instanceof HTMLElement && ["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName)) return;
       // A dialog owns the keyboard while it is up — Space must not start
       // playback behind it, and Escape belongs to the dialog.
-      if (pending || shareOpen || exportOpen || shortcutsOpen) return;
+      if (pending || shareOpen || importOpen || exportOpen || shortcutsOpen) return;
 
       // Escape leaves presenting first: there is no tool armed in there, and
       // getting out is the only thing the key can usefully mean.
@@ -628,6 +632,7 @@ export function Editor({ initialDoc }: Props = {}) {
     onNudge,
     pending,
     shareOpen,
+    importOpen,
     exportOpen,
     playing,
     setPlayback,
@@ -704,6 +709,15 @@ export function Editor({ initialDoc }: Props = {}) {
             {t("present.enter")}
           </button>
 
+          <button
+            type="button"
+            onClick={() => setImportOpen(true)}
+            title={t("bar.import.title")}
+            className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
+          >
+            <Upload size={13} />
+            {t("bar.import")}
+          </button>
           <button
             type="button"
             onClick={() => setExportOpen(true)}
@@ -940,7 +954,15 @@ export function Editor({ initialDoc }: Props = {}) {
         {pending?.kind === "import" && (
           <ConfirmDialog
             title={t("confirm.import.title")}
-            message={t("confirm.import.message", { name: pending.doc.name })}
+            message={
+              // Whole keys per shape rather than a shared sentence with a word swapped
+              // in: what a setup costs you is not what a board does.
+              pending.source === "tracks"
+                ? tn("confirm.import.message.tracks", pending.doc.scenes.length, {
+                    name: pending.doc.name,
+                  })
+                : t(`confirm.import.message.${pending.source}`, { name: pending.doc.name })
+            }
             confirmLabel={t("confirm.import.action")}
             onConfirm={() => importDoc(pending.doc)}
             onCancel={() => setPending(null)}
@@ -953,8 +975,15 @@ export function Editor({ initialDoc }: Props = {}) {
             view={pitchView}
             cloud={cloud}
             signedIn={accountState.account !== null}
-            onImport={(next: BoardDoc) => setPending({ kind: "import", doc: next })}
             onClose={() => setShareOpen(false)}
+            blocked={pending !== null}
+          />
+        )}
+
+        {importOpen && (
+          <ImportDialog
+            onImport={(next, source) => setPending({ kind: "import", doc: next, source })}
+            onClose={() => setImportOpen(false)}
             blocked={pending !== null}
           />
         )}

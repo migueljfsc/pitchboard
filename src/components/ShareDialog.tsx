@@ -1,7 +1,7 @@
 /**
  * Every way of handing a board to someone, in one place.
  *
- * Three of them, and they are genuinely different things rather than three buttons for the
+ * Two of them, and they are genuinely different things rather than two buttons for the
  * same one — which is why they were worth collecting rather than merging:
  *
  *   LINK   the whole board deflated into a `#d=` fragment. Frozen by construction, never
@@ -12,25 +12,26 @@
  *   BOARD  `/s/<slug>`, a live pointer at a saved board. Reloading it shows whatever the
  *          owner has changed since. Short enough to read down a phone, and it lasts exactly
  *          as long as the board does.
- *   FILE   JSON, in or out. The least perishable of the three: no server, no account, no
- *          link to rot.
  *
- * Read together: the first is permanent and frozen, the second is live and revocable, the
- * third is yours to keep.
+ * Read together: the first is permanent and frozen, the second is live and revocable.
+ *
+ * There was a third here — JSON, in and out — and it was two things wearing one label. A
+ * file coming OUT is a format the board is written in, so it sits in the export dialog
+ * beside MP4 and PNG (`JsonPane`); a file going IN is not a way of handing the board to
+ * anyone at all, so it has its own button and its own dialog (`ImportDialog`).
  */
 
 import { useEffect, useState } from "react";
 import { Check, Copy, Link2, TriangleAlert, X } from "lucide-react";
 
 import type { BoardDoc, PitchView } from "@/board/types";
-import { JsonPane } from "@/components/JsonPane";
 import { Action, Toggle } from "@/components/ui/DialogControls";
 import { useI18n } from "@/i18n/context";
 import type { CloudBoard } from "@/lib/useCloudBoard";
 import { ApiError, publishBoard, shareUrl as boardShareUrl, unpublishBoard } from "@/share/api";
 import { URL_BUDGET, encodeBoard, shareUrl, withinBudget, withoutHash } from "@/share/urlcodec";
 
-type Method = "board" | "link" | "file";
+type Method = "board" | "link";
 
 type LinkState =
   | { kind: "idle" }
@@ -48,13 +49,12 @@ type Props = {
   view: PitchView;
   cloud: CloudBoard;
   signedIn: boolean;
-  onImport: (doc: BoardDoc) => void;
   onClose: () => void;
   /** A confirmation is up over this dialog, and owns the keyboard. */
   blocked?: boolean;
 };
 
-export function ShareDialog({ doc, view, cloud, signedIn, onImport, onClose, blocked }: Props) {
+export function ShareDialog({ doc, view, cloud, signedIn, onClose, blocked }: Props) {
   const { t } = useI18n();
   /**
    * The board link leads, because it is the one most people want: short, revocable, and it
@@ -160,9 +160,6 @@ export function ShareDialog({ doc, view, cloud, signedIn, onImport, onClose, blo
             </Toggle>
             <Toggle active={method === "link"} onClick={() => setMethod("link")}>
               {t("share.method.link")}
-            </Toggle>
-            <Toggle active={method === "file"} onClick={() => setMethod("file")}>
-              {t("share.method.file")}
             </Toggle>
           </div>
           <button
@@ -276,8 +273,6 @@ export function ShareDialog({ doc, view, cloud, signedIn, onImport, onClose, blo
             )}
           </div>
         )}
-
-        {method === "file" && <JsonPane doc={doc} onImport={onImport} />}
       </div>
     </div>
   );

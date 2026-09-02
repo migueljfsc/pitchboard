@@ -47,9 +47,12 @@ export const pt: Dictionary = {
   "present.enter.title": "Preenche a janela com o quadro e esconde os painéis. Esc regressa.",
   "present.exit": "Concluído",
   "present.exit.title": "Voltar à edição (Esc)",
+  "bar.import": "Importar",
+  "bar.import.title":
+    "Abra um quadro, um ficheiro de preparação, ou trajetórias de jogadores extraídas de vídeo. Substitui o que está no quadro.",
   "bar.export": "Exportar",
   "bar.export.title":
-    "MP4, WebM ou GIF da animação completa, ou um PNG do momento no ecrã — tal como o vê.",
+    "MP4, WebM ou GIF da animação completa, um PNG do momento no ecrã, ou o próprio quadro em JSON.",
 
   "history.undo": "Anular",
   "history.redo": "Refazer",
@@ -112,7 +115,6 @@ export const pt: Dictionary = {
   "share.close": "Fechar",
   "share.method.link": "Ligação",
   "share.method.board": "Ligação do quadro",
-  "share.method.file": "Ficheiro",
   "share.link.blurb":
     "O quadro inteiro viaja dentro da ligação, por isso nunca expira e não precisa de conta. Quem a abrir vê uma cópia só de leitura, no enquadramento que tem agora, e pode criar a sua própria versão. O quadro viaja na própria ligação, por isso o servidor nunca o vê.",
   "share.length": "{chars} de {budget} caracteres",
@@ -155,8 +157,14 @@ export const pt: Dictionary = {
   "confirm.preset.action": "Substituir plantel",
 
   "confirm.import.title": "Substituir este quadro?",
-  "confirm.import.message":
+  "confirm.import.message.board":
     "“{name}” vai substituir tudo o que está no quadro — cenas, corridas, ligações e desenhos. Anular traz o quadro antigo de volta.",
+  "confirm.import.message.setup":
+    "As duas equipas são reconstruídas a partir de “{name}” — sistemas, nomes, números e unidades — e tudo o que está no quadro vai com as antigas: cenas, corridas, ligações e desenhos. Anular traz o quadro antigo de volta.",
+  "confirm.import.message.tracks.one":
+    "“{name}” foi lido de vídeo como {count} cena. Substitui tudo o que está no quadro — cenas, corridas, ligações e desenhos. Anular traz o quadro antigo de volta.",
+  "confirm.import.message.tracks.other":
+    "“{name}” foi lido de vídeo como {count} cenas. Substitui tudo o que está no quadro — cenas, corridas, ligações e desenhos. Anular traz o quadro antigo de volta.",
   "confirm.import.action": "Substituir quadro",
 
   "confirm.cancel": "Cancelar",
@@ -165,8 +173,6 @@ export const pt: Dictionary = {
   "import.tracks.invalid": "Este não é um ficheiro de trajetórias que esta versão reconheça.",
   "import.tracks.empty": "Nenhum jogador seguido nesse ficheiro esteve em campo tempo suficiente para importar.",
   "json.title": "JSON do quadro",
-  "json.export": "Exportar",
-  "json.import": "Importar",
   "json.close": "Fechar",
   "json.wholeBoard": "Quadro completo",
   "json.setupOnly": "Só a preparação",
@@ -176,13 +182,30 @@ export const pt: Dictionary = {
   "json.copy": "Copiar",
   "json.copied": "Copiado",
   "json.download": "Transferir",
-  "json.import.hint":
-    "Cole ou abra um quadro, uma preparação, ou trajetórias de jogadores extraídas de vídeo. As trajetórias tornam-se um quadro com uma cena em cada viragem do lance.",
-  "json.import.label": "JSON a importar",
-  "json.loadFile": "Carregar um ficheiro",
-  "json.useExample": "Usar o exemplo",
   "json.clipboard": "O navegador recusou o acesso à área de transferência — selecione o texto e copie-o à mão.",
-  "json.replaceBoard": "Substituir quadro",
+
+  // --------------------------------------------------------- import dialog
+  "import.dialog.title": "Abrir um ficheiro neste quadro",
+  "import.close": "Fechar",
+  "import.kinds": "Abrem-se aqui três tipos de ficheiro. Qual deles é vem do próprio ficheiro.",
+  "import.kind.board": "Um quadro",
+  "import.kind.board.hint":
+    "Uma jogada inteira — todas as cenas, corridas, ligações e desenhos. O que a exportação escreve.",
+  "import.kind.setup": "Uma preparação",
+  "import.kind.setup.hint":
+    "Sistema, nomes, números e unidades. A equipa, sem a jogada — curto o suficiente para escrever à mão.",
+  "import.kind.tracks": "Trajetórias de vídeo",
+  "import.kind.tracks.hint":
+    "Posições dos jogadores em metros de campo, como o football-tracks as escreve. Constrói-se um quadro a partir delas, com uma cena em cada viragem do lance.",
+  "import.drop": "Largue aqui um ficheiro",
+  "import.dropping": "Solte para o abrir",
+  "import.loadFile": "Escolher um ficheiro",
+  "import.file.clear": "Remover",
+  "import.paste":
+    "Ou cole um quadro ou uma preparação. Um ficheiro de trajetórias é demasiado grande para colar — abra-o.",
+  "import.label": "JSON a importar",
+  "import.useExample": "Usar o exemplo de preparação",
+  "import.replaceBoard": "Substituir quadro",
 
   // --------------------------------------------------- seeded document text
   "doc.board": "Quadro sem nome",
@@ -295,6 +318,8 @@ export const pt: Dictionary = {
     "VP9. Mais pequeno do que MP4 com a mesma qualidade. Abre nos navegadores; alguns leitores preferem MP4.",
   "export.blurb.gif": "Repete-se sozinho e cola-se diretamente numa conversa.",
   "export.blurb.png": "O momento em que está o cursor, na resolução máxima.",
+  "export.blurb.json":
+    "O próprio quadro, como ficheiro. Sem servidor, sem conta e sem nada que expire — abra-o aqui mais tarde, ou envie-o a quem o abra.",
   "export.phase.palette": "A construir a paleta",
   "export.phase.render": "A desenhar",
   "export.phase.finalise": "A escrever o ficheiro",
