@@ -10,6 +10,7 @@
 
 import { describe, expect, it } from "vitest";
 import { boardDocSchema } from "@/board/schema";
+import { fidelity } from "./fidelity";
 import { boardFromTracks } from "./index";
 import fixture from "./__fixtures__/rioave.json";
 
@@ -65,5 +66,30 @@ describe("a real broadcast goal", () => {
     if (!result.ok) return;
     const total = result.doc.teams[0].players.length + result.doc.teams[1].players.length;
     expect(total).toBeGreaterThanOrEqual(12);
+    // And not more than a pitch holds: past that the roster is fragments of the same
+    // player arriving as two.
+    expect(total).toBeLessThanOrEqual(22);
+  });
+});
+
+describe("run fidelity on a real goal", () => {
+  const result = boardFromTracks(fixture);
+
+  it("draws each player close to where they actually were", () => {
+    // The measurement that matters for runs. Everything else here is per frame — was
+    // this player found, is this position within two metres — and a run is none of
+    // those. A board can pass all of them while drawing a run that bends the wrong way,
+    // because the fitted curve is never compared to anything.
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const f = fidelity(result);
+    expect(f.medianM).toBeLessThan(0.5);
+    expect(f.p90M).toBeLessThan(1.5);
+  });
+
+  it("draws no run that leaves the play behind entirely", () => {
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(fidelity(result).maxM).toBeLessThan(6);
   });
 });

@@ -31,7 +31,7 @@ import type { Sample, Track, TracksFile } from "./tracks";
  * frame becomes a scene of its own. Below this the board would carry detail nobody can
  * see, and each extra scene is one more the coach has to look at.
  */
-export const SCENE_TOLERANCE_M = 2.5;
+export const SCENE_TOLERANCE_M = 1.5;
 
 /** A path straighter than this stays a straight tween. */
 export const STRAIGHT_TOLERANCE_M = 0.5;
@@ -39,8 +39,20 @@ export const STRAIGHT_TOLERANCE_M = 0.5;
 /** Scenes never land closer together than this. */
 export const MIN_SCENE_GAP_S = 0.4;
 
-/** How much of the window a track must cover to be worth putting on the board. */
-export const MIN_COVERAGE = 0.5;
+/**
+ * How much of the window a track must cover to be worth putting on the board.
+ *
+ * Lower than it looks like it should be, and measured rather than chosen. Raising it
+ * does NOT buy fidelity: the window trims to where the surviving players are all on
+ * screen, so demanding more coverage buys a longer window with fewer people in it and
+ * more of their positions held. At 0.4 the Rio Ave goal fields 13 players — which is
+ * what the tracker has live at the median frame — with a median drawn-versus-actual
+ * error of 0.09 m. At 0.5 it fields 7 and the error is worse.
+ *
+ * Below about 0.3 the roster passes what a pitch can hold, which is fragments of the
+ * same player arriving as two.
+ */
+export const MIN_COVERAGE = 0.4;
 
 /**
  * How far outside the pitch a position may sit and still be believed, in metres.
@@ -61,6 +73,28 @@ export const MAX_SCENES = 12;
 
 /** The shortest passage worth making a board of. */
 export const MIN_WINDOW_S = 2.5;
+
+/**
+ * The fastest a footballer moves, in metres per second. Usain Bolt peaks near 12.
+ *
+ * Not a tuning knob — a fact used to catch impossibilities. A tracker gates on pixels,
+ * and where the camera model is locally wrong a small step in pixels is a large one in
+ * metres, so a track can arrive holding a jump no human made. Measured on the Rio Ave
+ * goal: 11.26 m between two frames a thirtieth of a second apart, or 360 m/s.
+ */
+export const MAX_SPEED_MS = 12;
+
+/**
+ * How far apart two samples may be and still have their implied speed believed, in
+ * frames.
+ *
+ * Across a long gap the tracker saw nothing, and "impossible speed" there means only
+ * that the two ends are far apart — which is what an occlusion looks like when the
+ * player kept running. Splitting on that punishes every occlusion and shatters the
+ * roster: measured on the Rio Ave goal it took 10 v 6 down to 3 v 3. A teleport is a
+ * jump between samples that are ADJACENT, where there was no time to travel.
+ */
+export const TELEPORT_GAP_FRAMES = 3;
 
 /** Below this many tracks, no error is discounted as an outlier. */
 export const OUTLIER_MIN_TRACKS = 5;
@@ -91,6 +125,71 @@ export function positionAt(track: Track, f: number): Vec2 {
   const b = s[hi];
   const t = b.f === a.f ? 0 : (f - a.f) / (b.f - a.f);
   return { x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) };
+}
+
+/**
+ * Samples that leap away and come straight back, removed.
+ *
+ * A detection landing briefly on the wrong person is one bad sample, not two players,
+ * and cutting the track there costs a whole run to fix a thirtieth of a second. The
+ * test is whether the two neighbours are consistent WITHOUT it: if they are, the
+ * excursion was the outlier and the track continues through.
+ *
+ * Cutting every such spike instead is what took the Rio Ave board from 10 v 6 to 4 v 3.
+ */
+export function withoutSpikes(samples: Sample[], fps: number, maxSpeed = MAX_SPEED_MS): Sample[] {
+  if (samples.length < 3) return samples;
+  const speed = (a: Sample, b: Sample) =>
+    Math.hypot(b.x - a.x, b.y - a.y) / (Math.max(1, b.f - a.f) / fps);
+
+  const kept: Sample[] = [samples[0]];
+  for (let i = 1; i < samples.length - 1; i++) {
+    const prev = kept[kept.length - 1];
+    const here = samples[i];
+    const next = samples[i + 1];
+    const excursion = speed(prev, here) > maxSpeed && speed(here, next) > maxSpeed;
+    if (excursion && speed(prev, next) <= maxSpeed) continue;
+    kept.push(here);
+  }
+  kept.push(samples[samples.length - 1]);
+  return kept;
+}
+
+/**
+ * A track cut wherever it claims a move nobody could make.
+ *
+ * The two sides of such a jump are two different people — the tracker changed its mind
+ * about who it was following — so they come back as separate tracks rather than one
+ * repaired one. Repairing would mean choosing which half is the real player, and there
+ * is nothing in the file that says.
+ *
+ * Fragments too short to be worth anything are dropped by the coverage test later, so
+ * this only has to make the cut, not judge what is left.
+ */
+export function splitImpossible(track: Track, fps: number, maxSpeed = MAX_SPEED_MS): Track[] {
+  const samples = withoutSpikes(track.samples, fps, maxSpeed);
+  const out: Track[] = [];
+  let run: Sample[] = [samples[0]];
+
+  for (let i = 1; i < samples.length; i++) {
+    const a = samples[i - 1];
+    const b = samples[i];
+    const gap = b.f - a.f;
+    const seconds = Math.max(1, gap) / fps;
+    const speed = Math.hypot(b.x - a.x, b.y - a.y) / seconds;
+    if (gap <= TELEPORT_GAP_FRAMES && speed > maxSpeed) {
+      out.push({ ...track, samples: run });
+      run = [];
+    }
+    run.push(b);
+  }
+  out.push({ ...track, samples: run });
+
+  // Ids must stay distinct: `sources` maps a player back to the track they came from,
+  // and two fragments sharing an id would claim to be the same person.
+  return out
+    .filter((t) => t.samples.length >= 2)
+    .map((t, i) => (i === 0 ? t : { ...t, id: track.id * 1000 + i }));
 }
 
 /** Fraction of [from, to] the track actually has samples for. */
@@ -183,8 +282,8 @@ export function chooseScenes(
   from: number,
   to: number,
   fps: number,
-  toleranceM = SCENE_TOLERANCE_M,
-  maxScenes = MAX_SCENES,
+  toleranceM: number = SCENE_TOLERANCE_M,
+  maxScenes: number = MAX_SCENES,
 ): number[] {
   const minGap = Math.max(1, Math.round(MIN_SCENE_GAP_S * fps));
   const chosen = [from, to];
@@ -231,7 +330,7 @@ export function chooseScenes(
  */
 export function fitCurve(
   points: Vec2[],
-  straightToleranceM = STRAIGHT_TOLERANCE_M,
+  straightToleranceM: number = STRAIGHT_TOLERANCE_M,
 ): PathCurve | null {
   if (points.length < 4) return null;
   const p0 = points[0];

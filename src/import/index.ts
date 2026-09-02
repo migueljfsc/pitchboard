@@ -20,16 +20,39 @@ import {
   MIN_COVERAGE,
   onPitch,
   positionAt,
+  splitImpossible,
 } from "./reduce";
 import { tracksSchema, type Track, type TracksFile } from "./tracks";
 
-export type ImportResult = { ok: true; doc: BoardDoc } | { ok: false; error: Message };
+export type Imported = {
+  doc: BoardDoc;
+  /** The passage of the source the board was built from, in source frames. */
+  window: { from: number; to: number };
+  /** Source frame each scene was taken at, in order. */
+  frames: number[];
+  /**
+   * The track each player was built from, by player id.
+   *
+   * The track itself, not its id. Tracks are split before use, so a fragment's id may
+   * name nothing in the original file — and anything measuring the board against "the
+   * source" would silently measure it against a different, unsplit player.
+   */
+  sources: Record<string, Track>;
+};
+
+export type ImportResult = ({ ok: true } & Imported) | { ok: false; error: Message };
 
 export type ImportOptions = {
   /** What the board and its scenes are called. Passed in so a board made in Portuguese
    *  is seeded in Portuguese — locale never enters `BoardDoc` (D38). */
   labels?: { board?: string; scene?: string };
   minCoverage?: number;
+  /** How far a player must stray from the interpolation before a frame becomes a scene. */
+  sceneToleranceM?: number;
+  /** Most scenes to make. */
+  maxScenes?: number;
+  /** A run straighter than this keeps a straight tween. Infinity draws none at all. */
+  straightToleranceM?: number;
 };
 
 /** Sides a track can be put on. Referees and unknowns are not players and are dropped. */
@@ -57,7 +80,12 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
 
   // Players first, then the window: which passage is best observed depends only on the
   // people who could be on the board at all, so referees and spectators must not vote.
-  const players = file.tracks.filter((t) => sideOf(t) !== null && onPitch(t, file.pitch));
+  const players = file.tracks
+    // Cut before anything else looks at them: a track holding an impossible jump is two
+    // people, and every judgement after this — coverage, which passage was watched, the
+    // curve through a scene — would be made about a person who does not exist.
+    .flatMap((t) => splitImpossible(t, file.source.fps))
+    .filter((t) => sideOf(t) !== null && onPitch(t, file.pitch));
   const { from, to } = chooseWindow(
     players,
     file.source.startFrame,
@@ -67,7 +95,7 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   );
 
   const sides: Record<"home" | "away", Track[]> = { home: [], away: [] };
-  for (const track of file.tracks) {
+  for (const track of players) {
     const side = sideOf(track);
     // A track whose side could not be told is left out rather than assigned to one.
     // Half of them would be on the wrong team and nothing on the board would say so.
@@ -83,7 +111,14 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   const kept = [...sides.home, ...sides.away];
   if (kept.length === 0) return { ok: false, error: msg("import.tracks.empty") };
 
-  const frames = chooseScenes(kept, from, to, file.source.fps);
+  const frames = chooseScenes(
+    kept,
+    from,
+    to,
+    file.source.fps,
+    options.sceneToleranceM,
+    options.maxScenes,
+  );
 
   const teams = (["home", "away"] as const).map((side) => {
     const spec = side === "home" ? HOME : AWAY;
@@ -111,7 +146,10 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
         const walked = track.samples
           .filter((s) => s.f >= a && s.f <= f)
           .map((s) => ({ x: s.x, y: s.y }));
-        const curve = fitCurve([positionAt(track, a), ...walked, positionAt(track, f)]);
+        const curve = fitCurve(
+          [positionAt(track, a), ...walked, positionAt(track, f)],
+          options.straightToleranceM,
+        );
         if (curve) paths[idOf.get(track)!] = curve;
       }
     }
@@ -131,8 +169,14 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     };
   });
 
+  const sources: Record<string, Track> = {};
+  for (const track of kept) sources[idOf.get(track)!] = track;
+
   return {
     ok: true,
+    window: { from, to },
+    frames,
+    sources,
     doc: {
       version: 1,
       name: options.labels?.board ?? file.source.clip,

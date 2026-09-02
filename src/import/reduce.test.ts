@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { boardFromTracks } from "./index";
-import { chooseScenes, chooseWindow, coverage, fitCurve, positionAt } from "./reduce";
+import {
+  chooseScenes,
+  chooseWindow,
+  coverage,
+  fitCurve,
+  positionAt,
+  splitImpossible,
+  withoutSpikes,
+} from "./reduce";
 import type { Track } from "./tracks";
 
 const track = (
@@ -16,12 +24,17 @@ const track = (
     samples: pts.map(([f, x, y]) => ({ f, x, y })),
   }) as Track;
 
-/** A straight run from (10,20) to (60,20) over two seconds at 25fps. */
+/**
+ * A straight run over two seconds at 25fps, at 5 m/s — a real pace.
+ *
+ * It used to cover a metre per frame, which is 25 m/s, and every test here passed
+ * happily until `splitImpossible` pointed out that nobody runs that fast.
+ */
 const straightRun = (id: number, team: string, y = 20) =>
   track(
     id,
     team,
-    Array.from({ length: 51 }, (_, i) => [i + 1, 10 + i, y] as [number, number, number]),
+    Array.from({ length: 51 }, (_, i) => [i + 1, 10 + i * 0.2, y] as [number, number, number]),
   );
 
 const file = (tracks: Track[], endFrame = 51) => ({
@@ -83,7 +96,11 @@ describe("chooseScenes", () => {
       "home",
       Array.from({ length: 51 }, (_, i) => {
         const f = i + 1;
-        return (f <= 26 ? [f, 10 + f, 20] : [f, 36, 20 + (f - 26)]) as [number, number, number];
+        return (f <= 26 ? [f, 10 + f * 0.2, 20] : [f, 15.2, 20 + (f - 26) * 0.2]) as [
+          number,
+          number,
+          number,
+        ];
       }),
     );
     const scenes = chooseScenes([turn], 1, 51, 25);
@@ -98,7 +115,8 @@ describe("chooseScenes", () => {
       "home",
       Array.from(
         { length: 201 },
-        (_, i) => [i + 1, 20 + 12 * Math.sin(i / 2), 30 + 12 * Math.cos(i / 2)] as [number, number, number],
+        (_, i) =>
+          [i + 1, 20 + 3 * Math.sin(i / 12), 30 + 3 * Math.cos(i / 12)] as [number, number, number],
       ),
     );
     expect(chooseScenes([noisy], 1, 201, 25).length).toBeLessThanOrEqual(12);
@@ -119,7 +137,7 @@ describe("chooseScenes", () => {
       "away",
       Array.from(
         { length: 51 },
-        (_, i) => [i + 1, 40 + (i % 2 ? 9 : -9), 40] as [number, number, number],
+        (_, i) => [i + 1, 40 + (i % 2 ? 0.35 : -0.35), 40] as [number, number, number],
       ),
     );
     expect(chooseScenes([...calm, jittery], 1, 51, 25)).toEqual([1, 51]);
@@ -136,7 +154,11 @@ describe("chooseScenes", () => {
       "away",
       Array.from({ length: 51 }, (_, i) => {
         const f = i + 1;
-        return (f <= 26 ? [f, 50, 10 + f] : [f, 50, 62 - (f - 26)]) as [number, number, number];
+        return (f <= 26 ? [f, 50, 10 + f * 0.2] : [f, 50, 15.2 - (f - 26) * 0.2]) as [
+          number,
+          number,
+          number,
+        ];
       }),
     );
     expect(chooseScenes([still, turning], 1, 51, 25).length).toBeGreaterThan(2);
@@ -280,7 +302,7 @@ describe("chooseWindow", () => {
     track(
       id,
       "home",
-      Array.from({ length: b - a + 1 }, (_, i) => [a + i, 10 + i * 0.2, 20] as [number, number, number]),
+      Array.from({ length: b - a + 1 }, (_, i) => [a + i, 10 + i * 0.1, 20] as [number, number, number]),
     );
 
   it("trims to where most players are on screen", () => {
@@ -310,5 +332,73 @@ describe("chooseWindow", () => {
     const all = Array.from({ length: 4 }, (_, i) => spanning(i, 1, 300));
     const w = chooseWindow(all, 1, 300, 25);
     expect(w.to - w.from).toBe(299);
+  });
+});
+
+describe("impossible movement", () => {
+  const at = (f: number, x: number, y: number) => ({ f, x, y });
+
+  it("cuts a track where it teleports", () => {
+    // Twelve metres between adjacent frames is 360 m/s. The tracker changed its mind
+    // about who it was following, so the two halves are two people.
+    const t = track(1, "home", [
+      [1, 10, 20],
+      [2, 10.2, 20],
+      [3, 40, 20],
+      [4, 40.2, 20],
+    ]);
+    expect(splitImpossible(t, 32)).toHaveLength(2);
+  });
+
+  it("gives the halves different ids", () => {
+    // They map players back to their source. Two fragments sharing an id would claim
+    // to be the same person.
+    const t = track(1, "home", [
+      [1, 10, 20],
+      [2, 10.2, 20],
+      [3, 40, 20],
+      [4, 40.2, 20],
+    ]);
+    const ids = splitImpossible(t, 32).map((x) => x.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("leaves a genuine sprint alone", () => {
+    const sprint = Array.from(
+      { length: 20 },
+      (_, i) => [i + 1, 10 + i * (9 / 32), 20] as [number, number, number],
+    );
+    expect(splitImpossible(track(1, "home", sprint), 32)).toHaveLength(1);
+  });
+
+  it("does not cut across an occlusion the player ran through", () => {
+    // Nothing was seen for half a second. That the ends are far apart says the player
+    // kept running, not that they teleported — and cutting there costs a whole run.
+    const t = track(1, "home", [
+      [1, 10, 20],
+      [2, 10.3, 20],
+      [18, 22, 20],
+      [19, 22.3, 20],
+    ]);
+    expect(splitImpossible(t, 32)).toHaveLength(1);
+  });
+
+  it("removes a sample that leaps away and comes straight back", () => {
+    // One detection landing on the wrong person is a bad sample, not two players.
+    const spiked = [at(1, 10, 20), at(2, 10.2, 20), at(3, 45, 20), at(4, 10.6, 20), at(5, 10.8, 20)];
+    const cleaned = withoutSpikes(spiked, 32);
+    expect(cleaned).toHaveLength(4);
+    expect(cleaned.every((s) => s.x < 20)).toBe(true);
+  });
+
+  it("keeps a track whole when a spike is all that was wrong with it", () => {
+    const t = track(1, "home", [
+      [1, 10, 20],
+      [2, 10.2, 20],
+      [3, 45, 20],
+      [4, 10.6, 20],
+      [5, 10.8, 20],
+    ]);
+    expect(splitImpossible(t, 32)).toHaveLength(1);
   });
 });
