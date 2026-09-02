@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.37.1 (2026-09-02)
+
+### Perf
+
+- **import**: ask for less coverage now the tracker gives up sooner
+
 ## v0.37.0 (2026-09-02)
 
 ### Feat
