@@ -167,6 +167,10 @@ export const en = {
   "confirm.cancel": "Cancel",
 
   // ----------------------------------------------------------- JSON dialog
+  // Video import. The file comes from football-tracks, or from anything else that
+  // writes the same shape — the message must not name a particular producer.
+  "import.tracks.invalid": "That is not a tracks file this version understands.",
+  "import.tracks.empty": "No tracked players in that file were on screen long enough to import.",
   "json.title": "Board JSON",
   "json.export": "Export",
   "json.import": "Import",

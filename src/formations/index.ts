@@ -302,6 +302,41 @@ export function buildTeam(
   };
 }
 
+/**
+ * A team whose players are GIVEN rather than laid out from a preset.
+ *
+ * Video import needs this: the squad is whoever was tracked, which is however many
+ * people were on screen, and there is no formation to place them in — their positions
+ * come from the film. Kept here beside `buildTeam` on purpose. Anything added to `Team`
+ * has to be carried through every site that mints one, and the whole point of that rule
+ * is that there is one place to look.
+ */
+export function buildSquad(
+  spec: Omit<TeamSpec, "formation" | "direction">,
+  squad: { number?: number; label?: string }[],
+): Team {
+  const used = new Set<number>();
+  const players: Player[] = squad.map((entry, i) => {
+    // Ids are `<team>-<number>`, so two players sharing a number share an id and the
+    // second silently overwrites the first in every scene's positions. Numbers read off
+    // a shirt can repeat across a mis-read, and a track with none needs one anyway.
+    const number = freeNumber(entry.number ?? i + 1, used);
+    used.add(number);
+    return { id: `${spec.id}-${number}`, number, label: entry.label ?? "" };
+  });
+
+  return {
+    id: spec.id,
+    name: spec.name,
+    color: spec.color,
+    textColor: spec.textColor,
+    ...(spec.pattern ? { pattern: spec.pattern } : {}),
+    players,
+    // No formation: this side was never laid out from one, and claiming one would let
+    // "reset positions" rearrange a squad that came off a video into a 4-3-3.
+  };
+}
+
 export const DEFAULT_PITCH = { length: 105, width: 68 } as const;
 
 export const HOME: TeamSpec = {

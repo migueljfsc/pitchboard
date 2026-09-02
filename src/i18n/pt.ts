@@ -162,6 +162,8 @@ export const pt: Dictionary = {
   "confirm.cancel": "Cancelar",
 
   // ----------------------------------------------------------- JSON dialog
+  "import.tracks.invalid": "Este não é um ficheiro de trajetórias que esta versão reconheça.",
+  "import.tracks.empty": "Nenhum jogador seguido nesse ficheiro esteve em campo tempo suficiente para importar.",
   "json.title": "JSON do quadro",
   "json.export": "Exportar",
   "json.import": "Importar",

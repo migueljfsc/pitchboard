@@ -1,0 +1,237 @@
+/**
+ * `tracks.json` → `BoardDoc`. The reduction.
+ *
+ * A tracks file is hundreds of frames of positions; a board is a handful of scenes with
+ * a curve between them. Turning one into the other is the whole job, and it is pure
+ * numerical code with no video, no camera and no pixels anywhere in it.
+ *
+ * Three decisions carry the module:
+ *
+ * SCENES ARE CHOSEN WHERE THE SHAPE STOPS BEING PREDICTABLE. Not on a fixed interval,
+ * which cuts through the middle of a run and misses the moment the play turns. The
+ * split is recursive: interpolate between the scenes so far, find the frame where some
+ * player is furthest from where that interpolation puts them, and if it is far enough,
+ * make that frame a scene. A straight run needs none; a sudden switch of play gets one
+ * exactly where it happens.
+ *
+ * A CURVE IS ONLY DRAWN WHERE THE PATH IS ACTUALLY CURVED. `paths` takes null for a
+ * straight tween, so a run that is straight within half a metre stays null rather than
+ * carrying a bezier fitted to noise.
+ *
+ * NOTHING IS INVENTED THAT CAN BE LEFT OUT. A track with no shirt number becomes a
+ * generic token rather than a guessed one; a side that could not be told becomes no
+ * player at all rather than a coin flip.
+ */
+
+import type { BoardDoc, PathCurve, Scene, Vec2 } from "@/board/types";
+import type { Sample, Track, TracksFile } from "./tracks";
+
+/**
+ * How far a player must be from where interpolation puts them, in metres, before the
+ * frame becomes a scene of its own. Below this the board would carry detail nobody can
+ * see, and each extra scene is one more the coach has to look at.
+ */
+export const SCENE_TOLERANCE_M = 2.5;
+
+/** A path straighter than this stays a straight tween. */
+export const STRAIGHT_TOLERANCE_M = 0.5;
+
+/** Scenes never land closer together than this. */
+export const MIN_SCENE_GAP_S = 0.4;
+
+/** How much of the window a track must cover to be worth putting on the board. */
+export const MIN_COVERAGE = 0.5;
+
+/**
+ * How far outside the pitch a position may sit and still be believed, in metres.
+ *
+ * A producer's own filter is generous on purpose, because it does not know how far off
+ * its camera model is. This one is not: the board is metres on a known pitch, and a
+ * throw-in taker stands a stride outside the line while the crowd behind a goal is ten
+ * metres back. The file is another program's output arriving over a file picker, so it
+ * is untrusted in exactly the sense `storage.ts` means and is checked rather than
+ * assumed.
+ */
+export const OFF_PITCH_MARGIN_M = 3;
+
+/** How much of a track may sit off the pitch before it is taken to be a spectator. */
+export const MAX_OFF_PITCH = 0.2;
+
+export const MAX_SCENES = 12;
+
+/** Below this many tracks, no error is discounted as an outlier. */
+export const OUTLIER_MIN_TRACKS = 5;
+
+/**
+ * Where a track is at a frame.
+ *
+ * Inside the track's own span this interpolates, which is fair — the player was there
+ * and the detector merely blinked. Outside it, the position is HELD at the nearest end.
+ * That is the one thing this module invents, and it is visible on the board as a player
+ * standing still before they enter, which is the least misleading way to be wrong about
+ * somebody who was not on screen.
+ */
+export function positionAt(track: Track, f: number): Vec2 {
+  const s = track.samples;
+  if (f <= s[0].f) return { x: s[0].x, y: s[0].y };
+  const last = s[s.length - 1];
+  if (f >= last.f) return { x: last.x, y: last.y };
+
+  let lo = 0;
+  let hi = s.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (s[mid].f <= f) lo = mid;
+    else hi = mid;
+  }
+  const a = s[lo];
+  const b = s[hi];
+  const t = b.f === a.f ? 0 : (f - a.f) / (b.f - a.f);
+  return { x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) };
+}
+
+/** Fraction of [from, to] the track actually has samples for. */
+export function coverage(track: Track, from: number, to: number): number {
+  if (to <= from) return 0;
+  const first = track.samples[0].f;
+  const last = track.samples[track.samples.length - 1].f;
+  const overlap = Math.min(to, last) - Math.max(from, first);
+  return Math.max(0, overlap) / (to - from);
+}
+
+/** Whether a track is a player rather than somebody watching from behind the goal. */
+export function onPitch(
+  track: Track,
+  pitch: { length: number; width: number },
+  marginM = OFF_PITCH_MARGIN_M,
+  maxOutside = MAX_OFF_PITCH,
+): boolean {
+  let outside = 0;
+  for (const s of track.samples) {
+    const beyond =
+      s.x < -marginM ||
+      s.x > pitch.length + marginM ||
+      s.y < -marginM ||
+      s.y > pitch.width + marginM;
+    if (beyond) outside++;
+  }
+  return outside / track.samples.length <= maxOutside;
+}
+
+function lerp(a: Vec2, b: Vec2, t: number): Vec2 {
+  return { x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) };
+}
+
+function dist(a: Vec2, b: Vec2): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+/**
+ * Frames worth making scenes of.
+ *
+ * Recursive split on the worst interpolation error, which is Douglas-Peucker applied to
+ * every player at once rather than to one line. `MAX_SCENES` and `MIN_SCENE_GAP_S` stop
+ * it turning a noisy clip into a flick-book.
+ */
+export function chooseScenes(
+  tracks: Track[],
+  from: number,
+  to: number,
+  fps: number,
+  toleranceM = SCENE_TOLERANCE_M,
+  maxScenes = MAX_SCENES,
+): number[] {
+  const minGap = Math.max(1, Math.round(MIN_SCENE_GAP_S * fps));
+  const chosen = [from, to];
+
+  while (chosen.length < maxScenes) {
+    let worst = { error: 0, frame: -1 };
+
+    for (let i = 0; i < chosen.length - 1; i++) {
+      const a = chosen[i];
+      const b = chosen[i + 1];
+      if (b - a < 2 * minGap) continue;
+
+      for (let f = a + minGap; f <= b - minGap; f++) {
+        const t = (f - a) / (b - a);
+        const errors = tracks.map((track) =>
+          dist(lerp(positionAt(track, a), positionAt(track, b), t), positionAt(track, f)),
+        );
+        // The second worst player rather than the worst, ONCE there are enough players
+        // to call one an outlier. A single jittery track — and there is always one —
+        // otherwise demands a scene at every frame it wobbles, and the board fills with
+        // scenes describing a detector rather than a play. Below OUTLIER_MIN_TRACKS the
+        // worst is used, because among three players there is no outlier to discount
+        // and one striker breaking away is the whole point of the scene.
+        errors.sort((p, q) => q - p);
+        const error = errors[tracks.length >= OUTLIER_MIN_TRACKS ? 1 : 0];
+        if (error > worst.error) worst = { error, frame: f };
+      }
+    }
+
+    if (worst.frame < 0 || worst.error < toleranceM) break;
+    chosen.push(worst.frame);
+    chosen.sort((p, q) => p - q);
+  }
+
+  return chosen;
+}
+
+/**
+ * A cubic bezier through the sampled path, or null when a straight line will do.
+ *
+ * Endpoints are fixed — they are the two scenes — so only the controls are fitted, by
+ * least squares over a chord-length parameterisation. `PathCurve` holds them in
+ * absolute pitch metres, which is what the renderer expects.
+ */
+export function fitCurve(
+  points: Vec2[],
+  straightToleranceM = STRAIGHT_TOLERANCE_M,
+): PathCurve | null {
+  if (points.length < 4) return null;
+  const p0 = points[0];
+  const p3 = points[points.length - 1];
+
+  // Chord length, so the parameterisation follows distance travelled rather than the
+  // sample count — a player who pauses would otherwise drag the curve towards the pause.
+  const acc = [0];
+  for (let i = 1; i < points.length; i++) acc.push(acc[i - 1] + dist(points[i - 1], points[i]));
+  const total = acc[acc.length - 1];
+  if (total === 0) return null;
+
+  let straight = 0;
+  for (let i = 0; i < points.length; i++) {
+    straight = Math.max(straight, dist(points[i], lerp(p0, p3, acc[i] / total)));
+  }
+  if (straight < straightToleranceM) return null;
+
+  let c11 = 0;
+  let c12 = 0;
+  let c22 = 0;
+  const d1 = { x: 0, y: 0 };
+  const d2 = { x: 0, y: 0 };
+  for (let i = 0; i < points.length; i++) {
+    const t = acc[i] / total;
+    const u = 1 - t;
+    const a1 = 3 * u * u * t;
+    const a2 = 3 * u * t * t;
+    const rx = points[i].x - (u * u * u * p0.x + t * t * t * p3.x);
+    const ry = points[i].y - (u * u * u * p0.y + t * t * t * p3.y);
+    c11 += a1 * a1;
+    c12 += a1 * a2;
+    c22 += a2 * a2;
+    d1.x += a1 * rx;
+    d1.y += a1 * ry;
+    d2.x += a2 * rx;
+    d2.y += a2 * ry;
+  }
+
+  const det = c11 * c22 - c12 * c12;
+  if (Math.abs(det) < 1e-9) return null;
+  return {
+    c1: { x: (c22 * d1.x - c12 * d2.x) / det, y: (c22 * d1.y - c12 * d2.y) / det },
+    c2: { x: (c11 * d2.x - c12 * d1.x) / det, y: (c11 * d2.y - c12 * d1.y) / det },
+  };
+}
+
+export type { Scene, BoardDoc, TracksFile, Sample };
