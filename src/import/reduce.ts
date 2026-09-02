@@ -45,14 +45,17 @@ export const MIN_SCENE_GAP_S = 0.4;
  * Lower than it looks like it should be, and measured rather than chosen. Raising it
  * does NOT buy fidelity: the window trims to where the surviving players are all on
  * screen, so demanding more coverage buys a longer window with fewer people in it and
- * more of their positions held. At 0.4 the Rio Ave goal fields 13 players — which is
- * what the tracker has live at the median frame — with a median drawn-versus-actual
- * error of 0.09 m. At 0.5 it fields 7 and the error is worse.
+ * more of their positions held.
  *
- * Below about 0.3 the roster passes what a pitch can hold, which is fragments of the
+ * It also has to answer to the tracker. A tracker that gives up on a lost player quickly
+ * makes fewer identity mistakes and shorter tracks, and this is where that is paid for:
+ * at 0.3 the Rio Ave goal fields 11 players over 3 scenes with a p90 of 0.57 m, where
+ * demanding 0.4 fields 8 over 2 scenes and does worse.
+ *
+ * Below about 0.25 the roster passes what a pitch can hold, which is fragments of the
  * same player arriving as two.
  */
-export const MIN_COVERAGE = 0.4;
+export const MIN_COVERAGE = 0.3;
 
 /**
  * How far outside the pitch a position may sit and still be believed, in metres.

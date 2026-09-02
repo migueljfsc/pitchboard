@@ -65,7 +65,7 @@ describe("a real broadcast goal", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const total = result.doc.teams[0].players.length + result.doc.teams[1].players.length;
-    expect(total).toBeGreaterThanOrEqual(12);
+    expect(total).toBeGreaterThanOrEqual(10);
     // And not more than a pitch holds: past that the roster is fragments of the same
     // player arriving as two.
     expect(total).toBeLessThanOrEqual(22);

@@ -311,9 +311,9 @@ describe("chooseWindow", () => {
     // whole clip carries the six as invented positions for half its length; a board
     // over the second half carries eight real ones.
     const early = [spanning(1, 1, 300), spanning(2, 1, 300)];
-    const late = Array.from({ length: 6 }, (_, i) => spanning(10 + i, 200, 300));
+    const late = Array.from({ length: 6 }, (_, i) => spanning(10 + i, 230, 300));
     const w = chooseWindow([...early, ...late], 1, 300, 25);
-    expect(w.from).toBeGreaterThanOrEqual(200);
+    expect(w.from).toBeGreaterThanOrEqual(230);
     expect(w.to).toBe(300);
   });
 
