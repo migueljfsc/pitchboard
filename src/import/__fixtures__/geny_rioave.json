@@ -5644,7 +5644,7 @@
     },
     {
       "id": 8,
-      "team": "home",
+      "team": "gkHome",
       "number": null,
       "samples": [
         {
@@ -7136,7 +7136,7 @@
     },
     {
       "id": 12,
-      "team": "away",
+      "team": "home",
       "number": null,
       "samples": [
         {
@@ -12067,7 +12067,7 @@
     },
     {
       "id": 35,
-      "team": "home",
+      "team": "gkHome",
       "number": null,
       "samples": [
         {
