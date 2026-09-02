@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.37.0 (2026-09-02)
+
+### Feat
+
+- **import**: give the ball to whoever is nearest, and let them keep it
+
 ## v0.36.0 (2026-09-02)
 
 ### Feat
