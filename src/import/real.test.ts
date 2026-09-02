@@ -57,4 +57,13 @@ describe("a real broadcast goal", () => {
     expect(result.doc.scenes.length).toBeGreaterThan(2);
     expect(result.doc.scenes.length).toBeLessThan(12);
   });
+
+  it("fields a roster worth calling a board", () => {
+    // Trimming to the best-observed passage is what buys this. Over the whole clip the
+    // same file gives 6 v 3, with half of those players' positions held rather than seen.
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const total = result.doc.teams[0].players.length + result.doc.teams[1].players.length;
+    expect(total).toBeGreaterThanOrEqual(12);
+  });
 });

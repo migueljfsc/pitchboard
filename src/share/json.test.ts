@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import tracksFixture from "@/import/__fixtures__/rioave.json";
 import { MAX_IMPORT_CHARS, SETUP_EXAMPLE, fromJson, toJson, toSetupJson } from "./json";
 import { boardDocSchema } from "@/board/schema";
 import { addSceneAfter, setCarrier } from "@/board/scenes";
@@ -197,5 +198,33 @@ describe("setup export", () => {
     const setup = JSON.parse(toSetupJson(doc));
     const listed = setup.teams.flatMap((t: { links: unknown[] }) => t.links).length;
     expect(listed).toBe(doc.links.length - 1);
+  });
+});
+
+describe("tracks files", () => {
+  it("are told apart from a board even though both declare version 1", () => {
+    // The collision that matters: routed to the board branch a tracks file fails the
+    // board schema, and the errors describe teams and scenes it was never going to have.
+    const outcome = fromJson(JSON.stringify(tracksFixture));
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.kind).toBe("tracks");
+  });
+
+  it("arrive as a board with players on both sides", () => {
+    const outcome = fromJson(JSON.stringify(tracksFixture));
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.doc.teams[0].players.length).toBeGreaterThan(0);
+    expect(outcome.doc.teams[1].players.length).toBeGreaterThan(0);
+    expect(outcome.doc.scenes.length).toBeGreaterThan(1);
+  });
+
+  it("report their own failure, not the board schema's", () => {
+    const empty = { ...tracksFixture, tracks: [] };
+    const outcome = fromJson(JSON.stringify(empty));
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.error.key).toBe("import.tracks.empty");
   });
 });

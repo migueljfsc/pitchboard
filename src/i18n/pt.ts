@@ -177,7 +177,7 @@ export const pt: Dictionary = {
   "json.copied": "Copiado",
   "json.download": "Transferir",
   "json.import.hint":
-    "Cole um quadro completo, ou uma preparação com o sistema, o onze e as suas unidades. Os jogadores são listados pela ordem do sistema, guarda-redes primeiro; uma ligação nomeia números de camisola.",
+    "Cole ou abra um quadro, uma preparação, ou trajetórias de jogadores extraídas de vídeo. As trajetórias tornam-se um quadro com uma cena em cada viragem do lance.",
   "json.import.label": "JSON a importar",
   "json.loadFile": "Carregar um ficheiro",
   "json.useExample": "Usar o exemplo",

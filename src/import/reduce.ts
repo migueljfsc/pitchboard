@@ -59,6 +59,9 @@ export const MAX_OFF_PITCH = 0.2;
 
 export const MAX_SCENES = 12;
 
+/** The shortest passage worth making a board of. */
+export const MIN_WINDOW_S = 2.5;
+
 /** Below this many tracks, no error is discounted as an outlier. */
 export const OUTLIER_MIN_TRACKS = 5;
 
@@ -97,6 +100,48 @@ export function coverage(track: Track, from: number, to: number): number {
   const last = track.samples[track.samples.length - 1].f;
   const overlap = Math.min(to, last) - Math.max(from, first);
   return Math.max(0, overlap) / (to - from);
+}
+
+/**
+ * The passage of play to build the board from.
+ *
+ * Not the whole clip. A board must give every player a position in every scene, so a
+ * track covering half the file forces the other half to be invented — and the fuller
+ * the roster, the more of it is fiction. Trimming to where the players are actually on
+ * screen buys a real eleven over a shorter passage instead of a thin one over a long
+ * passage padded out with people standing still.
+ *
+ * Candidates are the track endpoints themselves, since the count of covered tracks only
+ * changes there. More players wins; duration breaks the tie, so an equally full window
+ * is the longer one.
+ */
+export function chooseWindow(
+  tracks: Track[],
+  from: number,
+  to: number,
+  fps: number,
+  minCoverage = MIN_COVERAGE,
+  minWindowS = MIN_WINDOW_S,
+): { from: number; to: number } {
+  const minFrames = Math.round(minWindowS * fps);
+  if (to - from <= minFrames || tracks.length === 0) return { from, to };
+
+  const starts = [from, ...tracks.map((t) => t.samples[0].f)].filter((f) => f >= from && f < to);
+  const ends = [to, ...tracks.map((t) => t.samples[t.samples.length - 1].f)].filter(
+    (f) => f > from && f <= to,
+  );
+
+  let best = { from, to, count: -1 };
+  for (const a of new Set(starts)) {
+    for (const b of new Set(ends)) {
+      if (b - a < minFrames) continue;
+      const count = tracks.filter((t) => coverage(t, a, b) >= minCoverage).length;
+      const better =
+        count > best.count || (count === best.count && b - a > best.to - best.from);
+      if (better) best = { from: a, to: b, count };
+    }
+  }
+  return { from: best.from, to: best.to };
 }
 
 /** Whether a track is a player rather than somebody watching from behind the goal. */

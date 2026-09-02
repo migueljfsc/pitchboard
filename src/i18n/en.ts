@@ -184,7 +184,7 @@ export const en = {
   "json.copied": "Copied",
   "json.download": "Download",
   "json.import.hint":
-    "Paste a whole board, or a setup naming the formation, the eleven and its units. Players are listed in formation order, keeper first; a link names shirt numbers.",
+    "Paste or open a board, a setup file, or player tracks from video. Tracks become a board with a scene wherever the play turns.",
   "json.import.label": "JSON to import",
   "json.loadFile": "Load a file",
   "json.useExample": "Use the example",

@@ -20,6 +20,7 @@ import { replaceTeamLinks } from "@/board/links";
 import { AWAY, DEFAULT_FORMATION, HOME, createBoardDoc, type TeamSpec } from "@/formations";
 import { contrastOn } from "@/lib/color";
 import { msg, type Message } from "@/i18n/core";
+import { boardFromTracks } from "@/import";
 
 /**
  * Cap on an imported file, well above any real board and well below anything
@@ -124,7 +125,7 @@ export type SetupTeam = z.infer<typeof setupTeamSchema>;
 export type SetupLink = z.infer<typeof setupLinkSchema>;
 
 export type ImportOutcome =
-  | { ok: true; doc: BoardDoc; kind: "board" | "setup" }
+  | { ok: true; doc: BoardDoc; kind: "board" | "setup" | "tracks" }
   | { ok: false; error: Message };
 
 /**
@@ -154,6 +155,13 @@ export class SetupError extends Error {
  */
 export type LinkSource = { kind: "team"; n: number } | { kind: "preset"; label: string };
 
+/** The shape of a tracks file, told apart from a board by what only it carries. */
+function isTracksFile(raw: unknown): boolean {
+  if (typeof raw !== "object" || raw === null) return false;
+  const o = raw as Record<string, unknown>;
+  return Array.isArray(o.tracks) && typeof o.source === "object" && o.source !== null;
+}
+
 export function fromJson(text: string): ImportOutcome {
   if (text.length > MAX_IMPORT_CHARS) {
     return { ok: false, error: msg("import.tooLarge", { kb: MAX_IMPORT_CHARS / 1000 }) };
@@ -164,6 +172,16 @@ export function fromJson(text: string): ImportOutcome {
     raw = JSON.parse(text);
   } catch {
     return { ok: false, error: msg("import.notJson") };
+  }
+
+  // A tracks file ALSO declares `version: 1`, so it has to be told apart before the
+  // board branch or it arrives as a broken board and the errors describe the wrong
+  // thing entirely. `source` and `tracks` are what a board never has.
+  if (isTracksFile(raw)) {
+    const imported = boardFromTracks(raw);
+    return imported.ok
+      ? { ok: true, kind: "tracks", doc: imported.doc }
+      : { ok: false, error: imported.error };
   }
 
   // `version` is the discriminator. A file that declares one but fails the board

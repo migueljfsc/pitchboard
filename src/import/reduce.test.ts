@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { boardFromTracks } from "./index";
-import { chooseScenes, coverage, fitCurve, positionAt } from "./reduce";
+import { chooseScenes, chooseWindow, coverage, fitCurve, positionAt } from "./reduce";
 import type { Track } from "./tracks";
 
 const track = (
@@ -272,5 +272,43 @@ describe("boardFromTracks", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.key).toBe("import.tracks.empty");
+  });
+});
+
+describe("chooseWindow", () => {
+  const spanning = (id: number, a: number, b: number) =>
+    track(
+      id,
+      "home",
+      Array.from({ length: b - a + 1 }, (_, i) => [a + i, 10 + i * 0.2, 20] as [number, number, number]),
+    );
+
+  it("trims to where most players are on screen", () => {
+    // Two players for the whole clip and six who only arrive halfway. A board over the
+    // whole clip carries the six as invented positions for half its length; a board
+    // over the second half carries eight real ones.
+    const early = [spanning(1, 1, 300), spanning(2, 1, 300)];
+    const late = Array.from({ length: 6 }, (_, i) => spanning(10 + i, 200, 300));
+    const w = chooseWindow([...early, ...late], 1, 300, 25);
+    expect(w.from).toBeGreaterThanOrEqual(200);
+    expect(w.to).toBe(300);
+  });
+
+  it("keeps the whole clip when everyone is there for it", () => {
+    const all = Array.from({ length: 5 }, (_, i) => spanning(i, 1, 300));
+    expect(chooseWindow(all, 1, 300, 25)).toEqual({ from: 1, to: 300 });
+  });
+
+  it("will not trim below a passage worth watching", () => {
+    // Otherwise the densest window is always the single frame everybody appears in.
+    const all = [spanning(1, 1, 300), ...Array.from({ length: 8 }, (_, i) => spanning(10 + i, 290, 300))];
+    const w = chooseWindow(all, 1, 300, 25);
+    expect(w.to - w.from).toBeGreaterThanOrEqual(Math.round(2.5 * 25));
+  });
+
+  it("prefers the longer of two equally full windows", () => {
+    const all = Array.from({ length: 4 }, (_, i) => spanning(i, 1, 300));
+    const w = chooseWindow(all, 1, 300, 25);
+    expect(w.to - w.from).toBe(299);
   });
 });

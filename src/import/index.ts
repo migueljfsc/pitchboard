@@ -12,7 +12,15 @@
 import type { BoardDoc, Scene, Vec2 } from "@/board/types";
 import { buildSquad, HOME, AWAY } from "@/formations";
 import { msg, type Message } from "@/i18n/core";
-import { chooseScenes, coverage, fitCurve, MIN_COVERAGE, onPitch, positionAt } from "./reduce";
+import {
+  chooseScenes,
+  chooseWindow,
+  coverage,
+  fitCurve,
+  MIN_COVERAGE,
+  onPitch,
+  positionAt,
+} from "./reduce";
 import { tracksSchema, type Track, type TracksFile } from "./tracks";
 
 export type ImportResult = { ok: true; doc: BoardDoc } | { ok: false; error: Message };
@@ -41,11 +49,23 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   if (!parsed.success) return { ok: false, error: msg("import.tracks.invalid") };
   const file: TracksFile = parsed.data;
 
-  const from = file.source.startFrame;
-  const to = file.source.endFrame;
-  if (to <= from) return { ok: false, error: msg("import.tracks.invalid") };
+  if (file.source.endFrame <= file.source.startFrame) {
+    return { ok: false, error: msg("import.tracks.invalid") };
+  }
 
   const minCoverage = options.minCoverage ?? MIN_COVERAGE;
+
+  // Players first, then the window: which passage is best observed depends only on the
+  // people who could be on the board at all, so referees and spectators must not vote.
+  const players = file.tracks.filter((t) => sideOf(t) !== null && onPitch(t, file.pitch));
+  const { from, to } = chooseWindow(
+    players,
+    file.source.startFrame,
+    file.source.endFrame,
+    file.source.fps,
+    minCoverage,
+  );
+
   const sides: Record<"home" | "away", Track[]> = { home: [], away: [] };
   for (const track of file.tracks) {
     const side = sideOf(track);
