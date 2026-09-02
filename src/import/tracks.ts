@@ -60,7 +60,15 @@ export const tracksSchema = z.object({
     width: z.number().positive(),
   }),
   tracks: z.array(track),
-  ball: z.unknown().nullable().optional(),
+  /**
+   * Where the ball was, per frame, in the same metres as a track's samples.
+   *
+   * NOT to be trusted as a position. A ground homography assumes z = 0, so a ball in
+   * flight lands metres from where it is. It answers one question reliably — which
+   * player is nearest — and that is the only thing a board wants, since Pitchboard
+   * models the ball as `scene.carrier` and nothing else.
+   */
+  ball: z.object({ samples: z.array(sample) }).nullable().optional(),
 });
 
 export type TracksFile = z.infer<typeof tracksSchema>;

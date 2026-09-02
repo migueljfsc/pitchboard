@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { boardFromTracks } from "./index";
 import {
+  carrierAt,
   chooseScenes,
   chooseWindow,
   coverage,
@@ -232,7 +233,7 @@ describe("boardFromTracks", () => {
     expect(result.doc.scenes[1].transitionMs).toBeGreaterThan(0);
   });
 
-  it("gives the board no ball at all", () => {
+  it("gives the board no ball when the file has none", () => {
     // Nothing tracked one, and a scene naming no carrier and storing no position simply
     // has none (D44). Putting it on a player at random would be a claim about the play.
     const result = boardFromTracks(file([straightRun(1, "home"), straightRun(2, "away", 40)]));
@@ -400,5 +401,80 @@ describe("impossible movement", () => {
       [5, 10.8, 20],
     ]);
     expect(splitImpossible(t, 32)).toHaveLength(1);
+  });
+});
+
+describe("carrierAt", () => {
+  const ball = (f: number, x: number, y: number) => ({ f, x, y });
+  const players = [
+    { id: "home-1", track: track(1, "home", [[10, 20, 30], [20, 20, 30]]) },
+    { id: "away-1", track: track(2, "away", [[10, 60, 30], [20, 60, 30]]) },
+  ];
+
+  it("gives the ball to the nearest player", () => {
+    expect(carrierAt([ball(15, 21, 30)], players, 15)).toBe("home-1");
+    expect(carrierAt([ball(15, 59, 30)], players, 15)).toBe("away-1");
+  });
+
+  it("gives it to nobody when it is nearer nobody", () => {
+    // A ball in flight belongs to no one, and the nearest player to it is whoever
+    // happens to be standing under it. Null is the honest answer.
+    expect(carrierAt([ball(15, 40, 30)], players, 15)).toBeNull();
+  });
+
+  it("will not use a sighting from another moment", () => {
+    // The ball moves. Where it was a second ago says nothing about who holds it now.
+    expect(carrierAt([ball(15, 21, 30)], players, 60)).toBeNull();
+  });
+
+  it("says nothing when the ball was never found", () => {
+    expect(carrierAt([], players, 15)).toBeNull();
+  });
+});
+
+describe("the ball on a board", () => {
+  const withBall = (samples: { f: number; x: number; y: number }[]) => ({
+    ...file([straightRun(1, "home", 20), straightRun(2, "away", 40)]),
+    ball: { samples },
+  });
+
+  it("hands the ball to whoever is nearest at each scene", () => {
+    // A sighting on every frame, as the producer gives it — the staleness guard means a
+    // lone sighting says nothing about a scene several seconds away, which is correct
+    // and is what the next test leans on.
+    const result = boardFromTracks(
+      withBall(Array.from({ length: 51 }, (_, i) => ({ f: i + 1, x: 10 + i * 0.2, y: 20.3 }))),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.doc.scenes.every((s) => s.carrier?.startsWith("home"))).toBe(true);
+  });
+
+  it("lets the holder keep it through scenes that cannot tell", () => {
+    // A carrier stands until somebody else takes it, and the flight between two holders
+    // is the pass. Blanking the carrier mid-board would make the ball vanish and return.
+    const result = boardFromTracks(withBall([{ f: 3, x: 10.5, y: 20 }]));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.doc.scenes.every((s) => s.carrier !== null)).toBe(true);
+  });
+
+  it("does not let the ball appear from nowhere partway through", () => {
+    // Found only late, it still starts the board with the player who first takes it,
+    // rather than materialising in scene three.
+    const result = boardFromTracks(withBall([{ f: 49, x: 19.6, y: 20 }]));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.doc.scenes[0].carrier).not.toBeNull();
+  });
+
+  it("leaves the board with no ball at all when none was found", () => {
+    const result = boardFromTracks(file([straightRun(1, "home"), straightRun(2, "away", 40)]));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    for (const s of result.doc.scenes) {
+      expect(s.carrier).toBeNull();
+      expect(s.ballPos).toBeUndefined();
+    }
   });
 });

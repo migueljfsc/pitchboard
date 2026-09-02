@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import tracksFixture from "@/import/__fixtures__/rioave.json";
+import tracksFixture from "@/import/__fixtures__/geny_rioave.json";
 import { MAX_IMPORT_CHARS, SETUP_EXAMPLE, fromJson, toJson, toSetupJson } from "./json";
 import { boardDocSchema } from "@/board/schema";
 import { addSceneAfter, setCarrier } from "@/board/scenes";

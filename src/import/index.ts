@@ -13,6 +13,7 @@ import type { BoardDoc, Scene, Vec2 } from "@/board/types";
 import { buildSquad, HOME, AWAY } from "@/formations";
 import { msg, type Message } from "@/i18n/core";
 import {
+  carrierAt,
   chooseScenes,
   chooseWindow,
   coverage,
@@ -135,6 +136,25 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     sides[side].forEach((track, j) => idOf.set(track, teams[i].players[j].id));
   });
 
+  // The ball, resolved to a holder at each scene. Where nobody can be said to have it —
+  // it is in flight, or the sighting was not believable — the previous holder keeps it.
+  // That is not a guess about who has the ball: it is what a board MEANS. A carrier
+  // stands until somebody else takes it, and the flight between two holders is exactly
+  // the pass Pitchboard draws (D43, D44).
+  const ballSamples = file.ball?.samples ?? [];
+  const withIds = kept.map((track) => ({ id: idOf.get(track)!, track }));
+  let holder: string | null = null;
+  const carriers = frames.map((f) => {
+    const found = carrierAt(ballSamples, withIds, f);
+    if (found) holder = found;
+    return holder;
+  });
+
+  // Nobody held it before the first sighting either, so the ball would appear from
+  // nowhere partway through. It starts with whoever first takes it instead.
+  const first = carriers.find((c) => c !== null) ?? null;
+  for (let i = 0; i < carriers.length && carriers[i] === null; i++) carriers[i] = first;
+
   const scenes: Scene[] = frames.map((f, i) => {
     const positions: Record<string, Vec2> = {};
     for (const track of kept) positions[idOf.get(track)!] = positionAt(track, f);
@@ -162,9 +182,9 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
       holdMs: 0,
       positions,
       paths,
-      // No ball: nothing tracked one, and a scene that names no carrier and stores no
-      // position simply has none (D44). Inventing one would put it on a player at random.
-      carrier: null,
+      // A scene naming no carrier and storing no position has no ball at all (D44),
+      // which is the right answer when nothing found one.
+      carrier: carriers[i],
       ballPath: null,
     };
   });

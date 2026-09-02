@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 import { boardDocSchema } from "@/board/schema";
 import { fidelity } from "./fidelity";
 import { boardFromTracks } from "./index";
-import fixture from "./__fixtures__/rioave.json";
+import fixture from "./__fixtures__/geny_rioave.json";
 
 describe("a real broadcast goal", () => {
   const result = boardFromTracks(fixture, { labels: { board: "Rio Ave 0-1 Sporting" } });
@@ -91,5 +91,34 @@ describe("run fidelity on a real goal", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(fidelity(result).maxM).toBeLessThan(6);
+  });
+});
+
+describe("the ball on a real goal", () => {
+  const result = boardFromTracks(fixture);
+
+  it("finds a holder for every scene", () => {
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    for (const scene of result.doc.scenes) expect(scene.carrier).not.toBeNull();
+  });
+
+  it("gives it to a player who exists", () => {
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const ids = new Set(result.doc.teams.flatMap((t) => t.players.map((p) => p.id)));
+    for (const scene of result.doc.scenes) {
+      if (scene.carrier) expect(ids.has(scene.carrier)).toBe(true);
+    }
+  });
+
+  it("sees the ball change hands", () => {
+    // The whole reason the carrier is worth deriving: a change of holder IS a pass, and
+    // Pitchboard draws the flight between them. A board where nobody ever passes would
+    // mean the ball had been pinned to one player and learnt nothing.
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const held = new Set(result.doc.scenes.map((s) => s.carrier));
+    expect(held.size).toBeGreaterThan(1);
   });
 });
