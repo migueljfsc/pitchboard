@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.38.1 (2026-09-03)
+
+### Fix
+
+- **import**: judge an impossible jump over a baseline, and field eleven
+
 ## v0.38.0 (2026-09-02)
 
 ### Feat
