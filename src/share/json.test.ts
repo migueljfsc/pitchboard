@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import tracksFixture from "@/import/__fixtures__/geny_rioave.json";
 import { MAX_IMPORT_CHARS, SETUP_EXAMPLE, fromJson, toJson, toSetupJson } from "./json";
 import { boardDocSchema } from "@/board/schema";
 import { addSceneAfter, setCarrier } from "@/board/scenes";
@@ -201,18 +200,51 @@ describe("setup export", () => {
   });
 });
 
+/**
+ * A tracks file, built rather than recorded.
+ *
+ * These tests are about ROUTING — a tracks file and a board both declare version 1, and
+ * the collision is what `fromJson` has to get right. None of them is about real footage,
+ * so a handful of players walking a smooth line is enough, and it costs no fixture.
+ */
+function tracksFile() {
+  const fps = 25;
+  const frames = 120;
+  const tracks = [];
+  let id = 0;
+  for (const team of ["home", "away"] as const) {
+    for (let p = 0; p < 5; p++) {
+      const x0 = team === "home" ? 30 + p * 4 : 70 - p * 4;
+      const y0 = 14 + p * 10;
+      const samples = [];
+      for (let f = 0; f <= frames; f++) {
+        const t = f / fps;
+        const dx = (team === "home" ? 1 : -1) * t * 1.5;
+        samples.push({ f, x: x0 + dx, y: y0 + Math.sin(t) * 2, conf: 0.9 });
+      }
+      tracks.push({ id: id++, team, number: p + 1, samples });
+    }
+  }
+  return {
+    version: 1,
+    source: { clip: "synthetic", fps, startFrame: 0, endFrame: frames },
+    pitch: { length: 105, width: 68 },
+    tracks,
+  };
+}
+
 describe("tracks files", () => {
   it("are told apart from a board even though both declare version 1", () => {
     // The collision that matters: routed to the board branch a tracks file fails the
     // board schema, and the errors describe teams and scenes it was never going to have.
-    const outcome = fromJson(JSON.stringify(tracksFixture));
+    const outcome = fromJson(JSON.stringify(tracksFile()));
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
     expect(outcome.kind).toBe("tracks");
   });
 
   it("arrive as a board with players on both sides", () => {
-    const outcome = fromJson(JSON.stringify(tracksFixture));
+    const outcome = fromJson(JSON.stringify(tracksFile()));
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
     expect(outcome.doc.teams[0].players.length).toBeGreaterThan(0);
@@ -221,7 +253,7 @@ describe("tracks files", () => {
   });
 
   it("report their own failure, not the board schema's", () => {
-    const empty = { ...tracksFixture, tracks: [] };
+    const empty = { ...tracksFile(), tracks: [] };
     const outcome = fromJson(JSON.stringify(empty));
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;

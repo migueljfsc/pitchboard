@@ -74,6 +74,18 @@ export const MAX_OFF_PITCH = 0.2;
 
 export const MAX_SCENES = 12;
 
+/**
+ * Players a side can field.
+ *
+ * A rule of the game rather than a tuning knob, and the only defence the importer has
+ * against a fragment arriving as a teammate. Splitting a track is safe where the halves
+ * are two people and lossy where they are one, so some over-count always survives: the
+ * Nottingham clip yields fourteen home shirts for eleven players. Capping does not
+ * reunite them — nothing in the file says which two are one — but a board cannot field
+ * fourteen, and the best-observed eleven is a better guess than the first eleven found.
+ */
+export const MAX_PER_SIDE = 11;
+
 /** The shortest passage worth making a board of. */
 export const MIN_WINDOW_S = 2.5;
 
@@ -110,6 +122,22 @@ export const MAX_SPEED_MS = 12;
  * jump between samples that are ADJACENT, where there was no time to travel.
  */
 export const TELEPORT_GAP_FRAMES = 3;
+
+/**
+ * How many samples either side of a cut are averaged before its speed is believed.
+ *
+ * A speed measured across one frame is a position error multiplied by the frame rate.
+ * At 48 fps, 12 m/s is a quarter of a metre between adjacent frames — under the noise a
+ * carried homography puts on a position — so 5.9% of steps on the Nottingham clip read
+ * as impossible and the file's 77 tracks arrived as 392 fragments. The same footage at
+ * 25 fps would have split 1.7%, which is the tell: the rule was measuring the frame rate
+ * rather than the football.
+ *
+ * `withoutSpikes` cannot help, because it only knows an excursion that comes back. Noise
+ * that does not come back is indistinguishable from a real jump one frame at a time, and
+ * only stops looking like one over a baseline.
+ */
+export const SPEED_BASELINE_SAMPLES = 3;
 
 /** Below this many tracks, no error is discounted as an outlier. */
 export const OUTLIER_MIN_TRACKS = 5;
@@ -181,22 +209,56 @@ export function withoutSpikes(samples: Sample[], fps: number, maxSpeed = MAX_SPE
  * Fragments too short to be worth anything are dropped by the coverage test later, so
  * this only has to make the cut, not judge what is left.
  */
-export function splitImpossible(track: Track, fps: number, maxSpeed = MAX_SPEED_MS): Track[] {
+export function splitImpossible(
+  track: Track,
+  fps: number,
+  maxSpeed = MAX_SPEED_MS,
+  intervalS?: number,
+): Track[] {
+  // What counts as adjacent. On a file reduced to a time grid, consecutive samples are a
+  // slot apart — five frames at 48 fps and a tenth of a second — so a rule counting raw
+  // frames finds nothing adjacent and quietly stops cutting anything at all. The tell is
+  // a fragment count exactly equal to the track count.
+  const maxGap = Math.max(TELEPORT_GAP_FRAMES, Math.ceil(1.5 * (intervalS ?? 0) * fps));
   const samples = withoutSpikes(track.samples, fps, maxSpeed);
   const out: Track[] = [];
   let run: Sample[] = [samples[0]];
+
+  // The mean of up to `SPEED_BASELINE_SAMPLES` from `lo`, which is where the frame rate
+  // stops being the thing measured: averaging shrinks position noise while leaving a
+  // real jump exactly where it was.
+  const centroid = (lo: number, hi: number) => {
+    const a = Math.max(0, lo);
+    const b = Math.min(samples.length, hi);
+    let x = 0;
+    let y = 0;
+    let f = 0;
+    for (let i = a; i < b; i++) {
+      x += samples[i].x;
+      y += samples[i].y;
+      f += samples[i].f;
+    }
+    const n = b - a;
+    return { x: x / n, y: y / n, f: f / n };
+  };
 
   for (let i = 1; i < samples.length; i++) {
     const a = samples[i - 1];
     const b = samples[i];
     const gap = b.f - a.f;
-    const seconds = Math.max(1, gap) / fps;
-    const speed = Math.hypot(b.x - a.x, b.y - a.y) / seconds;
-    if (gap <= TELEPORT_GAP_FRAMES && speed > maxSpeed) {
+    // The step itself says WHERE a cut would go; the baseline says whether there is one
+    // to make. Only the step is local enough to place the boundary, and only the
+    // baseline can tell a jump from noise, so a cut needs both to agree.
+    const step = Math.hypot(b.x - a.x, b.y - a.y) / (Math.max(1, gap) / fps);
+    const before = centroid(i - SPEED_BASELINE_SAMPLES, i);
+    const after = centroid(i, i + SPEED_BASELINE_SAMPLES);
+    const seconds = Math.max(1 / fps, (after.f - before.f) / fps);
+    const sustained = Math.hypot(after.x - before.x, after.y - before.y) / seconds;
+    if (gap <= maxGap && step > maxSpeed && sustained > maxSpeed) {
       out.push({ ...track, samples: run });
       run = [];
     }
-    run.push(b);
+    run.push(samples[i]);
   }
   out.push({ ...track, samples: run });
 

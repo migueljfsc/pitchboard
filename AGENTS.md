@@ -330,6 +330,14 @@ hatch, but CI owns the real deploy.
 - **A document does not change language when the reader does.** Boards keep the names they were
   given; only a NEW one is seeded from the active locale, through the labels `createBoardDoc` and
   the scene helpers accept. Locale itself is presentation and never enters `BoardDoc` (D38).
+- **A speed measured across one frame is a position error multiplied by fps.** Every
+  threshold in `src/import/reduce.ts` that divides by a frame interval was tuned on 32 fps
+  footage; at 48 fps the same 12 m/s is a quarter of a metre between samples, which is under
+  the noise on a carried homography. It shattered one clip's tracks into five times as many
+  fragments, and the board that came out validated, scored its best-ever fidelity, and
+  contained no curved run at all — because `coverage` is a fraction of the window, so a
+  shorter window flatters every fragment and the chooser retreats to the 2.5 s floor where
+  nothing has room to bend. A good score on a short window is the symptom to distrust (D52).
 - **DPR double-application** looks correct on a 1× monitor and wrong everywhere else.
 
 ## Definition of done

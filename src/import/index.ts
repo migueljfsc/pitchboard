@@ -18,6 +18,7 @@ import {
   chooseWindow,
   coverage,
   fitCurve,
+  MAX_PER_SIDE,
   MIN_COVERAGE,
   onPitch,
   positionAt,
@@ -85,7 +86,7 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     // Cut before anything else looks at them: a track holding an impossible jump is two
     // people, and every judgement after this — coverage, which passage was watched, the
     // curve through a scene — would be made about a person who does not exist.
-    .flatMap((t) => splitImpossible(t, file.source.fps))
+    .flatMap((t) => splitImpossible(t, file.source.fps, undefined, file.source.intervalS))
     .filter((t) => sideOf(t) !== null && onPitch(t, file.pitch));
   const { from, to } = chooseWindow(
     players,
@@ -107,6 +108,20 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     // teammate who never moves.
     if (!onPitch(track, file.pitch)) continue;
     sides[side].push(track);
+  }
+
+  // Best-observed first, then cut to a legal eleven. Coverage is the ranking because a
+  // fragment is by definition the shorter half of something, so the players actually
+  // watched through the passage are the ones that survive.
+  for (const side of ["home", "away"] as const) {
+    if (sides[side].length <= MAX_PER_SIDE) continue;
+    sides[side] = sides[side]
+      .slice()
+      .sort(
+        (a, b) =>
+          coverage(b, from, to) - coverage(a, from, to) || b.samples.length - a.samples.length,
+      )
+      .slice(0, MAX_PER_SIDE);
   }
 
   const kept = [...sides.home, ...sides.away];

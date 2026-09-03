@@ -351,6 +351,22 @@ describe("impossible movement", () => {
     expect(splitImpossible(t, 32)).toHaveLength(2);
   });
 
+  it("still cuts a gridded file, where samples are a slot apart", () => {
+    // A producer that stores one position per time slot leaves consecutive samples five
+    // frames apart at 48 fps. A gap rule counting raw frames calls that "not adjacent"
+    // and stops cutting anything — the tell is a fragment count exactly equal to the
+    // track count, which looks like clean tracking rather than a disabled defence.
+    const t = track(1, "home", [
+      [1, 10, 20],
+      [6, 10.2, 20],
+      [11, 40, 20],
+      [16, 40.2, 20],
+    ]);
+    expect(splitImpossible(t, 48, undefined, 0.1)).toHaveLength(2);
+    // Without being told the spacing, the same file survives whole.
+    expect(splitImpossible(t, 48)).toHaveLength(1);
+  });
+
   it("gives the halves different ids", () => {
     // They map players back to their source. Two fragments sharing an id would claim
     // to be the same person.

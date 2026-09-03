@@ -423,6 +423,33 @@ anchor every frame, which is a second kind of drag for one shape. The drift is s
 thing being dragged.
 
 
+## D52 — An impossible speed is judged over a baseline, and a side holds eleven
+The importer cut a track wherever two adjacent samples implied more than 12 m/s. That reads as
+a fact about football, and it is really a fact about the frame rate: a speed measured across one
+frame is a position error multiplied by fps. Every constant in `reduce.ts` was tuned on 32 fps
+footage, where 12 m/s is 0.37 m between frames. The first 48 fps clip put the same threshold at
+0.25 m — under the noise a carried homography leaves on a position — and 5.9% of its steps read
+as teleports. Its 77 tracks arrived as 392 fragments.
+
+Nothing about that failure looked like a bug. The board validated, its fidelity was the best of
+any clip (0.11 m median), and every existing test passed. What it had actually done was give up:
+`coverage` is a fraction of the window, so a shorter window flatters every track in it, and the
+chooser walked down to the 2.5 s floor where the fragments still looked like players. The result
+was 2.6 seconds of football with **no curved run in it at all** — the one thing the pipeline is
+for — and the fidelity score was excellent precisely because there was nothing left to get wrong.
+
+**The step says where a cut goes; a baseline says whether there is one.** Only the step is local
+enough to place the boundary and only the baseline can tell a jump from noise, so a cut needs
+both to agree. Averaging three samples either side shrinks noise and leaves a real jump where it
+was. 392 fragments became 132, the window went from 2.6 s to 7.3 s, and 0 curved runs became 22.
+The window objective was never touched — it had been reporting the fragmentation, not causing it.
+
+**A side holds eleven, because the game says so.** Splitting is safe where the halves are two
+people and lossy where they are one, so over-count survives: Nottingham still yields fourteen
+home shirts for eleven players. The cap does not reunite them — nothing in the file says which
+two are one, and stitching was measured and rejected upstream at one good join per bad — but a
+board cannot field fourteen, and the best-observed eleven beats the first eleven found.
+
 ## D51 — Projects nest, as an adjacency list guarded in the Worker
 D39 gave a user projects and a project boards, one level deep. A season's work does not fit
 that: "Season 24/25 > Away > Set pieces" is the shape, and twenty-five flat folders is the same

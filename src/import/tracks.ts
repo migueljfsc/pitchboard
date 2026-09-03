@@ -50,6 +50,14 @@ export const tracksSchema = z.object({
   source: z.object({
     clip: z.string().min(1),
     fps: z.number().positive(),
+    /**
+     * Seconds between stored positions, when the producer reduced them to a time grid.
+     *
+     * Absent means every frame. It matters because "adjacent" is what the impossible-jump
+     * split is about: on a gridded file consecutive samples are a slot apart, and a rule
+     * counting raw frames decides they are never adjacent and stops cutting anything.
+     */
+    intervalS: z.number().positive().optional(),
     startFrame: z.number().int().min(0),
     endFrame: z.number().int().min(0),
     width: z.number().int().positive().optional(),
