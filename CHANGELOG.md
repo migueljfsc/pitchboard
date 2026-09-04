@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.39.0 (2026-09-04)
+
+### Feat
+
+- **import**: start the board at the set piece
+
 ## v0.38.1 (2026-09-03)
 
 ### Fix
