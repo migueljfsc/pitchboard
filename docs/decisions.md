@@ -423,6 +423,49 @@ anchor every frame, which is a second kind of drag for one shape. The drift is s
 thing being dragged.
 
 
+## D54 — The window counts what the board can field, and buys seconds with a fragment
+`chooseWindow` maximised the number of covered tracks with duration as a tie-break at exactly
+equal count. Two things are wrong with that, and they only show up together.
+
+**The count is fragments, not players.** A track holding an impossible jump is cut before the
+window is chosen, and the upstream tracker's id switches make that frequent: 56 tracks arrive
+as 147 fragments on one clip, 66 as 197 on another. An extra covering fragment is routinely a
+player already on the board.
+
+**And the board fields at most `MAX_PER_SIDE` a side**, so a window scoring 26 and one scoring
+25 often produce the same eleven. Counting past the cap optimises what is then discarded.
+
+Without slack, one of those fragments outweighs any amount of football: the fullest window on
+SNGS-147 is 19 fragments over **2.8 seconds**, against 18 over 8.6. So each side is now scored
+against the cap, and the longest window within `WINDOW_SLACK` of the fullest is taken.
+
+**The two rules need each other, which is why neither shipped alone.** Capping alone lets a
+side with two fragments decide the window once the other is past eleven — SNGS-067 goes to 3.4
+seconds. Slack alone buys duration by gutting a side: SNGS-147 trades 11 v 8 over 2.8 s for
+**17 v 1** over 8.6 s, which is not a board. Together they hold.
+
+Measured over eleven clips as mean coverage times duration — the seconds of actually observed
+player-time a board is built from, rather than its length, which flatters interpolation:
+
+    clip        before          after
+    SNGS-067    6.6s  ->  12.8s      SNGS-060   13.8s -> 19.5s
+    SNGS-075    7.8s  ->  12.1s      SNGS-069   11.1s -> 17.4s
+    SNGS-116    6.2s  ->   8.6s      SNGS-066    9.6s -> 11.6s
+    SNGS-100    4.3s  ->   6.9s      SNGS-151    5.4s ->  7.3s
+    SNGS-110    6.2s  ->   7.2s      SNGS-147    1.7s ->  1.8s
+    SNGS-121   11.4s  ->   9.5s
+
+Ten of eleven improve. The coverage SHARE falls on most of them — a longer window is a larger
+denominator — and that is the trade being made deliberately: more real football on the board,
+a larger fraction of it interpolated between real observations.
+
+SNGS-121 is the one regression, and it is the cap doing what it was asked: 11 v 7 over 20.2 s
+becomes 9 v 11 over 16.5 s. A more complete away side for four fewer seconds.
+
+SNGS-147 barely moves, because nothing here can fix it. Its away side is only tracked early and
+its home side late, so no long window holds both. That is the upstream id switches, not the
+objective.
+
 ## D53 — A set piece outranks a full roster when choosing the window
 `chooseWindow` maximises the number of tracks covering the passage, tie-broken by duration.
 It never looked at the ball, and on set-piece footage that is exactly the wrong objective:

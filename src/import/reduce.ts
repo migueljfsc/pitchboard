@@ -90,6 +90,21 @@ export const MAX_PER_SIDE = 11;
 export const MIN_WINDOW_S = 2.5;
 
 /**
+ * How many covered tracks a longer window may give up to be chosen, in players.
+ *
+ * The count is FRAGMENTS, not people. A track holding an impossible jump is cut before
+ * the window is chosen, so a busy clip arrives as 90 to 200 pieces of 40 to 80 players
+ * and an extra covering fragment is frequently a player already on the board. The board
+ * then fields at most `MAX_PER_SIDE` a side, so windows scoring 26 and 25 routinely
+ * produce the same eleven.
+ *
+ * Without slack, duration only breaks an exact tie, and one fragment outweighs any amount
+ * of football: the best window on one clip is 19 fragments over 2.8 s, against 18 over
+ * 8.6 s. One is inside the noise of this measurement; six seconds of play is not.
+ */
+export const WINDOW_SLACK = 1;
+
+/**
  * How near a restart spot the ball must sit, in metres, and how long it must sit there,
  * before the passage counts as a set piece being taken.
  *
@@ -297,6 +312,18 @@ export function coverage(track: Track, from: number, to: number): number {
   return Math.max(0, overlap) / (to - from);
 }
 
+/** Sides a track can be put on. Referees and unknowns are not players. */
+const SIDES = {
+  home: ["home", "gkHome"],
+  away: ["away", "gkAway"],
+} as const;
+
+export function sideOf(track: Track): "home" | "away" | null {
+  if ((SIDES.home as readonly string[]).includes(track.team)) return "home";
+  if ((SIDES.away as readonly string[]).includes(track.team)) return "away";
+  return null;
+}
+
 /**
  * The frame a set piece is taken on, or null when the passage holds none.
  *
@@ -355,8 +382,11 @@ export function restartAt(
  * passage padded out with people standing still.
  *
  * Candidates are the track endpoints themselves, since the count of covered tracks only
- * changes there. More players wins; duration breaks the tie, so an equally full window
- * is the longer one.
+ * changes there. Each side is scored against `MAX_PER_SIDE`, since that is what the board
+ * can field, and the longest window within `WINDOW_SLACK` of the fullest wins — a fragment
+ * is not a player. The two rules need each other: the cap alone lets a side with two
+ * fragments decide the window once the other is over eleven, and slack alone buys duration
+ * by gutting a side.
  *
  * A set piece outranks both. During a corner the players are bunched in the box occluding
  * each other, so their tracks fragment and the count drops — which means this would
@@ -381,21 +411,32 @@ export function chooseWindow(
     (f) => f > from && f <= to,
   );
 
-  let best = { from, to, count: -1, covers: false };
+  const candidates: { from: number; to: number; count: number; covers: boolean }[] = [];
   for (const a of new Set(starts)) {
     for (const b of new Set(ends)) {
       if (b - a < minFrames) continue;
-      const covers = restart !== null && a <= restart && b > restart;
-      const count = tracks.filter((t) => coverage(t, a, b) >= minCoverage).length;
-      const better =
-        covers !== best.covers
-          ? covers
-          : count !== best.count
-            ? count > best.count
-            : b - a > best.to - best.from;
-      if (better) best = { from: a, to: b, count, covers };
+      const covered = tracks.filter((t) => coverage(t, a, b) >= minCoverage);
+      const home = covered.filter((t) => sideOf(t) === "home").length;
+      const away = covered.filter((t) => sideOf(t) === "away").length;
+      candidates.push({
+        from: a,
+        to: b,
+        // Capped per side, because that is what the board fields. Counting past the cap
+        // optimises fragments it then discards, and a total hides the split: one clip's
+        // fullest window is 17 home and 1 away, which is not a board.
+        count: Math.min(home, MAX_PER_SIDE) + Math.min(away, MAX_PER_SIDE),
+        covers: restart !== null && a <= restart && b > restart,
+      });
     }
   }
+  if (candidates.length === 0) return { from, to };
+
+  const covering = candidates.filter((c) => c.covers);
+  const pool = covering.length > 0 ? covering : candidates;
+  const most = Math.max(...pool.map((c) => c.count));
+  const best = pool
+    .filter((c) => c.count >= most - WINDOW_SLACK)
+    .reduce((x, y) => (y.to - y.from > x.to - x.from ? y : x));
   return { from: best.from, to: best.to };
 }
 

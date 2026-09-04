@@ -23,6 +23,7 @@ import {
   onPitch,
   positionAt,
   restartAt,
+  sideOf,
   splitImpossible,
 } from "./reduce";
 import { tracksSchema, type Track, type TracksFile } from "./tracks";
@@ -57,18 +58,6 @@ export type ImportOptions = {
   /** A run straighter than this keeps a straight tween. Infinity draws none at all. */
   straightToleranceM?: number;
 };
-
-/** Sides a track can be put on. Referees and unknowns are not players and are dropped. */
-const SIDES = {
-  home: ["home", "gkHome"],
-  away: ["away", "gkAway"],
-} as const;
-
-function sideOf(track: Track): "home" | "away" | null {
-  if ((SIDES.home as readonly string[]).includes(track.team)) return "home";
-  if ((SIDES.away as readonly string[]).includes(track.team)) return "away";
-  return null;
-}
 
 export function boardFromTracks(raw: unknown, options: ImportOptions = {}): ImportResult {
   const parsed = tracksSchema.safeParse(raw);

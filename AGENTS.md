@@ -346,6 +346,16 @@ stands*; read it before touching either side of the seam.
 - **A document does not change language when the reader does.** Boards keep the names they were
   given; only a NEW one is seeded from the active locale, through the labels `createBoardDoc` and
   the scene helpers accept. Locale itself is presentation and never enters `BoardDoc` (D38).
+- **The window's count is FRAGMENTS, and the board fields eleven a side** (D54). `splitImpossible`
+  runs first and the upstream tracker's switches make it frequent — 56 tracks arrive as 147
+  pieces — so an extra covering fragment is often somebody already on the board, and anything
+  past `MAX_PER_SIDE` is discarded anyway. Each side is scored against the cap, and the longest
+  window within `WINDOW_SLACK` of the fullest wins. The cap and the slack fix each other's
+  failure: capping alone lets a two-fragment side pick the window, slack alone buys seconds by
+  gutting a side (11 v 8 over 2.8 s became 17 v 1 over 8.6 s).
+- **Judge a window by coverage TIMES duration, not by either.** Duration flatters interpolation
+  and coverage is a fraction of the window, so a short window flatters every track in it (D52).
+  Their product is the observed player-seconds the board is actually built from.
 - **The window objective is about PLAYERS, so it walks past set pieces** (D53). During a corner
   the players bunch in the box and occlude each other, their tracks fragment, and the coverage
   count drops — so `chooseWindow` picks the open play afterwards and the board never contains

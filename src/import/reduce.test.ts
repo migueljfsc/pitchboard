@@ -336,6 +336,28 @@ describe("chooseWindow", () => {
     expect(w.to - w.from).toBe(299);
   });
 
+  it("takes a much longer window that is one fragment short of the fullest", () => {
+    // A fragment is not a player: an extra covering piece is often somebody already on
+    // the board, so one of them does not outweigh four times the football.
+    const whole = Array.from({ length: 5 }, (_, i) => spanning(i, 1, 300));
+    const late = [spanning(99, 230, 300)];
+    expect(chooseWindow([...whole, ...late], 1, 300, 25)).toEqual({ from: 1, to: 300 });
+  });
+
+  it("will not give up two", () => {
+    const whole = Array.from({ length: 5 }, (_, i) => spanning(i, 1, 300));
+    const late = [spanning(98, 230, 300), spanning(99, 230, 300)];
+    expect(chooseWindow([...whole, ...late], 1, 300, 25).from).toBeGreaterThanOrEqual(230);
+  });
+
+  it("does not count a side past what the board can field", () => {
+    // Fourteen home fragments and eleven are the same eleven once MAX_PER_SIDE has had
+    // them, so the window they crowd into is not fuller — only shorter.
+    const whole = Array.from({ length: 11 }, (_, i) => spanning(i, 1, 300));
+    const late = Array.from({ length: 14 }, (_, i) => spanning(50 + i, 230, 300));
+    expect(chooseWindow([...whole, ...late], 1, 300, 25)).toEqual({ from: 1, to: 300 });
+  });
+
   it("starts at a set piece even where fewer players are on screen", () => {
     // The case this exists for. During a corner the players are bunched in the box
     // occluding each other, so their tracks fragment and the count drops — and the
