@@ -33,6 +33,7 @@ before any React touches it, and every phase ends at a state you can look at.
 | — | Moving players and shaping runs in the 3D view (D49) |
 | — | Moving and resizing the drawing in the 3D view (D50) |
 | — | Nested project folders, with cycle and depth guards (D51) |
+| — | Video import — `tracks.json` from the `football-tracks` sibling repo becomes a board (D52) |
 
 Everything above is complete and covered by tests. The per-phase task lists and build notes were
 retired once they stopped describing anything a reader has to decide; what outlived them is in

@@ -72,6 +72,10 @@ src/board/                the engine — zero React, zero DOM
   interaction.ts          hit-testing, drag, selection
 src/formations/           preset shapes, each seeding its own links
 src/export/               worker render loop, mediabunny, gifenc, PNG
+src/import/               video-derived tracks in, a board out — see the sibling repo below
+  tracks.ts               tracks.json's zod schema; the contract with football-tracks
+  reduce.ts               the numerical half — fragments to runs, and choosing the window
+  index.ts                what becomes a player, what becomes a scene, what is refused
 src/share/                localStorage, URL-hash codec, API client
   storage.ts              the ONLY place localStorage is touched; never throws
   urlcodec.ts             #d= share links: deflate + base64url, and the budget
@@ -101,6 +105,18 @@ hatch, but CI owns the real deploy.
 
 `src/board/types.ts` is the canonical schema, in the same spirit as `cv.ts` in `portfolio` and
 `site.ts` in `motorcycle-journey`. Components never redefine document shape.
+
+## The sibling repo
+
+`src/import/` reads `tracks.json`, and nothing in this repo produces one. It comes from
+[`football-tracks`](../football-tracks) — a Python pipeline that turns a broadcast clip into
+player positions in pitch metres, so a coach corrects a play instead of drawing it. The two
+repos meet at that file and at nothing else: this one knows no video, that one knows no
+`BoardDoc`. Its `schema/tracks.schema.json` and our `src/import/tracks.ts` describe the same
+format and have to be changed together.
+
+**Active work is over there, not here.** `football-tracks/PLAN.md` opens with *Where this
+stands*; read it before touching either side of the seam.
 
 ## Engineering conventions
 
