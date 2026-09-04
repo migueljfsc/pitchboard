@@ -22,6 +22,7 @@ import {
   MIN_COVERAGE,
   onPitch,
   positionAt,
+  restartAt,
   splitImpossible,
 } from "./reduce";
 import { tracksSchema, type Track, type TracksFile } from "./tracks";
@@ -88,12 +89,17 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     // curve through a scene — would be made about a person who does not exist.
     .flatMap((t) => splitImpossible(t, file.source.fps, undefined, file.source.intervalS))
     .filter((t) => sideOf(t) !== null && onPitch(t, file.pitch));
+  // Read before the window is chosen, because it is one of the things choosing it: a
+  // board made of a corner clip that does not contain the corner is the wrong board.
+  const ballSamples = file.ball?.samples ?? [];
   const { from, to } = chooseWindow(
     players,
     file.source.startFrame,
     file.source.endFrame,
     file.source.fps,
     minCoverage,
+    undefined,
+    restartAt(ballSamples, file.pitch, file.source.fps),
   );
 
   const sides: Record<"home" | "away", Track[]> = { home: [], away: [] };
@@ -156,7 +162,6 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   // That is not a guess about who has the ball: it is what a board MEANS. A carrier
   // stands until somebody else takes it, and the flight between two holders is exactly
   // the pass Pitchboard draws (D43, D44).
-  const ballSamples = file.ball?.samples ?? [];
   const withIds = kept.map((track) => ({ id: idOf.get(track)!, track }));
   let holder: string | null = null;
   const carriers = frames.map((f) => {

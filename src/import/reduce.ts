@@ -90,6 +90,25 @@ export const MAX_PER_SIDE = 11;
 export const MIN_WINDOW_S = 2.5;
 
 /**
+ * How near a restart spot the ball must sit, in metres, and how long it must sit there,
+ * before the passage counts as a set piece being taken.
+ *
+ * A corner, a kick-off and a goal kick all start with the ball placed somewhere known and
+ * left alone for seconds, which is a thing nothing else in a football clip does. The
+ * radius is homography slack rather than a real tolerance — a ball on the corner arc
+ * projects a metre or so outside the line — and the rest is what separates a placed ball
+ * from one rolling past the spot.
+ *
+ * Free kicks are deliberately unreachable by this: they are taken wherever the foul was,
+ * so they have no position to recognise.
+ */
+export const RESTART_RADIUS_M = 1.5;
+export const RESTART_REST_S = 0.4;
+
+/** How long a gap in the sightings a single rest survives, in seconds. */
+const RESTART_GAP_S = 0.2;
+
+/**
  * How near the ball a player must be to be called its carrier, in metres.
  *
  * Measured, not chosen. Against SoccerNet's own ball, the nearest player is the right
@@ -279,6 +298,54 @@ export function coverage(track: Track, from: number, to: number): number {
 }
 
 /**
+ * The frame a set piece is taken on, or null when the passage holds none.
+ *
+ * The ball resting on a corner arc or the centre spot is the one moment in a clip whose
+ * position is known before it is seen, so it is worth finding: it is where the coach's
+ * board should start. What is returned is the moment the ball LEAVES — the kick — because
+ * that is what has to be on screen. How much of the wait to keep in front of it is left
+ * to `chooseWindow`, which is already choosing between passages on other grounds.
+ *
+ * Derived from the samples rather than read from a field, so it works on any tracks.json
+ * that satisfies the contract, including every file written before this existed.
+ */
+export function restartAt(
+  ball: Sample[],
+  pitch: { length: number; width: number },
+  fps: number,
+): number | null {
+  if (ball.length === 0) return null;
+  const spots: [number, number][] = [
+    [0, 0],
+    [0, pitch.width],
+    [pitch.length, 0],
+    [pitch.length, pitch.width],
+    [pitch.length / 2, pitch.width / 2],
+  ];
+  const restFrames = Math.max(1, Math.round(RESTART_REST_S * fps));
+  const gapFrames = Math.max(1, Math.round(RESTART_GAP_S * fps));
+  const samples = [...ball].sort((a, b) => a.f - b.f);
+
+  const runs: Sample[][] = [];
+  let run: Sample[] = [];
+  for (const s of samples) {
+    const resting = spots.some((p) => Math.hypot(s.x - p[0], s.y - p[1]) <= RESTART_RADIUS_M);
+    const broken = !resting || (run.length > 0 && s.f - run[run.length - 1].f > gapFrames);
+    if (broken && run.length > 0) {
+      runs.push(run);
+      run = [];
+    }
+    if (resting) run.push(s);
+  }
+  if (run.length > 0) runs.push(run);
+
+  const rests = runs.filter((r) => r.length >= restFrames);
+  if (rests.length === 0) return null;
+  const longest = rests.reduce((a, b) => (b.length > a.length ? b : a));
+  return longest[longest.length - 1].f;
+}
+
+/**
  * The passage of play to build the board from.
  *
  * Not the whole clip. A board must give every player a position in every scene, so a
@@ -290,6 +357,12 @@ export function coverage(track: Track, from: number, to: number): number {
  * Candidates are the track endpoints themselves, since the count of covered tracks only
  * changes there. More players wins; duration breaks the tie, so an equally full window
  * is the longer one.
+ *
+ * A set piece outranks both. During a corner the players are bunched in the box occluding
+ * each other, so their tracks fragment and the count drops — which means this would
+ * reliably walk past the corner and pick the open play afterwards, and did. A board made
+ * of a corner clip that does not contain the corner is the wrong board however many
+ * players it has. With no restart in the passage nothing changes.
  */
 export function chooseWindow(
   tracks: Track[],
@@ -298,6 +371,7 @@ export function chooseWindow(
   fps: number,
   minCoverage = MIN_COVERAGE,
   minWindowS = MIN_WINDOW_S,
+  restart: number | null = null,
 ): { from: number; to: number } {
   const minFrames = Math.round(minWindowS * fps);
   if (to - from <= minFrames || tracks.length === 0) return { from, to };
@@ -307,14 +381,19 @@ export function chooseWindow(
     (f) => f > from && f <= to,
   );
 
-  let best = { from, to, count: -1 };
+  let best = { from, to, count: -1, covers: false };
   for (const a of new Set(starts)) {
     for (const b of new Set(ends)) {
       if (b - a < minFrames) continue;
+      const covers = restart !== null && a <= restart && b > restart;
       const count = tracks.filter((t) => coverage(t, a, b) >= minCoverage).length;
       const better =
-        count > best.count || (count === best.count && b - a > best.to - best.from);
-      if (better) best = { from: a, to: b, count };
+        covers !== best.covers
+          ? covers
+          : count !== best.count
+            ? count > best.count
+            : b - a > best.to - best.from;
+      if (better) best = { from: a, to: b, count, covers };
     }
   }
   return { from: best.from, to: best.to };

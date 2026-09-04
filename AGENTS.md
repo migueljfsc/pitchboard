@@ -346,6 +346,17 @@ stands*; read it before touching either side of the seam.
 - **A document does not change language when the reader does.** Boards keep the names they were
   given; only a NEW one is seeded from the active locale, through the labels `createBoardDoc` and
   the scene helpers accept. Locale itself is presentation and never enters `BoardDoc` (D38).
+- **The window objective is about PLAYERS, so it walks past set pieces** (D53). During a corner
+  the players bunch in the box and occlude each other, their tracks fragment, and the coverage
+  count drops — so `chooseWindow` picks the open play afterwards and the board never contains
+  the corner. A restart now outranks a fuller roster; count and duration decide underneath it.
+  `restartAt` reads the ball resting on a corner arc or the centre spot straight out of
+  `ball.samples`, so nothing in `tracks.json` had to change and every existing file still works.
+  A free kick has no canonical position and is deliberately unreachable by it.
+- **A better ball is not a better board.** Fixing the ball at the corner improved five clips'
+  ball accuracy and left four of their boards byte-identical, because the window excluded the
+  frames that got better. Anything measured on the source has to be re-measured through
+  `boardFromTracks` before it counts as shipped.
 - **A speed measured across one frame is a position error multiplied by fps.** Every
   threshold in `src/import/reduce.ts` that divides by a frame interval was tuned on 32 fps
   footage; at 48 fps the same 12 m/s is a quarter of a metre between samples, which is under

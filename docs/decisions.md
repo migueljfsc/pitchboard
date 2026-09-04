@@ -423,6 +423,39 @@ anchor every frame, which is a second kind of drag for one shape. The drift is s
 thing being dragged.
 
 
+## D53 — A set piece outranks a full roster when choosing the window
+`chooseWindow` maximises the number of tracks covering the passage, tie-broken by duration.
+It never looked at the ball, and on set-piece footage that is exactly the wrong objective:
+during a corner the players are bunched in the box occluding each other, so their tracks
+fragment and the count drops, and the window reliably walked past the corner to the open play
+afterwards. Four of five imports whose ball had just been fixed at the corner produced a
+**byte-identical board** — the ball was now right in frames the board never opened.
+
+A board made from a corner clip that does not contain the corner is the wrong board however
+many players it has, so a window covering a restart now outranks a fuller one. Count and
+duration still decide everything underneath that.
+
+`restartAt` finds it: the ball resting within 1.5 m of a corner arc or the centre spot for at
+least 0.4 s, and the frame returned is the one it LEAVES on — the kick is what has to be on
+screen, and how much of the wait to keep in front of it is a question the existing objective
+already answers. It is derived from `ball.samples` rather than read from a field, so it works
+on every tracks.json ever written, and `tracks.json` did not have to change.
+
+The radius is homography slack, not a tolerance — a ball on the corner arc projects a metre or
+so outside the line. The rest is what separates a placed ball from one rolling past the spot.
+Both were measured upstream against SoccerNet's ball annotations, where a run this finds is
+right 460 times in 462.
+
+**Free kicks are deliberately out of reach.** They are taken wherever the foul was — (21.6, 7.2),
+(78.6, 10.4), (7.0, 54.6) across the sample — so they have no position to recognise, and 0 of 6
+free-kick clips are touched by this. Corners and kick-offs are 12 of 13.
+
+Measured over eleven imports: four windows moved, all of them onto a set piece that had been
+missed, and seven boards are identical — including all four clips with no restart in them. The
+cost is SNGS-110, which trades two away players for a window that contains its corner. The
+penalty spots are excluded for the same reason as upstream: a painted white disc is what a
+detector calls a ball, and a penalty is the one restart this footage never contains.
+
 ## D52 — An impossible speed is judged over a baseline, and a side holds eleven
 The importer cut a track wherever two adjacent samples implied more than 12 m/s. That reads as
 a fact about football, and it is really a fact about the frame rate: a speed measured across one

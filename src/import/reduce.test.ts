@@ -7,6 +7,7 @@ import {
   coverage,
   fitCurve,
   positionAt,
+  restartAt,
   splitImpossible,
   withoutSpikes,
 } from "./reduce";
@@ -333,6 +334,66 @@ describe("chooseWindow", () => {
     const all = Array.from({ length: 4 }, (_, i) => spanning(i, 1, 300));
     const w = chooseWindow(all, 1, 300, 25);
     expect(w.to - w.from).toBe(299);
+  });
+
+  it("starts at a set piece even where fewer players are on screen", () => {
+    // The case this exists for. During a corner the players are bunched in the box
+    // occluding each other, so their tracks fragment and the count drops — and the
+    // window walked past four corners and a kick-off to the open play afterwards.
+    const early = [spanning(1, 1, 300), spanning(2, 1, 300)];
+    const late = Array.from({ length: 6 }, (_, i) => spanning(10 + i, 230, 300));
+    const w = chooseWindow([...early, ...late], 1, 300, 25, undefined, undefined, 100);
+    expect(w.from).toBeLessThanOrEqual(100);
+    expect(w.to).toBeGreaterThan(100);
+  });
+
+  it("changes nothing when the passage holds no set piece", () => {
+    const early = [spanning(1, 1, 300), spanning(2, 1, 300)];
+    const late = Array.from({ length: 6 }, (_, i) => spanning(10 + i, 230, 300));
+    const all = [...early, ...late];
+    expect(chooseWindow(all, 1, 300, 25, undefined, undefined, null)).toEqual(
+      chooseWindow(all, 1, 300, 25),
+    );
+  });
+});
+
+describe("restartAt", () => {
+  const pitch = { length: 105, width: 68 };
+  const resting = (from: number, to: number, x: number, y: number) =>
+    Array.from({ length: to - from + 1 }, (_, i) => ({ f: from + i, x, y }));
+
+  it("finds the frame the ball leaves the corner arc", () => {
+    // A corner: the ball sits on the arc for three seconds, then is struck.
+    const ball = [...resting(40, 115, 104.9, -0.4), { f: 130, x: 90, y: 20 }];
+    expect(restartAt(ball, pitch, 25)).toBe(115);
+  });
+
+  it("finds a kick-off on the centre spot", () => {
+    expect(restartAt(resting(1, 60, 52.4, 34.2), pitch, 25)).toBe(60);
+  });
+
+  it("ignores a ball that merely rolls past the spot", () => {
+    // Four frames is 0.16s. Nobody placed that.
+    const ball = [...resting(40, 43, 105, 0), { f: 60, x: 80, y: 30 }];
+    expect(restartAt(ball, pitch, 25)).toBeNull();
+  });
+
+  it("ignores a ball at rest anywhere else", () => {
+    // A free kick is taken wherever the foul was, so it has no position to recognise.
+    expect(restartAt(resting(1, 100, 21.6, 7.2), pitch, 25)).toBeNull();
+  });
+
+  it("takes the longest rest when a clip holds more than one", () => {
+    const ball = [
+      ...resting(1, 20, 52.5, 34),
+      { f: 40, x: 70, y: 30 },
+      ...resting(60, 160, 104.8, 0.3),
+    ];
+    expect(restartAt(ball, pitch, 25)).toBe(160);
+  });
+
+  it("says nothing about a file with no ball", () => {
+    expect(restartAt([], pitch, 25)).toBeNull();
   });
 });
 
