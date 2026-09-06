@@ -52,6 +52,8 @@ type Row = {
   file: string;
   ok: boolean;
   error?: string;
+  from?: number;
+  to?: number;
   players?: number;
   home?: number;
   away?: number;
@@ -130,6 +132,8 @@ const rows: Row[] = files.map((file) => {
   return {
     file: label(file),
     ok: true,
+    from: window.from,
+    to: window.to,
     players: ids.length,
     home: doc.teams[0].players.length,
     away: doc.teams[1].players.length,

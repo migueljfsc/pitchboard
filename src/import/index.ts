@@ -22,6 +22,8 @@ import {
   handovers,
   MAX_PER_SIDE,
   MIN_COVERAGE,
+  MIN_OBSERVED_S,
+  observed,
   onPitch,
   positionAt,
   restartAt,
@@ -142,7 +144,16 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     // Half of them would be on the wrong team and nothing on the board would say so.
     if (!side) continue;
     if (track === keepers[side]) continue;
-    if (track !== taker && coverage(track, from, to) < minCoverage) continue;
+    // The same two tests `chooseWindow` scored the passage with. They have to agree: a
+    // window chosen for a roster this then declines to field is a window chosen for
+    // nothing.
+    if (
+      track !== taker &&
+      (coverage(track, from, to) < minCoverage ||
+        observed(track, from, to, file.source.fps) < MIN_OBSERVED_S)
+    ) {
+      continue;
+    }
     // Somebody standing behind the goal is not a player, whatever the producer labelled
     // them. Their positions are off the pitch and they would appear on the board as a
     // teammate who never moves.

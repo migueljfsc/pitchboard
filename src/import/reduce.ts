@@ -64,6 +64,26 @@ export const MIN_SCENE_GAP_S = 0.4;
 export const MIN_COVERAGE = 0.3;
 
 /**
+ * The least time a player must be watched for, in seconds, whatever share of the window
+ * that is.
+ *
+ * `MIN_COVERAGE` is a FRACTION of the window, so a shorter window clears it more easily
+ * and the count of covering tracks rises as the passage shrinks. `chooseWindow` maximises
+ * that count, so the bias is structural rather than a tuning problem: SNGS-147 came out
+ * as nineteen fragments over 3.2 seconds of a thirty-second clip, and those nineteen are
+ * eight real players seen for a second each.
+ *
+ * A floor in seconds cannot be gamed by shrinking the window. It is a claim about football
+ * rather than about the file: a player watched for under a second and a half has not made a
+ * run, and drawing one for them is inventing it.
+ *
+ * Measured either side of it. At 1 s SNGS-147 stays broken -- 17 fragments over 3.6 s -- and
+ * at 3 s the Nottingham clip falls from 20 players to 12 and the Rio Ave goal from 14 to 5.
+ * It also has to stay under `MIN_WINDOW_S`, or a window trimmed to the minimum fields nobody.
+ */
+export const MIN_OBSERVED_S = 1.5;
+
+/**
  * How far outside the pitch a position may sit and still be believed, in metres.
  *
  * A producer's own filter is generous on purpose, because it does not know how far off
@@ -328,6 +348,13 @@ export function splitImpossible(
 }
 
 /** Fraction of [from, to] the track actually has samples for. */
+/** How long a track is actually watched inside a window, in seconds. */
+export function observed(track: Track, from: number, to: number, fps: number): number {
+  const first = track.samples[0].f;
+  const last = track.samples[track.samples.length - 1].f;
+  return Math.max(0, Math.min(to, last) - Math.max(from, first)) / fps;
+}
+
 export function coverage(track: Track, from: number, to: number): number {
   if (to <= from) return 0;
   const first = track.samples[0].f;
@@ -477,6 +504,7 @@ export function chooseWindow(
   minWindowS = MIN_WINDOW_S,
   restart: number | null = null,
   changes: number[] = [],
+  minObservedS = MIN_OBSERVED_S,
 ): { from: number; to: number } {
   const minFrames = Math.round(minWindowS * fps);
   if (to - from <= minFrames || tracks.length === 0) return { from, to };
@@ -496,7 +524,7 @@ export function chooseWindow(
   for (const a of new Set(starts)) {
     for (const b of new Set(ends)) {
       if (b - a < minFrames) continue;
-      const covered = tracks.filter((t) => coverage(t, a, b) >= minCoverage);
+      const covered = tracks.filter((t) => observed(t, a, b, fps) >= minObservedS && coverage(t, a, b) >= minCoverage);
       const home = covered.filter((t) => sideOf(t) === "home").length;
       const away = covered.filter((t) => sideOf(t) === "away").length;
       candidates.push({

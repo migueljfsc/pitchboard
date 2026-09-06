@@ -368,6 +368,14 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
   window within `WINDOW_SLACK` of the fullest wins. The cap and the slack fix each other's
   failure: capping alone lets a two-fragment side pick the window, slack alone buys seconds by
   gutting a side (11 v 8 over 2.8 s became 17 v 1 over 8.6 s).
+- **A coverage FLOOR is a fraction of the window, so a short window clears it more easily**
+  (D66). Anything that counts tracks passing `MIN_COVERAGE` is therefore biased towards short
+  passages, and the bias is structural: SNGS-147's board was nineteen fragments over 3.2 s,
+  which is eight real players. `MIN_OBSERVED_S` is the floor that cannot be gamed that way, and
+  `chooseWindow` and the fielding filter must apply the same tests or the window is chosen for
+  a roster the board declines to field.
+- **Scoring a window by observed player-seconds trades the team for the clock** (D66): 86
+  seconds bought with 21 real players over eleven clips. Measured, not shipped.
 - **Judge a window by coverage TIMES duration, not by either.** Duration flatters interpolation
   and coverage is a fraction of the window, so a short window flatters every track in it (D52).
   Their product is the observed player-seconds the board is actually built from.

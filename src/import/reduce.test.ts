@@ -286,6 +286,20 @@ describe("boardFromTracks", () => {
     expect(result.doc.teams[0].players).toHaveLength(1);
   });
 
+  it("does not field a player watched for a second, however much of the window that is", () => {
+    // 30 frames of 51 is 59% coverage and 1.2 seconds. The share says field them; the clock
+    // says they never made a run (D66).
+    const brief = track(
+      9,
+      "home",
+      Array.from({ length: 30 }, (_, i) => [i + 1, 40 + i * 0.2, 50] as [number, number, number]),
+    );
+    const result = boardFromTracks(file([straightRun(1, "home"), straightRun(2, "away", 40), brief]));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.doc.teams[0].players).toHaveLength(1);
+  });
+
   it("refuses a file it does not understand, in a translatable way", () => {
     const result = boardFromTracks({ nope: true });
     expect(result.ok).toBe(false);
@@ -358,6 +372,14 @@ describe("chooseWindow", () => {
     const whole = Array.from({ length: 11 }, (_, i) => spanning(i, 1, 300));
     const late = Array.from({ length: 14 }, (_, i) => spanning(50 + i, 230, 300));
     expect(chooseWindow([...whole, ...late], 1, 300, 25)).toEqual({ from: 1, to: 300 });
+  });
+
+  it("cannot be talked into a short window by fragments that clear the share", () => {
+    // Eight pieces of 1.4 s each clear MIN_COVERAGE inside a 2.5 s window and nowhere else,
+    // so counting them buys a passage a quarter the length for a roster nobody watched.
+    const whole = Array.from({ length: 4 }, (_, i) => spanning(i, 1, 300));
+    const brief = Array.from({ length: 8 }, (_, i) => spanning(20 + i, 237, 271));
+    expect(chooseWindow([...whole, ...brief], 1, 300, 25)).toEqual({ from: 1, to: 300 });
   });
 
   it("starts at a set piece even where fewer players are on screen", () => {

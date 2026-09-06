@@ -423,6 +423,45 @@ anchor every frame, which is a second kind of drag for one shape. The drift is s
 thing being dragged.
 
 
+## D66 — A player has to be WATCHED, not merely present for a share of the window
+`MIN_COVERAGE` is a fraction of the chosen window, and `chooseWindow` maximises how many
+tracks clear it. Those two together are a ratchet towards short passages: halve the window and
+every fragment's coverage doubles, so more of them clear the floor, so the count rises — while
+the football on the board falls. Nothing in D54's cap-and-slack can see it, because the count it
+caps is the quantity being inflated.
+
+SNGS-147 is the pure case. The board was **nineteen fragments over 3.2 seconds** of a
+thirty-second clip, and those nineteen shirts are **eight real players** seen for about a second
+each. With a floor of 1.5 seconds of actual observation it is fourteen fragments over 11.6
+seconds, and **eleven real players**.
+
+    boards                       real players   window     observed player-seconds
+    eleven SoccerNet clips        177 -> 180    183 -> 192 s     1887 -> 1934
+
+Ten of the eleven are unchanged to the byte; SNGS-147 is the whole difference. **That corrects
+D54**, which concluded 147 "barely moves, because nothing here can fix it... that is the
+upstream id switches, not the objective". It was the objective.
+
+**The floor is in seconds because a share cannot be defended.** A player watched for under a
+second and a half has not made a run, and a board that draws one for them is inventing it —
+that is a claim about football, and it is the same claim at any window length. Measured either
+side: at 1 s SNGS-147 stays broken (3.6 s, 17 fragments); at 3 s the Nottingham clip falls from
+20 players to 12 and the Rio Ave goal from 14 to 5. It must also stay under `MIN_WINDOW_S`, or
+a window trimmed to the minimum fields nobody at all.
+
+`chooseWindow` and the fielding filter in `index.ts` apply the same two tests, deliberately: a
+window chosen for a roster the importer then declines to field is a window chosen for nothing.
+
+**The obvious fix was measured first and is worse.** Scoring each window by its observed
+player-seconds directly — coverage times duration, summed over the best eleven a side — is the
+quantity D54 judges boards by, and as an objective it trades the team for the clock: across the
+same eleven clips it buys 86 seconds by losing **21 real players** (177 -> 154), because
+player-seconds are indifferent between eleven players watched briefly and four watched
+throughout. A roster floor on top of it (70%, 85%, 95% of the fullest window's count) does not
+recover them: at 95% it reproduces the old behaviour, and every looser setting spends people
+for seconds. The defect was never the objective's units; it was that the roster it counts is
+inflated by short windows.
+
 ## D65 — A player who is not on the pitch yet cannot be carrying the ball
 
 `carrierAt` guarded one side of its own comparison. The ball had to have been SEEN near the
