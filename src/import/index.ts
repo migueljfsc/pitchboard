@@ -13,6 +13,7 @@ import type { BoardDoc, Scene, Vec2 } from "@/board/types";
 import { buildSquad, HOME, AWAY } from "@/formations";
 import { msg, type Message } from "@/i18n/core";
 import {
+  CARRIER_RADIUS_M,
   carrierAt,
   chooseScenes,
   chooseWindow,
@@ -92,12 +93,54 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   );
 
   const sides: Record<"home" | "away", Track[]> = { home: [], away: [] };
+  // The keeper of each side, best-observed first. Held apart from the outfielders because
+  // he is a ROLE and they are a ranking: a side fields exactly one, and the producer has
+  // already said which track it is. Coverage cannot judge him — he is at the far end of
+  // the pitch and in shot only while play is there, so on a thirty-second window he sits
+  // near 16% where an outfielder sits near 80%, and both numbers are correct. Ranked
+  // against them he loses every time, and the board comes out with no goalkeeper and no
+  // pass back to one.
+  // Whoever stands over the ball at the restart. Reserved for the same reason the keeper
+  // is: it is a ROLE this passage has, not a ranking. The taker is on screen for the kick
+  // and often little else — on SNGS-060 he holds 14% of the window against an outfielder's
+  // 80% — so coverage cuts him, and the board opens on a restart with nobody to take it.
+  const kick = restartAt(ballSamples, file.pitch, file.source.fps);
+  let taker: Track | null = null;
+  if (kick !== null) {
+    const here = ballSamples.reduce<(typeof ballSamples)[number] | null>(
+      (best, s) =>
+        Math.abs(s.f - kick) <= 2 && (!best || Math.abs(s.f - kick) < Math.abs(best.f - kick))
+          ? s
+          : best,
+      null,
+    );
+    if (here) {
+      let best = CARRIER_RADIUS_M;
+      for (const track of players) {
+        if (!sideOf(track) || !onPitch(track, file.pitch)) continue;
+        if (kick < track.samples[0].f || kick > track.samples[track.samples.length - 1].f) continue;
+        const p = positionAt(track, kick);
+        const d = Math.hypot(p.x - here.x, p.y - here.y);
+        if (d < best) [best, taker] = [d, track];
+      }
+    }
+  }
+
+  const keepers: Record<"home" | "away", Track | null> = { home: null, away: null };
+  for (const track of players) {
+    const side = track.team === "gkHome" ? "home" : track.team === "gkAway" ? "away" : null;
+    if (!side || !onPitch(track, file.pitch)) continue;
+    const held = keepers[side];
+    if (!held || coverage(track, from, to) > coverage(held, from, to)) keepers[side] = track;
+  }
+
   for (const track of players) {
     const side = sideOf(track);
     // A track whose side could not be told is left out rather than assigned to one.
     // Half of them would be on the wrong team and nothing on the board would say so.
     if (!side) continue;
-    if (coverage(track, from, to) < minCoverage) continue;
+    if (track === keepers[side]) continue;
+    if (track !== taker && coverage(track, from, to) < minCoverage) continue;
     // Somebody standing behind the goal is not a player, whatever the producer labelled
     // them. Their positions are off the pitch and they would appear on the board as a
     // teammate who never moves.
@@ -107,16 +150,25 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
 
   // Best-observed first, then cut to a legal eleven. Coverage is the ranking because a
   // fragment is by definition the shorter half of something, so the players actually
-  // watched through the passage are the ones that survive.
+  // watched through the passage are the ones that survive. The keeper takes the first
+  // slot rather than competing for one.
   for (const side of ["home", "away"] as const) {
-    if (sides[side].length <= MAX_PER_SIDE) continue;
-    sides[side] = sides[side]
-      .slice()
-      .sort(
-        (a, b) =>
-          coverage(b, from, to) - coverage(a, from, to) || b.samples.length - a.samples.length,
-      )
-      .slice(0, MAX_PER_SIDE);
+    const keeper = keepers[side];
+    const reserved = sides[side].filter((t) => t === taker);
+    const room = MAX_PER_SIDE - (keeper ? 1 : 0) - reserved.length;
+    if (sides[side].length - reserved.length > room) {
+      sides[side] = [
+        ...reserved,
+        ...sides[side]
+          .filter((t) => t !== taker)
+          .sort(
+            (a, b) =>
+              coverage(b, from, to) - coverage(a, from, to) || b.samples.length - a.samples.length,
+          )
+          .slice(0, room),
+      ];
+    }
+    if (keeper) sides[side].unshift(keeper);
   }
 
   const kept = [...sides.home, ...sides.away];
@@ -152,17 +204,62 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   // stands until somebody else takes it, and the flight between two holders is exactly
   // the pass Pitchboard draws (D43, D44).
   const withIds = kept.map((track) => ({ id: idOf.get(track)!, track }));
+  const found = frames.map((f) => carrierAt(ballSamples, withIds, f));
+
+  // Before the first sighting the ball is somewhere, and it is not with the player who
+  // eventually picks it up. Handing those scenes to that player puts it metres from where
+  // it sat and erases the kick that started the passage — which is what a restart is. So
+  // the leading scenes hold the ball's own position instead, which is exactly what
+  // `ballPos` is for and is only trustworthy here: a ball at rest on the ground is where
+  // the homography says, and a ball in flight is not (D44, and `tracks.ts` on the ball).
+  const resting = frames.map((f) => {
+    if (ballSamples.length === 0) return null;
+    const here = ballSamples.reduce((best, s) =>
+      Math.abs(s.f - f) < Math.abs(best.f - f) ? s : best,
+    );
+    return Math.abs(here.f - f) <= 2 ? { x: here.x, y: here.y } : null;
+  });
+
+  // A holder stands until somebody else takes it, even across scenes where the ball was
+  // seen somewhere else. Dropping the carrier at those scenes is more faithful to where
+  // the ball WAS and worse as a board: one pass becomes three hops with the ball adrift
+  // between them, and a stray sighting sends it to the touchline and back. A coach can
+  // mark a pass that is drawn; they cannot repair a play that is not.
+  // The taker of a restart may not play the ball twice in succession — Law 8, and it is
+  // what a kick-off IS. Without this he simply keeps it: nobody else is inside the carrier
+  // radius for the next few scenes, the holder stands, and the board shows him dribbling
+  // away from the centre spot, which is not football.
+  const takerId = taker ? (idOf.get(taker) ?? null) : null;
   let holder: string | null = null;
-  const carriers = frames.map((f) => {
-    const found = carrierAt(ballSamples, withIds, f);
-    if (found) holder = found;
+  let released = takerId === null;
+  const carriers = found.map((c, i) => {
+    if (c !== null && c !== takerId) released = true;
+    if (i > 0 && !released) return null;
+    if (c !== null) holder = c;
     return holder;
   });
 
-  // Nobody held it before the first sighting either, so the ball would appear from
-  // nowhere partway through. It starts with whoever first takes it instead.
-  const first = carriers.find((c) => c !== null) ?? null;
-  for (let i = 0; i < carriers.length && carriers[i] === null; i++) carriers[i] = first;
+  // Where the ball was NOT seen either, the old answer still stands: it starts with
+  // whoever first takes it, rather than materialising in scene three.
+  // The kick lands on whoever is next known to hold it. Between the restart and them the
+  // ball is in the air with nobody we can name under it, and leaving those scenes empty
+  // makes it blink out after the kick-off — so they belong to the receiver, and the kick
+  // is one travel from the spot to him.
+  if (carriers[0] !== null && carriers[0] === takerId) {
+    const lands = carriers.findIndex((c, i) => i > 0 && c !== null);
+    if (lands > 1) for (let i = 1; i < lands; i++) carriers[i] = carriers[lands];
+  }
+
+  const taken = carriers.findIndex((c) => c !== null);
+  const first = taken >= 0 ? carriers[taken] : null;
+  for (let i = 0; i < (taken >= 0 ? taken : carriers.length); i++) {
+    // The opening scene keeps the ball's own position when there is one — that is the
+    // restart, and it is what makes the kick a pass FROM the spot rather than a player
+    // arriving already holding it. Every scene after it belongs to whoever first takes
+    // the ball, so the passage opens with one travel instead of the ball going missing.
+    if (i === 0 && resting[0] !== null) continue;
+    carriers[i] = first;
+  }
 
   const scenes: Scene[] = frames.map((f, i) => {
     const positions: Record<string, Vec2> = {};

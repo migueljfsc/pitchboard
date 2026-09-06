@@ -72,7 +72,25 @@ export const OFF_PITCH_MARGIN_M = 3;
 /** How much of a track may sit off the pitch before it is taken to be a spectator. */
 export const MAX_OFF_PITCH = 0.2;
 
-export const MAX_SCENES = 12;
+/**
+ * Most scenes a board may hold.
+ *
+ * A guard, not a quality setting. `SCENE_TOLERANCE_M` is what decides how faithful a board
+ * is — the search stops when no player is further than that from their interpolation — and
+ * a cap below where it stops silently overrides it. At 12 it did: SNGS-060 ran out of slots
+ * with a five-second stretch still uncovered, and every player crossed it in a straight
+ * line. Let the tolerance finish and that clip takes 23; across the eleven benchmark clips
+ * nothing asks for more than 24, and raising the cap further changes no board at all.
+ *
+ * It buys nothing at the share link either, which was the plausible reason for a low one:
+ * the largest imported board already exceeds `URL_BUDGET` at 12 scenes, and 24 puts no
+ * further clip over. A board too big to fit in a link is still saved, exported and opened
+ * as a file.
+ *
+ * What it does still guard is a pathological file — the search is quadratic in the frames
+ * of a window, and nothing about a producer's output is trusted here.
+ */
+export const MAX_SCENES = 24;
 
 /**
  * Players a side can field.
@@ -465,6 +483,11 @@ export function carrierAt(
 
   let nearest: { id: string; d: number } | null = null;
   for (const { id, track } of players) {
+    // The same rule the ball gets, applied to the player. `positionAt` CLAMPS outside a
+    // track's range, so a player first seen at frame 268 reports that position when asked
+    // about frame 1 — and the ball is handed to somebody who is not on the pitch yet.
+    // Measured on SNGS-060: at scene frame 82 the carrier's track began at frame 120.
+    if (f < track.samples[0].f || f > track.samples[track.samples.length - 1].f) continue;
     const p = positionAt(track, f);
     const d = Math.hypot(p.x - here.x, p.y - here.y);
     if (!nearest || d < nearest.d) nearest = { id, d };
