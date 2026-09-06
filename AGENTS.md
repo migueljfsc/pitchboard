@@ -88,6 +88,8 @@ src/App.tsx               picks Viewer or Editor from the hash; no router
 src/pages/Viewer.tsx      read-only playback of a shared board, with fork
 src/board/migrate.ts      version dispatch, run before validation on every load
 src/components/           React chrome; ui/ holds shadcn-style primitives
+scripts/board.ts          `pnpm board <tracks.json>` — a tracks file through the real importer,
+                          described in one line. The bar every producer change is judged on
 worker/                   Cloudflare Worker — the API, and the SPA's static passthrough
   index.ts                the router; /api/* only, assets are served ahead of it
   lib/                    session, google, users, boards (and the project tree), presets,
@@ -117,6 +119,19 @@ format and have to be changed together.
 
 **Active work is over there, not here.** `football-tracks/PLAN.md` opens with *Where this
 stands*; read it before touching either side of the seam.
+
+**`pnpm board` is how a change over there is judged.** It runs a tracks file through
+`boardFromTracks` — the real one, loaded through Vite so the aliases resolve — and prints the
+roster, the window, the observed player-seconds, the furthest a player travels and how many
+runs are curved:
+
+```
+pnpm board ../football-tracks/work/SNGS-151/tracks.json          # one clip
+pnpm board ../football-tracks/work/*/cmp.*.json --json           # a comparison, machine-readable
+```
+
+Seven improvements measured on the producer's own frames have failed to move any of those
+numbers. The table used to be rewritten by hand for each of them; it is a command now.
 
 ## Engineering conventions
 

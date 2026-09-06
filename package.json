@@ -17,6 +17,7 @@
     "typecheck": "pnpm types && tsc -b --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "board": "node --experimental-strip-types scripts/board.ts",
     "deploy:worker": "wrangler deploy"
   },
   "dependencies": {
