@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.42.0 (2026-09-06)
+
+### Feat
+
+- **import**: a scene is a possession change or a real movement, not a jink
+
 ## v0.41.0 (2026-09-06)
 
 ### Feat
