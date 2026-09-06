@@ -423,6 +423,40 @@ anchor every frame, which is a second kind of drag for one shape. The drift is s
 thing being dragged.
 
 
+## D65 — A player who is not on the pitch yet cannot be carrying the ball
+
+`carrierAt` guarded one side of its own comparison. The ball had to have been SEEN near the
+moment asked about — *"a sighting from another moment says nothing about this one"* — and the
+player had no such test. `positionAt` clamps outside a track's range, so a player first
+detected at frame 268 reports that position when asked about frame 1, and the nearest-player
+search happily returns them.
+
+Measured on SNGS-060, whose clip is a kick-off: at scene frame 82 the ball was given to a
+player whose track begins at frame 120. The consequence is the one a viewer notices — the
+ball attaches to somebody standing near the centre spot who is not there, the "previous
+holder keeps it" rule carries that across the following scenes, and the kick-off is drawn as
+a dribble. The clip's defining moment is missing from the board built from it.
+
+The fix is the ball's own rule applied to the player: a track is a candidate only where it
+actually covers the frame.
+
+That leaves the leading scenes of a restart with no carrier, which is correct and is what
+`ballPos` is for. They now hold the ball's measured position instead of being backfilled with
+whoever eventually picks it up — the ball sits on the spot and travels off it, which is the
+kick. This is the one place that position can be trusted: `tracks.ts` warns that a ball in
+FLIGHT lands metres from where it is, because the homography assumes z = 0, and a ball at rest
+on the ground has no such error.
+
+The backfill survives for the case it was written for. Where the ball was not seen at those
+scenes either, it still starts with whoever first takes it, rather than materialising in scene
+three.
+
+**Two wrong diagnoses came first and both were measured before being believed.** That no scene
+falls at the handover — a scene was seeded there, and it moved one scene by ten frames and
+improved nothing. And that the receiver is not a fielded player — inferred from no fielded
+player being within four metres of the ball, which is exactly what a pass in flight looks
+like, since a kick-off may be played anywhere in one's own half.
+
 ## D54 — The window counts what the board can field, and buys seconds with a fragment
 `chooseWindow` maximised the number of covered tracks with duration as a tie-break at exactly
 equal count. Two things are wrong with that, and they only show up together.

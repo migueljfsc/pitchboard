@@ -567,6 +567,14 @@ describe("the ball on a board", () => {
     expect(result.doc.scenes[0].carrier).not.toBeNull();
   });
 
+  it("does not hand the ball to a player who is not on the pitch yet", () => {
+    // `positionAt` clamps outside a track's range, so a player first seen late reports
+    // that position when asked about an early frame. The ball must not be given to them:
+    // measured on SNGS-060 the carrier at scene two had a track beginning 38 frames later.
+    const late = { ...straightRun(3, "home", 30), samples: straightRun(3, "home", 30).samples.filter((s) => s.f >= 40) };
+    expect(carrierAt([{ f: 1, x: late.samples[0].x, y: late.samples[0].y }], [{ id: "p", track: late }], 1)).toBeNull();
+  });
+
   it("leaves the board with no ball at all when none was found", () => {
     const result = boardFromTracks(file([straightRun(1, "home"), straightRun(2, "away", 40)]));
     expect(result.ok).toBe(true);
