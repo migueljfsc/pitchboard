@@ -3,6 +3,16 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.41.0 (2026-09-06)
+
+### Feat
+
+- **import**: keep a place for the keeper and whoever takes the restart
+
+### Fix
+
+- **import**: the ball cannot belong to a player who is not on the pitch yet
+
 ## v0.40.0 (2026-09-04)
 
 ### Feat
