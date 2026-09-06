@@ -418,6 +418,9 @@ export function restartAt(
  * of a corner clip that does not contain the corner is the wrong board however many
  * players it has. With no restart in the passage nothing changes.
  */
+/** How long after a handover to look for the moment the new holder actually has the ball. */
+export const SETTLE_S = 0.5;
+
 /**
  * The frames the ball changes hands on, across a whole file.
  *
@@ -426,15 +429,40 @@ export function restartAt(
  * on SNGS-151, the passage with the best-observed roster excluded the first three changes
  * of possession in the clip, which is where the play actually was.
  */
-export function handovers(ball: Sample[], tracks: Track[], radiusM = CARRIER_RADIUS_M): number[] {
+export function handovers(
+  ball: Sample[],
+  tracks: Track[],
+  fps: number,
+  radiusM = CARRIER_RADIUS_M,
+): number[] {
   if (ball.length === 0 || tracks.length === 0) return [];
   const players = tracks.map((track, i) => ({ id: String(i), track }));
+  const settle = Math.max(1, Math.round(SETTLE_S * fps));
+  const at = new Map(ball.map((s) => [s.f, s]));
   const out: number[] = [];
   let held: string | null = null;
   for (const s of ball) {
     const who = carrierAt(ball, players, s.f, radiusM);
     if (who === null) continue;
-    if (held !== null && who !== held) out.push(s.f);
+    if (held !== null && who !== held) {
+      // Not the frame possession CHANGES — the frame the new holder actually has it. A
+      // handover is the ball in flight, so a scene placed on it lands where nobody is
+      // within reach of the ball and the board must attach it to somebody anyway.
+      // Measured on SNGS-060: at the handover frames, the nearest real player to the real
+      // ball is 4.0 to 8.5 m away.
+      const track = players[Number(who)].track;
+      let best = s.f;
+      let near = Infinity;
+      for (let f = s.f; f <= s.f + settle; f++) {
+        const here = at.get(f);
+        if (!here) continue;
+        if (f < track.samples[0].f || f > track.samples[track.samples.length - 1].f) continue;
+        const p = positionAt(track, f);
+        const d = Math.hypot(p.x - here.x, p.y - here.y);
+        if (d < near) [near, best] = [d, f];
+      }
+      out.push(best);
+    }
     held = who;
   }
   return out;

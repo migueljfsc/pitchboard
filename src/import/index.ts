@@ -91,7 +91,7 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     minCoverage,
     undefined,
     restartAt(ballSamples, file.pitch, file.source.fps),
-    handovers(ballSamples, players),
+    handovers(ballSamples, players, file.source.fps),
   );
 
   const sides: Record<"home" | "away", Track[]> = { home: [], away: [] };
@@ -183,7 +183,7 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     file.source.fps,
     options.sceneToleranceM,
     options.maxScenes,
-    handovers(ballSamples, kept),
+    handovers(ballSamples, kept, file.source.fps),
   );
 
   const teams = (["home", "away"] as const).map((side) => {
@@ -292,8 +292,13 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
       positions,
       paths,
       // A scene naming no carrier and storing no position has no ball at all (D44),
-      // which is the right answer when nothing found one.
+      // which is the right answer when nothing found one. A scene never holds both, so
+      // the ball takes its OWN position only where it was seen and the holder the board
+      // is carrying demonstrably does not have it: the restart, where it sits on its spot,
+      // and the middle of a long ball, where whoever kicked it is thirty metres behind it.
+      // Anywhere else the holder keeps it, or one pass becomes three hops.
       carrier: carriers[i],
+      ...(i === 0 && carriers[0] === null && resting[0] ? { ballPos: resting[0] } : {}),
       ballPath: null,
     };
   });
