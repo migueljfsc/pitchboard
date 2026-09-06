@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.42.1 (2026-09-06)
+
+### Fix
+
+- **import**: a scene lands where the new holder has the ball, not mid-pass
+
 ## v0.42.0 (2026-09-06)
 
 ### Feat
