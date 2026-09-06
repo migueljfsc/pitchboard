@@ -91,14 +91,16 @@ describe("chooseScenes", () => {
   });
 
   it("puts a scene where the play actually turns", () => {
-    // Straight out to x=35, then a hard turn back. The corner is the moment worth
-    // keeping, and a fixed interval would have cut somewhere else.
+    // Straight out, then a hard turn back. The corner is the moment worth keeping, and a
+    // fixed interval would have cut somewhere else. The run is a tactical distance rather
+    // than a stride: `SCENE_TOLERANCE_M` describes a player changing where they are going,
+    // and a metre of it is the detector's own wobble.
     const turn = track(
       1,
       "home",
       Array.from({ length: 51 }, (_, i) => {
         const f = i + 1;
-        return (f <= 26 ? [f, 10 + f * 0.2, 20] : [f, 15.2, 20 + (f - 26) * 0.2]) as [
+        return (f <= 26 ? [f, 10 + f * 0.6, 20] : [f, 25.6, 20 + (f - 26) * 0.6]) as [
           number,
           number,
           number,

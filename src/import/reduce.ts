@@ -28,10 +28,16 @@ import type { Sample, Track, TracksFile } from "./tracks";
 
 /**
  * How far a player must be from where interpolation puts them, in metres, before the
- * frame becomes a scene of its own. Below this the board would carry detail nobody can
- * see, and each extra scene is one more the coach has to look at.
+ * frame becomes a scene of its own.
+ *
+ * This is the setting that decides what a board is FOR. At 1.5 m it marked a jink or the
+ * detector's own wobble: SNGS-151 came out with twelve scenes for about a metre and a half
+ * of movement each, six of them describing one small adjustment that a coach would call a
+ * single run. A tactical movement is several metres, so the tolerance is several metres,
+ * and what survives is a player changing where they are going rather than how they are
+ * standing. Each scene is also one more thing the coach has to look at and correct.
  */
-export const SCENE_TOLERANCE_M = 1.5;
+export const SCENE_TOLERANCE_M = 4;
 
 /** A path straighter than this stays a straight tween. */
 export const STRAIGHT_TOLERANCE_M = 0.5;
@@ -412,6 +418,28 @@ export function restartAt(
  * of a corner clip that does not contain the corner is the wrong board however many
  * players it has. With no restart in the passage nothing changes.
  */
+/**
+ * The frames the ball changes hands on, across a whole file.
+ *
+ * A coach watches the ball. Which passage of a clip is worth a board is therefore a
+ * question about possession and not only about how many players stood in shot — measured
+ * on SNGS-151, the passage with the best-observed roster excluded the first three changes
+ * of possession in the clip, which is where the play actually was.
+ */
+export function handovers(ball: Sample[], tracks: Track[], radiusM = CARRIER_RADIUS_M): number[] {
+  if (ball.length === 0 || tracks.length === 0) return [];
+  const players = tracks.map((track, i) => ({ id: String(i), track }));
+  const out: number[] = [];
+  let held: string | null = null;
+  for (const s of ball) {
+    const who = carrierAt(ball, players, s.f, radiusM);
+    if (who === null) continue;
+    if (held !== null && who !== held) out.push(s.f);
+    held = who;
+  }
+  return out;
+}
+
 export function chooseWindow(
   tracks: Track[],
   from: number,
@@ -420,6 +448,7 @@ export function chooseWindow(
   minCoverage = MIN_COVERAGE,
   minWindowS = MIN_WINDOW_S,
   restart: number | null = null,
+  changes: number[] = [],
 ): { from: number; to: number } {
   const minFrames = Math.round(minWindowS * fps);
   if (to - from <= minFrames || tracks.length === 0) return { from, to };
@@ -429,7 +458,13 @@ export function chooseWindow(
     (f) => f > from && f <= to,
   );
 
-  const candidates: { from: number; to: number; count: number; covers: boolean }[] = [];
+  const candidates: {
+    from: number;
+    to: number;
+    count: number;
+    covers: boolean;
+    passes: number;
+  }[] = [];
   for (const a of new Set(starts)) {
     for (const b of new Set(ends)) {
       if (b - a < minFrames) continue;
@@ -444,6 +479,7 @@ export function chooseWindow(
         // fullest window is 17 home and 1 away, which is not a board.
         count: Math.min(home, MAX_PER_SIDE) + Math.min(away, MAX_PER_SIDE),
         covers: restart !== null && a <= restart && b > restart,
+        passes: changes.filter((f) => f >= a && f <= b).length,
       });
     }
   }
@@ -452,9 +488,14 @@ export function chooseWindow(
   const covering = candidates.filter((c) => c.covers);
   const pool = covering.length > 0 ? covering : candidates;
   const most = Math.max(...pool.map((c) => c.count));
+  // Roster first, then the ball, then length. Duration was the tie-break and it chose
+  // badly: among windows that field the same side, the longer one is not the one with the
+  // play in it, and a coach analysing a passage with no pass in it has nothing to analyse.
   const best = pool
     .filter((c) => c.count >= most - WINDOW_SLACK)
-    .reduce((x, y) => (y.to - y.from > x.to - x.from ? y : x));
+    .reduce((x, y) =>
+      y.passes !== x.passes ? (y.passes > x.passes ? y : x) : y.to - y.from > x.to - x.from ? y : x,
+    );
   return { from: best.from, to: best.to };
 }
 
@@ -536,9 +577,22 @@ export function chooseScenes(
   fps: number,
   toleranceM: number = SCENE_TOLERANCE_M,
   maxScenes: number = MAX_SCENES,
+  changes: number[] = [],
 ): number[] {
   const minGap = Math.max(1, Math.round(MIN_SCENE_GAP_S * fps));
   const chosen = [from, to];
+
+  // A change of possession is a scene whatever the players are doing. It is the event a
+  // coach is looking at, and the deviation test below cannot find it: a pass moves the
+  // ball twenty metres while everybody stands still, so no measurement of how far players
+  // stray from their interpolation will ever put a scene there.
+  for (const f of changes) {
+    if (f - from < minGap || to - f < minGap) continue;
+    if (chosen.some((c) => Math.abs(c - f) < minGap)) continue;
+    if (chosen.length >= maxScenes) break;
+    chosen.push(f);
+  }
+  chosen.sort((p, q) => p - q);
 
   while (chosen.length < maxScenes) {
     let worst = { error: 0, frame: -1 };

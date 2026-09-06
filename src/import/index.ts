@@ -19,6 +19,7 @@ import {
   chooseWindow,
   coverage,
   fitCurve,
+  handovers,
   MAX_PER_SIDE,
   MIN_COVERAGE,
   onPitch,
@@ -90,6 +91,7 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     minCoverage,
     undefined,
     restartAt(ballSamples, file.pitch, file.source.fps),
+    handovers(ballSamples, players),
   );
 
   const sides: Record<"home" | "away", Track[]> = { home: [], away: [] };
@@ -181,6 +183,7 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     file.source.fps,
     options.sceneToleranceM,
     options.maxScenes,
+    handovers(ballSamples, kept),
   );
 
   const teams = (["home", "away"] as const).map((side) => {
