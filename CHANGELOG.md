@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.43.3 (2026-09-07)
+
+### Fix
+
+- **import**: an honest board still has to have the football in it
+
 ## v0.43.2 (2026-09-07)
 
 ### Fix
