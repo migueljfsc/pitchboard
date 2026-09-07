@@ -503,6 +503,26 @@ is also a z = 0 shadow. Where our board and that reading agree, both could still
 one remaining `away` moment on SNGS-121 is exactly such a case: the ground truth calls it away
 too, and only a person watching the clip can say.
 
+## D73 — The importer never judges whether the football is any good
+A coach, after SNGS-069 came out accurate and tactically dull: *"you don't need to decide that.
+The user will use a clip he deems good enough for a board; all we need to concern ourselves with
+is being as accurate as possible, to save the user as much time as we can."*
+
+So the chooser does not rank passages by football. Not by how far the ball progresses, not by
+whether the play reaches the final third, not by shots or box entries — all of which were on the
+table and are measurable, and all of which decide FOR the coach what is worth looking at. The
+clip is already their judgement; the board's only job is to be true to it.
+
+What the chooser may still weigh is the difference between representing the clip and
+misrepresenting it: whether a passage can be drawn without inventing most of it (D67), whether
+it fields a team, and whether it contains the ball events the clip contains (D68). "Where the
+football IS" is a claim about the clip. "Whether the football is interesting" is a claim about
+the game, and it is not ours.
+
+The same rule settles the three clips whose boards name no carrier at all — SNGS-067, 075 and
+116. A board with no ball is thin, and loosening what D71 and D72 tightened to put one there
+would be inventing passes to make a clip look better. They stay ball-less and honest.
+
 ## D72 — A turnover that gives the ball straight back never happened
 The last of the fly-over faults, found by the same coach on the same clip. SNGS-121's board had
 the home team passing across the pitch — correct — with one scene in the middle where the blue

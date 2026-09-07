@@ -380,6 +380,10 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
   board position its shadow sweeping the pitch, so every player it crosses is briefly the
   nearest. The carrier is whoever KEEPS it. Speed cannot be the test -- half of all real
   receptions show the ball above 9 m/s, because a pass arrives through the air.
+- **Never judge whether the football is any good** (D73). The coach chose the clip; ranking
+  passages by progression, final-third entries or shots decides for them what is worth looking
+  at. Fidelity is the whole objective — "where the football is" is about the clip, "whether the
+  football is interesting" is about the game and is not ours.
 - **A turnover that gives the ball straight back never happened** (D72). One-scene possession
   flips are the measurement, not a tackle, and `steady` reverts them across sides.
 - **"The passes that really happened" is itself an inference** (D71). SoccerNet annotates a
