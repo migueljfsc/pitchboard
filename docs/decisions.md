@@ -466,6 +466,39 @@ drawn from memory. What is left is short because THE TRACKER IS SHORT: a board c
 long as the roster is watched, and at today's fragmentation that is a handful of seconds. The
 fix for board length is upstream, not here.
 
+## D70 — A clip is several plays, so it imports as several boards
+An honest board covers about a third of a thirty-second clip, because that is how long the
+tracker holds a roster (D67). One board therefore leaves most of the football behind: SNGS-060
+contains nineteen changes of possession and its best single passage holds four, and the coach
+who asked where the back pass and the header went was right that they were missing.
+
+Cutting the clip into the passages that ARE honest recovers all of it. Measured on six clips,
+**two to four passages cover the whole of each one and every event in it**:
+
+    clip        passages   of the clip   events recovered
+    SNGS-060        2        30 / 30 s        19 / 19
+    SNGS-121        2        30 / 30          19 / 19
+    SNGS-116        4        30 / 30          16 / 16
+    SNGS-067        4        30 / 30           4 / 4
+
+`boardsFromTracks` takes the best passage, then the best of what is left either side of it,
+recursively — each chosen by the same rules a single board is chosen by, so every board is as
+honest as the one board was. Across the thirteen clips it gives 33 boards holding 70 drawn
+passes, against 13 boards holding about a dozen.
+
+**This is the alternative to letting a player vanish mid-board**, which was the other way to
+cover a clip and would have meant a `BoardDoc` where a scene may omit a player, plus every
+consumer of `positions` — timeline, renderer, interaction, export, share codec, migration. A
+clip is several plays and a coach reads them one at a time, so the cheap answer is also the
+truer one.
+
+Two rules keep the extra boards worth having. A passage must field `MIN_BOARD_PLAYERS`, because
+cutting turns up thin edges — SNGS-147's opening seven seconds field three players, which is a
+diagram of nothing. And it must hold either a change of possession or somebody really moving: a
+shape shifting or a press is coachable without the ball changing hands, a photograph is not.
+The best passage is always returned whatever it fields, because a coach can look at a thin
+board and reject it and cannot look at a refusal.
+
 ## D69 — A run shorter than the error that produced it is not a run
 The camera model puts a player 0.5-1.5 m from where they stood, independently at every frame,
 so a player standing still arrives at the next scene a metre away — and the board draws that as

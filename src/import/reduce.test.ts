@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boardFromTracks } from "./index";
+import { boardFromTracks, boardsFromTracks } from "./index";
 import {
   carrierAt,
   chooseScenes,
@@ -313,6 +313,55 @@ describe("boardFromTracks", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.key).toBe("import.tracks.empty");
+  });
+});
+
+describe("boardsFromTracks", () => {
+  const burst = (from: number, to: number, count: number, offset = 0) =>
+    Array.from({ length: count }, (_, i) =>
+      track(
+        offset + i,
+        i % 2 === 0 ? "home" : "away",
+        Array.from(
+          { length: to - from + 1 },
+          (_, k) => [from + k, 10 + k * 0.2, 5 + i * 3] as [number, number, number],
+        ),
+      ),
+    );
+
+  const clip = (tracks: Track[], endFrame: number) => ({
+    version: 1,
+    source: { clip: "half.mp4", fps: 25, startFrame: 1, endFrame },
+    pitch: { length: 105, width: 68 },
+    tracks,
+    ball: null,
+  });
+
+  it("gives a clip's separate passages a board each, in order", () => {
+    // Two spells of play with nobody tracked between them. One board covers one of them
+    // honestly; the clip holds both, and a coach should be shown both.
+    const file = clip([...burst(1, 200, 12), ...burst(500, 700, 12, 100)], 750);
+    const out = boardsFromTracks(file);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.boards).toHaveLength(2);
+    expect(out.boards[0].window.to).toBeLessThanOrEqual(out.boards[1].window.from);
+  });
+
+  it("does not make a board of a passage that cannot field a team", () => {
+    const file = clip([...burst(1, 200, 12), ...burst(500, 700, 4, 100)], 750);
+    const out = boardsFromTracks(file);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.boards).toHaveLength(1);
+  });
+
+  it("always returns a board, even where every passage is thin", () => {
+    // A coach can look at a thin board and reject it. They cannot look at a refusal.
+    const out = boardsFromTracks(clip(burst(1, 200, 4), 300));
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.boards).toHaveLength(1);
   });
 });
 
