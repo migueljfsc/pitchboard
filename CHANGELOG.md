@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.45.0 (2026-09-07)
+
+### Feat
+
+- **import**: open a clip's other plays from the top bar
+
 ## v0.44.0 (2026-09-07)
 
 ### Feat
