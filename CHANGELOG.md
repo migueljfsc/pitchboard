@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.45.4 (2026-09-07)
+
+### Fix
+
+- **import**: name a board for the passage it covers, not just the clip
+
 ## v0.45.3 (2026-09-07)
 
 ### Fix
