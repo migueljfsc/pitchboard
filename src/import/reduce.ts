@@ -196,25 +196,6 @@ export const MAX_PER_SIDE = 11;
 export const MIN_WINDOW_S = 2.5;
 
 /**
- * How many times a clip may be cut again either side of a passage already found.
- *
- * Three reaches four to eight passages, and measured on six clips two to four already cover
- * the whole of each one: the depth is a guard against a pathological file rather than a
- * setting, in the same spirit as `MAX_SCENES`.
- */
-export const MAX_PASSAGE_DEPTH = 3;
-
-/**
- * The fewest players a passage must field to be worth a board of its own.
- *
- * Cutting a clip into its passages turns up thin ones at the edges -- SNGS-147's opening
- * seven seconds field three players, which is a diagram of nothing. Ten is both sides
- * present in some form. The best passage is always kept whatever it fields, because an
- * import that returns nothing is worse than an import a coach can look at and reject.
- */
-export const MIN_BOARD_PLAYERS = 10;
-
-/**
  * How many fielded tracks a passage may give up to be chosen, in players.
  *
  * The count is FRAGMENTS, not people. A track holding an impossible jump is cut before

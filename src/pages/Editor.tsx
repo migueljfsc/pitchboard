@@ -85,7 +85,7 @@ type Pending =
   | { kind: "links" }
   | { kind: "preset"; preset: SquadPreset; replacing: SquadPreset }
   /** `source` is what the file turned out to be, so the confirmation can say. */
-  | { kind: "import"; docs: BoardDoc[]; source: ImportKind };
+  | { kind: "import"; doc: BoardDoc; source: ImportKind };
 
 type Props = {
   /**
@@ -130,8 +130,6 @@ export function Editor({ initialDoc }: Props = {}) {
   const [pending, setPending] = useState<Pending | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
-  /** The plays a clip turned out to hold, and which of them is on the board (D70). */
-  const [passages, setPassages] = useState<{ docs: BoardDoc[]; at: number } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [selectionOpen, setSelectionOpen] = useState(true);
   const [drawingsOpen, setDrawingsOpen] = useState(false);
@@ -481,33 +479,6 @@ export function Editor({ initialDoc }: Props = {}) {
     setImportOpen(false);
   };
 
-  /**
-   * A clip arrives as the several plays it holds (D70), and the first one opens.
-   *
-   * The rest are held for the session rather than thrown away: an honest board covers
-   * about a third of a clip, so the others are the same footage and the coach walks
-   * through them. They are not saved anywhere on their own -- Save puts the one being
-   * looked at into the library, which is the existing answer to "keep this".
-   */
-  const importDocs = (docs: BoardDoc[]) => {
-    setPassages(docs.length > 1 ? { docs, at: 0 } : null);
-    importDoc(docs[0]);
-  };
-
-  /**
-   * Move to another play from the same clip, keeping what was done to this one.
-   *
-   * The play being left is written back before the next one opens. Without that, moving
-   * away and coming back reopens the file's version and a coach's corrections are gone --
-   * and correcting the board is the entire point of importing one.
-   */
-  const goToPassage = (at: number) => {
-    if (!passages) return;
-    const docs = passages.docs.map((d, i) => (i === passages.at ? doc : d));
-    setPassages({ docs, at });
-    importDoc(docs[at]);
-  };
-
   const onDelayChange = (ms: number | null) => {
     if (editScene === undefined) return;
     let next = doc;
@@ -766,29 +737,6 @@ export function Editor({ initialDoc }: Props = {}) {
             {t("share.dialog")}
           </button>
 
-          {passages && (
-            <div className="flex items-center gap-1 rounded-md border border-ink-600 bg-ink-900 px-2 py-1 text-xs text-ink-200">
-              <span>{t("passages.label", { at: passages.at + 1, of: passages.docs.length })}</span>
-              <button
-                type="button"
-                className="rounded px-1.5 py-0.5 transition hover:bg-ink-700 disabled:opacity-40"
-                disabled={passages.at === 0}
-                onClick={() => goToPassage(passages.at - 1)}
-                aria-label={t("passages.previous")}
-              >
-                ‹
-              </button>
-              <button
-                type="button"
-                className="rounded px-1.5 py-0.5 transition hover:bg-ink-700 disabled:opacity-40"
-                disabled={passages.at === passages.docs.length - 1}
-                onClick={() => goToPassage(passages.at + 1)}
-                aria-label={t("passages.next")}
-              >
-                ›
-              </button>
-            </div>
-          )}
           {accountState.account && <SaveBoardButton cloud={cloud} boardName={doc.name} />}
 
           <span className="mx-1 h-5 w-px bg-ink-600" />
@@ -1010,17 +958,13 @@ export function Editor({ initialDoc }: Props = {}) {
               // Whole keys per shape rather than a shared sentence with a word swapped
               // in: what a setup costs you is not what a board does.
               pending.source === "tracks"
-                ? pending.docs.length > 1
-                  ? tn("confirm.import.message.passages", pending.docs.length, {
-                      name: pending.docs[0].name,
-                    })
-                  : tn("confirm.import.message.tracks", pending.docs[0].scenes.length, {
-                      name: pending.docs[0].name,
-                    })
-                : t(`confirm.import.message.${pending.source}`, { name: pending.docs[0].name })
+                ? tn("confirm.import.message.tracks", pending.doc.scenes.length, {
+                    name: pending.doc.name,
+                  })
+                : t(`confirm.import.message.${pending.source}`, { name: pending.doc.name })
             }
             confirmLabel={t("confirm.import.action")}
-            onConfirm={() => importDocs(pending.docs)}
+            onConfirm={() => importDoc(pending.doc)}
             onCancel={() => setPending(null)}
           />
         )}
@@ -1038,7 +982,7 @@ export function Editor({ initialDoc }: Props = {}) {
 
         {importOpen && (
           <ImportDialog
-            onImport={(next, source) => setPending({ kind: "import", docs: next, source })}
+            onImport={(next, source) => setPending({ kind: "import", doc: next, source })}
             onClose={() => setImportOpen(false)}
             blocked={pending !== null}
           />

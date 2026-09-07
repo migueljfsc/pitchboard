@@ -22,8 +22,6 @@ import {
   MAX_PER_SIDE,
   MIN_COVERAGE,
   MIN_OBSERVED_S,
-  MAX_PASSAGE_DEPTH,
-  MIN_BOARD_PLAYERS,
   MIN_WINDOW_S,
   observed,
   STILL_M,
@@ -67,96 +65,7 @@ export type ImportOptions = {
   maxScenes?: number;
   /** A run straighter than this keeps a straight tween. Infinity draws none at all. */
   straightToleranceM?: number;
-  /**
-   * The passage to build, when the caller has already chosen one.
-   *
-   * `boardsFromTracks` uses it to cut a clip into the several plays it holds. Everything
-   * else in here still follows from the window -- the roster, the keeper, the taker of a
-   * restart -- so a board built to order is the same board, of a different moment.
-   */
-  window?: { from: number; to: number };
 };
-
-/**
- * Every play a clip holds, in order, each on its own board.
- *
- * A board covers the passage it can cover honestly, and on this footage that is a third of
- * a thirty-second clip -- so one board leaves most of the football on the cutting-room
- * floor. SNGS-060 holds nineteen changes of possession and its best single passage holds
- * four. Cut the clip into the passages that ARE honest and the same nineteen are all there,
- * across two boards, with nothing invented to join them.
- *
- * Measured on six clips: two to four passages cover the whole of each one and every event
- * in it. That is what makes this the answer rather than a schema that lets a player vanish
- * mid-board -- a clip is several plays, and a coach reads them one at a time anyway.
- */
-export function boardsFromTracks(
-  raw: unknown,
-  options: ImportOptions = {},
-): ({ ok: true; boards: Imported[] } | { ok: false; error: Message }) {
-  const parsed = tracksSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, error: msg("import.tracks.invalid") };
-  const file = parsed.data;
-  const { fps, startFrame, endFrame } = file.source;
-  const shortest = Math.round(MIN_WINDOW_S * fps);
-
-  const players = file.tracks
-    .flatMap((t) => splitImpossible(t, fps, undefined, file.source.intervalS))
-    .filter((t) => sideOf(t) !== null && onPitch(t, file.pitch));
-  const ballSamples = file.ball?.samples ?? [];
-  const restart = restartAt(ballSamples, file.pitch, fps);
-  const changes = handovers(ballSamples, players, fps);
-
-  // The best passage, then the best of what is left either side of it. Recursive rather
-  // than a sweep because each passage is chosen by the same rules as a single board would
-  // be: what is honest, what fields a team, and where the ball is.
-  const found: { from: number; to: number }[] = [];
-  const search = (a: number, b: number, depth: number): void => {
-    if (depth > MAX_PASSAGE_DEPTH || b - a < shortest) return;
-    const w = chooseWindow(players, a, b, fps, options.minCoverage, undefined, restart, changes);
-    if (w.to - w.from < shortest || found.some((p) => w.from < p.to && w.to > p.from)) return;
-    found.push(w);
-    search(a, w.from, depth + 1);
-    search(w.to, b, depth + 1);
-  };
-  search(startFrame, endFrame, 0);
-  found.sort((x, y) => x.from - y.from);
-
-  const boards: Imported[] = [];
-  for (const window of found.length ? found : [{ from: startFrame, to: endFrame }]) {
-    const built = boardFromTracks(raw, { ...options, window });
-    // A passage that holds no change of possession earns its board by MOVEMENT -- a shape
-    // shifting or a press is coachable without the ball changing hands -- and a passage
-    // holding neither is a photograph.
-    if (built.ok && worthKeeping(built)) boards.push(built);
-  }
-  // Never nothing: a coach can look at a thin board and reject it, and cannot look at a
-  // refusal at all. The single best passage is what `boardFromTracks` would have returned.
-  if (boards.length === 0) {
-    const only = boardFromTracks(raw, options);
-    return only.ok ? { ok: true, boards: [only] } : only;
-  }
-
-  return { ok: true, boards };
-}
-
-/** Whether a passage says anything: a team, and either a pass or somebody really moving. */
-function worthKeeping(built: Imported): boolean {
-  const ids = built.doc.teams.flatMap((t) => t.players.map((p) => p.id));
-  if (ids.length < MIN_BOARD_PLAYERS) return false;
-  const passed = built.doc.scenes.some(
-    (s, i) => i > 0 && s.carrier !== null && s.carrier !== built.doc.scenes[i - 1].carrier,
-  );
-  const moved = built.doc.scenes.some((scene, i) => {
-    if (i === 0) return false;
-    const before = built.doc.scenes[i - 1].positions;
-    return ids.some((id) => {
-      const [a, b] = [before[id], scene.positions[id]];
-      return a && b && (a.x !== b.x || a.y !== b.y);
-    });
-  });
-  return passed || moved;
-}
 
 export function boardFromTracks(raw: unknown, options: ImportOptions = {}): ImportResult {
   const parsed = tracksSchema.safeParse(raw);
@@ -184,18 +93,16 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   // Read before the window is chosen, because it is one of the things choosing it: a
   // board made of a corner clip that does not contain the corner is the wrong board.
   const ballSamples = file.ball?.samples ?? [];
-  const { from, to } =
-    options.window ??
-    chooseWindow(
-      players,
-      file.source.startFrame,
-      file.source.endFrame,
-      file.source.fps,
-      minCoverage,
-      undefined,
-      restartAt(ballSamples, file.pitch, file.source.fps),
-      handovers(ballSamples, players, file.source.fps),
-    );
+  const { from, to } = chooseWindow(
+    players,
+    file.source.startFrame,
+    file.source.endFrame,
+    file.source.fps,
+    minCoverage,
+    undefined,
+    restartAt(ballSamples, file.pitch, file.source.fps),
+    handovers(ballSamples, players, file.source.fps),
+  );
 
   const sides: Record<"home" | "away", Track[]> = { home: [], away: [] };
   // The keeper of each side, best-observed first. Held apart from the outfielders because

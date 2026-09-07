@@ -20,7 +20,7 @@ import { replaceTeamLinks } from "@/board/links";
 import { AWAY, DEFAULT_FORMATION, HOME, createBoardDoc, type TeamSpec } from "@/formations";
 import { contrastOn } from "@/lib/color";
 import { msg, type Message } from "@/i18n/core";
-import { boardsFromTracks } from "@/import";
+import { boardFromTracks } from "@/import";
 
 /**
  * Cap on an imported file, well above any real board and well below anything
@@ -125,19 +125,7 @@ export type SetupTeam = z.infer<typeof setupTeamSchema>;
 export type SetupLink = z.infer<typeof setupLinkSchema>;
 
 export type ImportOutcome =
-  | {
-      ok: true;
-      doc: BoardDoc;
-      kind: "board" | "setup" | "tracks";
-      /**
-       * Every board the file holds, `doc` first.
-       *
-       * A board and a setup are one board. A tracks file is a CLIP, and a clip is several
-       * plays: an honest board covers about a third of one, so the rest arrive here rather
-       * than being dropped on the floor (D70).
-       */
-      docs: BoardDoc[];
-    }
+  | { ok: true; doc: BoardDoc; kind: "board" | "setup" | "tracks" }
   | { ok: false; error: Message };
 
 /**
@@ -190,14 +178,10 @@ export function fromJson(text: string): ImportOutcome {
   // board branch or it arrives as a broken board and the errors describe the wrong
   // thing entirely. `source` and `tracks` are what a board never has.
   if (isTracksFile(raw)) {
-    const imported = boardsFromTracks(raw);
-    if (!imported.ok) return { ok: false, error: imported.error };
-    const docs = imported.boards.map((board, i) =>
-      imported.boards.length > 1
-        ? { ...board.doc, name: `${board.doc.name} (${i + 1}/${imported.boards.length})` }
-        : board.doc,
-    );
-    return { ok: true, kind: "tracks", doc: docs[0], docs };
+    const imported = boardFromTracks(raw);
+    return imported.ok
+      ? { ok: true, kind: "tracks", doc: imported.doc }
+      : { ok: false, error: imported.error };
   }
 
   // `version` is the discriminator. A file that declares one but fails the board
@@ -211,7 +195,7 @@ export function fromJson(text: string): ImportOutcome {
 
     const parsed = boardDocSchema.safeParse(migrated.doc);
     return parsed.success
-      ? { ok: true, kind: "board", doc: parsed.data as BoardDoc, docs: [parsed.data as BoardDoc] }
+      ? { ok: true, kind: "board", doc: parsed.data as BoardDoc }
       : { ok: false, error: invalid(parsed.error) };
   }
 
@@ -219,8 +203,7 @@ export function fromJson(text: string): ImportOutcome {
   if (!parsed.success) return { ok: false, error: invalid(parsed.error) };
 
   try {
-    const doc = docFromSetup(parsed.data);
-    return { ok: true, kind: "setup", doc, docs: [doc] };
+    return { ok: true, kind: "setup", doc: docFromSetup(parsed.data) };
   } catch (e) {
     return {
       ok: false,
