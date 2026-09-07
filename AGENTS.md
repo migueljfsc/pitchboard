@@ -386,6 +386,10 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
   football is interesting" is about the game and is not ours.
 - **A turnover that gives the ball straight back never happened** (D72). One-scene possession
   flips are the measurement, not a tackle, and `steady` reverts them across sides.
+- **Carrying a holder forward is a reading of the ball's SILENCE, and it expires** (D74). Past
+  `CARRY_S` with no sighting behind the scene, nobody is named -- a board that shows possession
+  stopping is honest about what was tracked; one that shows the wrong team passing is not.
+  Measured backwards only: a sighting after the scene says where the ball got to, not who had it.
 - **"The passes that really happened" is itself an inference** (D71). SoccerNet annotates a
   ball, not possession, and its ball is the same z = 0 shadow -- so a drawn pass that agrees
   with it may still be wrong, and only somebody watching the clip can settle it.

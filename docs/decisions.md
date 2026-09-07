@@ -466,6 +466,37 @@ drawn from memory. What is left is short because THE TRACKER IS SHORT: a board c
 long as the roster is watched, and at today's fragmentation that is a handful of seconds. The
 fix for board length is upstream, not here.
 
+## D74 — A holder may only stand for as long as the ball's silence is short
+A carrier stands until somebody else takes it, and the flight between two holders is the pass
+(D43, D44). That rule is a reading of the ball's SILENCE, and silence stops meaning "still his"
+once it is long enough for the play to have moved on.
+
+A coach, on his own clip: *"it shows that the away team held possession but it is not true, a
+home player made a run on the left and passed it to the second post for the goal."* Half of that
+was the producer handing one track two players, which is football-tracks D78. The other half is
+here: the ball went unseen from frame 121 to 178 — 1.8 s, exactly the run he was asking about —
+and the board handed the whole passage to whoever held it before the gap. Nothing in the file
+stood behind that claim.
+
+So a scene names nobody once no sighting stands within `CARRY_S` (1 s) BEFORE it. Backwards
+only: a sighting after the scene says where the ball got to, not who had it, and the claim being
+carried is a claim about the past. Naming nobody is a real answer (D44) and the one a coach can
+work with — a board that shows possession stopping is honest about what was tracked, and a board
+that shows the wrong team passing is not.
+
+**It costs nothing measurable, which is the point.** All thirteen boards are byte-identical at
+999 s, 2 s and 1 s — same roster, window, density, travel, curves and passes — and passes drawn
+against passes played holds at 70% precision, 31% recall across the six clips with truth. The
+only board that moves is the coach's, where the last scene stops claiming a carrier it cannot
+support. **0.5 s is where it starts costing**: SNGS-060 loses three scenes of real possession
+and gains nothing, so 1 s ships.
+
+This is the second attempt at that complaint. The first was a runner-up margin in `carrierAt` —
+name nobody unless the nearest player is nearer by 1.5 m than the next — and it was measured and
+thrown away: between two players running together it stops naming anybody at all, and possession
+collapses onto whoever held it first. The fault was never the margin between two candidates; it
+was carrying a candidate across a stretch with no evidence in it.
+
 ## D71 — The ball flying over a player is not a pass to him
 A coach watching SNGS-121: the ball is lofted forward from the start, and the board draws a
 short pass first and the long ball second. And the home team keeps possession throughout while

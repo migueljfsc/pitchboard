@@ -32,6 +32,7 @@ import {
   positionAt,
   restartAt,
   sideOf,
+  sighted,
   splitImpossible,
   steady,
 } from "./reduce";
@@ -291,6 +292,10 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     if (c !== null && c !== takerId) released = true;
     if (i > 0 && !released) return null;
     if (c !== null) holder = c;
+    // Carrying a holder forward is a reading of the ball's silence, and it is only good
+    // for as long as the silence is short (CARRY_S). Past that the file says nothing
+    // about who has the ball, and the board says nothing either.
+    else if (!sighted(ballSamples, frames[i], file.source.fps)) holder = null;
     return holder;
   });
 

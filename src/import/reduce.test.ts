@@ -704,10 +704,29 @@ describe("the ball on a board", () => {
   it("lets the holder keep it through scenes that cannot tell", () => {
     // A carrier stands until somebody else takes it, and the flight between two holders
     // is the pass. Blanking the carrier mid-board would make the ball vanish and return.
-    const result = boardFromTracks(withBall([{ f: 3, x: 10.5, y: 20 }]));
+    // At his feet long enough to be his (HOLD_S), then in flight between the two runs for
+    // the rest of the board, so no later scene can name anybody and the holder carries.
+    const seen = Array.from({ length: 51 }, (_, i) => ({
+      f: i + 1,
+      x: 10 + i * 0.2,
+      y: i < 12 ? 20.3 : 30,
+    }));
+    const result = boardFromTracks(withBall(seen));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.doc.scenes.every((s) => s.carrier !== null)).toBe(true);
+  });
+
+  it("stops naming a holder once the ball has gone unseen for too long", () => {
+    // The other half of the same rule. Carrying a holder forward reads the ball's
+    // silence, and past CARRY_S the silence says nothing about who has it -- on a coach's
+    // clip 1.8 s of it handed the other team's attack to the player who last held it.
+    const result = boardFromTracks(withBall([{ f: 3, x: 10.5, y: 20 }]));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const carriers = result.doc.scenes.map((s) => s.carrier);
+    expect(carriers[0]).toBe("home-1");
+    expect(carriers[carriers.length - 1]).toBeNull();
   });
 
   it("does not let the ball appear from nowhere partway through", () => {

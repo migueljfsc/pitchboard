@@ -283,6 +283,30 @@ export const HOLD_S = 0.4;
 export const HOLD_SHARE = 0.6;
 
 /**
+ * How long a holder may keep the ball with no sighting behind him, in seconds.
+ *
+ * A carrier stands until somebody else takes it, which is what a board MEANS (D43) — but
+ * that rule is a reading of the ball's silence, and silence stops meaning "still his" once
+ * it is long enough for the play to have moved on. On a coach's own clip the ball went
+ * unseen for 1.8 s, exactly the run he was asking about, and the board handed the whole
+ * passage to the player who last held it before the gap: the other team's attack drawn in
+ * the defending side's colour, with nothing in the file behind it.
+ *
+ * Measured BACKWARDS only. A sighting after the scene says where the ball got to, not who
+ * had it; the claim being carried is a claim about the past.
+ *
+ * Where nothing stands behind it the scene names nobody, which is a real answer (D44) and
+ * the one a coach can work with: a board that shows possession stopping is honest about
+ * what was tracked, and a board that shows the wrong team passing is not.
+ */
+export const CARRY_S = 1;
+
+/** Whether a ball sighting stands behind frame `f` — one at or before it, within CARRY_S. */
+export function sighted(ball: Sample[], f: number, fps: number): boolean {
+  return ball.some((s) => s.f <= f && (f - s.f) / fps <= CARRY_S);
+}
+
+/**
  * The fastest a footballer moves, in metres per second. Usain Bolt peaks near 12.
  *
  * Not a tuning knob — a fact used to catch impossibilities. A tracker gates on pixels,
