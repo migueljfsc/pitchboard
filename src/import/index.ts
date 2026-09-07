@@ -385,7 +385,16 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     sources,
     doc: {
       version: 1,
-      name: options.labels?.board ?? file.source.clip,
+      // Named for the passage, not just the clip. A board can only cover the part of a
+      // clip that was tracked well enough to draw -- SNGS-151's first 21 seconds hold
+      // fewer than six players, so its board opens at 21.4 s -- and a coach who chose the
+      // clip and knows what is in it needs to be told which piece of it they are looking
+      // at. Silence there reads as the board being wrong about the video.
+      name:
+        options.labels?.board ??
+        (start > file.source.startFrame || end < file.source.endFrame
+          ? `${file.source.clip} (${(start / file.source.fps).toFixed(0)}–${(end / file.source.fps).toFixed(0)}s)`
+          : file.source.clip),
       pitch: { length: file.pitch.length, width: file.pitch.width },
       teams: [teams[0], teams[1]],
       scenes,
