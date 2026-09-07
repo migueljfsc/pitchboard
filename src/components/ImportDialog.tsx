@@ -39,7 +39,8 @@ type Source =
   | { kind: "file"; name: string; bytes: number; text: string };
 
 type Props = {
-  onImport: (doc: BoardDoc, kind: ImportKind) => void;
+  /** Every board the file held, the first one first: a clip holds several plays (D70). */
+  onImport: (docs: BoardDoc[], kind: ImportKind) => void;
   onClose: () => void;
   /** A confirmation is up over this dialog, and owns the keyboard. */
   blocked?: boolean;
@@ -78,7 +79,7 @@ export function ImportDialog({ onImport, onClose, blocked }: Props) {
       setError(outcome.error);
       return;
     }
-    onImport(outcome.doc, outcome.kind);
+    onImport(outcome.docs, outcome.kind);
   };
 
   return (

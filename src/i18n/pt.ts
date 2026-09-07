@@ -165,6 +165,10 @@ export const pt: Dictionary = {
     "“{name}” foi lido de vídeo como {count} cena. Substitui tudo o que está no quadro — cenas, corridas, ligações e desenhos. Anular traz o quadro antigo de volta.",
   "confirm.import.message.tracks.other":
     "“{name}” foi lido de vídeo como {count} cenas. Substitui tudo o que está no quadro — cenas, corridas, ligações e desenhos. Anular traz o quadro antigo de volta.",
+  "confirm.import.message.passages.one":
+    "“{name}” foi lido de vídeo. Tem {count} jogada, que substitui tudo o que está no quadro — cenas, corridas, ligações e desenhos. Anular traz o quadro antigo de volta.",
+  "confirm.import.message.passages.other":
+    "“{name}” foi lido de vídeo. Tem {count} jogadas: a primeira substitui tudo o que está no quadro — cenas, corridas, ligações e desenhos — e as outras abrem-se na barra de cima. Anular traz o quadro antigo de volta.",
   "confirm.import.action": "Substituir quadro",
 
   "confirm.cancel": "Cancelar",
@@ -187,6 +191,9 @@ export const pt: Dictionary = {
   // --------------------------------------------------------- import dialog
   "import.dialog.title": "Abrir um ficheiro neste quadro",
   "import.close": "Fechar",
+  "passages.label": "Jogada {at} de {of}",
+  "passages.previous": "Jogada anterior deste vídeo",
+  "passages.next": "Jogada seguinte deste vídeo",
   "import.kinds": "Abrem-se aqui três tipos de ficheiro. Qual deles é vem do próprio ficheiro.",
   "import.kind.board": "Um quadro",
   "import.kind.board.hint":

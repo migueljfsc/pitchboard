@@ -170,6 +170,10 @@ export const en = {
     "“{name}” was read from video as {count} scene. It replaces everything on the board — scenes, runs, links and drawings. Undo brings the old board back.",
   "confirm.import.message.tracks.other":
     "“{name}” was read from video as {count} scenes. It replaces everything on the board — scenes, runs, links and drawings. Undo brings the old board back.",
+  "confirm.import.message.passages.one":
+    "“{name}” was read from video. It holds {count} play, which replaces everything on the board — scenes, runs, links and drawings. Undo brings the old board back.",
+  "confirm.import.message.passages.other":
+    "“{name}” was read from video. It holds {count} plays: the first replaces everything on the board — scenes, runs, links and drawings — and the others open from the top bar. Undo brings the old board back.",
   "confirm.import.action": "Replace board",
 
   "confirm.cancel": "Cancel",
@@ -196,6 +200,9 @@ export const en = {
   // there because nothing else in the app says a tracks file can be opened at all.
   "import.dialog.title": "Open a file into this board",
   "import.close": "Close",
+  "passages.label": "Play {at} of {of}",
+  "passages.previous": "Previous play from this clip",
+  "passages.next": "Next play from this clip",
   "import.kinds": "Three kinds of file open here. Which one it is comes from the file itself.",
   "import.kind.board": "A board",
   "import.kind.board.hint": "A whole play — every scene, run, link and drawing. What Export writes.",
