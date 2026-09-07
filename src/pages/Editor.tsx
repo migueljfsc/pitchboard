@@ -494,6 +494,20 @@ export function Editor({ initialDoc }: Props = {}) {
     importDoc(docs[0]);
   };
 
+  /**
+   * Move to another play from the same clip, keeping what was done to this one.
+   *
+   * The play being left is written back before the next one opens. Without that, moving
+   * away and coming back reopens the file's version and a coach's corrections are gone --
+   * and correcting the board is the entire point of importing one.
+   */
+  const goToPassage = (at: number) => {
+    if (!passages) return;
+    const docs = passages.docs.map((d, i) => (i === passages.at ? doc : d));
+    setPassages({ docs, at });
+    importDoc(docs[at]);
+  };
+
   const onDelayChange = (ms: number | null) => {
     if (editScene === undefined) return;
     let next = doc;
@@ -759,11 +773,7 @@ export function Editor({ initialDoc }: Props = {}) {
                 type="button"
                 className="rounded px-1.5 py-0.5 transition hover:bg-ink-700 disabled:opacity-40"
                 disabled={passages.at === 0}
-                onClick={() => {
-                  const at = passages.at - 1;
-                  setPassages({ ...passages, at });
-                  importDoc(passages.docs[at]);
-                }}
+                onClick={() => goToPassage(passages.at - 1)}
                 aria-label={t("passages.previous")}
               >
                 ‹
@@ -772,11 +782,7 @@ export function Editor({ initialDoc }: Props = {}) {
                 type="button"
                 className="rounded px-1.5 py-0.5 transition hover:bg-ink-700 disabled:opacity-40"
                 disabled={passages.at === passages.docs.length - 1}
-                onClick={() => {
-                  const at = passages.at + 1;
-                  setPassages({ ...passages, at });
-                  importDoc(passages.docs[at]);
-                }}
+                onClick={() => goToPassage(passages.at + 1)}
                 aria-label={t("passages.next")}
               >
                 ›
