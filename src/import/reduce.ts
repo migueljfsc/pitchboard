@@ -192,6 +192,19 @@ export const MIN_WINDOW_S = 2.5;
 export const WINDOW_SLACK = 1;
 
 /**
+ * How much of the fullest honest passage's roster another may give up to hold more of the
+ * ball.
+ *
+ * A board needs three things and no passage on this footage has all of them: positions
+ * that were really seen, the events a coach came to look at, and enough of a team to read
+ * the shape. Ordering them sacrifices whichever is last -- putting the roster first walks
+ * past every pass, because possession changes where players occlude each other and tracks
+ * fragment; putting the ball first empties the pitch to six players. So honesty and the
+ * roster are floors, and the ball chooses among what clears them.
+ */
+export const MIN_ROSTER_SHARE = 0.75;
+
+/**
  * How near a restart spot the ball must sit, in metres, and how long it must sit there,
  * before the passage counts as a set piece being taken.
  *
@@ -586,8 +599,20 @@ export function chooseWindow(
   const tol = Math.max(1, Math.round(WITNESS_TOL_S * fps));
   if (to - from <= minFrames || tracks.length === 0) return { from, to };
 
-  const starts = [from, ...tracks.map((t) => t.samples[0].f)].filter((f) => f >= from && f < to);
-  const ends = [to, ...tracks.map((t) => t.samples[t.samples.length - 1].f)].filter(
+  // Candidate boundaries: where a track begins or ends, and where something HAPPENED.
+  //
+  // Track endpoints alone were the whole set, and they cannot express "the four seconds
+  // around that pass" unless some player's track happens to start there. On SNGS-067 that
+  // is exactly what went wrong: every passage holding a change of possession was too long
+  // to be honest, and the honest ones held no football, because the one candidate that was
+  // both — a short window bracketing the pass — was never offered.
+  const margin = Math.round(minWindowS * fps) / 2;
+  const events = [...changes, ...(restart === null ? [] : [restart])];
+  const around = events.flatMap((f) => [f, f - margin, f + margin]);
+  const starts = [from, ...tracks.map((t) => t.samples[0].f), ...around].filter(
+    (f) => f >= from && f < to,
+  );
+  const ends = [to, ...tracks.map((t) => t.samples[t.samples.length - 1].f), ...around].filter(
     (f) => f > from && f <= to,
   );
 
@@ -627,14 +652,27 @@ export function chooseWindow(
         // every scene, so a passage whose roster is half unwatched is drawn half from
         // memory -- and nothing on the finished board says which half.
         density: fielded.length ? fielded.reduce((x, y) => x + y, 0) / fielded.length : 0,
+        // A restart is AN event, not a trump card. Preferring any passage containing it
+        // over any passage without it is how SNGS-067 came out anchored to a kick-off
+        // with all four of its changes of possession outside the window: the board held
+        // the one moment nothing happens after. Counted alongside the passes, a corner
+        // still wins the clip it defines (D53) and stops winning the ones it does not.
         covers: restart !== null && a <= restart && b > restart,
-        passes: changes.filter((f) => f >= a && f <= b).length,
+        passes:
+          changes.filter((f) => f >= a && f <= b).length +
+          (restart !== null && a <= restart && b > restart ? 1 : 0),
       });
     }
   }
   if (candidates.length === 0) return { from, to };
 
-  const covering = candidates.filter((c) => c.covers);
+  // A set piece still decides the passage where the passage has anything else in it. What
+  // it may not do is win a clip on its own: SNGS-067 came out anchored to a kick-off with
+  // all four of its changes of possession outside the window, which is a board of the one
+  // moment nothing happens after (D53 refined).
+  // "Anything else" means anything else there IS: on a clip where the ball was never seen
+  // to change hands, the set piece is the only event and still decides.
+  const covering = candidates.filter((c) => c.covers && (changes.length === 0 || c.passes > 1));
   const restarts = covering.length > 0 ? covering : candidates;
   // HONESTY IS A CONSTRAINT, NOT THE OBJECTIVE. Maximising watched football alone fields
   // two players for twelve seconds over eight for three, because it is indifferent to how
@@ -645,13 +683,27 @@ export function chooseWindow(
   // If nothing clears the bar, the least invented passage is still the answer: refusing to
   // import is not something a coach can use.
   const pool = honest.length > 0 ? honest : [maxBy(restarts, (c) => c.density)];
-  const most = Math.max(...pool.map((c) => c.count));
-  // Roster, then the ball, then the seconds actually WATCHED -- which was duration, and
-  // duration is what let a passage grow into the frames where nobody was seen at all.
-  const best = pool
-    .filter((c) => c.count >= most - WINDOW_SLACK)
+  // THE BALL FIRST, among passages that are honest. A board a coach can use is one with
+  // the football in it: a passage holding no change of possession is a formation, not a
+  // play, and the roster objective walks past the ball every time because possession
+  // changes where players occlude each other and tracks fragment. Honesty is still the
+  // constraint -- the passage may not stretch into frames nobody was seen in to collect
+  // another pass -- and the roster breaks ties underneath.
+  // Two constraints and then the ball. Honesty bounds how much of the board may be drawn
+  // from memory; the roster floor bounds how much of the TEAM may be given up to reach
+  // another pass -- a passage with the whole game in it and six players on the pitch is
+  // not a board either. Ordering these instead of constraining them sacrifices whichever
+  // comes last, and every ordering was tried: roster first walks past the ball, ball first
+  // empties the pitch.
+  const fullest = Math.max(...pool.map((c) => c.count));
+  const enough = pool.filter((c) => c.count >= fullest * MIN_ROSTER_SHARE);
+  const busiest = Math.max(...enough.map((c) => c.passes));
+  const best = enough
+    .filter((c) => c.passes === busiest)
+    // The set piece breaks the tie, which is what D53 was really asking for: among boards
+    // holding the same amount of football, the one that opens on the kick-off.
     .reduce((x, y) =>
-      y.passes !== x.passes ? (y.passes > x.passes ? y : x) : y.watched > x.watched ? y : x,
+      y.covers !== x.covers ? (y.covers ? y : x) : y.watched > x.watched ? y : x,
     );
   return { from: best.from, to: best.to };
 }
@@ -758,9 +810,10 @@ export function chooseScenes(
     if (f - from < minGap || to - f < minGap) continue;
     if (chosen.some((c) => Math.abs(c - f) < minGap)) continue;
     if (chosen.length >= maxScenes) break;
-    // A possession change nobody was on screen for is not an event, it is two held
-    // positions and a guess about which of them has the ball.
-    if (backedAt(f) < backedFloor) continue;
+    // NOT subject to `backedFloor`. A pass is an observation of the ball and the two
+    // players either end of it, and at a kick-off the rest of the roster is by definition
+    // not gathered round: gating events on how many OTHER players are on screen deletes
+    // the football and leaves the padding, which is the exact opposite of the intent.
     chosen.push(f);
   }
   chosen.sort((p, q) => p - q);

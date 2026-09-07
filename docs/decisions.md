@@ -466,6 +466,50 @@ drawn from memory. What is left is short because THE TRACKER IS SHORT: a board c
 long as the roster is watched, and at today's fragmentation that is a handful of seconds. The
 fix for board length is upstream, not here.
 
+## D68 — Honest is not enough: the board has to have the football in it
+D67 made the boards true and emptied them. The same coach: *"067 is 2 scenes and nothing
+happens"*, *"there's no kickoff, no back pass, no header after the GK boots it"*. Three separate
+faults, and the first two were mine from D67:
+
+- **The scene floor was deleting the events.** It was applied to possession changes as well as
+  to the recursive split, and at a kick-off the rest of the roster is by definition not gathered
+  round — so the one moment worth drawing was the one it refused. An event is an observation of
+  the ball and the two players either end of it; the floor is for scenes the split INVENTED.
+- **The end-trim walked past the restart.** `chooseWindow` deliberately included the kick-off
+  and the trim then cut it off, which is how SNGS-060 lost the thing it opens with.
+- **A passage could only begin or end where a track did.** Candidate boundaries were track
+  endpoints, so "the four seconds around that pass" was never in the candidate set unless a
+  player's track happened to start there. On SNGS-067 every passage holding a change of
+  possession was too long to be honest and every honest one held no football — the candidate
+  that was both was never offered. Events are boundaries now.
+
+**And the objective itself was wrong twice.** Ordering honesty, the roster and the ball
+sacrifices whichever comes last, and all three orderings were measured: roster first walks past
+every pass (possession changes happen where players occlude each other and tracks fragment);
+ball first empties the pitch to six players; honesty first produces two scenes of nobody moving.
+So honesty and the roster are FLOORS — `MIN_BOARD_DENSITY`, `MIN_ROSTER_SHARE` — and the ball
+chooses among what clears them.
+
+**A restart is an event, not a trump card.** D53 gave any passage containing a set piece
+priority over any passage without one, and SNGS-067 came out anchored to a kick-off with all
+four of its changes of possession outside the window: a board of the one moment nothing happens
+after. It still decides the passage, but only where the passage has something else in it too —
+or where the clip holds no other event at all, which is what D53 was really about.
+
+    board          players   window   real   events kept / in window / in clip
+    SNGS-067         16       5.2 s   60%           1 / 1 / 4      kick-off kept
+    SNGS-060         15      11.6 s   70%           4 / 5 / 19     kick-off kept
+    SNGS-069         20      15.0 s   75%          10 / 12 / 12
+    SNGS-121         17      18.1 s   67%          11 / 12 / 19
+    SNGS-116         18       8.5 s   58%           8 / 10 / 16
+
+**What the last column says is the real limit, and no rule here can move it.** SNGS-060 contains
+nineteen changes of possession and an honest board holds five, because honesty caps the window
+at about a third of the clip and the football is spread across all of it. A board covering the
+whole clip has to be able to leave a player OUT of a scene — which `BoardDoc` cannot express,
+every player needing a position in every scene — or go back to drawing them from memory. That
+is the next real decision, and it is a schema one.
+
 ## D66 — A player has to be WATCHED, not merely present for a share of the window
 `MIN_COVERAGE` is a fraction of the chosen window, and `chooseWindow` maximises how many
 tracks clear it. Those two together are a ratchet towards short passages: halve the window and

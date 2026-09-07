@@ -376,6 +376,13 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
   `pnpm board` reports `seen` (drawn positions with a sighting within 0.25 s) and `worst` (the
   emptiest scene); they are the fidelity bar, and a passage that scores well on watched
   player-seconds can still be mostly remembered (D67).
+- **A fidelity rule must never touch an EVENT** (D68). A kick-off has nobody else gathered
+  round it, so a floor on "how much of the roster is on screen" deletes exactly the moment the
+  board exists for. Gate the scenes the split invented, never the ball.
+- **Honesty, the roster and the ball cannot be ordered — only two can be floors** (D68). Every
+  ordering was measured and each one sacrifices the third completely.
+- **Candidate windows are bounded by events as well as by track endpoints** (D68). Without that,
+  "the four seconds around that pass" is not a passage the chooser can even consider.
 - **A scene is the worst place to draw from memory, and the split aims straight at it.**
   `chooseScenes` looks for the frame where a player deviates most from their interpolation, and
   a player the tracker just lost deviates hardest of all (D67).

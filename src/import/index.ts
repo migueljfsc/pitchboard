@@ -206,10 +206,23 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   // to be empty -- a track starting or stopping there is exactly what made that frame a
   // candidate -- and a board whose last scene is drawn from memory is the one a coach
   // notices, because it is where the play stops making sense.
+  //
+  // It may never cross an EVENT. The restart and every change of possession are what the
+  // passage was chosen for, and trimming a quiet opening straight past the kick-off is how
+  // a board loses the one thing on it a coach came to see.
+  const events = [
+    ...(kick !== null && kick >= from && kick <= to ? [kick] : []),
+    ...handovers(ballSamples, kept, file.source.fps).filter((f) => f >= from && f <= to),
+  ];
+  const firstEvent = events.length ? Math.min(...events) : to;
+  const lastEvent = events.length ? Math.max(...events) : from;
+
   let [start, end] = [from, to];
   const shortest = Math.round(MIN_WINDOW_S * file.source.fps);
-  while (end - start > shortest && backedAt(start) < SCENE_BACKED_FLOOR) start++;
-  while (end - start > shortest && backedAt(end) < SCENE_BACKED_FLOOR) end--;
+  while (end - start > shortest && start < firstEvent && backedAt(start) < SCENE_BACKED_FLOOR) {
+    start++;
+  }
+  while (end - start > shortest && end > lastEvent && backedAt(end) < SCENE_BACKED_FLOOR) end--;
 
   const frames = chooseScenes(
     kept,

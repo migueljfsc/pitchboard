@@ -28,7 +28,9 @@ import { basename, dirname, resolve } from "node:path";
 import { createServer } from "vite";
 import type { BoardDoc } from "../src/board/types.ts";
 import type { Message } from "../src/i18n/core.ts";
-import type { Track } from "../src/import/tracks.ts";
+import type { Sample, Track, TracksFile } from "../src/import/tracks.ts";
+
+type Pitch = TracksFile["pitch"];
 
 /**
  * What `boardFromTracks` returns.
@@ -62,6 +64,11 @@ type Row = {
   density?: number;
   worstScene?: number;
   lastScene?: number;
+  restart?: number | null;
+  restartKept?: boolean;
+  changes?: number;
+  changesInWindow?: number;
+  changesKept?: number;
   windowS?: number;
   observedPlayerS?: number;
   xFrom?: number;
@@ -93,10 +100,16 @@ const server = await createServer({ server: { middlewareMode: true }, logLevel: 
 const { boardFromTracks } = (await server.ssrLoadModule("/src/import/index.ts")) as {
   boardFromTracks: (raw: unknown, options?: { minCoverage?: number }) => ImportResult;
 };
-const { coverage, witnessed } = (await server.ssrLoadModule("/src/import/reduce.ts")) as {
-  coverage: (track: Track, from: number, to: number) => number;
-  witnessed: (track: Track, from: number, to: number, tol: number) => number;
-};
+const { coverage, witnessed, restartAt, handovers, splitImpossible, sideOf, onPitch } =
+  (await server.ssrLoadModule("/src/import/reduce.ts")) as {
+    coverage: (track: Track, from: number, to: number) => number;
+    witnessed: (track: Track, from: number, to: number, tol: number) => number;
+    restartAt: (ball: Sample[], pitch: Pitch, fps: number) => number | null;
+    handovers: (ball: Sample[], players: Track[], fps: number) => number[];
+    splitImpossible: (t: Track, fps: number, max?: number, intervalS?: number) => Track[];
+    sideOf: (t: Track) => "home" | "away" | null;
+    onPitch: (t: Track, pitch: Pitch) => boolean;
+  };
 
 const rows: Row[] = files.map((file) => {
   const raw: unknown = JSON.parse(readFileSync(resolve(file), "utf8"));
@@ -151,6 +164,19 @@ const rows: Row[] = files.map((file) => {
       return sum + (track ? witnessed(track, window.from, window.to, tol) : 0);
     }, 0) / Math.max(ids.length, 1);
 
+  // What the clip actually contains, against what the board kept of it: the restart and
+  // every change of possession. These are the events a coach came to look at, and they are
+  // the first thing a fidelity rule will delete -- nobody else is on screen at a kick-off.
+  const doc_ = raw as TracksFile;
+  const ball = doc_.ball?.samples ?? [];
+  const players = doc_.tracks
+    .flatMap((t) => splitImpossible(t, doc_.source.fps, undefined, doc_.source.intervalS))
+    .filter((t) => sideOf(t) !== null && onPitch(t, doc_.pitch));
+  const restart = restartAt(ball, doc_.pitch, doc_.source.fps);
+  const changes = handovers(ball, players, doc_.source.fps);
+  const inWindow = changes.filter((f) => f >= window.from && f <= window.to);
+  const kept = inWindow.filter((f) => frames.some((s) => Math.abs(s - f) <= tol));
+
   const curves = doc.scenes.reduce(
     (n, s) => n + Object.values(s.paths).filter((p) => p !== null).length,
     0,
@@ -173,6 +199,11 @@ const rows: Row[] = files.map((file) => {
     density,
     worstScene: Math.min(...seen),
     lastScene: seen[seen.length - 1],
+    restart,
+    restartKept: restart !== null && restart >= window.from && restart <= window.to,
+    changes: changes.length,
+    changesInWindow: inWindow.length,
+    changesKept: kept.length,
     windowS,
     observedPlayerS: observed,
     xFrom: Math.min(...xs),
@@ -190,8 +221,11 @@ if (asJson) {
 } else {
   const head =
     "board".padEnd(24) +
-    ["players", "H/A", "scenes", "window", "watched", "dens", "seen", "worst", "last", "travel", "curves"]
-      .map((h, i) => h.padStart([8, 7, 7, 8, 10, 7, 7, 7, 7, 8, 7][i]))
+    [
+      "players", "H/A", "scenes", "window", "watched", "dens", "seen", "worst", "last",
+      "travel", "curves", "passes", "restart",
+    ]
+      .map((h, i) => h.padStart([8, 7, 7, 8, 10, 7, 7, 7, 7, 8, 7, 11, 7][i]))
       .join("");
   console.log(head);
   console.log("-".repeat(head.length));
@@ -212,7 +246,9 @@ if (asJson) {
         `${(r.worstScene! * 100).toFixed(0)}%`.padStart(7) +
         `${(r.lastScene! * 100).toFixed(0)}%`.padStart(7) +
         `${r.travelM!.toFixed(1)} m`.padStart(8) +
-        String(r.curves).padStart(7),
+        String(r.curves).padStart(7) +
+        `${r.changesKept}/${r.changesInWindow}/${r.changes}`.padStart(11) +
+        (r.restart === null ? "  -" : r.restartKept ? "  yes" : "  LOST"),
     );
   }
 }
