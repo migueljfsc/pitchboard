@@ -58,6 +58,10 @@ type Row = {
   home?: number;
   away?: number;
   scenes?: number;
+  backed?: number;
+  density?: number;
+  worstScene?: number;
+  lastScene?: number;
   windowS?: number;
   observedPlayerS?: number;
   xFrom?: number;
@@ -76,6 +80,9 @@ function label(path: string): string {
 
 const args = process.argv.slice(2);
 const asJson = args.includes("--json");
+// A sweep knob, not a setting: the importer's own default is the shipped one.
+const coverageArg = args.find((a) => a.startsWith("--min-coverage="));
+const minCoverage = coverageArg ? Number(coverageArg.split("=")[1]) : undefined;
 const files = args.filter((a) => !a.startsWith("--"));
 if (files.length === 0) {
   console.error("usage: pnpm board <tracks.json> [more...] [--json]");
@@ -84,18 +91,19 @@ if (files.length === 0) {
 
 const server = await createServer({ server: { middlewareMode: true }, logLevel: "error" });
 const { boardFromTracks } = (await server.ssrLoadModule("/src/import/index.ts")) as {
-  boardFromTracks: (raw: unknown) => ImportResult;
+  boardFromTracks: (raw: unknown, options?: { minCoverage?: number }) => ImportResult;
 };
-const { coverage } = (await server.ssrLoadModule("/src/import/reduce.ts")) as {
+const { coverage, witnessed } = (await server.ssrLoadModule("/src/import/reduce.ts")) as {
   coverage: (track: Track, from: number, to: number) => number;
+  witnessed: (track: Track, from: number, to: number, tol: number) => number;
 };
 
 const rows: Row[] = files.map((file) => {
   const raw: unknown = JSON.parse(readFileSync(resolve(file), "utf8"));
-  const result = boardFromTracks(raw);
+  const result = boardFromTracks(raw, minCoverage === undefined ? {} : { minCoverage });
   if (!result.ok) return { file: label(file), ok: false, error: result.error.key };
 
-  const { doc, window, sources } = result;
+  const { doc, window, sources, frames } = result;
   const fps = (raw as { source: { fps: number } }).source.fps;
   const windowS = (window.to - window.from) / fps;
   const observed = Object.values(sources).reduce(
@@ -120,6 +128,29 @@ const rows: Row[] = files.map((file) => {
     travel = Math.max(travel, walked);
   }
 
+  // How much of what the board DRAWS was actually seen.
+  //
+  // Every player has a position in every scene -- that is what a board is -- but a player
+  // the tracker lost is drawn standing where they were last seen, and nothing on the board
+  // says which is which. `observed` counts the time a player was watched; this counts the
+  // POSITIONS the coach is shown, and it is the one that says whether a passage is a
+  // record of the clip or a reconstruction of it.
+  const tol = Math.round(0.2 * fps);
+  const seen = frames.map(
+    (f) =>
+      ids.filter((id) => sources[id]?.samples.some((s) => Math.abs(s.f - f) <= tol)).length /
+      Math.max(ids.length, 1),
+  );
+  const backed = seen.reduce((a, b) => a + b, 0) / Math.max(seen.length, 1);
+  // What the window chooser thought it was getting: the mean share of the WINDOW each
+  // fielded player was watched for. Where this is high and `backed` is low, the scenes
+  // are landing in the holes rather than the passage being padded.
+  const density =
+    ids.reduce((sum, id) => {
+      const track = sources[id];
+      return sum + (track ? witnessed(track, window.from, window.to, tol) : 0);
+    }, 0) / Math.max(ids.length, 1);
+
   const curves = doc.scenes.reduce(
     (n, s) => n + Object.values(s.paths).filter((p) => p !== null).length,
     0,
@@ -138,6 +169,10 @@ const rows: Row[] = files.map((file) => {
     home: doc.teams[0].players.length,
     away: doc.teams[1].players.length,
     scenes: doc.scenes.length,
+    backed,
+    density,
+    worstScene: Math.min(...seen),
+    lastScene: seen[seen.length - 1],
     windowS,
     observedPlayerS: observed,
     xFrom: Math.min(...xs),
@@ -155,8 +190,8 @@ if (asJson) {
 } else {
   const head =
     "board".padEnd(24) +
-    ["players", "H/A", "scenes", "window", "observed", "x range", "travel", "curves", "passes"]
-      .map((h, i) => h.padStart([8, 7, 7, 8, 10, 12, 8, 7, 7][i]))
+    ["players", "H/A", "scenes", "window", "watched", "dens", "seen", "worst", "last", "travel", "curves"]
+      .map((h, i) => h.padStart([8, 7, 7, 8, 10, 7, 7, 7, 7, 8, 7][i]))
       .join("");
   console.log(head);
   console.log("-".repeat(head.length));
@@ -172,10 +207,12 @@ if (asJson) {
         String(r.scenes).padStart(7) +
         `${r.windowS!.toFixed(1)} s`.padStart(8) +
         `${r.observedPlayerS!.toFixed(0)} p·s`.padStart(10) +
-        `${r.xFrom!.toFixed(0)}-${r.xTo!.toFixed(0)} m`.padStart(12) +
+        `${(r.density! * 100).toFixed(0)}%`.padStart(7) +
+        `${(r.backed! * 100).toFixed(0)}%`.padStart(7) +
+        `${(r.worstScene! * 100).toFixed(0)}%`.padStart(7) +
+        `${(r.lastScene! * 100).toFixed(0)}%`.padStart(7) +
         `${r.travelM!.toFixed(1)} m`.padStart(8) +
-        String(r.curves).padStart(7) +
-        String(r.passes).padStart(7),
+        String(r.curves).padStart(7),
     );
   }
 }

@@ -423,6 +423,49 @@ anchor every frame, which is a second kind of drag for one shape. The drift is s
 thing being dragged.
 
 
+## D67 — Half of every board was a player standing where he was last seen
+A board gives every player a position in every scene — that is what a board IS — so a player
+the tracker lost is drawn where he was last seen, and nothing on the finished board tells the
+coach which of the twenty-two are real. Nothing measured it either. Counting the drawn
+positions that have a sighting within a quarter of a second:
+
+    board              was            now
+    SNGS-067        52% real       68% real     worst scene 18% -> 63%
+    SNGS-151        43%            68%          worst scene 14% -> 60%
+    SNGS-147        51%            70%
+    SNGS-060        61%            72%
+    eleven clips    43-63%         59-82%       worst scene 13-63% -> 56-65%
+
+A coach found it before any metric did: *"at the end you make up something"*. The end is where
+it is worst, because a window's last frames are the ones a track stops at — that is what made
+them a candidate boundary.
+
+**`coverage` measures a SPAN, and that is the hole the rest fell through.** First sample to
+last: a track with a two-second gap in the middle covers the window completely, clears every
+floor, and is drawn standing still through the gap. `witnessed` measures the samples instead —
+the union of what each one can honestly speak for — and everything that asks "how much of this
+player did we see" now asks it that way: the fielding filter, the keeper pick, the per-side
+ranking and the window objective.
+
+**Three rules, and they are all refusals.**
+
+- `MIN_BOARD_DENSITY` — a passage whose fielded roster is less than 70% witnessed is not
+  chosen. Honesty is a CONSTRAINT and not the objective: maximising watched football alone
+  fields two players for twelve seconds over eight for three, because it cannot see how many
+  people are on the board. The roster still decides, but only among honest passages.
+- `SCENE_BACKED_FLOOR` — no scene where under 65% of the roster is on screen. `chooseScenes`
+  walked straight into this: it splits where a player deviates furthest from their
+  interpolation, and a player the tracker just lost deviates hardest of all. The frames it
+  liked best were the least real ones on the board.
+- The passage is trimmed at both ends to where the roster is actually on screen, which is what
+  the coach was pointing at.
+
+**What it costs is duration, and that is the honest price.** SNGS-067 goes from 25.2 seconds to
+3.9, SNGS-060 from 26.0 to 9.0. The football is not lost — it was never on those boards, it was
+drawn from memory. What is left is short because THE TRACKER IS SHORT: a board can only be as
+long as the roster is watched, and at today's fragmentation that is a handful of seconds. The
+fix for board length is upstream, not here.
+
 ## D66 — A player has to be WATCHED, not merely present for a share of the window
 `MIN_COVERAGE` is a fraction of the chosen window, and `chooseWindow` maximises how many
 tracks clear it. Those two together are a ratchet towards short passages: halve the window and

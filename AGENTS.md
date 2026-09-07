@@ -368,6 +368,17 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
   window within `WINDOW_SLACK` of the fullest wins. The cap and the slack fix each other's
   failure: capping alone lets a two-fragment side pick the window, slack alone buys seconds by
   gutting a side (11 v 8 over 2.8 s became 17 v 1 over 8.6 s).
+- **`coverage` measures a track's SPAN, not its samples** (D67). A track seen at both ends of a
+  window and nowhere in between covers it completely, and the board draws that player standing
+  still through the gap. Use `witnessed` for any question of the form "how much of this player
+  did we see"; `coverage` survives only where a span is genuinely what is meant.
+- **Half of a board used to be positions nobody saw**, and no metric said so — the coach did.
+  `pnpm board` reports `seen` (drawn positions with a sighting within 0.25 s) and `worst` (the
+  emptiest scene); they are the fidelity bar, and a passage that scores well on watched
+  player-seconds can still be mostly remembered (D67).
+- **A scene is the worst place to draw from memory, and the split aims straight at it.**
+  `chooseScenes` looks for the frame where a player deviates most from their interpolation, and
+  a player the tracker just lost deviates hardest of all (D67).
 - **A coverage FLOOR is a fraction of the window, so a short window clears it more easily**
   (D66). Anything that counts tracks passing `MIN_COVERAGE` is therefore biased towards short
   passages, and the bias is structural: SNGS-147's board was nineteen fragments over 3.2 s,

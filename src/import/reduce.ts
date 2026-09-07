@@ -84,6 +84,53 @@ export const MIN_COVERAGE = 0.3;
 export const MIN_OBSERVED_S = 1.5;
 
 /**
+ * How far either side of a sample the board may be drawn from it, in seconds.
+ *
+ * A quarter of a second. Beyond that a position is not this player's position any more,
+ * it is where they were: a footballer at 5 m/s has moved more than a metre.
+ */
+export const WITNESS_TOL_S = 0.25;
+
+/**
+ * How much of a board must be positions somebody actually SAW.
+ *
+ * The bar a passage has to clear before it can be chosen, and the reason this file has
+ * `witnessed` at all. Every player needs a position in every scene — that is what a board
+ * IS — so a player the tracker lost is drawn standing where they were last seen, and
+ * nothing on the board tells the coach which of the twenty-two are real. Measured on the
+ * shipped boards, 43-63% of the drawn positions were real ones, and one scene of SNGS-067
+ * was 18%: four fifths of that scene is a reconstruction.
+ *
+ * 0.7 is where the passages stop being padded and still contain football. Higher empties
+ * them — at a 0.85 average the eleven boards keep two or three scenes and no passes at
+ * all, which is an accurate record of a moment rather than a play.
+ */
+export const MIN_BOARD_DENSITY = 0.7;
+
+/**
+ * How much of the roster must be on screen at a frame before a scene is put there.
+ *
+ * A scene is a moment the coach is asked to look at, so it is the worst place on a board
+ * to be drawing from memory -- and `chooseScenes` walks straight into it, because the
+ * frames where a player deviates furthest from their interpolation are frequently the
+ * frames where the tracker lost them and the position stopped being real. Measured on the
+ * shipped boards: SNGS-067 held a scene where 18% of the shirts were backed by a sighting
+ * and SNGS-151 one at 14%.
+ *
+ * Measured across the eleven clips against the share of the finished board that is real:
+ *
+ *     window density   scene floor   board is real   SNGS-060
+ *          0.7            0.50           63-67%      12.4 s, 49 m of travel
+ *          0.7            0.65           68-72%       9.0 s, 40 m
+ *          0.8            0.65           63-79%       4.2 s, 16 m
+ *
+ * 0.65 with a 0.7 window is where the boards stop being half-remembered and still hold a
+ * passage of play. Tightening the window instead of the scene empties them: SNGS-060 keeps
+ * three scenes and a quarter of its movement.
+ */
+export const SCENE_BACKED_FLOOR = 0.65;
+
+/**
  * How far outside the pitch a position may sit and still be believed, in metres.
  *
  * A producer's own filter is generous on purpose, because it does not know how far off
@@ -134,17 +181,13 @@ export const MAX_PER_SIDE = 11;
 export const MIN_WINDOW_S = 2.5;
 
 /**
- * How many covered tracks a longer window may give up to be chosen, in players.
+ * How many fielded tracks a passage may give up to be chosen, in players.
  *
  * The count is FRAGMENTS, not people. A track holding an impossible jump is cut before
  * the window is chosen, so a busy clip arrives as 90 to 200 pieces of 40 to 80 players
- * and an extra covering fragment is frequently a player already on the board. The board
- * then fields at most `MAX_PER_SIDE` a side, so windows scoring 26 and 25 routinely
- * produce the same eleven.
- *
- * Without slack, duration only breaks an exact tie, and one fragment outweighs any amount
- * of football: the best window on one clip is 19 fragments over 2.8 s, against 18 over
- * 8.6 s. One is inside the noise of this measurement; six seconds of play is not.
+ * and an extra fragment is frequently a player already on the board. The board then
+ * fields at most `MAX_PER_SIDE` a side, so windows scoring 26 and 25 routinely produce
+ * the same eleven.
  */
 export const WINDOW_SLACK = 1;
 
@@ -355,6 +398,38 @@ export function observed(track: Track, from: number, to: number, fps: number): n
   return Math.max(0, Math.min(to, last) - Math.max(from, first)) / fps;
 }
 
+/**
+ * How much of a window a track was actually WATCHED for, as a share.
+ *
+ * `coverage` measures a track's span: first sample to last. A track with a two-second
+ * hole in the middle covers the window completely by that measure, and the board draws
+ * the player standing still through the hole — which is how a board ends up half held
+ * without any number saying so (D67 in football-tracks is the same trap: a measurement
+ * conditioned on what a model already answers).
+ *
+ * This measures the samples. Each one witnesses `tol` frames either side of itself, and
+ * the union of those intervals inside the window is what the board can honestly draw.
+ */
+export function witnessed(track: Track, from: number, to: number, tol: number): number {
+  if (to <= from) return 0;
+  let total = 0;
+  let openFrom = -Infinity;
+  let openTo = -Infinity;
+  for (const s of track.samples) {
+    const lo = Math.max(from, s.f - tol);
+    const hi = Math.min(to, s.f + tol);
+    if (hi <= lo) continue;
+    if (lo > openTo) {
+      if (openTo > openFrom) total += openTo - openFrom;
+      [openFrom, openTo] = [lo, hi];
+    } else if (hi > openTo) {
+      openTo = hi;
+    }
+  }
+  if (openTo > openFrom) total += openTo - openFrom;
+  return total / (to - from);
+}
+
 export function coverage(track: Track, from: number, to: number): number {
   if (to <= from) return 0;
   const first = track.samples[0].f;
@@ -505,8 +580,10 @@ export function chooseWindow(
   restart: number | null = null,
   changes: number[] = [],
   minObservedS = MIN_OBSERVED_S,
+  minDensity = MIN_BOARD_DENSITY,
 ): { from: number; to: number } {
   const minFrames = Math.round(minWindowS * fps);
+  const tol = Math.max(1, Math.round(WITNESS_TOL_S * fps));
   if (to - from <= minFrames || tracks.length === 0) return { from, to };
 
   const starts = [from, ...tracks.map((t) => t.samples[0].f)].filter((f) => f >= from && f < to);
@@ -518,22 +595,38 @@ export function chooseWindow(
     from: number;
     to: number;
     count: number;
+    watched: number;
+    density: number;
     covers: boolean;
     passes: number;
   }[] = [];
   for (const a of new Set(starts)) {
     for (const b of new Set(ends)) {
       if (b - a < minFrames) continue;
-      const covered = tracks.filter((t) => observed(t, a, b, fps) >= minObservedS && coverage(t, a, b) >= minCoverage);
-      const home = covered.filter((t) => sideOf(t) === "home").length;
-      const away = covered.filter((t) => sideOf(t) === "away").length;
+      const shares: Record<"home" | "away", number[]> = { home: [], away: [] };
+      for (const track of tracks) {
+        const side = sideOf(track);
+        if (side === null) continue;
+        // WITNESSED, not covered. A track's span reaching across the window says the
+        // player was here at some point; what the board can honestly draw is where the
+        // samples are.
+        const share = witnessed(track, a, b, tol);
+        if (share < minCoverage || observed(track, a, b, fps) < minObservedS) continue;
+        shares[side].push(share);
+      }
+      // Capped per side, because that is what the board fields, and the best-watched
+      // eleven are the ones it will keep.
+      const fielded = [...fieldable(shares.home), ...fieldable(shares.away)];
       candidates.push({
         from: a,
         to: b,
-        // Capped per side, because that is what the board fields. Counting past the cap
-        // optimises fragments it then discards, and a total hides the split: one clip's
-        // fullest window is 17 home and 1 away, which is not a board.
-        count: Math.min(home, MAX_PER_SIDE) + Math.min(away, MAX_PER_SIDE),
+        count: fielded.length,
+        // The seconds of real observation this passage would put on the board.
+        watched: (fielded.reduce((x, y) => x + y, 0) * (b - a)) / fps,
+        // And how much of the board those seconds are. Every player needs a position in
+        // every scene, so a passage whose roster is half unwatched is drawn half from
+        // memory -- and nothing on the finished board says which half.
+        density: fielded.length ? fielded.reduce((x, y) => x + y, 0) / fielded.length : 0,
         covers: restart !== null && a <= restart && b > restart,
         passes: changes.filter((f) => f >= a && f <= b).length,
       });
@@ -542,17 +635,34 @@ export function chooseWindow(
   if (candidates.length === 0) return { from, to };
 
   const covering = candidates.filter((c) => c.covers);
-  const pool = covering.length > 0 ? covering : candidates;
+  const restarts = covering.length > 0 ? covering : candidates;
+  // HONESTY IS A CONSTRAINT, NOT THE OBJECTIVE. Maximising watched football alone fields
+  // two players for twelve seconds over eight for three, because it is indifferent to how
+  // many people are on the board; roster alone pads the passage with players the tracker
+  // lost. So the roster decides among the passages that can be drawn without inventing
+  // most of themselves, and nowhere else.
+  const honest = restarts.filter((c) => c.density >= minDensity && c.count > 0);
+  // If nothing clears the bar, the least invented passage is still the answer: refusing to
+  // import is not something a coach can use.
+  const pool = honest.length > 0 ? honest : [maxBy(restarts, (c) => c.density)];
   const most = Math.max(...pool.map((c) => c.count));
-  // Roster first, then the ball, then length. Duration was the tie-break and it chose
-  // badly: among windows that field the same side, the longer one is not the one with the
-  // play in it, and a coach analysing a passage with no pass in it has nothing to analyse.
+  // Roster, then the ball, then the seconds actually WATCHED -- which was duration, and
+  // duration is what let a passage grow into the frames where nobody was seen at all.
   const best = pool
     .filter((c) => c.count >= most - WINDOW_SLACK)
     .reduce((x, y) =>
-      y.passes !== x.passes ? (y.passes > x.passes ? y : x) : y.to - y.from > x.to - x.from ? y : x,
+      y.passes !== x.passes ? (y.passes > x.passes ? y : x) : y.watched > x.watched ? y : x,
     );
   return { from: best.from, to: best.to };
+}
+
+function maxBy<T>(items: T[], score: (item: T) => number): T {
+  return items.reduce((best, item) => (score(item) > score(best) ? item : best));
+}
+
+/** The best-watched eleven of a side: what the board will actually field. */
+function fieldable(shares: number[]): number[] {
+  return [...shares].sort((x, y) => y - x).slice(0, MAX_PER_SIDE);
 }
 
 /**
@@ -634,6 +744,8 @@ export function chooseScenes(
   toleranceM: number = SCENE_TOLERANCE_M,
   maxScenes: number = MAX_SCENES,
   changes: number[] = [],
+  backedAt: (frame: number) => number = () => 1,
+  backedFloor: number = SCENE_BACKED_FLOOR,
 ): number[] {
   const minGap = Math.max(1, Math.round(MIN_SCENE_GAP_S * fps));
   const chosen = [from, to];
@@ -646,6 +758,9 @@ export function chooseScenes(
     if (f - from < minGap || to - f < minGap) continue;
     if (chosen.some((c) => Math.abs(c - f) < minGap)) continue;
     if (chosen.length >= maxScenes) break;
+    // A possession change nobody was on screen for is not an event, it is two held
+    // positions and a guess about which of them has the ball.
+    if (backedAt(f) < backedFloor) continue;
     chosen.push(f);
   }
   chosen.sort((p, q) => p - q);
@@ -659,6 +774,11 @@ export function chooseScenes(
       if (b - a < 2 * minGap) continue;
 
       for (let f = a + minGap; f <= b - minGap; f++) {
+        // The deviation test finds the frame where a player is furthest from where
+        // interpolation puts them, and a player the tracker just lost deviates hardest of
+        // all -- their position stops moving while everyone else carries on. Those frames
+        // are the worst possible place for a scene.
+        if (backedAt(f) < backedFloor) continue;
         const t = (f - a) / (b - a);
         const errors = tracks.map((track) =>
           dist(lerp(positionAt(track, a), positionAt(track, b), t), positionAt(track, f)),

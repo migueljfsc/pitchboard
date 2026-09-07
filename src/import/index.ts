@@ -17,14 +17,17 @@ import {
   carrierAt,
   chooseScenes,
   chooseWindow,
-  coverage,
   fitCurve,
   handovers,
   MAX_PER_SIDE,
   MIN_COVERAGE,
   MIN_OBSERVED_S,
+  MIN_WINDOW_S,
   observed,
   onPitch,
+  SCENE_BACKED_FLOOR,
+  WITNESS_TOL_S,
+  witnessed,
   positionAt,
   restartAt,
   sideOf,
@@ -73,6 +76,10 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   }
 
   const minCoverage = options.minCoverage ?? MIN_COVERAGE;
+  // How far either side of a sample a position may be drawn from it. Everything that asks
+  // "how much of this player did we see" asks it with the same tolerance as the window
+  // chooser, or the board fields a roster the passage was not chosen for.
+  const tol = Math.max(1, Math.round(WITNESS_TOL_S * file.source.fps));
 
   // Players first, then the window: which passage is best observed depends only on the
   // people who could be on the board at all, so referees and spectators must not vote.
@@ -135,7 +142,9 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     const side = track.team === "gkHome" ? "home" : track.team === "gkAway" ? "away" : null;
     if (!side || !onPitch(track, file.pitch)) continue;
     const held = keepers[side];
-    if (!held || coverage(track, from, to) > coverage(held, from, to)) keepers[side] = track;
+    if (!held || witnessed(track, from, to, tol) > witnessed(held, from, to, tol)) {
+      keepers[side] = track;
+    }
   }
 
   for (const track of players) {
@@ -149,7 +158,7 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     // nothing.
     if (
       track !== taker &&
-      (coverage(track, from, to) < minCoverage ||
+      (witnessed(track, from, to, tol) < minCoverage ||
         observed(track, from, to, file.source.fps) < MIN_OBSERVED_S)
     ) {
       continue;
@@ -176,7 +185,8 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
           .filter((t) => t !== taker)
           .sort(
             (a, b) =>
-              coverage(b, from, to) - coverage(a, from, to) || b.samples.length - a.samples.length,
+              witnessed(b, from, to, tol) - witnessed(a, from, to, tol) ||
+              b.samples.length - a.samples.length,
           )
           .slice(0, room),
       ];
@@ -187,14 +197,29 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   const kept = [...sides.home, ...sides.away];
   if (kept.length === 0) return { ok: false, error: msg("import.tracks.empty") };
 
+  // How much of the board is real at a frame, for the roster this passage actually fields.
+  const backedAt = (f: number) =>
+    kept.filter((t) => t.samples.some((s) => Math.abs(s.f - f) <= tol)).length /
+    Math.max(kept.length, 1);
+
+  // Trim the passage to where the players are on screen. A window's ends are the likeliest
+  // to be empty -- a track starting or stopping there is exactly what made that frame a
+  // candidate -- and a board whose last scene is drawn from memory is the one a coach
+  // notices, because it is where the play stops making sense.
+  let [start, end] = [from, to];
+  const shortest = Math.round(MIN_WINDOW_S * file.source.fps);
+  while (end - start > shortest && backedAt(start) < SCENE_BACKED_FLOOR) start++;
+  while (end - start > shortest && backedAt(end) < SCENE_BACKED_FLOOR) end--;
+
   const frames = chooseScenes(
     kept,
-    from,
-    to,
+    start,
+    end,
     file.source.fps,
     options.sceneToleranceM,
     options.maxScenes,
     handovers(ballSamples, kept, file.source.fps),
+    backedAt,
   );
 
   const teams = (["home", "away"] as const).map((side) => {
@@ -319,7 +344,7 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
 
   return {
     ok: true,
-    window: { from, to },
+    window: { from: start, to: end },
     frames,
     sources,
     doc: {

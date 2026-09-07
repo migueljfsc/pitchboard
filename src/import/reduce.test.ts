@@ -3,6 +3,7 @@ import { boardFromTracks } from "./index";
 import {
   carrierAt,
   chooseScenes,
+  witnessed,
   chooseWindow,
   coverage,
   fitCurve,
@@ -315,6 +316,67 @@ describe("boardFromTracks", () => {
   });
 });
 
+describe("witnessed", () => {
+  it("counts the samples, where coverage counts the span", () => {
+    // A track seen at both ends of a window and nowhere in between covers it completely
+    // and was watched for almost none of it. That gap is where a board invents a player
+    // standing still, and `coverage` cannot see it.
+    const holed = track(1, "home", [
+      [1, 10, 20],
+      [2, 10.2, 20],
+      [99, 30, 20],
+      [100, 30.2, 20],
+    ]);
+    expect(coverage(holed, 1, 100)).toBe(1);
+    expect(witnessed(holed, 1, 100, 5)).toBeLessThan(0.3);
+  });
+
+  it("is one for a track sampled through the whole window", () => {
+    const solid = track(
+      1,
+      "home",
+      Array.from({ length: 100 }, (_, i) => [i + 1, 10 + i * 0.1, 20] as [number, number, number]),
+    );
+    expect(witnessed(solid, 1, 100, 5)).toBe(1);
+  });
+});
+
+describe("chooseScenes", () => {
+  const run = (id: number, a: number, b: number) =>
+    track(
+      id,
+      "home",
+      Array.from(
+        { length: b - a + 1 },
+        (_, i) => [a + i, 10 + i * 0.1, 20] as [number, number, number],
+      ),
+    );
+
+  /** Out and back, turning at frame 150 — fifteen metres from the straight tween. */
+  const bend = (id: number) =>
+    track(
+      id,
+      "home",
+      Array.from({ length: 300 }, (_, i) => {
+        const f = i + 1;
+        return [f, 10 + (f <= 150 ? f * 0.1 : (300 - f) * 0.1), 20] as [number, number, number];
+      }),
+    );
+
+  it("will not put a scene where most of the roster is off screen", () => {
+    // The turn at 150 is where the deviation test wants a scene, and it is the frame the
+    // tracker was blind for. A scene there asks the coach to look at a position nobody saw.
+    const tracks = [run(1, 1, 300), run(2, 1, 300), bend(3), bend(4)];
+    const backedAt = (f: number) => (f > 120 && f < 180 ? 0.1 : 1);
+    const placed = chooseScenes(tracks, 1, 300, 25, undefined, undefined, [], backedAt);
+    expect(placed.some((f) => f > 120 && f < 180)).toBe(false);
+
+    // And without the floor it goes straight there, which is what the floor is for.
+    const unguarded = chooseScenes(tracks, 1, 300, 25);
+    expect(unguarded.some((f) => f > 120 && f < 180)).toBe(true);
+  });
+});
+
 describe("chooseWindow", () => {
   const spanning = (id: number, a: number, b: number) =>
     track(
@@ -372,6 +434,23 @@ describe("chooseWindow", () => {
     const whole = Array.from({ length: 11 }, (_, i) => spanning(i, 1, 300));
     const late = Array.from({ length: 14 }, (_, i) => spanning(50 + i, 230, 300));
     expect(chooseWindow([...whole, ...late], 1, 300, 25)).toEqual({ from: 1, to: 300 });
+  });
+
+  it("prefers a passage it watched to a longer one it mostly remembers", () => {
+    // Both windows field the same four players. In the first they are on screen; in the
+    // second half the passage is a hole and the board would draw it from memory.
+    const watched = Array.from({ length: 4 }, (_, i) => spanning(i, 1, 150));
+    const holed = watched.map((t) =>
+      track(
+        t.id + 10,
+        "home",
+        t.samples
+          .filter((s) => s.f <= 40 || s.f >= 140)
+          .map((s) => [s.f + 150, s.x, s.y] as [number, number, number]),
+      ),
+    );
+    const w = chooseWindow([...watched, ...holed], 1, 300, 25);
+    expect(w.to).toBeLessThanOrEqual(160);
   });
 
   it("cannot be talked into a short window by fragments that clear the share", () => {
