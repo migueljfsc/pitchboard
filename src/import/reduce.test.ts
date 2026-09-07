@@ -10,6 +10,7 @@ import {
   positionAt,
   restartAt,
   splitImpossible,
+  steady,
   withoutSpikes,
 } from "./reduce";
 import type { Track } from "./tracks";
@@ -313,6 +314,35 @@ describe("boardFromTracks", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.key).toBe("import.tracks.empty");
+  });
+});
+
+describe("steady", () => {
+  it("undoes a turnover that gives the ball straight back", () => {
+    // A coach watching SNGS-121: the home team passes across the pitch and never loses it,
+    // and the board showed the blue team holding it for one scene in the middle.
+    expect(steady(["home-1", "home-4", "away-9", "home-2", "home-7"])).toEqual([
+      "home-1",
+      "home-4",
+      "home-4",
+      "home-2",
+      "home-7",
+    ]);
+  });
+
+  it("leaves a turnover that sticks", () => {
+    const won = ["home-1", "home-4", "away-9", "away-3", "away-9"];
+    expect(steady(won)).toEqual(won);
+  });
+
+  it("leaves an exchange between team-mates alone", () => {
+    const passed = ["home-1", "home-4", "home-1"];
+    expect(steady(passed)).toEqual(passed);
+  });
+
+  it("says nothing where nobody is holding it", () => {
+    const gap = ["home-1", null, "away-9", null, "home-2"];
+    expect(steady(gap)).toEqual(gap);
   });
 });
 

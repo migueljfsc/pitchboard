@@ -503,6 +503,30 @@ is also a z = 0 shadow. Where our board and that reading agree, both could still
 one remaining `away` moment on SNGS-121 is exactly such a case: the ground truth calls it away
 too, and only a person watching the clip can say.
 
+## D72 — A turnover that gives the ball straight back never happened
+The last of the fly-over faults, found by the same coach on the same clip. SNGS-121's board had
+the home team passing across the pitch — correct — with one scene in the middle where the blue
+team held it. In the clip that never happens.
+
+Pulled apart at that scene: **our ball was seven metres from the real one**, sitting on top of a
+track that was itself six metres from any real player. Both the ball and the tracks were
+displaced in that moment, which is registration, and no rule about carriers can put a ball back
+where it was. `carrierAt`'s hold test (D71) cannot see it either — the phantom holder is nearest
+for the whole window, because the phantom ball follows him.
+
+What gives it away is the shape. A real turnover changes what the other side does next; one that
+lasts a single scene and hands the ball back to the side that had it is the measurement
+wobbling. `steady` reverts those, across SIDES only — one home player to another and back is an
+ordinary exchange of passes and says nothing about control.
+
+**Measured, it costs two points of precision, and it is right anyway.** The ground truth for a
+"real" handover is the same nearest-player reading of an equally flat ball (D71), so it endorses
+the very fly-over being removed: our score goes 85% → 83% precision, 47% → 43% recall, while the
+board goes from wrong to right on the one clip a coach has actually watched. Where a metric and
+a person who watched the video disagree about the video, the person is the ground truth.
+
+SNGS-121 now reads home throughout, with five passes drawn and all five real.
+
 ## D70 — Cutting a clip into several plays: built, and scrapped on sight
 An honest board covers about a third of a thirty-second clip (D67), so one board leaves most of
 the football behind — SNGS-060 holds nineteen changes of possession and its best passage holds

@@ -380,6 +380,8 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
   board position its shadow sweeping the pitch, so every player it crosses is briefly the
   nearest. The carrier is whoever KEEPS it. Speed cannot be the test -- half of all real
   receptions show the ball above 9 m/s, because a pass arrives through the air.
+- **A turnover that gives the ball straight back never happened** (D72). One-scene possession
+  flips are the measurement, not a tackle, and `steady` reverts them across sides.
 - **"The passes that really happened" is itself an inference** (D71). SoccerNet annotates a
   ball, not possession, and its ball is the same z = 0 shadow -- so a drawn pass that agrees
   with it may still be wrong, and only somebody watching the clip can settle it.

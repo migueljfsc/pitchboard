@@ -33,6 +33,7 @@ import {
   restartAt,
   sideOf,
   splitImpossible,
+  steady,
 } from "./reduce";
 import { tracksSchema, type Track, type TracksFile } from "./tracks";
 
@@ -292,6 +293,9 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     if (c !== null) holder = c;
     return holder;
   });
+
+  const settled = steady(carriers);
+  carriers.splice(0, carriers.length, ...settled);
 
   // Where the ball was NOT seen either, the old answer still stands: it starts with
   // whoever first takes it, rather than materialising in scene three.

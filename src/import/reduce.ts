@@ -765,6 +765,36 @@ function fieldable(shares: number[]): number[] {
 }
 
 /**
+ * Possession with the one-scene flickers taken out.
+ *
+ * A turnover that gives the ball straight back is a ball crossing an opponent, not a
+ * tackle. It is the last of the fly-over faults and the one `carrierAt`'s hold test cannot
+ * reach: on SNGS-121 a cross-field pass put the board's ball seven metres from the real
+ * one, on top of a track that was itself six metres from any real player, and the board
+ * drew the blue team taking possession for a single scene and handing it back. A real
+ * turnover changes what the other side does next; one that lasts one scene and reverses is
+ * the measurement, and a coach reads it as an interception that never happened.
+ *
+ * Across SIDES only. One home player to another and back is an ordinary exchange of passes
+ * and says nothing about who is in control.
+ *
+ * Made on a coach's reading of the clip rather than on the score, and it costs two points
+ * of measured precision -- because the ground truth for a "real" handover is the same
+ * nearest-player reading of an equally flat ball, so it endorses the very fly-over being
+ * removed (D71).
+ */
+export function steady(carriers: (string | null)[]): (string | null)[] {
+  const side = (id: string) => id.split("-")[0];
+  const out = [...carriers];
+  for (let i = 1; i < out.length - 1; i++) {
+    const [before, here, after] = [out[i - 1], out[i], out[i + 1]];
+    if (before === null || here === null || after === null) continue;
+    if (side(here) !== side(before) && side(after) === side(before)) out[i] = before;
+  }
+  return out;
+}
+
+/**
  * Who has the ball at a frame, or null when nobody can be said to.
  *
  * Pitchboard models the ball as `scene.carrier` and nothing else, which turns an
