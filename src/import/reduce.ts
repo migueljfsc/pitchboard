@@ -42,6 +42,21 @@ export const SCENE_TOLERANCE_M = 4;
 /** A path straighter than this stays a straight tween. */
 export const STRAIGHT_TOLERANCE_M = 0.5;
 
+/**
+ * How far a player must have gone between two scenes before the board says they moved.
+ *
+ * The camera model puts a position 0.5-1.5 m from where the player was, and it does that
+ * independently at every frame, so a player standing still arrives at the next scene a
+ * metre away. Drawn, that is an arrow -- and measured across five boards, 35% of the runs
+ * were under a metre and 48% under two: between a third and a half of what a coach was
+ * being shown was the measurement wobbling, with a bezier fitted through 21% of it.
+ *
+ * A run shorter than the error that produced it is not a run, so the player keeps the
+ * position they had. 1.5 m is the p90 of that error on the clips this is measured on, and
+ * it is also about the shortest movement worth a coach's attention on a tactics board.
+ */
+export const STILL_M = 1.5;
+
 /** Scenes never land closer together than this. */
 export const MIN_SCENE_GAP_S = 0.4;
 

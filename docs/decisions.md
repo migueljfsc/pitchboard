@@ -466,6 +466,25 @@ drawn from memory. What is left is short because THE TRACKER IS SHORT: a board c
 long as the roster is watched, and at today's fragmentation that is a handful of seconds. The
 fix for board length is upstream, not here.
 
+## D69 — A run shorter than the error that produced it is not a run
+The camera model puts a player 0.5-1.5 m from where they stood, independently at every frame,
+so a player standing still arrives at the next scene a metre away — and the board draws that as
+an arrow. Measured across five boards: **561 runs drawn, 35% of them under a metre and 48%
+under two**, with a bezier fitted through a fifth of that. Between a third and a half of what a
+coach was being asked to read was the measurement wobbling.
+
+A player now keeps the position they were last DRAWN at until they have gone `STILL_M` from it.
+Against the drawn position and not the file's, deliberately: a real drift of 1.4 m a scene
+accumulates and the player moves once it is a metre and a half of football, where comparing
+with the file each time would freeze them forever.
+
+    runs drawn        561 -> 332      under 2 m   48% -> 10%
+    median run        2.1 m -> 3.9 m  curves      220 -> 201
+
+Nothing else moves: SNGS-060 keeps 49 m of travel and every event, SNGS-121 45 m. What went is
+arrows on players who were standing still. No scene was left empty by it either — every scene
+still has eight to sixteen players moving into it, and the two that have one or two are passes.
+
 ## D68 — Honest is not enough: the board has to have the football in it
 D67 made the boards true and emptied them. The same coach: *"067 is 2 scenes and nothing
 happens"*, *"there's no kickoff, no back pass, no header after the GK boots it"*. Three separate

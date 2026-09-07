@@ -24,6 +24,7 @@ import {
   MIN_OBSERVED_S,
   MIN_WINDOW_S,
   observed,
+  STILL_M,
   onPitch,
   SCENE_BACKED_FLOOR,
   WITNESS_TOL_S,
@@ -313,24 +314,41 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     carriers[i] = first;
   }
 
+  // Where each player was last DRAWN, which is not always where the file puts them: a run
+  // shorter than the camera model's own error is the measurement wobbling, and drawing it
+  // gives the coach an arrow for a player who stood still (D69).
+  const drawn: Record<string, Vec2> = {};
+  /** Each scene's positions as drawn, so a path is fitted between what the board shows. */
+  const scenes_: Record<string, Vec2>[] = [];
+
   const scenes: Scene[] = frames.map((f, i) => {
     const positions: Record<string, Vec2> = {};
-    for (const track of kept) positions[idOf.get(track)!] = positionAt(track, f);
+    for (const track of kept) {
+      const id = idOf.get(track)!;
+      const here = positionAt(track, f);
+      const before = drawn[id];
+      const still = before && Math.hypot(here.x - before.x, here.y - before.y) < STILL_M;
+      positions[id] = still ? before : here;
+      drawn[id] = positions[id];
+    }
 
     const paths: Record<string, ReturnType<typeof fitCurve>> = {};
     if (i > 0) {
       const a = frames[i - 1];
       for (const track of kept) {
+        const id = idOf.get(track)!;
+        const [was, now] = [scenes_[i - 1][id], positions[id]];
+        // A player who did not move has no path to fit, and fitting one through the
+        // samples anyway draws a curve out of and back into the same point.
+        if (was.x === now.x && was.y === now.y) continue;
         const walked = track.samples
           .filter((s) => s.f >= a && s.f <= f)
           .map((s) => ({ x: s.x, y: s.y }));
-        const curve = fitCurve(
-          [positionAt(track, a), ...walked, positionAt(track, f)],
-          options.straightToleranceM,
-        );
-        if (curve) paths[idOf.get(track)!] = curve;
+        const curve = fitCurve([was, ...walked, now], options.straightToleranceM);
+        if (curve) paths[id] = curve;
       }
     }
+    scenes_.push(positions);
 
     return {
       id: `scene-${i + 1}`,

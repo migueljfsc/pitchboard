@@ -376,6 +376,9 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
   `pnpm board` reports `seen` (drawn positions with a sighting within 0.25 s) and `worst` (the
   emptiest scene); they are the fidelity bar, and a passage that scores well on watched
   player-seconds can still be mostly remembered (D67).
+- **An arrow shorter than the camera's own error is noise, not a run** (D69). A third of every
+  board's arrows were a standing player wobbling. Compare against where the player was last
+  DRAWN, so a real slow drift still accumulates into a run.
 - **A fidelity rule must never touch an EVENT** (D68). A kick-off has nobody else gathered
   round it, so a floor on "how much of the roster is on screen" deletes exactly the moment the
   board exists for. Gate the scenes the split invented, never the ball.
