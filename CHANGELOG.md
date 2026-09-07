@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.45.2 (2026-09-07)
+
+### Fix
+
+- **import**: the ball flying over a player is not a pass to him
+
 ## v0.45.1 (2026-09-07)
 
 ### Fix
