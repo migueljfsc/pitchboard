@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.43.4 (2026-09-07)
+
+### Fix
+
+- **import**: do not draw an arrow for a player who was standing still
+
 ## v0.43.3 (2026-09-07)
 
 ### Fix
