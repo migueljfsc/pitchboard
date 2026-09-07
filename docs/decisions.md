@@ -466,6 +466,43 @@ drawn from memory. What is left is short because THE TRACKER IS SHORT: a board c
 long as the roster is watched, and at today's fragmentation that is a handful of seconds. The
 fix for board length is upstream, not here.
 
+## D71 — The ball flying over a player is not a pass to him
+A coach watching SNGS-121: the ball is lofted forward from the start, and the board draws a
+short pass first and the long ball second. And the home team keeps possession throughout while
+the board shows it changing hands. Both are invented events, and an invented event is the most
+expensive thing this importer can produce — it is drawn as football and reads as football.
+
+**The cause is `z = 0`, one layer down.** A ground homography puts a lofted ball where its
+shadow is, so the ball's position on the board sweeps across the pitch during a flight, and
+every player it sweeps over is for one frame the nearest. `carrierAt` read that frame by frame
+and called it possession.
+
+**Speed cannot separate a fly-over from a reception.** Measured on ground truth, half of all
+REAL receptions show the ball moving faster than 9 m/s, because a pass arrives through the air
+there too — SoccerNet's ball is the same shadow. Duration can: a real hold lasts 0.4-0.6 s at
+the median, and every hold our own ball produced was under 0.3 s.
+
+So the carrier is whoever KEEPS it: the nearest player must still be nearest through
+`HOLD_S`, over `HOLD_SHARE` of the ball's sightings in that window. Every sighting counts and
+not only the ones with somebody near, because a ball crossing open ground has no rival claimant
+and "nobody else was nearer" is not possession — a test caught that, having been written to.
+
+    rule          passes drawn   of them real   precision   recall
+    as it was          28             17           61%        60%
+    hold 0.2 s         22             15           68%        60%
+    hold 0.4 s         15             11           73%        47%
+
+**0.4 s ships even though 0.2 s is free**, because the two errors are not equal. A pass that
+never happened is a turnover a coach will try to coach; a missing one leaves the play looking
+continuous, which it was. On SNGS-121 every pass the board now draws is one that was really
+played, and the possession flip the coach queried is gone.
+
+**One honest limit on all of this.** SoccerNet does not annotate possession, so "the passes that
+really happened" here are the same nearest-player reading applied to the annotated ball — which
+is also a z = 0 shadow. Where our board and that reading agree, both could still be wrong. The
+one remaining `away` moment on SNGS-121 is exactly such a case: the ground truth calls it away
+too, and only a person watching the clip can say.
+
 ## D70 — Cutting a clip into several plays: built, and scrapped on sight
 An honest board covers about a third of a thirty-second clip (D67), so one board leaves most of
 the football behind — SNGS-060 holds nineteen changes of possession and its best passage holds

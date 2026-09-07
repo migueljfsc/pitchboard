@@ -632,6 +632,25 @@ describe("carrierAt", () => {
   it("says nothing when the ball was never found", () => {
     expect(carrierAt([], players, 15)).toBeNull();
   });
+
+  it("does not hand the ball to a player it is flying over", () => {
+    // The ball crosses home-1 for a frame on its way somewhere else. Read frame by frame
+    // that is a pass to him, and the board draws one (D71): a coach watching SNGS-121 saw
+    // a short pass drawn before the long ball that actually happened.
+    const over = [
+      ball(14, 10, 30),
+      ball(15, 21, 30),
+      ball(16, 32, 30),
+      ball(17, 43, 30),
+      ball(18, 54, 30),
+    ];
+    expect(carrierAt(over, players, 15, undefined, 25)).toBeNull();
+  });
+
+  it("hands it to a player who keeps it", () => {
+    const kept = [ball(15, 21, 30), ball(16, 21.2, 30), ball(17, 21.1, 30), ball(18, 21.3, 30)];
+    expect(carrierAt(kept, players, 15, undefined, 25)).toBe("home-1");
+  });
 });
 
 describe("the ball on a board", () => {

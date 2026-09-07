@@ -257,7 +257,8 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   // stands until somebody else takes it, and the flight between two holders is exactly
   // the pass Pitchboard draws (D43, D44).
   const withIds = kept.map((track) => ({ id: idOf.get(track)!, track }));
-  const found = frames.map((f) => carrierAt(ballSamples, withIds, f));
+  // With `fps`, so a scene asks who HOLDS the ball rather than who it is passing over.
+  const found = frames.map((f) => carrierAt(ballSamples, withIds, f, undefined, file.source.fps));
 
   // Before the first sighting the ball is somewhere, and it is not with the player who
   // eventually picks it up. Handing those scenes to that player puts it metres from where

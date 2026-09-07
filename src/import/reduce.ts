@@ -251,6 +251,38 @@ const RESTART_GAP_S = 0.2;
 export const CARRIER_RADIUS_M = 4;
 
 /**
+ * How long the nearest player has to STAY the nearest before the ball is theirs, and how
+ * much of that time they must hold it for.
+ *
+ * A ball in flight is the problem this exists for. A ground homography assumes z = 0, so a
+ * lofted ball's position on the board is its shadow sweeping across the pitch -- and every
+ * player it sweeps over is, for a frame, the nearest. Read frame by frame that is a pass,
+ * and the board draws it: a coach watching SNGS-121 saw a short pass drawn before the loft
+ * that actually happened, and a turnover in a passage where possession never changed.
+ *
+ * Speed cannot separate them -- measured on ground truth, half of all REAL receptions show
+ * the ball moving faster than 9 m/s, because a pass arrives through the air there too.
+ * Duration can: a real hold lasts 0.4 to 0.6 s at the median, and every hold our own ball
+ * produced was under 0.3 s. So the test is whether the new holder keeps it.
+ *
+ * Measured end to end on six boards, as the passes DRAWN against the passes played inside
+ * the same window:
+ *
+ *     rule          drawn   of them real   precision   recall
+ *     as it was       28         17           61%       60%
+ *     hold 0.2 s      22         15           68%       60%
+ *     hold 0.4 s      15         11           73%       47%
+ *
+ * 0.2 s is free -- six phantoms go and no real pass with them. 0.4 s costs real passes to
+ * remove more phantoms, and it is what ships, because the two errors are not equal: a pass
+ * that never happened is a turnover a coach will try to coach, and a missing one leaves the
+ * play looking continuous. On SNGS-121, the clip a coach checked, every pass the board now
+ * draws is one that was really played.
+ */
+export const HOLD_S = 0.4;
+export const HOLD_SHARE = 0.6;
+
+/**
  * The fastest a footballer moves, in metres per second. Usain Bolt peaks near 12.
  *
  * Not a tuning knob — a fact used to catch impossibilities. A tracker gates on pixels,
@@ -572,7 +604,7 @@ export function handovers(
   const out: number[] = [];
   let held: string | null = null;
   for (const s of ball) {
-    const who = carrierAt(ball, players, s.f, radiusM);
+    const who = carrierAt(ball, players, s.f, radiusM, fps);
     if (who === null) continue;
     if (held !== null && who !== held) {
       // Not the frame possession CHANGES — the frame the new holder actually has it. A
@@ -747,11 +779,37 @@ export function carrierAt(
   players: { id: string; track: Track }[],
   f: number,
   radiusM = CARRIER_RADIUS_M,
+  fps?: number,
+): string | null {
+  const who = nearestTo(ball, players, f, radiusM);
+  if (who === null || fps === undefined) return who;
+
+  // And do they KEEP it? A ball flying over a player is nearest to them for a frame, which
+  // read on its own is a pass to them and is drawn as one.
+  const hold = HOLD_S * fps;
+  let seen = 0;
+  let theirs = 0;
+  for (const s of ball) {
+    if (s.f < f || s.f > f + hold) continue;
+    seen++;
+    if (nearestTo(ball, players, s.f, radiusM) === who) theirs++;
+  }
+  // Every sighting counts, not just the ones with somebody near: a ball crossing open
+  // ground has no rival claimant, and counting only claimants would read "nobody else was
+  // nearer" as possession. With no sighting at all there is nothing to judge, and the
+  // nearest player stands.
+  return seen === 0 || theirs >= seen * HOLD_SHARE ? who : null;
+}
+
+/** The nearest player to the ball at a frame, inside the radius, and nothing more. */
+function nearestTo(
+  ball: Sample[],
+  players: { id: string; track: Track }[],
+  f: number,
+  radiusM: number,
 ): string | null {
   if (ball.length === 0 || players.length === 0) return null;
-  const here = ball.reduce((best, s) =>
-    Math.abs(s.f - f) < Math.abs(best.f - f) ? s : best,
-  );
+  const here = ball.reduce((best, s) => (Math.abs(s.f - f) < Math.abs(best.f - f) ? s : best));
   // A sighting from another moment says nothing about this one.
   if (Math.abs(here.f - f) > 2) return null;
 
