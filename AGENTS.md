@@ -390,6 +390,10 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
   `CARRY_S` with no sighting behind the scene, nobody is named -- a board that shows possession
   stopping is honest about what was tracked; one that shows the wrong team passing is not.
   Measured backwards only: a sighting after the scene says where the ball got to, not who had it.
+- **The ball is evidence, not only a pointer at a player** (D75). A pass to an untracked
+  receiver and a shot both end with the ball in nobody's possession, and a board built only from
+  carriers draws them as a dribble. `flights` makes the moment it comes loose a scene, and a
+  scene naming nobody draws the ball where it was seen -- if that sighting is on the field.
 - **"The passes that really happened" is itself an inference** (D71). SoccerNet annotates a
   ball, not possession, and its ball is the same z = 0 shadow -- so a drawn pass that agrees
   with it may still be wrong, and only somebody watching the clip can settle it.

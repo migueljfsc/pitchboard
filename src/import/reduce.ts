@@ -301,6 +301,18 @@ export const HOLD_SHARE = 0.6;
  */
 export const CARRY_S = 1;
 
+/**
+ * How far from every player the ball has to be before the board draws it on its own.
+ *
+ * Wider than the carrier radius on purpose: those two rules must not argue over the same
+ * metre. Inside four metres the ball is somebody's (D43); past eight it is nobody's, and a
+ * board that pins it to a player anyway is drawing a pass as a dribble.
+ */
+export const LOOSE_M = 8;
+
+/** A loose stretch shorter than this is a stray sighting, not a ball in flight. */
+export const MIN_FLIGHT_S = 0.2;
+
 /** Whether a ball sighting stands behind frame `f` — one at or before it, within CARRY_S. */
 export function sighted(ball: Sample[], f: number, fps: number): boolean {
   return ball.some((s) => s.f <= f && (f - s.f) / fps <= CARRY_S);
@@ -853,6 +865,107 @@ export function carrierAt(
   // nearer" as possession. With no sighting at all there is nothing to judge, and the
   // nearest player stands.
   return seen === 0 || theirs >= seen * HOLD_SHARE ? who : null;
+}
+
+/**
+ * Where the ball is when it was seen at `f` and NOBODY is near it — in flight, or dead.
+ *
+ * The ball's own position is only worth drawing where it is unambiguous, which is why this
+ * asks for `LOOSE_M` and not the carrier radius: at four metres a ball is arguably being
+ * dribbled, and two rules fighting over the same metre is how a board flickers. At eight it
+ * is nobody's, and the file is saying something the carrier model cannot — that the pass is
+ * in the air, or that the ball is in the net.
+ */
+export function looseAt(
+  ball: Sample[],
+  players: { id: string; track: Track }[],
+  f: number,
+  radiusM = LOOSE_M,
+): Vec2 | null {
+  if (ball.length === 0) return null;
+  const here = ball.reduce((best, s) => (Math.abs(s.f - f) < Math.abs(best.f - f) ? s : best));
+  if (Math.abs(here.f - f) > 2) return null;
+  for (const { track } of players) {
+    if (f < track.samples[0].f || f > track.samples[track.samples.length - 1].f) continue;
+    const p = positionAt(track, f);
+    if (Math.hypot(p.x - here.x, p.y - here.y) <= radiusM) return null;
+  }
+  return { x: here.x, y: here.y };
+}
+
+/**
+ * The frames the ball comes loose — the first sighting of each stretch nobody is near.
+ *
+ * A handover is only visible where the ball ARRIVES (`handovers`), so a pass whose receiver
+ * was never tracked, and a shot, leave no mark on the board at all: the carrier model has
+ * one holder before and one after, or the same holder throughout, and the ball is drawn on
+ * his boot the whole way. A coach reads that as a player carrying the ball through a pass he
+ * actually played — reported on a clip where the opening pass and the shot were both missing
+ * and the scorer appeared to dribble away to celebrate.
+ *
+ * The moment the ball leaves is an event whatever happens next, and it is in the file. A
+ * stretch shorter than `MIN_FLIGHT_S` is a stray sighting rather than a flight.
+ */
+export function flights(
+  ball: Sample[],
+  tracks: Track[],
+  fps: number,
+  radiusM = LOOSE_M,
+): number[] {
+  if (ball.length === 0) return [];
+  const players = tracks.map((track, i) => ({ id: String(i), track }));
+  const sorted = [...ball].sort((a, b) => a.f - b.f);
+  const out: number[] = [];
+  let start: number | null = null;
+  let last: number | null = null;
+  const close = (end: number) => {
+    if (start !== null && (end - start) / fps >= MIN_FLIGHT_S) out.push(start);
+    start = null;
+  };
+  for (const s of sorted) {
+    const loose = looseAt(sorted, players, s.f, radiusM) !== null;
+    // A break in the sightings ends the flight: what the ball did while unseen is not
+    // something this can claim, and the far side of a gap is a new event or none.
+    if (last !== null && (s.f - last) / fps > MIN_FLIGHT_S) close(last);
+    if (loose) start ??= s.f;
+    else if (start !== null) close(last ?? s.f);
+    last = s.f;
+  }
+  if (last !== null) close(last);
+  return out;
+}
+
+/**
+ * Whether a sighting at `f` puts the ball out of the holder's reach — it is not his now.
+ *
+ * The carry-forward rule (D43) reads the ball's silence, and a sighting is not silence. A
+ * holder thirty metres from a ball the file can see does not have it, however recently he
+ * did: on a coach's clip the scorer ran away to celebrate and the board drew him dribbling,
+ * with the ball sitting in the net behind him in the same file.
+ *
+ * Says nothing where the ball was not seen, or where the holder's track does not reach the
+ * frame — both are absence of evidence, and this only ever acts on evidence.
+ *
+ * Judged at `LOOSE_M` rather than the carrier radius, and measured: at four metres it also
+ * fires on the z = 0 shadow of a ball its holder still has, which cost two scenes of real
+ * possession on SNGS-069 and bought nothing anywhere. Past eight metres it is not his.
+ */
+export function leftBehind(
+  ball: Sample[],
+  players: { id: string; track: Track }[],
+  f: number,
+  holder: string | null,
+  radiusM = LOOSE_M,
+): boolean {
+  if (holder === null || ball.length === 0) return false;
+  const here = ball.reduce((best, s) => (Math.abs(s.f - f) < Math.abs(best.f - f) ? s : best));
+  if (Math.abs(here.f - f) > 2) return false;
+  const track = players.find((p) => p.id === holder)?.track;
+  if (!track || f < track.samples[0].f || f > track.samples[track.samples.length - 1].f) {
+    return false;
+  }
+  const p = positionAt(track, f);
+  return Math.hypot(p.x - here.x, p.y - here.y) > radiusM;
 }
 
 /** The nearest player to the ball at a frame, inside the radius, and nothing more. */

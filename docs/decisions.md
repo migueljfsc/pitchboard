@@ -466,6 +466,51 @@ drawn from memory. What is left is short because THE TRACKER IS SHORT: a board c
 long as the roster is watched, and at today's fragmentation that is a handful of seconds. The
 fix for board length is upstream, not here.
 
+## D75 — A ball nobody has is drawn where it is, and the moment it comes loose is a scene
+The carrier model answers one question — who has the ball — and a board built only from its
+answers cannot show the two events a coach cares most about. A pass whose receiver was never
+tracked has one holder before it and the same holder after; a shot has a holder and then
+nothing. Both come out as a player dribbling through something he actually kicked.
+
+A coach on a Man United clip, with all three faults in one sentence: *"it's missing the initial
+pass to the player that eventually runs with the ball; it is missing the shot, so when the
+player goes to celebrate the board thinks it is a run with the ball when it isn't."* The file
+had both events in it all along — the ball is tracked from frame 56 to 106 flying across the
+pitch with nobody within nine metres of it, and again from 421 sitting in the goal — and the
+importer threw both away because neither could be attached to a player.
+
+Three rules, and they are one idea: **the ball is evidence in its own right, not only a pointer
+at a player.**
+
+- `flights()` — the frames the ball comes loose, meaning the first sighting of each stretch
+  with nobody inside `LOOSE_M`. Those join the handovers as scene candidates and as events the
+  window may not be trimmed past. `handovers` can only see where a ball ARRIVES; the moment it
+  leaves is an event whatever happens next.
+- `leftBehind()` — a sighting that puts the ball more than `LOOSE_M` from the holder ends his
+  possession, whether or not anybody else can be shown to have taken it. Carrying a holder
+  forward (D43, D74) reads the ball's silence, and a sighting is not silence.
+- `ballPos` on any scene that names nobody and has a sighting on the field, not just the first.
+  D44 already described this case -- "the middle of a long ball, where whoever kicked it is
+  thirty metres behind it" -- and only ever implemented it for the restart.
+
+The coach's board goes from `away-8 away-8 away-8 away-8 away-8` -- one man carrying the ball
+for nine seconds through a pass, a run, a shot and a celebration -- to `- ball(30,10) away-8
+away-8 away-8 ball(2,36)`: the ball arrives from off the passage, he takes it and runs, and it
+finishes in the goal.
+
+**Measured across the thirteen boards:** passes drawn against passes played goes from 70% to
+73% precision and 31% to 34% recall, the roster, window, density and `seen` are unchanged
+everywhere, and three boards gain a scene (SNGS-060 six to nine, SNGS-100 three to four,
+SNGS-110 four to five) because a flight is now a candidate. `leftBehind` at the carrier radius
+instead of `LOOSE_M` was measured at the same time and is worse for the same aggregate: it
+fires on the z = 0 shadow of a ball its holder still has.
+
+**Two guards this needed.** A sighting the camera model puts off the field is out of play or a
+false positive, and drawing it takes the play off the board -- SNGS-060 had one at (-1, 9) --
+so `ballPos` is only ever a sighting inside the touchlines. And the scenes BEFORE the first
+flight are no longer handed to the player who eventually takes the ball: the pass that put it
+in the air came off somebody else's boot, and filling them draws him passing to himself.
+
 ## D74 — A holder may only stand for as long as the ball's silence is short
 A carrier stands until somebody else takes it, and the flight between two holders is the pass
 (D43, D44). That rule is a reading of the ball's SILENCE, and silence stops meaning "still his"

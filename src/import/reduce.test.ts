@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { boardFromTracks } from "./index";
 import {
   carrierAt,
+  leftBehind,
   chooseScenes,
   witnessed,
   chooseWindow,
@@ -683,6 +684,27 @@ describe("carrierAt", () => {
   });
 });
 
+describe("a holder the ball has left", () => {
+  const players = [
+    { id: "home-1", track: track(1, "home", [[10, 20, 30], [20, 20, 30]]) },
+    { id: "away-1", track: track(2, "away", [[10, 60, 30], [20, 60, 30]]) },
+  ];
+  const ball = (f: number, x: number, y: number) => ({ f, x, y, conf: 0.9 });
+
+  it("is no longer the holder once a sighting puts the ball out of his reach", () => {
+    expect(leftBehind([ball(15, 40, 30)], players, 15, "home-1")).toBe(true);
+    expect(leftBehind([ball(15, 21, 30)], players, 15, "home-1")).toBe(false);
+  });
+
+  it("says nothing where there is no evidence", () => {
+    // No sighting at this frame, no holder, or a holder whose track does not reach it: all
+    // three are absence of evidence, and the carry-forward rule stands.
+    expect(leftBehind([ball(80, 40, 30)], players, 15, "home-1")).toBe(false);
+    expect(leftBehind([ball(15, 40, 30)], players, 15, null)).toBe(false);
+    expect(leftBehind([ball(15, 40, 30)], players, 15, "nobody")).toBe(false);
+  });
+});
+
 describe("the ball on a board", () => {
   const withBall = (samples: { f: number; x: number; y: number }[]) => ({
     ...file([straightRun(1, "home", 20), straightRun(2, "away", 40)]),
@@ -701,20 +723,53 @@ describe("the ball on a board", () => {
     expect(result.doc.scenes.every((s) => s.carrier?.startsWith("home"))).toBe(true);
   });
 
-  it("lets the holder keep it through scenes that cannot tell", () => {
-    // A carrier stands until somebody else takes it, and the flight between two holders
-    // is the pass. Blanking the carrier mid-board would make the ball vanish and return.
-    // At his feet long enough to be his (HOLD_S), then in flight between the two runs for
-    // the rest of the board, so no later scene can name anybody and the holder carries.
+  it("lets the holder keep it through a silence the ball never contradicts", () => {
+    // A carrier stands until somebody else takes it, and the flight between two holders is
+    // the pass. Blanking the carrier at a scene that simply cannot tell would make the ball
+    // vanish and return. Seen at his feet, then not seen: the board keeps it on him for
+    // CARRY_S, and the test below is the other end of the same rule.
+    const seen = Array.from({ length: 12 }, (_, i) => ({ f: i + 1, x: 10 + i * 0.2, y: 20.3 }));
+    const result = boardFromTracks(withBall(seen));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.doc.scenes[0].carrier).toBe("home-1");
+  });
+
+  it("draws a ball nobody is near where it actually is", () => {
+    // The pass and the shot: both end with the ball metres from everybody, and the carrier
+    // model alone leaves it on the boot of whoever last had it -- a coach reads that as a
+    // player dribbling through a pass he played. Where the file says the ball is nobody's,
+    // the board says so and draws it.
     const seen = Array.from({ length: 51 }, (_, i) => ({
       f: i + 1,
       x: 10 + i * 0.2,
-      y: i < 12 ? 20.3 : 30,
+      y: i < 12 ? 20.3 : 60,
     }));
     const result = boardFromTracks(withBall(seen));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.doc.scenes.every((s) => s.carrier !== null)).toBe(true);
+    const away = result.doc.scenes.filter((s) => s.carrier === null && s.ballPos);
+    expect(away.length).toBeGreaterThan(0);
+    expect(away[0].ballPos!.y).toBeCloseTo(60, 0);
+    // Never both: a scene with a carrier draws the ball on him (schema).
+    expect(result.doc.scenes.every((s) => s.carrier === null || s.ballPos === undefined)).toBe(
+      true,
+    );
+  });
+
+  it("puts a scene where the ball comes loose", () => {
+    // A handover is only visible where the ball ARRIVES, so a pass whose receiver was never
+    // tracked leaves no scene at all. The moment it leaves is the event.
+    const seen = Array.from({ length: 51 }, (_, i) => ({
+      f: i + 1,
+      x: 10 + i * 0.2,
+      y: i < 20 ? 20.3 : 60,
+    }));
+    const result = boardFromTracks(withBall(seen));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const left = result.frames.find((f) => f >= 21 && f <= 26);
+    expect(left).toBeDefined();
   });
 
   it("stops naming a holder once the ball has gone unseen for too long", () => {

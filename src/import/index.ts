@@ -18,6 +18,7 @@ import {
   chooseScenes,
   chooseWindow,
   fitCurve,
+  flights,
   handovers,
   MAX_PER_SIDE,
   MIN_COVERAGE,
@@ -30,6 +31,8 @@ import {
   WITNESS_TOL_S,
   witnessed,
   positionAt,
+  leftBehind,
+  looseAt,
   restartAt,
   sideOf,
   sighted,
@@ -213,9 +216,16 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   // It may never cross an EVENT. The restart and every change of possession are what the
   // passage was chosen for, and trimming a quiet opening straight past the kick-off is how
   // a board loses the one thing on it a coach came to see.
+  const ballEvents = [
+    ...handovers(ballSamples, kept, file.source.fps),
+    // The ball coming loose is an event whether or not anybody is there to receive it: a
+    // pass to an untracked player and a shot both end in nobody's possession, and trimming
+    // past one loses the only mark the file carries of it.
+    ...flights(ballSamples, kept, file.source.fps),
+  ].sort((a, b) => a - b);
   const events = [
     ...(kick !== null && kick >= from && kick <= to ? [kick] : []),
-    ...handovers(ballSamples, kept, file.source.fps).filter((f) => f >= from && f <= to),
+    ...ballEvents.filter((f) => f >= from && f <= to),
   ];
   const firstEvent = events.length ? Math.min(...events) : to;
   const lastEvent = events.length ? Math.max(...events) : from;
@@ -234,7 +244,7 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     file.source.fps,
     options.sceneToleranceM,
     options.maxScenes,
-    handovers(ballSamples, kept, file.source.fps),
+    ballEvents,
     backedAt,
   );
 
@@ -276,6 +286,12 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     return Math.abs(here.f - f) <= 2 ? { x: here.x, y: here.y } : null;
   });
 
+  // Only where the measurement lands on the field. A ball the camera model puts outside it
+  // is out of play or a false positive, and either way drawing it takes the play off the
+  // board — the producer's own margin lets a sighting sit metres past the line.
+  const onField = (p: Vec2 | null) =>
+    p && p.x >= 0 && p.x <= file.pitch.length && p.y >= 0 && p.y <= file.pitch.width ? p : null;
+
   // A holder stands until somebody else takes it, even across scenes where the ball was
   // seen somewhere else. Dropping the carrier at those scenes is more faithful to where
   // the ball WAS and worse as a board: one pass becomes three hops with the ball adrift
@@ -285,6 +301,10 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   // what a kick-off IS. Without this he simply keeps it: nobody else is inside the carrier
   // radius for the next few scenes, the holder stands, and the board shows him dribbling
   // away from the centre spot, which is not football.
+  // Where the ball is in the air or dead, metres from everybody: the file says where it is
+  // and says nobody has it, and both halves of that are worth drawing (D44).
+  const loose = frames.map((f) => looseAt(ballSamples, withIds, f));
+
   const takerId = taker ? (idOf.get(taker) ?? null) : null;
   let holder: string | null = null;
   let released = takerId === null;
@@ -292,6 +312,10 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     if (c !== null && c !== takerId) released = true;
     if (i > 0 && !released) return null;
     if (c !== null) holder = c;
+    // A sighting that puts the ball out of his reach ends his possession, whether or not
+    // anybody else can be shown to have taken it. Otherwise he keeps it on the board all
+    // the way through the pass he played, and out to the corner flag to celebrate.
+    else if (leftBehind(ballSamples, withIds, frames[i], holder)) holder = null;
     // Carrying a holder forward is a reading of the ball's silence, and it is only good
     // for as long as the silence is short (CARRY_S). Past that the file says nothing
     // about who has the ball, and the board says nothing either.
@@ -315,12 +339,18 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
 
   const taken = carriers.findIndex((c) => c !== null);
   const first = taken >= 0 ? carriers[taken] : null;
+  const flew = loose.findIndex((p) => p !== null);
   for (let i = 0; i < (taken >= 0 ? taken : carriers.length); i++) {
     // The opening scene keeps the ball's own position when there is one — that is the
     // restart, and it is what makes the kick a pass FROM the spot rather than a player
     // arriving already holding it. Every scene after it belongs to whoever first takes
     // the ball, so the passage opens with one travel instead of the ball going missing.
     if (i === 0 && resting[0] !== null) continue;
+    // And a scene where the ball is demonstrably nobody's is not a scene the eventual
+    // holder can be given: the pass that put it there is the event, not a prelude to it.
+    // Nor is anything BEFORE it — the ball in the air came off somebody else's boot, and
+    // handing those scenes to the man who receives it draws him passing to himself.
+    if (loose[i] !== null || (flew >= 0 && i < flew)) continue;
     carriers[i] = first;
   }
 
@@ -375,7 +405,12 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
       // and the middle of a long ball, where whoever kicked it is thirty metres behind it.
       // Anywhere else the holder keeps it, or one pass becomes three hops.
       carrier: carriers[i],
-      ...(i === 0 && carriers[0] === null && resting[0] ? { ballPos: resting[0] } : {}),
+      // The ball's own position, wherever the board names nobody and the file saw it. That
+      // is the pass in the air, the shot on its way in, and the restart on its spot — the
+      // events a carrier model has no way to draw (D44).
+      ...(carriers[i] === null && onField(loose[i] ?? resting[i])
+        ? { ballPos: onField(loose[i] ?? resting[i])! }
+        : {}),
       ballPath: null,
     };
   });
