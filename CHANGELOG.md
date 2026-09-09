@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.48.0 (2026-09-09)
+
+### Feat
+
+- **import**: draw a loose ball at the nearest player's feet
+
 ## v0.47.1 (2026-09-09)
 
 ### Fix
