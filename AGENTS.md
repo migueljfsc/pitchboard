@@ -394,6 +394,9 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
   receiver and a shot both end with the ball in nobody's possession, and a board built only from
   carriers draws them as a dribble. `flights` makes the moment it comes loose a scene, and a
   scene naming nobody draws the ball where it was seen -- if that sighting is on the field.
+- **A ball nobody holds is drawn at the nearest player's FEET** (D79), not at the sighting: a
+  metre and a half is the camera model, and a pass drawn into the gap beside a player reads as a
+  pass into space. It does not name him -- the hold test already declined that.
 - **A one-touch pass is a change of DIRECTION, not a hold** (D78). The hold test asks who keeps
   the ball, which is right about a fly-over and wrong about quick play -- nobody keeps it.
   `touchedAt` answers where the hold test is silent, and events get their own scene gap (0.2 s)

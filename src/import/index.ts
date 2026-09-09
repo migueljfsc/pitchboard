@@ -38,6 +38,7 @@ import {
   positionAt,
   leftBehind,
   looseAt,
+  atFeet,
   restartAt,
   scored,
   sideOf,
@@ -429,8 +430,12 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     carriers[i] = adrift >= 0 && i < adrift ? struck : next(i);
   }
 
-  // What the board draws for the ball at each scene, where it names nobody.
-  const drawnBall = frames.map((_f, i) => onField(loose[i] ?? resting[i]));
+  // What the board draws for the ball at each scene, where it names nobody: at the feet of
+  // whoever is standing there, since the measurement cannot tell that from a stride away.
+  const drawnBall = frames.map((f, i) => {
+    const seen = onField(loose[i] ?? resting[i]);
+    return seen === null ? null : atFeet(seen, withIds, f, unnamed);
+  });
 
   // Once it has crossed the line the play is over: the ball stays in the net rather than
   // drifting back onto the pitch as the next sighting says, and nobody is holding it. A

@@ -354,6 +354,46 @@ export function scored(
 }
 
 /**
+ * How near a player a loose ball has to be before it is drawn at his feet instead.
+ *
+ * The ball's own position carries the camera model's error, a metre or two of it, and at
+ * that accuracy "at his feet" and "a stride away" are the same measurement. Drawn where the
+ * number says, a pass to a player standing still lands on the grass beside him and a coach
+ * reads the move as passes into space: *"the passes are not landing to players directly, it
+ * seems like it's doing passes to the field"*.
+ *
+ * This does not name him the carrier -- the hold test has already declined that, and a pass
+ * is a carrier change (D43). It only draws the ball where the football is.
+ */
+export const SNAP_M = 2;
+
+/**
+ * Where to draw a ball nobody is holding: at the nearest player's feet, or where it was
+ * seen when nobody is near enough for that to be the same place.
+ *
+ * Blockers count as players here even though they cannot be named: the point is to draw the
+ * ball where a person is, and an unreadable shirt is still a person. Snapping to the
+ * second-nearest because the nearest cannot be named would put the ball at an opponent's
+ * feet, which is the fault the blocker exists to prevent.
+ */
+export function atFeet(
+  where: Vec2,
+  players: { id: string; track: Track }[],
+  f: number,
+  blockers: Track[] = [],
+  snapM = SNAP_M,
+): Vec2 {
+  let nearest: { at: Vec2; d: number } | null = null;
+  for (const track of [...players.map((p) => p.track), ...blockers]) {
+    if (f < track.samples[0].f || f > track.samples[track.samples.length - 1].f) continue;
+    const p = positionAt(track, f);
+    const d = Math.hypot(p.x - where.x, p.y - where.y);
+    if (!nearest || d < nearest.d) nearest = { at: p, d };
+  }
+  return nearest && nearest.d <= snapM ? nearest.at : where;
+}
+
+/**
  * How far outside the field a ball sighting may sit and still be drawn, pulled onto it.
  *
  * The two cases either side of this number are a shot and a mistake. A ball that has just

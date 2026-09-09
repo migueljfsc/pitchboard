@@ -466,6 +466,29 @@ drawn from memory. What is left is short because THE TRACKER IS SHORT: a board c
 long as the roster is watched, and at today's fragmentation that is a handful of seconds. The
 fix for board length is upstream, not here.
 
+## D79 — A ball nobody is holding is drawn at the nearest player's feet
+Same coach, one round later, on a board that had just started showing his passing move:
+*"the passes are not landing to players directly, instead it seems like it's doing passes to
+the field."* He is describing the scenes that name nobody. The ball is drawn where the file saw
+it, and the file saw it a metre and a half from the player who actually had it — which is the
+camera model's own error, not a fact about the football.
+
+At that accuracy "at his feet" and "a stride away" are the same measurement, and only one of
+them is a pass. So a ball with no carrier is drawn at the nearest player's position when he is
+within `SNAP_M`, and where it was seen when nobody is that close — a ball genuinely in flight
+has nobody within two metres and does not move.
+
+It does NOT name him the carrier. The hold test has already declined that, and a pass is a
+carrier change (D43); this only puts the ball where the football is. Nothing in the six-clip
+pass measurement moves, which is the point: the same passes are drawn, and they land on people.
+
+**Players nobody could name count as players here.** Snapping past an unreadable shirt to the
+nearest player with a side would put the ball at an opponent's feet, which is precisely what
+the blocker in D78 exists to prevent. Which leaves the one case this cannot draw: where the
+nearest person is unnameable, the ball lands on him and he is not on the board, so it still
+looks like grass. That is football-tracks D84 — a track holding two players — and it is the
+last thing on this clip that is not football.
+
 ## D78 — A one-touch pass is a change of direction, not a hold
 A coach, on a Porto possession highlight: *"it shows the Porto GK pass to the opposition,
 which does not happen in the clip. Also the quick triangle associations are not present."*

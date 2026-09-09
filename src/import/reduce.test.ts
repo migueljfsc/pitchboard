@@ -7,6 +7,7 @@ import {
   carrierAt,
   KICK_S,
   kickedBy,
+  atFeet,
   scored,
   touchedAt,
   touches,
@@ -856,6 +857,28 @@ describe("the kits a board wears", () => {
     expect(out.ok).toBe(true);
     if (!out.ok) return;
     expect(out.doc.teams.map((t) => t.textColor)).toEqual(["#000000", "#ffffff"]);
+  });
+});
+
+describe("a loose ball on the board", () => {
+  const players = [{ id: "home-1", track: track(1, "home", [[10, 20, 30], [20, 20, 30]]) }];
+  const unreadable = track(3, "unknown", [[10, 25, 30], [20, 25, 30]]);
+
+  it("is drawn at the feet of whoever is standing there", () => {
+    // The measurement carries a metre or two of camera model, and at that accuracy "at his
+    // feet" and "a stride away" are the same reading -- but only one of them is football.
+    expect(atFeet({ x: 21.5, y: 30 }, players, 15)).toEqual({ x: 20, y: 30 });
+  });
+
+  it("stays where it was seen when nobody is near enough", () => {
+    const where = { x: 40, y: 30 };
+    expect(atFeet(where, players, 15)).toEqual(where);
+  });
+
+  it("counts a player nobody could name", () => {
+    // Snapping past him to the nearest NAMEABLE player would put the ball at an opponent's
+    // feet, which is the fault the blocker exists to prevent.
+    expect(atFeet({ x: 24, y: 30 }, players, 15, [unreadable])).toEqual({ x: 25, y: 30 });
   });
 });
 
