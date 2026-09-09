@@ -483,6 +483,16 @@ Absent is a real answer and the commonest one: a file written before this, or a 
 kits measure too close to be told apart on colour, leaves the board's own palette alone. Nothing
 else changes — the same eleven boards, the same passes, the same rosters.
 
+**And the colour is snapped to the picker's own swatches.** A measurement is `#3a81d1`; the
+picker offers eight colours and nothing between them, so a board painted in measurements is one
+a coach cannot re-pick, and a link he sets by hand can no longer match a kit exactly — which is
+what `PALETTE` exists to guarantee. The file says what it saw and the board says it in its own
+vocabulary: Everton's `#3a81d1` becomes the picker's blue, United's `#d1493a` its rose. Distance
+is the redmean approximation rather than plain RGB, which calls a saturated blue and a saturated
+green neighbours and would paint a red kit amber. Where both sides land on one swatch the better
+match keeps it and the other takes its next choice, because two teams in one colour is not a
+board.
+
 ## D76 — The ball's silences are events too, and a ball over the line is on it
 Same coach, one round later: *"now the movements are somewhat accurate but the ball gets
 lost."* Two faults, and between them they are the whole of what a board does with a shot.

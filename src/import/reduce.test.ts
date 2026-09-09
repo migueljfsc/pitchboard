@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { PALETTE } from "@/components/ui/palette";
 import { AWAY, HOME } from "@/formations";
 import { boardFromTracks } from "./index";
 import {
@@ -754,11 +755,27 @@ describe("a silence the ball moved across", () => {
 describe("the kits a board wears", () => {
   const plain = () => file([straightRun(1, "home", 20), straightRun(2, "away", 40)]);
 
-  it("takes them from the file when it measured them", () => {
+  it("takes them from the file, in the picker's own colours", () => {
+    // Measured off the shirts, snapped to the swatches the team picker offers: a board
+    // painted two colours that appear nowhere in the picker cannot be re-picked or matched
+    // to a link by hand.
     const out = boardFromTracks({ ...plain(), kits: { home: "#3a81d1", away: "#d1493a" } });
     expect(out.ok).toBe(true);
     if (!out.ok) return;
-    expect(out.doc.teams.map((t) => t.color)).toEqual(["#3a81d1", "#d1493a"]);
+    expect(out.doc.teams.map((t) => t.color)).toEqual(["#2563eb", "#e11d48"]);
+    for (const team of out.doc.teams) expect(PALETTE).toContain(team.color);
+  });
+
+  it("never puts both sides in the same colour", () => {
+    // Two kits that measure near the same swatch: the better match keeps it and the other
+    // takes its next choice, because two teams in one colour is not a board.
+    const out = boardFromTracks({ ...plain(), kits: { home: "#d1493a", away: "#c04030" } });
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    const [home, away] = out.doc.teams.map((t) => t.color);
+    expect(home).not.toBe(away);
+    expect(PALETTE).toContain(home);
+    expect(PALETTE).toContain(away);
   });
 
   it("keeps its own palette when the file says nothing", () => {

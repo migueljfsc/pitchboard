@@ -401,6 +401,8 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
   where it does, that is what the sides are painted -- `home` is the side defending the nearer
   goal, which is not the side a coach calls home, so the colours are the only thing that ties
   the board to the clip he watched. Text colour follows the kit's luminance, not the side.
+  The measurement is snapped to `PALETTE` first: a colour the picker does not offer cannot be
+  re-picked or matched by a link, and the two sides may never land on the same swatch.
 - **A ball behind the line between the posts is a GOAL, and stays in the net** (D76). Drawn on
   the line instead, it sits among the defenders who were standing there and the board reads as
   a turnover; drawn back on the pitch by the next sighting, worse. Outside the posts the same

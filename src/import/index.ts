@@ -11,6 +11,7 @@
 
 import type { BoardDoc, Scene, Vec2 } from "@/board/types";
 import { clamp } from "@/board/geometry";
+import { PALETTE } from "@/components/ui/palette";
 import { buildSquad, HOME, AWAY } from "@/formations";
 import { msg, type Message } from "@/i18n/core";
 import {
@@ -257,12 +258,13 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     backedAt,
   );
 
+  // The kits from the clip where the file measured them, this board's palette where it
+  // could not. A coach who watched Everton in blue and United in red should not have to
+  // translate the board's own two colours back to the game he is correcting.
+  const worn = fromPalette(file.kits?.home ?? null, file.kits?.away ?? null);
   const teams = (["home", "away"] as const).map((side) => {
     const spec = side === "home" ? HOME : AWAY;
-    // The kits from the clip where the file measured them, this board's palette where it
-    // could not. A coach who watched Everton in blue and United in red should not have to
-    // translate the board's own two colours back to the game he is correcting.
-    const color = file.kits?.[side] ?? spec.color;
+    const color = worn[side] ?? spec.color;
     return buildSquad(
       { id: spec.id, name: spec.name, color, textColor: readableOn(color) },
       sides[side].map((t) => ({ number: t.number ?? undefined })),
@@ -523,4 +525,46 @@ function readableOn(hex: string): string {
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
   const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
   return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b) > 0.45 ? "#000000" : "#ffffff";
+}
+
+/**
+ * The measured kits, snapped to the swatches the team picker offers.
+ *
+ * A colour read off a shirt is a measurement — `#3a81d1`, `#d1493a` — and a board whose
+ * teams are two colours that appear nowhere in the picker is one a coach cannot re-pick
+ * or match a link to. So the file says what it saw and the board says it in its own
+ * vocabulary, which is the same bargain `buildSquad` already makes about formations.
+ *
+ * The two sides may not land on the same swatch. Where they would, the better match keeps
+ * it and the other takes its next choice: two teams in one colour is not a board.
+ */
+function fromPalette(
+  home: string | null,
+  away: string | null,
+): { home: string | null; away: string | null } {
+  if (home === null || away === null) return { home: null, away: null };
+  const ranked = (hex: string) =>
+    [...PALETTE].sort((a, b) => apart(hex, a) - apart(hex, b)) as string[];
+  const [first, second] = [ranked(home), ranked(away)];
+  if (first[0] !== second[0]) return { home: first[0], away: second[0] };
+  // Whoever matches its swatch worse gives way, and takes the next one down its own list.
+  return apart(home, first[0]) <= apart(away, second[0])
+    ? { home: first[0], away: second[1] }
+    : { home: first[1], away: second[0] };
+}
+
+/**
+ * How far apart two colours look, by the "redmean" approximation.
+ *
+ * Plain RGB distance calls a saturated blue and a saturated green neighbours, which is
+ * how a red kit ends up amber. This weights the channels by where in the red range the
+ * pair sits, and is within a point or two of a Lab distance over a palette this size.
+ */
+function apart(a: string, b: string): number {
+  const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const [ar, ag, ab] = rgb(a);
+  const [br, bg, bb] = rgb(b);
+  const mean = (ar + br) / 2;
+  const [dr, dg, db] = [ar - br, ag - bg, ab - bb];
+  return (2 + mean / 256) * dr * dr + 4 * dg * dg + (2 + (255 - mean) / 256) * db * db;
 }
