@@ -505,10 +505,31 @@ taken out is not a board a coach can use either.
 worse. The player who received it wears a kit the split could not read — his signature sits
 exactly between the two sides — so D72 declines him, the board does not field him, and
 `nearestTo` stepped over him to the next player along, who was an opponent. A track nobody can
-name now BLOCKS: nearer the ball than anybody nameable means nobody is named. It changes
-nothing on the six SoccerNet clips, where almost every track has a side, and it removes an
-invented turnover from the clip that found it. Officials are not blockers — `unknown` means
-the side could not be read, `referee` means it was read and there isn't one.
+name now BLOCKS: nearer the ball than anybody nameable means nobody is named. Officials are not
+blockers — `unknown` means the side could not be read, `referee` means it was read and there
+isn't one.
+
+**Build that list from the FILE, not from the roster.** The first cut filtered the unnameable
+tracks out of a list that had already dropped them, so the blocker was an empty array and
+measured as free. It is not free: the six clips with truth go from 13 right of 16 drawn to 12,
+and two boards shift by a scene, because a blocked frame changes which events the window is
+trimmed around. One pass across a sixteen-event yardstick, against an invented turnover on a
+coach's own clip — and a wrong-team error is the one this project has twice called the expensive
+one (D71, D72). It ships.
+
+**`leftBehind` had the same shape of hole.** It refused to judge a holder whose track had run
+out, which is the case that matters most: the board draws such a holder at his last known
+position with the ball glued to him, so a sighting sixteen metres away makes that picture a lie
+whether or not he is still tracked. Not NAMING a carrier needs evidence the player is there
+(D65); dropping one does not. That is what kept a keeper holding the ball through the pass he
+had just played.
+
+**What none of this can do is put the missing player on the board.** The receiver is a track
+holding two people, which is football-tracks D84 — both ways of catching that were measured
+there and refused. So the pass out of defence is drawn as the ball arriving at a spot nobody is
+named at, which is what the file actually knows: the coach's sequence — keeper, to the middle,
+back to a defender, forward again — now reads off the board with one player missing from it,
+rather than with the ball on the wrong team's boot.
 
 ## D77 — The board wears the kits from the clip when the file knows them
 Pitchboard paints `home` red and `away` blue, and the importer calls `home` whichever side
