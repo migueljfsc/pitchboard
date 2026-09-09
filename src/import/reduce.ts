@@ -313,6 +313,49 @@ export const LOOSE_M = 8;
 /** A loose stretch shorter than this is a stray sighting, not a ball in flight. */
 export const MIN_FLIGHT_S = 0.2;
 
+/** How far back from a flight to look for the player it came off. */
+export const KICK_S = 1.5;
+
+/** Half the goal's width, in metres: a sighting outside it did not cross between the posts. */
+export const GOAL_HALF_WIDTH_M = 3.66;
+
+/** How deep the board draws its goals, and so how far into one the ball may be put. */
+export const GOAL_DEPTH_M = 2;
+
+/**
+ * Where the ball is when it has crossed a goal line between the posts: in the net.
+ *
+ * Worth naming because a board cannot say "goal" and a coach reads one anyway — from the
+ * ball being past everybody rather than beside somebody. Pulled onto the goal line and it
+ * sits among the defenders who were on it, which is how a clip that ends in a goal came
+ * back as *"the blue team loses the ball to a red player"*.
+ *
+ * Null unless the sighting is behind the line by no more than `BALL_EDGE_M` -- further out
+ * is the camera model failing, not a goal -- and inside the posts.
+ */
+export function scored(
+  p: Vec2,
+  pitch: { length: number; width: number },
+  edgeM = BALL_EDGE_M,
+): Vec2 | null {
+  const behind = p.x < 0 ? -p.x : p.x > pitch.length ? p.x - pitch.length : -1;
+  if (behind < 0 || behind > edgeM) return null;
+  if (Math.abs(p.y - pitch.width / 2) > GOAL_HALF_WIDTH_M) return null;
+  const depth = Math.min(behind, GOAL_DEPTH_M);
+  return { x: p.x < 0 ? -depth : pitch.length + depth, y: p.y };
+}
+
+/**
+ * How far outside the field a ball sighting may sit and still be drawn, pulled onto it.
+ *
+ * The two cases either side of this number are a shot and a mistake. A ball that has just
+ * crossed the line is metres past it and belongs on the line -- that is the goal, and
+ * dropping it takes the ball off the board at the one moment a coach is watching it. A
+ * sighting well outside is the camera model failing or the detector finding something in
+ * the crowd, and drawing it moves the play off the pitch.
+ */
+export const BALL_EDGE_M = 4;
+
 /** Whether a ball sighting stands behind frame `f` — one at or before it, within CARRY_S. */
 export function sighted(ball: Sample[], f: number, fps: number): boolean {
   return ball.some((s) => s.f <= f && (f - s.f) / fps <= CARRY_S);
@@ -966,6 +1009,76 @@ export function leftBehind(
   }
   const p = positionAt(track, f);
   return Math.hypot(p.x - here.x, p.y - here.y) > radiusM;
+}
+
+/**
+ * Whose boot the ball came off, for a flight that starts at `f`.
+ *
+ * A flight begins by definition with the ball already clear of everybody (`LOOSE_M`), so the
+ * kicker is not at that frame — he is at the last sighting before it where somebody was
+ * still within reach. Naming him is what turns a ball appearing in mid-air into a pass:
+ * without it the board draws the ball arriving from nowhere and a coach cannot see who
+ * played it, which is exactly what one reported after `flights` first went in.
+ *
+ * Looks back `KICK_S` and no further. Beyond that the ball was somewhere else entirely and
+ * the nearest player to an old sighting says nothing about this one.
+ */
+export function kickedBy(
+  ball: Sample[],
+  players: { id: string; track: Track }[],
+  f: number,
+  fps: number,
+  radiusM = CARRIER_RADIUS_M,
+): string | null {
+  const back = ball
+    .filter((s) => s.f <= f && (f - s.f) / fps <= KICK_S)
+    .sort((a, b) => b.f - a.f);
+  for (const s of back) {
+    const who = nearestTo(ball, players, s.f, radiusM);
+    if (who !== null) return who;
+  }
+  return null;
+}
+
+/**
+ * The frames either side of a silence the ball moved across: it left, and it arrived.
+ *
+ * `flights` needs sightings to see a ball in the air, and the ones that matter most are
+ * exactly where there are none — a shot is struck, the detector loses a ball travelling at
+ * thirty metres a second, and the next thing anybody sees is it sitting in the goal. With
+ * no scene at either end the board holds the striker's ball for the whole gap and then
+ * floats it across two seconds of nothing, which is what a coach means by the ball getting
+ * lost.
+ *
+ * Both ends are events the file is sure of: the last frame it saw the ball where it was,
+ * and the first frame it saw where it got to. What happened in between is not claimed.
+ *
+ * A gap only counts if the ball MOVED across it (`minMoveM`). Sightings resuming where they
+ * stopped are a detector blinking, not a pass.
+ */
+export function breaks(
+  ball: Sample[],
+  tracks: Track[],
+  fps: number,
+  minGapS = MIN_FLIGHT_S,
+  minMoveM = LOOSE_M,
+): number[] {
+  const sorted = [...ball].sort((a, b) => a.f - b.f);
+  const players = tracks.map((track, i) => ({ id: String(i), track }));
+  const out: number[] = [];
+  for (let i = 1; i < sorted.length; i++) {
+    const [a, b] = [sorted[i - 1], sorted[i]];
+    if ((b.f - a.f) / fps <= minGapS) continue;
+    if (Math.hypot(b.x - a.x, b.y - a.y) < minMoveM) continue;
+    // The arrival always: it is where the ball turned out to be, and a board with no
+    // scene there drifts it across whatever the next scene happens to be.
+    out.push(b.f);
+    // The departure only if somebody still HAD it — the striker, about to shoot. A ball
+    // already in flight when it was last seen is mid-pass, and a scene there breaks one
+    // movement into two, which is the fault D75 exists to avoid.
+    if (nearestTo(ball, players, a.f, CARRIER_RADIUS_M) !== null) out.push(a.f);
+  }
+  return out;
 }
 
 /** The nearest player to the ball at a frame, inside the radius, and nothing more. */

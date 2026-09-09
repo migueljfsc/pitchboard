@@ -10,6 +10,7 @@
  */
 
 import type { BoardDoc, Scene, Vec2 } from "@/board/types";
+import { clamp } from "@/board/geometry";
 import { buildSquad, HOME, AWAY } from "@/formations";
 import { msg, type Message } from "@/i18n/core";
 import {
@@ -17,9 +18,12 @@ import {
   carrierAt,
   chooseScenes,
   chooseWindow,
+  BALL_EDGE_M,
+  breaks,
   fitCurve,
   flights,
   handovers,
+  kickedBy,
   MAX_PER_SIDE,
   MIN_COVERAGE,
   MIN_OBSERVED_S,
@@ -34,6 +38,7 @@ import {
   leftBehind,
   looseAt,
   restartAt,
+  scored,
   sideOf,
   sighted,
   splitImpossible,
@@ -222,6 +227,10 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     // pass to an untracked player and a shot both end in nobody's possession, and trimming
     // past one loses the only mark the file carries of it.
     ...flights(ballSamples, kept, file.source.fps),
+    // And both ends of a silence the ball crossed. The shot is the case: nobody sees it
+    // between the boot and the net, so without these the board carries it on the striker
+    // and then drifts it into the goal over whatever the next scene happens to be.
+    ...breaks(ballSamples, kept, file.source.fps),
   ].sort((a, b) => a - b);
   const events = [
     ...(kick !== null && kick >= from && kick <= to ? [kick] : []),
@@ -250,8 +259,12 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
 
   const teams = (["home", "away"] as const).map((side) => {
     const spec = side === "home" ? HOME : AWAY;
+    // The kits from the clip where the file measured them, this board's palette where it
+    // could not. A coach who watched Everton in blue and United in red should not have to
+    // translate the board's own two colours back to the game he is correcting.
+    const color = file.kits?.[side] ?? spec.color;
     return buildSquad(
-      { id: spec.id, name: spec.name, color: spec.color, textColor: spec.textColor },
+      { id: spec.id, name: spec.name, color, textColor: readableOn(color) },
       sides[side].map((t) => ({ number: t.number ?? undefined })),
     );
   });
@@ -286,11 +299,17 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     return Math.abs(here.f - f) <= 2 ? { x: here.x, y: here.y } : null;
   });
 
-  // Only where the measurement lands on the field. A ball the camera model puts outside it
-  // is out of play or a false positive, and either way drawing it takes the play off the
-  // board — the producer's own margin lets a sighting sit metres past the line.
-  const onField = (p: Vec2 | null) =>
-    p && p.x >= 0 && p.x <= file.pitch.length && p.y >= 0 && p.y <= file.pitch.width ? p : null;
+  // A ball the camera model puts outside the field is either out of play or a false
+  // positive, and drawing it where the model says takes the play off the board. Just
+  // outside is the interesting case and the commonest: a shot ends up BEHIND the goal
+  // line, and a metre of registration error puts it there too — so a sighting within
+  // BALL_EDGE_M of the field is pulled onto it, which draws a goal on the line, and
+  // anything further out is dropped. SNGS-060 had one at (-1, 9), which is neither.
+  const onField = (p: Vec2 | null) => {
+    if (!p) return null;
+    const [x, y] = [clamp(p.x, 0, file.pitch.length), clamp(p.y, 0, file.pitch.width)];
+    return Math.hypot(x - p.x, y - p.y) <= BALL_EDGE_M ? { x, y } : null;
+  };
 
   // A holder stands until somebody else takes it, even across scenes where the ball was
   // seen somewhere else. Dropping the carrier at those scenes is more faithful to where
@@ -308,6 +327,9 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   const takerId = taker ? (idOf.get(taker) ?? null) : null;
   let holder: string | null = null;
   let released = takerId === null;
+  // Scenes where the file DENIES a holder rather than merely failing to name one. The two
+  // are not the same answer and only the second may be filled in below.
+  const denied = frames.map(() => false);
   const carriers = found.map((c, i) => {
     if (c !== null && c !== takerId) released = true;
     if (i > 0 && !released) return null;
@@ -315,16 +337,37 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     // A sighting that puts the ball out of his reach ends his possession, whether or not
     // anybody else can be shown to have taken it. Otherwise he keeps it on the board all
     // the way through the pass he played, and out to the corner flag to celebrate.
-    else if (leftBehind(ballSamples, withIds, frames[i], holder)) holder = null;
+    else if (leftBehind(ballSamples, withIds, frames[i], holder)) {
+      holder = null;
+      denied[i] = true;
+    }
     // Carrying a holder forward is a reading of the ball's silence, and it is only good
     // for as long as the silence is short (CARRY_S). Past that the file says nothing
     // about who has the ball, and the board says nothing either.
-    else if (!sighted(ballSamples, frames[i], file.source.fps)) holder = null;
+    // Only where there is a holder to lose: before anybody has been named, silence denies
+    // nothing -- it is the opening of a board, not a statement about possession.
+    else if (holder !== null && !sighted(ballSamples, frames[i], file.source.fps)) {
+      holder = null;
+      denied[i] = true;
+    }
     return holder;
   });
 
   const settled = steady(carriers);
   carriers.splice(0, carriers.length, ...settled);
+
+  // A flight with a player at both ends is already a pass: the carrier changes from the
+  // man who struck it to the man who takes it, and that is ONE movement on the board.
+  // Drawing the ball at its own position in between splits it into two hops -- reported
+  // by a coach as "the pass is getting divided into two movements". So the ball is drawn
+  // on its own only where the carrier model cannot draw the event: a shot, a ball that
+  // runs out of play, a pass to somebody the tracker never held.
+  loose.forEach((where, i) => {
+    if (where === null || carriers[i] !== null) return;
+    const lands = carriers.findIndex((c, j) => j > i && c !== null);
+    const from = kickedBy(ballSamples, withIds, frames[i], file.source.fps);
+    if (from !== null && lands >= 0) carriers[i] = from;
+  });
 
   // Where the ball was NOT seen either, the old answer still stands: it starts with
   // whoever first takes it, rather than materialising in scene three.
@@ -337,21 +380,47 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     if (lands > 1) for (let i = 1; i < lands; i++) carriers[i] = carriers[lands];
   }
 
-  const taken = carriers.findIndex((c) => c !== null);
-  const first = taken >= 0 ? carriers[taken] : null;
-  const flew = loose.findIndex((p) => p !== null);
-  for (let i = 0; i < (taken >= 0 ? taken : carriers.length); i++) {
+  // The first flight nobody could be named at either end of: nothing before it can be
+  // given to anybody, because the ball came off a boot this file never saw.
+  const adrift = loose.findIndex((p, i) => p !== null && carriers[i] === null);
+  // Whoever struck THAT one, if the file saw him: the scenes before it are his, and where
+  // it saw nobody they stay empty rather than being handed to a player who never had it.
+  const struck =
+    adrift >= 0 ? kickedBy(ballSamples, withIds, frames[adrift], file.source.fps) : null;
+
+  // A scene the file could not name a holder at — as opposed to one where it says there
+  // is none — belongs to the next player known to hold the ball. That is the old "it
+  // starts with whoever first takes it" rule, applied wherever possession resumes rather
+  // than only at the opening: the pass is then drawn once, from the man who struck it to
+  // the man who took it, instead of the ball going missing in between and arriving in two
+  // hops.
+  const next = (i: number) => carriers.slice(i + 1).find((c) => c !== null) ?? null;
+  for (let i = 0; i < carriers.length; i++) {
+    if (carriers[i] !== null || denied[i] || loose[i] !== null) continue;
     // The opening scene keeps the ball's own position when there is one — that is the
     // restart, and it is what makes the kick a pass FROM the spot rather than a player
-    // arriving already holding it. Every scene after it belongs to whoever first takes
-    // the ball, so the passage opens with one travel instead of the ball going missing.
+    // arriving already holding it.
     if (i === 0 && resting[0] !== null) continue;
-    // And a scene where the ball is demonstrably nobody's is not a scene the eventual
-    // holder can be given: the pass that put it there is the event, not a prelude to it.
-    // Nor is anything BEFORE it — the ball in the air came off somebody else's boot, and
-    // handing those scenes to the man who receives it draws him passing to himself.
-    if (loose[i] !== null || (flew >= 0 && i < flew)) continue;
-    carriers[i] = first;
+    carriers[i] = adrift >= 0 && i < adrift ? struck : next(i);
+  }
+
+  // What the board draws for the ball at each scene, where it names nobody.
+  const drawnBall = frames.map((_f, i) => onField(loose[i] ?? resting[i]));
+
+  // Once it has crossed the line the play is over: the ball stays in the net rather than
+  // drifting back onto the pitch as the next sighting says, and nobody is holding it. A
+  // goal drawn on the line among the defenders standing on it reads as a turnover, which
+  // is what a coach reported on a clip that ends in one.
+  const scoredAt = frames.findIndex((_f, i) => {
+    const seen = loose[i] ?? resting[i];
+    return seen !== null && scored(seen, file.pitch) !== null;
+  });
+  if (scoredAt >= 0) {
+    const net = scored((loose[scoredAt] ?? resting[scoredAt])!, file.pitch)!;
+    for (let i = scoredAt; i < frames.length; i++) {
+      carriers[i] = null;
+      drawnBall[i] = net;
+    }
   }
 
   // Where each player was last DRAWN, which is not always where the file puts them: a run
@@ -408,9 +477,7 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
       // The ball's own position, wherever the board names nobody and the file saw it. That
       // is the pass in the air, the shot on its way in, and the restart on its spot — the
       // events a carrier model has no way to draw (D44).
-      ...(carriers[i] === null && onField(loose[i] ?? resting[i])
-        ? { ballPos: onField(loose[i] ?? resting[i])! }
-        : {}),
+      ...(carriers[i] === null && drawnBall[i] ? { ballPos: drawnBall[i]! } : {}),
       ballPath: null,
     };
   });
@@ -443,4 +510,17 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
       links: [],
     },
   };
+}
+
+/**
+ * Black or white, whichever can be read on a shirt colour.
+ *
+ * Relative luminance, the way a browser measures contrast: a yellow kit takes black
+ * numbers and a navy one takes white, and getting it the wrong way round makes the
+ * numbers vanish on exactly the kits that are hardest to tell apart anyway.
+ */
+function readableOn(hex: string): string {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b) > 0.45 ? "#000000" : "#ffffff";
 }

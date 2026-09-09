@@ -394,6 +394,17 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
   receiver and a shot both end with the ball in nobody's possession, and a board built only from
   carriers draws them as a dribble. `flights` makes the moment it comes loose a scene, and a
   scene naming nobody draws the ball where it was seen -- if that sighting is on the field.
+- **A shot is a SILENCE, not a sighting** (D76). Nobody sees a struck ball until it is in the
+  net, so `breaks` marks both ends of a gap the ball moved across -- and the departure only
+  where somebody still had it, or a pass in flight gets split in two.
+- **The board wears the kits the file measured** (D77). `tracks.json` may carry `kits`, and
+  where it does, that is what the sides are painted -- `home` is the side defending the nearer
+  goal, which is not the side a coach calls home, so the colours are the only thing that ties
+  the board to the clip he watched. Text colour follows the kit's luminance, not the side.
+- **A ball behind the line between the posts is a GOAL, and stays in the net** (D76). Drawn on
+  the line instead, it sits among the defenders who were standing there and the board reads as
+  a turnover; drawn back on the pitch by the next sighting, worse. Outside the posts the same
+  sighting is just a bad fit, and is dropped.
 - **"The passes that really happened" is itself an inference** (D71). SoccerNet annotates a
   ball, not possession, and its ball is the same z = 0 shadow -- so a drawn pass that agrees
   with it may still be wrong, and only somebody watching the clip can settle it.

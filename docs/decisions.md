@@ -466,6 +466,73 @@ drawn from memory. What is left is short because THE TRACKER IS SHORT: a board c
 long as the roster is watched, and at today's fragmentation that is a handful of seconds. The
 fix for board length is upstream, not here.
 
+## D77 — The board wears the kits from the clip when the file knows them
+Pitchboard paints `home` red and `away` blue, and the importer calls `home` whichever side
+defends the nearer goal (football-tracks D63). On a coach's own clip that made Manchester
+United, in red, the blue team — and every sentence about the board after that needed
+translating: *"the blue team (which is man united) loses the ball to a red player"*. Two rounds
+of diagnosis on this repo went past each other for the same reason.
+
+`tracks.json` now carries an optional `kits` — the two sides' shirt colours, measured off the
+shirts themselves (football-tracks D81) — and `buildSquad` uses them where they are there. The
+text colour follows from the kit's own luminance, the way a browser measures contrast: a yellow
+kit takes black numbers, a navy one white, and getting that backwards hides the numbers on
+exactly the kits that are hardest to tell apart.
+
+Absent is a real answer and the commonest one: a file written before this, or a clip whose two
+kits measure too close to be told apart on colour, leaves the board's own palette alone. Nothing
+else changes — the same eleven boards, the same passes, the same rosters.
+
+## D76 — The ball's silences are events too, and a ball over the line is on it
+Same coach, one round later: *"now the movements are somewhat accurate but the ball gets
+lost."* Two faults, and between them they are the whole of what a board does with a shot.
+
+**The board had no scene anywhere near the shot.** `handovers` sees the ball arrive, `flights`
+(D75) sees it come loose — and a shot is neither, because the detector loses a ball travelling
+at thirty metres a second and the next sighting is it sitting in the goal 1.7 s later. With
+nothing between, the striker held it at frame 315 and the ball then drifted into the net across
+whatever the next scene happened to be, two and a half seconds of it.
+
+`breaks` marks both ends of a silence the ball moved across: the last frame it was seen where
+it was, and the first frame it was seen where it got to. Both are facts; what happened in
+between is not claimed. The DEPARTURE is only marked when somebody was still within the carrier
+radius of it — a ball already in flight when it was last seen is mid-pass, and a scene there
+splits one movement into two, which is the fault D75 exists to avoid.
+
+**And the ball vanished at the goal.** D75 refuses to draw a sighting off the field, because
+the camera model puts false positives in the crowd. But a shot ENDS off the field: the sighting
+that matters most on the clip was at x = −1, a metre past the goal line, and the board drew no
+ball at all in the scene a coach is watching hardest. A sighting within `BALL_EDGE_M` is pulled
+onto the field instead of dropped, which draws the goal on the line; anything further out is
+still dropped, which is what SNGS-060's (−1, 9) needed.
+
+    the coach's board, by scene
+    away-5 (44,19)   he has it
+    away-5 (44,18)   struck
+    away-8 (29,5)    taken, on the touchline
+    away-8 (25,12)   carrying
+    away-8 (19,23)   carrying
+    away-8 (18,25)   the last frame it is his
+    ball  (-0.8,35)  in the net
+    ball  (-0.8,35)  still in the net
+
+**A goal is drawn IN the goal, and stays there.** The first cut of this pulled the sighting
+onto the goal line, where it sat among the defenders who were standing on it — and the next
+sighting, a metre inside the field, moved it back towards them. The coach read the whole thing
+as a turnover: *"the blue team loses the ball to a red player"*, on a clip whose scoring team
+never lost it. So a sighting behind the line and between the posts (`scored`) keeps its own
+position, capped at the depth the board draws its goals, and every scene after it holds the
+ball there with nobody named. Play is over; the board says so.
+
+Outside the posts nothing changes — SNGS-060's sighting at (−1, 9) is a bad fit, not a goal,
+and is still dropped.
+
+Every scene's ball is now within a metre of a real sighting where one exists, against 8 to 16 m
+before. **Across the six clips with truth, passes drawn against passes played go from 73% to
+82% precision and 34% to 38% recall** — the first change in this area to move both. Boards gain
+scenes where the ball did something (SNGS-069 nine to eleven, SNGS-116 three to five) and their
+rosters, windows and watched player-seconds are unchanged.
+
 ## D75 — A ball nobody has is drawn where it is, and the moment it comes loose is a scene
 The carrier model answers one question — who has the ball — and a board built only from its
 answers cannot show the two events a coach cares most about. A pass whose receiver was never
@@ -510,6 +577,46 @@ false positive, and drawing it takes the play off the board -- SNGS-060 had one 
 so `ballPos` is only ever a sighting inside the touchlines. And the scenes BEFORE the first
 flight are no longer handed to the player who eventually takes the ball: the pass that put it
 in the air came off somebody else's boot, and filling them draws him passing to himself.
+
+**And a third, one round of coach feedback later**: *"the pass is still missing as the ball is
+without a holder at the start and magically gets passed to the correct player."* Right — a
+flight drawn with nobody before it is a ball arriving out of thin air, which is the same fault
+seen from the other side. `kickedBy` names the player it came off: a flight begins with the
+ball already clear of everybody, so the kicker is at the last sighting before it where somebody
+was still within reach, looking back no further than `KICK_S`. Those opening scenes are his.
+
+The board goes to `away-5 ball(30,10) away-8 away-8 away-8 ball(2,36)` — one team's player
+plays it, the ball crosses, another takes it and runs, and it ends in the goal. The thirteen
+boards, the pass precision and the pass recall are all unchanged by the addition; the only
+other board it moves is SNGS-100, whose opening scene now names the same player its second
+scene already did.
+
+**What this cannot do is see further back than the ball.** On that clip the first sighting is
+frame 56, with the ball already rolling, so the kicker is the player it was nearest when it
+first appeared. If the detector never saw the ball at the passer's feet, no rule here invents
+him.
+
+**And one round after that**: *"the pass is getting divided into two movements, instead of a
+straight pass."* Right again, and it is the ball position that has to go. A flight with a
+player at BOTH ends is already a pass — the carrier changes from the man who struck it to the
+man who took it, and that is one movement on the board. Drawing the ball at its own position in
+between makes it two hops. So the ball is drawn on its own only where the carrier model cannot
+draw the event at all: a shot, a ball that runs out of play, a pass to somebody the tracker
+never held. Where both ends are known the flight scene holds the KICKER, and the pass draws
+once.
+
+That also generalised the oldest rule in this area. "The ball starts with whoever first takes
+it, rather than materialising in scene three" was written for the opening scenes; it is really
+about any scene the file could not name a holder at, so it now applies wherever possession
+resumes — the scenes between a pass and its receiver belong to the receiver. What it must not
+touch is a scene where the file DENIES a holder rather than failing to name one (D74's silence,
+`leftBehind`'s sighting), and those two cases are now tracked apart. Silence before anybody has
+held the ball denies nothing: it is the opening of a board, not a statement about possession.
+
+The coach's board ends at `away-5 away-5 away-8 away-8 away-8 ball(2,36)` — one player has it,
+one pass, the receiver runs, the ball finishes in the goal. Passes drawn against passes played
+hold at 73% precision and 34% recall across the six clips with truth, and the thirteen boards
+are unchanged but for SNGS-060, which draws one more pass and one less loose ball.
 
 ## D74 — A holder may only stand for as long as the ball's silence is short
 A carrier stands until somebody else takes it, and the flight between two holders is the pass

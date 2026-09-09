@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { AWAY, HOME } from "@/formations";
 import { boardFromTracks } from "./index";
 import {
+  breaks,
   carrierAt,
+  KICK_S,
+  kickedBy,
+  scored,
   leftBehind,
   chooseScenes,
   witnessed,
@@ -705,6 +710,89 @@ describe("a holder the ball has left", () => {
   });
 });
 
+describe("whose boot a flight came off", () => {
+  const players = [
+    { id: "home-1", track: track(1, "home", [[10, 20, 30], [30, 20, 30]]) },
+    { id: "away-1", track: track(2, "away", [[10, 60, 30], [30, 60, 30]]) },
+  ];
+  const ball = (f: number, x: number, y: number) => ({ f, x, y, conf: 0.9 });
+  // Kicked at 12 from home-1's feet, clear of everybody by 20.
+  const struck = [ball(12, 21, 30), ball(16, 32, 30), ball(20, 44, 30)];
+
+  it("is the last player within reach before it came loose", () => {
+    expect(kickedBy(struck, players, 20, 25)).toBe("home-1");
+  });
+
+  it("says nothing when the ball was nobody's for longer than KICK_S", () => {
+    expect(kickedBy(struck, players, 20 + Math.ceil(KICK_S * 25) + 5, 25)).toBeNull();
+    expect(kickedBy([], players, 20, 25)).toBeNull();
+  });
+});
+
+describe("a silence the ball moved across", () => {
+  const players = [track(1, "home", [[10, 20, 30], [40, 20, 30]])];
+  const ball = (f: number, x: number, y: number) => ({ f, x, y, conf: 0.9 });
+
+  it("marks where the ball turned up, and where it was struck from", () => {
+    // A shot: last seen at his feet on frame 12, next seen thirty metres away on 30.
+    const shot = [ball(11, 20, 31), ball(12, 20.5, 30.5), ball(30, 50, 30), ball(31, 50, 30)];
+    expect(breaks(shot, players, 25)).toEqual(expect.arrayContaining([30, 12]));
+  });
+
+  it("does not mark a departure nobody was near", () => {
+    // Already in flight when it was last seen: a scene there splits one pass into two.
+    const crossing = [ball(11, 60, 10), ball(12, 62, 10), ball(30, 90, 10)];
+    expect(breaks(crossing, players, 25)).toEqual([30]);
+  });
+
+  it("ignores a gap the ball did not move across", () => {
+    const blink = [ball(12, 20.5, 30.5), ball(30, 21, 30)];
+    expect(breaks(blink, players, 25)).toEqual([]);
+  });
+});
+
+describe("the kits a board wears", () => {
+  const plain = () => file([straightRun(1, "home", 20), straightRun(2, "away", 40)]);
+
+  it("takes them from the file when it measured them", () => {
+    const out = boardFromTracks({ ...plain(), kits: { home: "#3a81d1", away: "#d1493a" } });
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.doc.teams.map((t) => t.color)).toEqual(["#3a81d1", "#d1493a"]);
+  });
+
+  it("keeps its own palette when the file says nothing", () => {
+    const out = boardFromTracks(plain());
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.doc.teams.map((t) => t.color)).toEqual([HOME.color, AWAY.color]);
+  });
+
+  it("puts readable numbers on a light kit and a dark one", () => {
+    const out = boardFromTracks({ ...plain(), kits: { home: "#e6e6e6", away: "#1b2a4a" } });
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.doc.teams.map((t) => t.textColor)).toEqual(["#000000", "#ffffff"]);
+  });
+});
+
+describe("a ball over the goal line", () => {
+  const pitch = { length: 105, width: 68 };
+
+  it("is in the net when it crossed between the posts", () => {
+    expect(scored({ x: -0.8, y: 35 }, pitch)).toEqual({ x: -0.8, y: 35 });
+    expect(scored({ x: 105.5, y: 33 }, pitch)).toEqual({ x: 105.5, y: 33 });
+    // No deeper than the goal the board draws, however far out the model put it.
+    expect(scored({ x: -3.5, y: 34 }, pitch)!.x).toBe(-2);
+  });
+
+  it("is not, outside the posts or far off the field", () => {
+    expect(scored({ x: -1, y: 9 }, pitch)).toBeNull();
+    expect(scored({ x: -20, y: 34 }, pitch)).toBeNull();
+    expect(scored({ x: 50, y: 34 }, pitch)).toBeNull();
+  });
+});
+
 describe("the ball on a board", () => {
   const withBall = (samples: { f: number; x: number; y: number }[]) => ({
     ...file([straightRun(1, "home", 20), straightRun(2, "away", 40)]),
@@ -770,6 +858,65 @@ describe("the ball on a board", () => {
     if (!result.ok) return;
     const left = result.frames.find((f) => f >= 21 && f <= 26);
     expect(left).toBeDefined();
+  });
+
+  it("names the player a flight came off, so the pass has a passer", () => {
+    // With the flight drawn but nobody before it, the board shows the ball arriving out of
+    // thin air -- reported by the coach one round after `flights` went in. A flight starts
+    // with the ball already clear of everybody, so the kicker is at the last sighting
+    // before it where somebody was still within reach.
+    // Never seen at anybody's feet long enough to be theirs: three sightings a few metres
+    // off home-1, then clear of everybody. The opening scene is his all the same, because
+    // that is where the ball came from.
+    const seen = Array.from({ length: 32 }, (_, i) => ({
+      f: i + 20,
+      x: 10 + (i + 19) * 0.2,
+      y: i < 3 ? 22.5 : 60,
+    }));
+    const result = boardFromTracks(withBall(seen));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.doc.scenes[0].carrier).toBe("home-1");
+    expect(result.doc.scenes.some((s) => s.carrier === null && s.ballPos)).toBe(true);
+  });
+
+  it("draws a ball just past the goal line on it, and one in the crowd not at all", () => {
+    // The shot is the case: a ball over the line is off the field by a metre or two, and
+    // dropping it takes the ball off the board at the one moment a coach is watching it.
+    // Far outside is the camera model failing, and drawing that moves the play off the
+    // pitch entirely.
+    const over = Array.from({ length: 51 }, (_, i) => ({ f: i + 1, x: i < 12 ? 10 : -2, y: 30 }));
+    const scored = boardFromTracks(withBall(over));
+    expect(scored.ok).toBe(true);
+    if (!scored.ok) return;
+    const drawn = scored.doc.scenes.filter((s) => s.ballPos);
+    expect(drawn.length).toBeGreaterThan(0);
+    expect(drawn[drawn.length - 1].ballPos!.x).toBe(0);
+
+    const miles = Array.from({ length: 51 }, (_, i) => ({ f: i + 1, x: i < 12 ? 10 : -20, y: 30 }));
+    const lost = boardFromTracks(withBall(miles));
+    expect(lost.ok).toBe(true);
+    if (!lost.ok) return;
+    expect(lost.doc.scenes.some((s) => s.ballPos && s.ballPos.x < 0)).toBe(false);
+  });
+
+  it("leaves the ball in the net once it has crossed the line", () => {
+    // Play is over: a goal drawn back on the pitch, among the defenders who were standing
+    // on the line, reads as them winning it -- which is what a coach reported.
+    const shot = Array.from({ length: 51 }, (_, i) => ({
+      f: i + 1,
+      x: i < 12 ? 10 : i < 30 ? -1 : 3,
+      y: i < 12 ? 20.3 : 34,
+    }));
+    const result = boardFromTracks(withBall(shot));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const after = result.doc.scenes.filter((s) => s.ballPos && s.ballPos.x < 0);
+    expect(after.length).toBeGreaterThan(0);
+    // Nothing puts it back on the pitch afterwards, and nobody is holding it.
+    const last = result.doc.scenes[result.doc.scenes.length - 1];
+    expect(last.carrier).toBeNull();
+    expect(last.ballPos!.x).toBeLessThan(0);
   });
 
   it("stops naming a holder once the ball has gone unseen for too long", () => {

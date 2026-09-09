@@ -77,6 +77,20 @@ export const tracksSchema = z.object({
    * models the ball as `scene.carrier` and nothing else.
    */
   ball: z.object({ samples: z.array(sample) }).nullable().optional(),
+  /**
+   * What each side was WEARING, measured off the shirts by the producer.
+   *
+   * Optional, and absent rather than guessed: two kits a camera cannot tell apart are
+   * better answered by this board's own palette than by two colours that look the same.
+   * A coach reads his own clip in the kits he watched it in, so where the file knows
+   * them, the board wears them.
+   */
+  kits: z
+    .object({
+      home: z.string().regex(/^#[0-9a-f]{6}$/),
+      away: z.string().regex(/^#[0-9a-f]{6}$/),
+    })
+    .optional(),
 });
 
 export type TracksFile = z.infer<typeof tracksSchema>;
