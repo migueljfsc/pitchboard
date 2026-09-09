@@ -3,6 +3,18 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.46.0 (2026-09-09)
+
+### Feat
+
+- **import**: draw the goal, the shot, and the kits from the clip
+- **import**: draw the ball itself when nobody has it
+
+### Fix
+
+- **import**: say a measured kit in the picker's own colours
+- **import**: stop naming a holder once the ball has gone unseen
+
 ## v0.45.4 (2026-09-07)
 
 ### Fix
