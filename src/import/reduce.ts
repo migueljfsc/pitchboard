@@ -1014,9 +1014,12 @@ export function leftBehind(
   const here = ball.reduce((best, s) => (Math.abs(s.f - f) < Math.abs(best.f - f) ? s : best));
   if (Math.abs(here.f - f) > 2) return false;
   const track = players.find((p) => p.id === holder)?.track;
-  if (!track || f < track.samples[0].f || f > track.samples[track.samples.length - 1].f) {
-    return false;
-  }
+  if (!track) return false;
+  // Measured against where the board DRAWS him, which is why `positionAt`'s clamping is
+  // wanted here and refused in `nearestTo`. A holder whose track has run out is drawn
+  // where he was last seen and the ball is drawn on him; if the file can see the ball
+  // sixteen metres away, that picture is a lie whether or not he is still tracked. Not
+  // naming a carrier needs evidence the player is there (D65); DROPPING one does not.
   const p = positionAt(track, f);
   return Math.hypot(p.x - here.x, p.y - here.y) > radiusM;
 }

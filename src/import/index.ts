@@ -219,7 +219,9 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   // Officials are NOT among them. `unknown` means the side could not be read; `referee`
   // means it was read and there isn't one, and a linesman standing near the ball is not a
   // reason to refuse to say who has it.
-  const unnamed = players.filter((t) => t.team === "unknown" && onPitch(t, file.pitch));
+  const unnamed = file.tracks
+    .flatMap((t) => splitImpossible(t, file.source.fps, undefined, file.source.intervalS))
+    .filter((t) => t.team === "unknown" && onPitch(t, file.pitch));
 
   // How much of the board is real at a frame, for the roster this passage actually fields.
   const backedAt = (f: number) =>
