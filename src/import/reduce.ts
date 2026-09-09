@@ -61,6 +61,14 @@ export const STILL_M = 1.5;
 export const MIN_SCENE_GAP_S = 0.4;
 
 /**
+ * The same, for scenes that mark an EVENT rather than a badly fitting curve.
+ *
+ * Half the gap, because the reason for the other one does not apply: `MIN_SCENE_GAP_S`
+ * stops the deviation test describing a jittery detector, and a pass is not jitter.
+ */
+export const MIN_EVENT_GAP_S = 0.2;
+
+/**
  * How much of the window a track must cover to be worth putting on the board.
  *
  * Lower than it looks like it should be, and measured rather than chosen. Raising it
@@ -889,8 +897,9 @@ export function carrierAt(
   f: number,
   radiusM = CARRIER_RADIUS_M,
   fps?: number,
+  blockers: Track[] = [],
 ): string | null {
-  const who = nearestTo(ball, players, f, radiusM);
+  const who = nearestTo(ball, players, f, radiusM, blockers);
   if (who === null || fps === undefined) return who;
 
   // And do they KEEP it? A ball flying over a player is nearest to them for a frame, which
@@ -901,7 +910,7 @@ export function carrierAt(
   for (const s of ball) {
     if (s.f < f || s.f > f + hold) continue;
     seen++;
-    if (nearestTo(ball, players, s.f, radiusM) === who) theirs++;
+    if (nearestTo(ball, players, s.f, radiusM, blockers) === who) theirs++;
   }
   // Every sighting counts, not just the ones with somebody near: a ball crossing open
   // ground has no rival claimant, and counting only claimants would read "nobody else was
@@ -924,11 +933,12 @@ export function looseAt(
   players: { id: string; track: Track }[],
   f: number,
   radiusM = LOOSE_M,
+  blockers: Track[] = [],
 ): Vec2 | null {
   if (ball.length === 0) return null;
   const here = ball.reduce((best, s) => (Math.abs(s.f - f) < Math.abs(best.f - f) ? s : best));
   if (Math.abs(here.f - f) > 2) return null;
-  for (const { track } of players) {
+  for (const { track } of [...players, ...blockers.map((track) => ({ track }))]) {
     if (f < track.samples[0].f || f > track.samples[track.samples.length - 1].f) continue;
     const p = positionAt(track, f);
     if (Math.hypot(p.x - here.x, p.y - here.y) <= radiusM) return null;
@@ -1011,6 +1021,82 @@ export function leftBehind(
   return Math.hypot(p.x - here.x, p.y - here.y) > radiusM;
 }
 
+/** How far the ball's direction must change beside a player before it is called a touch. */
+export const TOUCH_TURN_DEG = 40;
+
+/** How long either side of a touch its direction is read over, in seconds. */
+export const TOUCH_WINDOW_S = 0.15;
+
+/** How fast the ball must be moving on both sides for a turn to mean anything, in m/s. */
+export const TOUCH_SPEED_MS = 2.5;
+
+/**
+ * Who touched the ball at `f`, when nobody held it: one-touch play.
+ *
+ * `carrierAt`'s hold test asks who KEEPS the ball, which is what tells a receiver from a
+ * player the ball merely flew over (D71) — and it is exactly wrong about the football a
+ * coach most wants drawn. A one-touch pass is nobody keeping it: the ball arrives, leaves
+ * in a new direction, and the man who did it never has it for the 0.4 s the test asks for.
+ * Reported by a coach on a possession highlight: *"the quick triangle associations are not
+ * present in the board"*.
+ *
+ * A touch is a change of DIRECTION beside somebody, which is the thing a fly-over cannot
+ * fake: a ball crossing a player carries straight on. Speed is required on both sides so
+ * that noise in a slow ball's position — a metre of it, at this camera's accuracy — cannot
+ * turn into a right angle.
+ */
+export function touchedAt(
+  ball: Sample[],
+  players: { id: string; track: Track }[],
+  f: number,
+  fps: number,
+  radiusM = CARRIER_RADIUS_M,
+  blockers: Track[] = [],
+): string | null {
+  const window = Math.max(1, Math.round(TOUCH_WINDOW_S * fps));
+  const at = (want: number) =>
+    ball.reduce<Sample | null>(
+      (best, s) =>
+        Math.abs(s.f - want) <= 2 && (!best || Math.abs(s.f - want) < Math.abs(best.f - want))
+          ? s
+          : best,
+      null,
+    );
+  const [before, here, after] = [at(f - window), at(f), at(f + window)];
+  if (!before || !here || !after) return null;
+
+  const inbound = { x: here.x - before.x, y: here.y - before.y };
+  const outbound = { x: after.x - here.x, y: after.y - here.y };
+  const [came, went] = [Math.hypot(inbound.x, inbound.y), Math.hypot(outbound.x, outbound.y)];
+  const seconds = window / fps;
+  if (came / seconds < TOUCH_SPEED_MS || went / seconds < TOUCH_SPEED_MS) return null;
+
+  const cos = (inbound.x * outbound.x + inbound.y * outbound.y) / (came * went);
+  const turn = (Math.acos(Math.min(1, Math.max(-1, cos))) * 180) / Math.PI;
+  return turn >= TOUCH_TURN_DEG ? nearestTo(ball, players, f, radiusM, blockers) : null;
+}
+
+/** The frames somebody touched the ball, one per turn rather than one per sighting. */
+export function touches(
+  ball: Sample[],
+  tracks: Track[],
+  fps: number,
+  radiusM = CARRIER_RADIUS_M,
+  blockers: Track[] = [],
+): number[] {
+  const players = tracks.map((track, i) => ({ id: String(i), track }));
+  const out: number[] = [];
+  let last = -Infinity;
+  for (const s of [...ball].sort((a, b) => a.f - b.f)) {
+    if (s.f - last < TOUCH_WINDOW_S * fps) continue;
+    if (touchedAt(ball, players, s.f, fps, radiusM, blockers) !== null) {
+      out.push(s.f);
+      last = s.f;
+    }
+  }
+  return out;
+}
+
 /**
  * Whose boot the ball came off, for a flight that starts at `f`.
  *
@@ -1081,12 +1167,21 @@ export function breaks(
   return out;
 }
 
-/** The nearest player to the ball at a frame, inside the radius, and nothing more. */
+/**
+ * The nearest player to the ball at a frame, inside the radius, and nothing more.
+ *
+ * `blockers` are tracks the board does not field — a player whose side the kit could not
+ * settle (D72). They cannot be given the ball, and they must not be stepped over: on a
+ * coach's clip the keeper's pass was received by an unreadable shirt, so the board handed
+ * it to the next-nearest player, who was an opponent, and drew a keeper passing to the
+ * opposition. Nearer than anybody nameable means nobody can be named.
+ */
 function nearestTo(
   ball: Sample[],
   players: { id: string; track: Track }[],
   f: number,
   radiusM: number,
+  blockers: Track[] = [],
 ): string | null {
   if (ball.length === 0 || players.length === 0) return null;
   const here = ball.reduce((best, s) => (Math.abs(s.f - f) < Math.abs(best.f - f) ? s : best));
@@ -1104,7 +1199,13 @@ function nearestTo(
     const d = Math.hypot(p.x - here.x, p.y - here.y);
     if (!nearest || d < nearest.d) nearest = { id, d };
   }
-  return nearest && nearest.d <= radiusM ? nearest.id : null;
+  if (!nearest || nearest.d > radiusM) return null;
+  for (const track of blockers) {
+    if (f < track.samples[0].f || f > track.samples[track.samples.length - 1].f) continue;
+    const p = positionAt(track, f);
+    if (Math.hypot(p.x - here.x, p.y - here.y) < nearest.d) return null;
+  }
+  return nearest.id;
 }
 
 /** Whether a track is a player rather than somebody watching from behind the goal. */
@@ -1153,6 +1254,12 @@ export function chooseScenes(
   backedFloor: number = SCENE_BACKED_FLOOR,
 ): number[] {
   const minGap = Math.max(1, Math.round(MIN_SCENE_GAP_S * fps));
+  // Events may sit closer together than scenes the deviation test invents, because they
+  // are things that HAPPENED rather than places a curve fits badly. One-touch football is
+  // three passes in a second, and at the deviation gap the second and third of them land
+  // inside the first's shadow and are dropped -- a coach's possession highlight came back
+  // as one player carrying the ball forty metres.
+  const eventGap = Math.max(1, Math.round(MIN_EVENT_GAP_S * fps));
   const chosen = [from, to];
 
   // A change of possession is a scene whatever the players are doing. It is the event a
@@ -1160,8 +1267,8 @@ export function chooseScenes(
   // ball twenty metres while everybody stands still, so no measurement of how far players
   // stray from their interpolation will ever put a scene there.
   for (const f of changes) {
-    if (f - from < minGap || to - f < minGap) continue;
-    if (chosen.some((c) => Math.abs(c - f) < minGap)) continue;
+    if (f - from < eventGap || to - f < eventGap) continue;
+    if (chosen.some((c) => Math.abs(c - f) < eventGap)) continue;
     if (chosen.length >= maxScenes) break;
     // NOT subject to `backedFloor`. A pass is an observation of the ball and the two
     // players either end of it, and at a kick-off the rest of the roster is by definition

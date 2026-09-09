@@ -466,6 +466,50 @@ drawn from memory. What is left is short because THE TRACKER IS SHORT: a board c
 long as the roster is watched, and at today's fragmentation that is a handful of seconds. The
 fix for board length is upstream, not here.
 
+## D78 — A one-touch pass is a change of direction, not a hold
+A coach, on a Porto possession highlight: *"it shows the Porto GK pass to the opposition,
+which does not happen in the clip. Also the quick triangle associations are not present."*
+Two faults, and the second is the more interesting.
+
+**`carrierAt`'s hold test asks who KEEPS the ball**, which is what tells a receiver from a
+player the ball merely flew over (D71) — and it is exactly wrong about the football a coach
+most wants drawn. One-touch play is nobody keeping it: the ball arrives, leaves in a new
+direction, and the man who did it never has it for the 0.4 s the test asks for. So the board
+drew a move of six passes as one player carrying the ball forty metres.
+
+`touchedAt` answers the other question: who turned it. A change of direction beside somebody
+is the thing a fly-over cannot fake, because a ball crossing a player carries straight on.
+Speed is required on both sides of the turn, so a metre of position noise on a dawdling ball
+— which this camera has — cannot become a right angle. Where the hold test says nothing, the
+turn does.
+
+**And events may sit closer together than scenes.** `MIN_SCENE_GAP_S` exists to stop the
+deviation test describing a jittery detector; a pass is not jitter. At 0.4 s the second and
+third passes of a quick exchange land inside the first's shadow and are dropped, so events now
+have their own 0.2 s gap.
+
+**Measured across the six clips with truth, one change at a time:**
+
+    passes drawn vs played        drawn   right   precision   recall
+    before                          11       9       82%        38%
+    + the touch                     13      10       77%        41%
+    + the event gap                 16      13       81%        52%
+
+Fourteen points of recall for one of precision, and the coach's own board goes from three
+named carriers to five. The gap trades four points of precision for seven of recall on its
+own, which is the one judgement call here: an invented pass is this project's expensive error
+(D71, D72), and 0.2 s was still chosen, because a possession highlight with the possession
+taken out is not a board a coach can use either.
+
+**The keeper's pass to nobody in particular.** The other half of his report was simpler and
+worse. The player who received it wears a kit the split could not read — his signature sits
+exactly between the two sides — so D72 declines him, the board does not field him, and
+`nearestTo` stepped over him to the next player along, who was an opponent. A track nobody can
+name now BLOCKS: nearer the ball than anybody nameable means nobody is named. It changes
+nothing on the six SoccerNet clips, where almost every track has a side, and it removes an
+invented turnover from the clip that found it. Officials are not blockers — `unknown` means
+the side could not be read, `referee` means it was read and there isn't one.
+
 ## D77 — The board wears the kits from the clip when the file knows them
 Pitchboard paints `home` red and `away` blue, and the importer calls `home` whichever side
 defends the nearer goal (football-tracks D63). On a coach's own clip that made Manchester

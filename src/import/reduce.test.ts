@@ -8,6 +8,8 @@ import {
   KICK_S,
   kickedBy,
   scored,
+  touchedAt,
+  touches,
   leftBehind,
   chooseScenes,
   witnessed,
@@ -730,6 +732,70 @@ describe("whose boot a flight came off", () => {
   });
 });
 
+describe("one-touch play", () => {
+  const runner = track(1, "home", [[1, 20, 30], [40, 20, 30]]);
+  const other = track(2, "away", [[1, 60, 60], [40, 60, 60]]);
+  const players = [
+    { id: "home-1", track: runner },
+    { id: "away-1", track: other },
+  ];
+  const ball = (f: number, x: number, y: number) => ({ f, x, y, conf: 0.9 });
+
+  it("is a change of direction beside somebody, not a hold", () => {
+    // Arrives at him along x, leaves along y: the hold test sees nobody keeping it and
+    // says nothing, which is how a coach's possession highlight came back as one player
+    // carrying the ball the length of the move.
+    const turned = [
+      ball(15, 14, 30),
+      ball(17, 16.5, 30),
+      ball(19, 19, 30),
+      ball(21, 20, 32),
+      ball(23, 20, 36),
+      ball(25, 20, 40),
+    ];
+    expect(carrierAt(turned, players, 19, undefined, 25)).toBeNull();
+    expect(touchedAt(turned, players, 19, 25)).toBe("home-1");
+    expect(touches(turned, [runner, other], 25)).toContain(19);
+  });
+
+  it("is not a ball flying past him in a straight line", () => {
+    const across = Array.from({ length: 11 }, (_, i) => ball(15 + i * 2, 10 + i * 2.5, 30));
+    expect(touchedAt(across, players, 19, 25)).toBeNull();
+  });
+
+  it("is not the wobble of a ball barely moving", () => {
+    // A metre of position noise on a slow ball is a right angle, and this camera has one.
+    const dawdle = [
+      ball(15, 19.8, 30),
+      ball(17, 20.0, 30.1),
+      ball(19, 20.1, 29.9),
+      ball(21, 20.0, 30.2),
+      ball(23, 20.2, 30.0),
+    ];
+    expect(touchedAt(dawdle, players, 19, 25)).toBeNull();
+  });
+});
+
+describe("a player whose side nobody could read", () => {
+  const ball = (f: number, x: number, y: number) => ({ f, x, y, conf: 0.9 });
+  const named = [{ id: "away-1", track: track(2, "away", [[10, 23, 30], [20, 23, 30]]) }];
+  const unreadable = track(3, "unknown", [[10, 21, 30], [20, 21, 30]]);
+
+  it("blocks the ball rather than being stepped over", () => {
+    // The keeper's pass was received by a shirt the split could not read, so the board
+    // handed it to the next-nearest player -- an opponent -- and drew a keeper passing to
+    // the opposition on a clip where that never happened.
+    const seen = [ball(15, 20, 30)];
+    expect(carrierAt(seen, named, 15)).toBe("away-1");
+    expect(carrierAt(seen, named, 15, undefined, undefined, [unreadable])).toBeNull();
+  });
+
+  it("does not block when the ball is not his either", () => {
+    const seen = [ball(15, 24, 30)];
+    expect(carrierAt(seen, named, 15, undefined, undefined, [unreadable])).toBe("away-1");
+  });
+});
+
 describe("a silence the ball moved across", () => {
   const players = [track(1, "home", [[10, 20, 30], [40, 20, 30]])];
   const ball = (f: number, x: number, y: number) => ({ f, x, y, conf: 0.9 });
@@ -873,8 +939,9 @@ describe("the ball on a board", () => {
     const result = boardFromTracks(withBall(seen));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const left = result.frames.find((f) => f >= 21 && f <= 26);
-    expect(left).toBeDefined();
+    // At the touch that sent it, or the first sighting clear of everybody: either is the
+    // moment it left, and which one is marked depends on whether the turn was visible.
+    expect(result.frames.find((f) => f >= 15 && f <= 26)).toBeDefined();
   });
 
   it("names the player a flight came off, so the pass has a passer", () => {

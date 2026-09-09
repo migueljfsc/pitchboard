@@ -394,6 +394,13 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
   receiver and a shot both end with the ball in nobody's possession, and a board built only from
   carriers draws them as a dribble. `flights` makes the moment it comes loose a scene, and a
   scene naming nobody draws the ball where it was seen -- if that sighting is on the field.
+- **A one-touch pass is a change of DIRECTION, not a hold** (D78). The hold test asks who keeps
+  the ball, which is right about a fly-over and wrong about quick play -- nobody keeps it.
+  `touchedAt` answers where the hold test is silent, and events get their own scene gap (0.2 s)
+  because three passes in a second otherwise collapse into one.
+- **A track whose side nobody could read BLOCKS the ball** (D78). Stepping over it hands the
+  ball to the next player along, who may be an opponent -- that is how a keeper came to pass to
+  the opposition on a clip where he never did. `referee` is not a blocker: that side WAS read.
 - **A shot is a SILENCE, not a sighting** (D76). Nobody sees a struck ball until it is in the
   net, so `breaks` marks both ends of a gap the ball moved across -- and the departure only
   where somebody still had it, or a pass in flight gets split in two.

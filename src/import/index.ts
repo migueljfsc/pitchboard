@@ -44,6 +44,8 @@ import {
   sighted,
   splitImpossible,
   steady,
+  touchedAt,
+  touches,
 } from "./reduce";
 import { tracksSchema, type Track, type TracksFile } from "./tracks";
 
@@ -209,6 +211,16 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   const kept = [...sides.home, ...sides.away];
   if (kept.length === 0) return { ok: false, error: msg("import.tracks.empty") };
 
+  // On the pitch, and nameable by nobody: a track whose side the kit could not settle
+  // (D72). The board cannot field them -- half would be in the wrong colour -- but the
+  // ball can still be at their feet, and pretending they are not there hands it to the
+  // next player along, who may be an opponent.
+  //
+  // Officials are NOT among them. `unknown` means the side could not be read; `referee`
+  // means it was read and there isn't one, and a linesman standing near the ball is not a
+  // reason to refuse to say who has it.
+  const unnamed = players.filter((t) => t.team === "unknown" && onPitch(t, file.pitch));
+
   // How much of the board is real at a frame, for the roster this passage actually fields.
   const backedAt = (f: number) =>
     kept.filter((t) => t.samples.some((s) => Math.abs(s.f - f) <= tol)).length /
@@ -232,6 +244,9 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     // between the boot and the net, so without these the board carries it on the striker
     // and then drifts it into the goal over whatever the next scene happens to be.
     ...breaks(ballSamples, kept, file.source.fps),
+    // And every touch: a one-touch pass is over before the hold test can see it, so
+    // without these the board draws a move of six passes as one player carrying.
+    ...touches(ballSamples, kept, file.source.fps, undefined, unnamed),
   ].sort((a, b) => a - b);
   const events = [
     ...(kick !== null && kick >= from && kick <= to ? [kick] : []),
@@ -285,7 +300,13 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   // the pass Pitchboard draws (D43, D44).
   const withIds = kept.map((track) => ({ id: idOf.get(track)!, track }));
   // With `fps`, so a scene asks who HOLDS the ball rather than who it is passing over.
-  const found = frames.map((f) => carrierAt(ballSamples, withIds, f, undefined, file.source.fps));
+  // Who holds it, or -- where nobody does -- who turned it, which is what one-touch play
+  // looks like from the outside (D78 in this file's numbering: `touchedAt`).
+  const found = frames.map(
+    (f) =>
+      carrierAt(ballSamples, withIds, f, undefined, file.source.fps, unnamed) ??
+      touchedAt(ballSamples, withIds, f, file.source.fps, undefined, unnamed),
+  );
 
   // Before the first sighting the ball is somewhere, and it is not with the player who
   // eventually picks it up. Handing those scenes to that player puts it metres from where
@@ -324,7 +345,7 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   // away from the centre spot, which is not football.
   // Where the ball is in the air or dead, metres from everybody: the file says where it is
   // and says nobody has it, and both halves of that are worth drawing (D44).
-  const loose = frames.map((f) => looseAt(ballSamples, withIds, f));
+  const loose = frames.map((f) => looseAt(ballSamples, withIds, f, undefined, unnamed));
 
   const takerId = taker ? (idOf.get(taker) ?? null) : null;
   let holder: string | null = null;
