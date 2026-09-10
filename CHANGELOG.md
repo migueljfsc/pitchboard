@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.49.0 (2026-09-10)
+
+### Feat
+
+- **import**: keep room on the board for the players the ball goes through
+
 ## v0.48.0 (2026-09-09)
 
 ### Feat
