@@ -394,6 +394,10 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
   receiver and a shot both end with the ball in nobody's possession, and a board built only from
   carriers draws them as a dribble. `flights` makes the moment it comes loose a scene, and a
   scene naming nobody draws the ball where it was seen -- if that sighting is on the field.
+- **The roster keeps room for whoever the ball goes through** (D80). Coverage ranks the other
+  twenty-one; the man on the ball is reserved like a restart's taker, or the pass he receives
+  lands on grass because he is not on the board. It costs density -- he is less watched than the
+  players standing in shot -- and the window's honesty floor is measured before he is added.
 - **A ball nobody holds is drawn at the nearest player's FEET** (D79), not at the sighting: a
   metre and a half is the camera model, and a pass drawn into the gap beside a player reads as a
   pass into space. It does not name him -- the hold test already declined that.

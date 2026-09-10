@@ -1210,6 +1210,42 @@ export function breaks(
   return out;
 }
 
+/** Fewest sightings a player must be nearest the ball at before the board must field him. */
+export const MIN_ON_THE_BALL = 5;
+
+/**
+ * The players the football goes through in a passage: whoever is nearest the ball, close
+ * enough to have it, for more than a moment.
+ *
+ * The roster is capped at eleven a side and ranked by how much of the passage each player
+ * was watched for, which is right for the twenty-one players who are not on the ball and
+ * wrong for the one who is. A man who appears for a third of the window and receives the
+ * pass the clip is about loses his place to a defender who stood in shot throughout, and
+ * the pass then lands on grass: the board draws the ball at his feet and he is not there
+ * to have it. `restartAt`'s taker is reserved for exactly this reason (D53); this is the
+ * same rule for open play.
+ */
+export function onTheBall(
+  ball: Sample[],
+  tracks: Track[],
+  from: number,
+  to: number,
+  radiusM = CARRIER_RADIUS_M,
+): Set<Track> {
+  const players = tracks.map((track, i) => ({ id: String(i), track }));
+  const counted = new Map<string, number>();
+  for (const s of ball) {
+    if (s.f < from || s.f > to) continue;
+    const who = nearestTo(ball, players, s.f, radiusM);
+    if (who !== null) counted.set(who, (counted.get(who) ?? 0) + 1);
+  }
+  const out = new Set<Track>();
+  for (const [id, seen] of counted) {
+    if (seen >= MIN_ON_THE_BALL) out.add(players[Number(id)].track);
+  }
+  return out;
+}
+
 /**
  * The nearest player to the ball at a frame, inside the radius, and nothing more.
  *

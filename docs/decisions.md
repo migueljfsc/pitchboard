@@ -466,6 +466,30 @@ drawn from memory. What is left is short because THE TRACKER IS SHORT: a board c
 long as the roster is watched, and at today's fragmentation that is a handful of seconds. The
 fix for board length is upstream, not here.
 
+## D80 — The board keeps room for the players the ball goes through
+The roster is capped at eleven a side and ranked by how much of the passage each player was
+watched for. That is right about the twenty-one players who are not on the ball and wrong about
+the one who is: a man who appears for a third of the window and receives the pass the clip is
+about loses his place to a defender who stood in shot throughout, and the pass then lands on
+grass — the board draws the ball at his feet and he is not there to have it.
+
+`restartAt`'s taker has been reserved for exactly this reason since D53. `onTheBall` is the same
+rule for open play: whoever is nearest the ball, inside the carrier radius, for more than a
+moment (`MIN_ON_THE_BALL` sightings) keeps a slot, and the coverage ranking fills what is left.
+
+**It costs density, and that is the trade.** The players the football goes through are by
+definition less watched than the ones standing in shot: the coach's clip goes from 69% to 60%
+of its drawn positions having a sighting behind them, and from seven of its nine possession
+changes drawn to **all nine**. SNGS-069 moves the same way, four points down and its eleven
+events intact; the other eleven boards do not move at all. A board whose ball is on somebody is
+worth more than one whose every position is backed and whose passes land in space — but it is a
+real cost, and the window chooser's own honesty floor (D67) is measured before these players
+are added back, so a board can now come out below it.
+
+Together with D85 on the producer's side, the coach's sequence reads off the board as he
+described it: keeper, to the middle, back to a defender, forward, and up. Nine changes of
+possession, none of them to the other team.
+
 ## D79 — A ball nobody is holding is drawn at the nearest player's feet
 Same coach, one round later, on a board that had just started showing his passing move:
 *"the passes are not landing to players directly, instead it seems like it's doing passes to

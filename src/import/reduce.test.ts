@@ -8,6 +8,7 @@ import {
   KICK_S,
   kickedBy,
   atFeet,
+  onTheBall,
   scored,
   touchedAt,
   touches,
@@ -857,6 +858,28 @@ describe("the kits a board wears", () => {
     expect(out.ok).toBe(true);
     if (!out.ok) return;
     expect(out.doc.teams.map((t) => t.textColor)).toEqual(["#000000", "#ffffff"]);
+  });
+});
+
+describe("the players the ball goes through", () => {
+  const ball = (f: number, x: number, y: number) => ({ f, x, y, conf: 0.9 });
+  const onIt = track(1, "home", [[10, 20, 30], [40, 20, 30]]);
+  const elsewhere = track(2, "home", [[10, 70, 60], [40, 70, 60]]);
+  const seen = Array.from({ length: 10 }, (_, i) => ball(12 + i, 20.5, 30));
+
+  it("are the ones the roster must keep room for", () => {
+    const got = onTheBall(seen, [onIt, elsewhere], 1, 40);
+    expect(got.has(onIt)).toBe(true);
+    expect(got.has(elsewhere)).toBe(false);
+  });
+
+  it("do not include a player the ball merely passed", () => {
+    const brief = [ball(12, 20.5, 30), ball(13, 30, 30), ball(14, 40, 30)];
+    expect(onTheBall(brief, [onIt, elsewhere], 1, 40).size).toBe(0);
+  });
+
+  it("are counted inside the window only", () => {
+    expect(onTheBall(seen, [onIt, elsewhere], 30, 40).size).toBe(0);
   });
 });
 

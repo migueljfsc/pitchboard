@@ -32,6 +32,7 @@ import {
   observed,
   STILL_M,
   onPitch,
+  onTheBall,
   SCENE_BACKED_FLOOR,
   WITNESS_TOL_S,
   witnessed,
@@ -188,10 +189,12 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   // Best-observed first, then cut to a legal eleven. Coverage is the ranking because a
   // fragment is by definition the shorter half of something, so the players actually
   // watched through the passage are the ones that survive. The keeper takes the first
-  // slot rather than competing for one.
+  // slot rather than competing for one, and so does anybody the ball goes through: the
+  // ranking is right about the twenty-one players who are not on the ball.
+  const involved = onTheBall(ballSamples, players, from, to);
   for (const side of ["home", "away"] as const) {
     const keeper = keepers[side];
-    const reserved = sides[side].filter((t) => t === taker);
+    const reserved = sides[side].filter((t) => t === taker || involved.has(t));
     const room = MAX_PER_SIDE - (keeper ? 1 : 0) - reserved.length;
     if (sides[side].length - reserved.length > room) {
       sides[side] = [
@@ -212,17 +215,18 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   const kept = [...sides.home, ...sides.away];
   if (kept.length === 0) return { ok: false, error: msg("import.tracks.empty") };
 
-  // On the pitch, and nameable by nobody: a track whose side the kit could not settle
-  // (D72). The board cannot field them -- half would be in the wrong colour -- but the
-  // ball can still be at their feet, and pretending they are not there hands it to the
-  // next player along, who may be an opponent.
+  // On the pitch, and NOT ON THE BOARD: a track whose side the kit could not settle (D72),
+  // or one squeezed out of a full eleven. Either way the ball can be at their feet, and
+  // pretending they are not there hands it to the next player along, who may be an
+  // opponent -- which is how a goalkeeper came to pass to the opposition on a clip where
+  // he never lost the ball.
   //
-  // Officials are NOT among them. `unknown` means the side could not be read; `referee`
-  // means it was read and there isn't one, and a linesman standing near the ball is not a
-  // reason to refuse to say who has it.
+  // Officials are NOT among them. A linesman standing near the ball is not a reason to
+  // refuse to say who has it; he is simply not a candidate.
+  const fielded = new Set(kept);
   const unnamed = file.tracks
     .flatMap((t) => splitImpossible(t, file.source.fps, undefined, file.source.intervalS))
-    .filter((t) => t.team === "unknown" && onPitch(t, file.pitch));
+    .filter((t) => !fielded.has(t) && t.team !== "referee" && onPitch(t, file.pitch));
 
   // How much of the board is real at a frame, for the roster this passage actually fields.
   const backedAt = (f: number) =>
