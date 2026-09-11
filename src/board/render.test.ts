@@ -412,7 +412,7 @@ describe("link colour", () => {
     drawBoard(r.ctx, doc, 0, view());
 
     expect(r.log).toContain('strokeStyle="#123456"');
-    expect(r.log).not.toContain('strokeStyle="#e11d48"');
+    expect(r.log).not.toContain('strokeStyle="#f59e0b"');
   });
 });
 

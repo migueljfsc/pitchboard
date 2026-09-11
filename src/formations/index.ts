@@ -339,10 +339,22 @@ export function buildSquad(
 
 export const DEFAULT_PITCH = { length: 105, width: 68 } as const;
 
+/**
+ * The two colours a board wears when the clip could not say what the kits were.
+ *
+ * Amber and violet, and deliberately NOT red and blue: those are the two most common kits
+ * in football, so they are the two most likely to be read as real. A coach importing
+ * Sporting against Galatasaray got his hooped side painted red and the actually-red side
+ * painted blue, and spent six rounds of feedback translating the board back to the game.
+ *
+ * These are picker swatches like any other, so a coach who wants the real colours can set
+ * them in two clicks -- and where the clip DOES measure the kits, `boardFromTracks` uses
+ * those instead and never reaches here (D92 in football-tracks).
+ */
 export const HOME: TeamSpec = {
   id: "home",
   name: "Home",
-  color: "#e11d48",
+  color: "#f59e0b",
   textColor: "#ffffff",
   formation: DEFAULT_FORMATION,
   direction: "left",
@@ -351,7 +363,7 @@ export const HOME: TeamSpec = {
 export const AWAY: TeamSpec = {
   id: "away",
   name: "Away",
-  color: "#2563eb",
+  color: "#7c3aed",
   textColor: "#ffffff",
   formation: "4-4-2",
   direction: "right",
