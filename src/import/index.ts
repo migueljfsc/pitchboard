@@ -411,6 +411,13 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   // it saw nobody they stay empty rather than being handed to a player who never had it.
   const struck =
     adrift >= 0 ? kickedBy(ballSamples, withIds, frames[adrift], file.source.fps) : null;
+  // And only back to the last scene somebody WAS named at. The ball was his from when he
+  // got it until he struck it, which is not the same as everything before it: on a clip
+  // whose only unattributable flight is the final scene, "everything before it" handed the
+  // opening to the man who shot at the end -- the board drew the ball at the far
+  // goalkeeper's feet for four scenes while the play was sixty metres away (D84).
+  let held = -1;
+  for (let i = 0; i < adrift; i++) if (carriers[i] !== null) held = i;
 
   // A scene the file could not name a holder at — as opposed to one where it says there
   // is none — belongs to the next player known to hold the ball. That is the old "it
@@ -419,13 +426,26 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   // the man who took it, instead of the ball going missing in between and arriving in two
   // hops.
   const next = (i: number) => carriers.slice(i + 1).find((c) => c !== null) ?? null;
+  // Whoever is chosen has to have been ON THE PITCH at that scene. `nearestTo` already
+  // refuses to name a player outside his own track's span -- `positionAt` clamps, so a man
+  // first seen at frame 353 answers about frame 1 with the position he will eventually
+  // reach -- and both of these backfills walked straight past that guard. The coach's board
+  // opened with the ball at the away goalkeeper's feet, sixty metres from the play, three
+  // hundred frames before his track began (D84).
+  const there = (id: string | null, f: number) => {
+    if (id === null) return null;
+    const track = withIds.find((w) => w.id === id)?.track;
+    if (!track) return null;
+    const span = [track.samples[0].f, track.samples[track.samples.length - 1].f];
+    return f >= span[0] && f <= span[1] ? id : null;
+  };
   for (let i = 0; i < carriers.length; i++) {
     if (carriers[i] !== null || denied[i] || loose[i] !== null) continue;
     // The opening scene keeps the ball's own position when there is one — that is the
     // restart, and it is what makes the kick a pass FROM the spot rather than a player
     // arriving already holding it.
     if (i === 0 && resting[0] !== null) continue;
-    carriers[i] = adrift >= 0 && i < adrift ? struck : next(i);
+    carriers[i] = there(adrift >= 0 && i > held && i < adrift ? struck : next(i), frames[i]);
   }
 
   // What the board draws for the ball at each scene, where it names nobody: at the feet of

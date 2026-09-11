@@ -387,6 +387,13 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
   traps inside it: it must keep filling when the clip is already covered (stopping at zero gain
   fields nine a side), and coverage is a DEPTH not a flag (1/(1+n)), or a second player in a
   thin passage is worth nothing and the board loses the shape of a press.
+- **`positionAt` CLAMPS, so any rule that names a player must check he was THERE** (D84).
+  `nearestTo` does; both carrier backfills did not, and a board opened with the ball at a
+  goalkeeper's feet three hundred frames before his track began, sixty metres from the play.
+  The same trap is one edit away anywhere a scene is handed an id rather than finding one.
+- **"The scenes before the flight belong to whoever struck it" needs a floor** (D84). When the
+  only unattributable flight is the last scene, "before it" is the entire board. The ball was
+  his from when he GOT it: stop at the last scene somebody was named at.
 - **A ball in the AIR is not where the board would draw it** (D83, and D66 before it). Its
   projection bows away from the near touchline and back, by up to ten metres -- a signature no
   rolling ball has. `airborne` drops those frames before anything reads the ball, so one loft

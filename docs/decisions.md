@@ -466,6 +466,49 @@ drawn from memory. What is left is short because THE TRACKER IS SHORT: a board c
 long as the roster is watched, and at today's fragmentation that is a handful of seconds. The
 fix for board length is upstream, not here.
 
+## D84 — A backfilled carrier still has to have been on the pitch
+
+Two rules hand the ball to somebody at a scene the file could not name a holder at: it goes
+to the next player known to hold it, or -- for the scenes before a flight nobody was named at
+either end of -- to whoever struck that flight. Both walked straight past the guard that
+`nearestTo` applies four lines away:
+
+    // `positionAt` CLAMPS outside a track's range, so a player first seen at frame 268
+    // reports that position when asked about frame 1 -- and the ball is handed to somebody
+    // who is not on the pitch yet.
+
+A coach reported the ball "completely missing from the initial scenes". It was not missing.
+It was drawn at the away goalkeeper's feet, at (100.5, 34.8), for the first four scenes of a
+board whose play was sixty metres away at the other end -- and his track did not begin until
+frame 353, three hundred frames after the scenes it was decorating.
+
+Two faults, one shape.
+
+**The `struck` rule had no floor.** "The scenes before the first unattributable flight are the
+kicker's" is right when that flight is early and wrong when it is the last scene on the board,
+because then "before it" is the whole clip. On this one `adrift` was scene 14 of 15, so the
+man who shot at the end was given the opening. The ball was his from when he GOT it, which is
+not the same as everything before it: the fill now stops at the last scene somebody was named
+at.
+
+**And both rules could name an absent player.** The fix is the guard the rest of the file
+already keeps -- a carrier has to be inside his own track's span at that scene, or the scene
+names nobody.
+
+    scene   before              after
+    f  1    away-1  no sighting  home-1  no sighting
+    f 72    away-1  60.3 m out   home-1   9.0 m out
+    f165    away-1  69.0 m out   home-1  16.8 m out
+    f190    away-1  63.6 m out   home-1   9.5 m out
+
+The remaining gap is a different question and an open one: those three scenes are a ball in
+flight, and the board deliberately attaches a flight to its receiver so the pass is drawn as
+one movement rather than the ball arriving in hops. Nine metres is that rule working. Sixty
+was this bug.
+
+Nothing else moved: thirteen boards are identical, and the coach's clip goes from 8 to 15
+scenes with density 53% to 65%.
+
 ## D83 — A lofted ball is one pass, and its projected arc is not where it went
 
 A homography puts everything on the grass (D66), so a ball in the air is projected down the

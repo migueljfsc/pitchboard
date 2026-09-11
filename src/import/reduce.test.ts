@@ -1128,3 +1128,53 @@ describe("airborne", () => {
     expect(airborne(rising, 25).size).toBe(0);
   });
 });
+
+describe("the ball is never given to somebody who was not there", () => {
+  /** On screen only from `at`, standing still. */
+  const arrivesAt = (id: number, team: string, at: number, to: number, x: number, y: number) =>
+    track(
+      id,
+      team,
+      Array.from({ length: to - at + 1 }, (_, i) => [at + i, x, y] as [number, number, number]),
+    );
+
+  it("does not backfill a scene with a player whose track has not started", () => {
+    // `nearestTo` refuses to name a player outside his own track's span, because
+    // `positionAt` CLAMPS -- a man first seen at frame 200 answers about frame 1 with the
+    // position he will eventually reach. Both backfills walked past that guard, and the
+    // coach's board opened with the ball at the away goalkeeper's feet, sixty metres from
+    // the play, three hundred frames before his track began (D84).
+    //
+    // Six metres from the ball is the band that triggers it: too far to carry (four), too
+    // near for the ball to count as loose (eight), so the scene is neither held nor free
+    // and falls through to the backfill.
+    const early = [
+      arrivesAt(1, "home", 1, 300, 50, 54),
+      arrivesAt(2, "away", 1, 300, 44, 60),
+    ];
+    const late = [
+      arrivesAt(3, "home", 200, 300, 94, 34),
+      arrivesAt(4, "away", 200, 300, 91, 36),
+    ];
+    const ball = [
+      ...Array.from({ length: 60 }, (_, i) => ({ f: 20 + i, x: 50, y: 60 })),
+      ...Array.from({ length: 25 }, (_, i) => ({ f: 250 + i, x: 94, y: 34 })),
+      ...Array.from({ length: 20 }, (_, i) => ({ f: 281 + i, x: 60, y: 10 })),
+    ];
+    const result = boardFromTracks({
+      ...file([...early, ...late], 300),
+      ball: { samples: ball },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const sources = result.sources as Record<string, Track>;
+    for (const [i, scene] of result.doc.scenes.entries()) {
+      if (scene.carrier === null) continue;
+      const t = sources[scene.carrier];
+      const f = result.frames[i];
+      expect(f).toBeGreaterThanOrEqual(t.samples[0].f);
+      expect(f).toBeLessThanOrEqual(t.samples[t.samples.length - 1].f);
+    }
+  });
+});
