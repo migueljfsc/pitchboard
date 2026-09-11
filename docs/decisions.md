@@ -466,6 +466,142 @@ drawn from memory. What is left is short because THE TRACKER IS SHORT: a board c
 long as the roster is watched, and at today's fragmentation that is a handful of seconds. The
 fix for board length is upstream, not here.
 
+## D83 — A lofted ball is one pass, and its projected arc is not where it went
+
+A homography puts everything on the grass (D66), so a ball in the air is projected down the
+camera ray and lands further from the camera the higher it is. The coach's goalkeeper lofted
+one 35 metres and the board drew it as two passes. This is the phantom:
+
+    f199   (7.4, 41.7)    at the keeper's feet
+    f220  (12.8, 25.7)    reappears already 16 m away -- the ball is climbing
+    f256  (25.8, 17.0)    the apex, 9.5 m off the straight line, out by the far touchline
+    f301  (42.1, 27.4)    coming back down
+
+`breaks` put a scene at f220 with nobody carrying, D79 drew the loose ball at the nearest
+player's feet, and one kick became a pass to a bystander and a pass on. The coach read it
+immediately: "its just one pass, loft, from the gk to the midfield player".
+
+The bow is the tell, and it is a signature no ball rolling on the grass has: the deviation is
+one-signed, peaks in the middle, and always points AWAY from the near touchline, because
+that is the direction the camera's ray displaces a rising ball. A curled pass bends either
+way and by a metre or two.
+
+The bow alone is not enough, because the runs being judged are delimited by the ball being
+LOST rather than by it landing. On SNGS-100 the ball is located on 134 frames of the clip and
+one run of 124 of them curves gently across the pitch: it passes the bow test and is five
+seconds of ordinary football. `MAX_AIR_S` is the second half of the test, and it is physics
+rather than tuning -- a goal kick hangs two to three seconds, nothing struck by a foot hangs
+five. With it, the detector fires on three clips of fourteen, at 1.3 s, 1.7 s and 2.5 s.
+
+Those frames are dropped before anything reads the ball, so no scene lands on them, no
+carrier is claimed from them, and the pass is drawn once. The coach's board goes from
+`keeper -> phantom -> midfielder` to `keeper -> midfielder`, and the other eleven clips do
+not move.
+
+## D82 — The eleven that cover the clip, not the eleven seen longest
+
+Ranking players by how much of the clip they were watched for sounds like the same question
+as "which eleven should the board field" and is not. Since D81 the window is the whole clip,
+and on a clip that follows the ball the length of the pitch, being in shot for a long time
+means being wherever the camera settled. Every player from the first half of a move loses his
+slot to one who had not arrived yet.
+
+The coach found it in one sentence: "the away team is pressing much higher than the board
+suggests, at least two players are very close to the GK". They were. Galatasaray's t11 stood
+7 m off his goalkeeper and t4 12 m off, and NEITHER was on the board -- both cut for players
+who first appear forty metres downfield a second later and were therefore "seen" for more of
+the clip. What the board showed instead was four away statues between x=43 and x=98 and
+nobody inside the box.
+
+So the roster is a greedy set cover over frames: repeatedly take whoever adds the most of the
+passage nobody chosen so far was seen in. A player watched throughout still takes the first
+slot, because he covers the most; a player watched only during the opening takes a later one,
+because by then the opening is what is missing.
+
+Two details, both found by measuring:
+
+* **It has to keep filling when the passage is already covered.** Stopping at zero marginal
+  gain fielded nine and ten a side across the benchmark. Eleven is a team; the remaining
+  slots go to the best-watched, which is what the ranking used to be.
+* **Coverage is a DEPTH, not a flag.** Plain set cover saturates, so with the opening covered
+  once a second player there is worth nothing and the slot goes downfield -- which keeps a
+  player on the board and loses the shape of the press. A frame already covered n times is
+  worth 1/(1+n).
+
+    observed player-seconds   060  279 -> 354    121  244 -> 272    Untitled  140 -> 152
+    density                        42% -> 53%         38% -> 42%              48% -> 53%
+    curves drawn                    72 -> 108          53 -> 65                 47 -> 52
+
+t11 is now on the board at (7.2, 34.9), with six Galatasaray players inside x=35 while the
+goalkeeper has the ball.
+
+**t4, the second man pressing, is still cut, and no ranking can field him.** Weighting each
+frame by how near the player was to the ball -- so somebody inside the box outbids somebody
+on the far touchline at the same moment -- was built and measured, and it changes the ORDER
+the eleven are picked in without changing the SET. Across fourteen boards the share of drawn
+positions backed by a sighting came to 543 points before and 542 after: a wash. Reverted.
+
+Because the constraint is not the ranking, it is the slots. Galatasaray produce FIFTEEN
+tracks across those thirteen seconds -- seven who are in shot for the build-up and leave, and
+five who walk into shot for the attack -- against eleven places on the board. Four have to go
+whoever is chosen, and t4 (frames 2-245) loses his to t28 (frames 278-595) because the board
+would otherwise stand a statue through the whole second half instead of the first. Both are
+real players; neither is on screen for the other's half.
+
+There is no fix for that inside the roster. A player is not eleven-a-side over a clip that
+travels the length of the pitch -- he is however many separate appearances the tracker
+resolved -- and the two ways out are upstream: join the fragments so fifteen tracks become
+eleven players (D69 measures the ceiling, and it is not full), or let a board field a player
+only for the scenes he was in, which `BoardDoc` cannot express.
+
+## D81 — The board is the whole clip, because a held position is not an invented one
+
+Every window rule here rested on one sentence from `chooseWindow`: "a track covering half the
+file forces the other half to be invented". A coach read a Sporting–Galatasaray board that
+began after his goalkeeper had already played the ball and said the premise was wrong — don't
+invent the positions you cannot see, just stop moving the player. Which is what `positionAt`
+has always done: outside a track's span it clamps to the first or last sighting, and there is a
+test named "holds position outside the span rather than extrapolating" saying why. The board
+was already honest about this at the position level and threw away half of every clip to buy
+honesty it had.
+
+The trims were also already conceding it, twice. The goalkeeper is exempt from the coverage
+test — "in shot only while play is there, so on a thirty-second window he sits near 16% where
+an outfielder sits near 80%, and both numbers are correct" — and so is the restart taker. Those
+were not special cases. On a clip that follows the ball eighty metres, that is most of the team.
+
+So: the window is the whole clip, and coverage RANKS the roster without excluding from it. The
+only bar left is `MIN_OBSERVED_S`, which asks whether a track is a player at all.
+
+    every clip now fields ELEVEN a side, against a ragged roster before:
+
+    SNGS-147   8 v 7  -> 11 v 11        SNGS-121   7 v 9  -> 11 v 11
+    SNGS-110  10 v 6  -> 11 v 11        SNGS-066   7 v 10 -> 11 v 11
+    Untitled   5 v 10 -> 11 v 11        SNGS-151   7 v 4  -> 11 v 11
+
+    and draws more of the football, because the passage is no longer cut around it:
+
+    passes drawn   SNGS-121  4 -> 10    SNGS-060  3 -> 8    SNGS-110  1 -> 6
+
+D52 had written SNGS-147 off — "its away side is only tracked early and its home side late, so
+no long window holds both. That is the upstream id switches, not the objective." It was the
+objective. A window that must show everybody at once cannot hold that clip; a board that holds
+people still can.
+
+The cost is real and it is the density column: 69% to 48% on the coach's clip, and 27-54%
+across the benchmark. That number now means "share of the board drawn from a live sighting"
+rather than "share of the board that is not fiction", and those were only ever the same number
+because the window was cut until they were.
+
+Two guards survive, both narrowed to what they are actually for. The ends are still trimmed,
+but only where NOTHING was seen — the seconds before the camera finds the play — rather than
+where less was seen, because half a roster is unseen at the first frame of any clip. And a ball
+event only pins the window open where somebody is visible at it: SNGS-100 has 348 straight
+frames with no player sampled at all, and the ball outlives the players there.
+
+`chooseWindow` is now unreferenced outside its own tests. It is left in place until the coach
+has read a board made this way.
+
 ## D80 — The board keeps room for the players the ball goes through
 The roster is capped at eleven a side and ranked by how much of the passage each player was
 watched for. That is right about the twenty-one players who are not on the ball and wrong about

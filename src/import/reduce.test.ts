@@ -3,6 +3,8 @@ import { PALETTE } from "@/components/ui/palette";
 import { AWAY, HOME } from "@/formations";
 import { boardFromTracks } from "./index";
 import {
+  airborne,
+  bestCover,
   breaks,
   carrierAt,
   KICK_S,
@@ -15,7 +17,6 @@ import {
   leftBehind,
   chooseScenes,
   witnessed,
-  chooseWindow,
   coverage,
   fitCurve,
   positionAt,
@@ -418,110 +419,6 @@ describe("chooseScenes", () => {
   });
 });
 
-describe("chooseWindow", () => {
-  const spanning = (id: number, a: number, b: number) =>
-    track(
-      id,
-      "home",
-      Array.from({ length: b - a + 1 }, (_, i) => [a + i, 10 + i * 0.1, 20] as [number, number, number]),
-    );
-
-  it("trims to where most players are on screen", () => {
-    // Two players for the whole clip and six who only arrive halfway. A board over the
-    // whole clip carries the six as invented positions for half its length; a board
-    // over the second half carries eight real ones.
-    const early = [spanning(1, 1, 300), spanning(2, 1, 300)];
-    const late = Array.from({ length: 6 }, (_, i) => spanning(10 + i, 230, 300));
-    const w = chooseWindow([...early, ...late], 1, 300, 25);
-    expect(w.from).toBeGreaterThanOrEqual(230);
-    expect(w.to).toBe(300);
-  });
-
-  it("keeps the whole clip when everyone is there for it", () => {
-    const all = Array.from({ length: 5 }, (_, i) => spanning(i, 1, 300));
-    expect(chooseWindow(all, 1, 300, 25)).toEqual({ from: 1, to: 300 });
-  });
-
-  it("will not trim below a passage worth watching", () => {
-    // Otherwise the densest window is always the single frame everybody appears in.
-    const all = [spanning(1, 1, 300), ...Array.from({ length: 8 }, (_, i) => spanning(10 + i, 290, 300))];
-    const w = chooseWindow(all, 1, 300, 25);
-    expect(w.to - w.from).toBeGreaterThanOrEqual(Math.round(2.5 * 25));
-  });
-
-  it("prefers the longer of two equally full windows", () => {
-    const all = Array.from({ length: 4 }, (_, i) => spanning(i, 1, 300));
-    const w = chooseWindow(all, 1, 300, 25);
-    expect(w.to - w.from).toBe(299);
-  });
-
-  it("takes a much longer window that is one fragment short of the fullest", () => {
-    // A fragment is not a player: an extra covering piece is often somebody already on
-    // the board, so one of them does not outweigh four times the football.
-    const whole = Array.from({ length: 5 }, (_, i) => spanning(i, 1, 300));
-    const late = [spanning(99, 230, 300)];
-    expect(chooseWindow([...whole, ...late], 1, 300, 25)).toEqual({ from: 1, to: 300 });
-  });
-
-  it("will not give up two", () => {
-    const whole = Array.from({ length: 5 }, (_, i) => spanning(i, 1, 300));
-    const late = [spanning(98, 230, 300), spanning(99, 230, 300)];
-    expect(chooseWindow([...whole, ...late], 1, 300, 25).from).toBeGreaterThanOrEqual(230);
-  });
-
-  it("does not count a side past what the board can field", () => {
-    // Fourteen home fragments and eleven are the same eleven once MAX_PER_SIDE has had
-    // them, so the window they crowd into is not fuller — only shorter.
-    const whole = Array.from({ length: 11 }, (_, i) => spanning(i, 1, 300));
-    const late = Array.from({ length: 14 }, (_, i) => spanning(50 + i, 230, 300));
-    expect(chooseWindow([...whole, ...late], 1, 300, 25)).toEqual({ from: 1, to: 300 });
-  });
-
-  it("prefers a passage it watched to a longer one it mostly remembers", () => {
-    // Both windows field the same four players. In the first they are on screen; in the
-    // second half the passage is a hole and the board would draw it from memory.
-    const watched = Array.from({ length: 4 }, (_, i) => spanning(i, 1, 150));
-    const holed = watched.map((t) =>
-      track(
-        t.id + 10,
-        "home",
-        t.samples
-          .filter((s) => s.f <= 40 || s.f >= 140)
-          .map((s) => [s.f + 150, s.x, s.y] as [number, number, number]),
-      ),
-    );
-    const w = chooseWindow([...watched, ...holed], 1, 300, 25);
-    expect(w.to).toBeLessThanOrEqual(160);
-  });
-
-  it("cannot be talked into a short window by fragments that clear the share", () => {
-    // Eight pieces of 1.4 s each clear MIN_COVERAGE inside a 2.5 s window and nowhere else,
-    // so counting them buys a passage a quarter the length for a roster nobody watched.
-    const whole = Array.from({ length: 4 }, (_, i) => spanning(i, 1, 300));
-    const brief = Array.from({ length: 8 }, (_, i) => spanning(20 + i, 237, 271));
-    expect(chooseWindow([...whole, ...brief], 1, 300, 25)).toEqual({ from: 1, to: 300 });
-  });
-
-  it("starts at a set piece even where fewer players are on screen", () => {
-    // The case this exists for. During a corner the players are bunched in the box
-    // occluding each other, so their tracks fragment and the count drops — and the
-    // window walked past four corners and a kick-off to the open play afterwards.
-    const early = [spanning(1, 1, 300), spanning(2, 1, 300)];
-    const late = Array.from({ length: 6 }, (_, i) => spanning(10 + i, 230, 300));
-    const w = chooseWindow([...early, ...late], 1, 300, 25, undefined, undefined, 100);
-    expect(w.from).toBeLessThanOrEqual(100);
-    expect(w.to).toBeGreaterThan(100);
-  });
-
-  it("changes nothing when the passage holds no set piece", () => {
-    const early = [spanning(1, 1, 300), spanning(2, 1, 300)];
-    const late = Array.from({ length: 6 }, (_, i) => spanning(10 + i, 230, 300));
-    const all = [...early, ...late];
-    expect(chooseWindow(all, 1, 300, 25, undefined, undefined, null)).toEqual(
-      chooseWindow(all, 1, 300, 25),
-    );
-  });
-});
 
 describe("restartAt", () => {
   const pitch = { length: 105, width: 68 };
@@ -1086,5 +983,148 @@ describe("the ball on a board", () => {
       expect(s.carrier).toBeNull();
       expect(s.ballPos).toBeUndefined();
     }
+  });
+});
+
+describe("the board is the whole clip", () => {
+  /** Seen for `count` frames from `at`, then out of shot for the rest of the clip. */
+  const glimpse = (id: number, team: string, y: number, at: number, count = 45) =>
+    track(
+      id,
+      team,
+      Array.from(
+        { length: count },
+        (_, i) => [at + i, 10 + i * 0.2, y] as [number, number, number],
+      ),
+    );
+
+  it("does not trim the opening away because half the roster walks in later", () => {
+    // The fault a coach reported: a clip that follows the ball eighty metres has one cast
+    // at the start and another at the end, and trimming to where most of the roster is on
+    // screen cut the goalkeeper's pass that began the move.
+    const early = [1, 2, 3, 4].map((i) => glimpse(i, i < 3 ? "home" : "away", 10 + i * 5, 1));
+    const late = [5, 6, 7, 8].map((i) => glimpse(i, i < 7 ? "home" : "away", 10 + i * 5, 150));
+    const result = boardFromTracks(file([...early, ...late], 200));
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.window.from).toBe(1);
+    expect(result.window.to).toBe(200);
+  });
+
+  it("fields a player seen for a moment rather than dropping him from the team", () => {
+    // Coverage ranks, it does not exclude. A player in shot for two seconds of a fifteen
+    // second clip is still one of the eleven, and leaving him out draws his side a man
+    // short -- which is worse football than drawing him held where he was last seen.
+    const most = [1, 2, 3].map((i) => glimpse(i, "home", 10 + i * 5, 1, 190));
+    const brief = glimpse(9, "home", 50, 150, 45);
+    const other = [5, 6].map((i) => glimpse(i, "away", 10 + i * 5, 1, 190));
+    const result = boardFromTracks(file([...most, brief, ...other], 200));
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(Object.values(result.sources).map((t) => t.id)).toContain(9);
+  });
+
+  it("still trims an opening nobody was seen in at all", () => {
+    // Held is an answer; no sighting anywhere is not. The seconds before the camera finds
+    // the play carry nothing to hold, so they are still cut.
+    const late = [1, 2, 3].map((i) => glimpse(i, i < 3 ? "home" : "away", 10 + i * 5, 120, 80));
+    const result = boardFromTracks(file(late, 200));
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.window.from).toBeGreaterThan(100);
+  });
+
+  it("draws a player who left the picture standing where he was last seen", () => {
+    const gone = glimpse(1, "home", 30, 1, 40);
+    const stays = [2, 3].map((i) => glimpse(i, i === 2 ? "home" : "away", 10 + i * 5, 1, 190));
+    const result = boardFromTracks(file([gone, ...stays], 200));
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const last = gone.samples[gone.samples.length - 1];
+    expect(positionAt(gone, 190)).toEqual({ x: last.x, y: last.y });
+  });
+});
+
+describe("bestCover", () => {
+  const seenFor = (id: number, from: number, to: number) =>
+    track(
+      id,
+      "home",
+      Array.from(
+        { length: to - from + 1 },
+        (_, i) => [from + i, 20 + i * 0.1, 30] as [number, number, number],
+      ),
+    );
+
+  it("keeps a player seen only at the start over a fourth one seen only at the end", () => {
+    // The coach's fault: on a clip that follows the ball the length of the pitch, ranking
+    // by how much of it a player was watched for hands every slot to whoever the camera
+    // ended on. Galatasaray's two pressing players were cut for players forty metres
+    // downfield, and the board showed an away side with nobody near the goalkeeper.
+    const late = [1, 2, 3, 4].map((i) => seenFor(i, 150, 300));
+    const early = seenFor(9, 1, 60);
+    const picked = bestCover([...late, early], 1, 300, 6, 4);
+    expect(picked.map((t) => t.id)).toContain(9);
+  });
+
+  it("fills every slot once the passage is covered rather than stopping", () => {
+    // Eleven is a team. A cover that stops when nothing new is added fields nine.
+    const all = [1, 2, 3, 4, 5].map((i) => seenFor(i, 1, 300));
+    expect(bestCover(all, 1, 300, 6, 4)).toHaveLength(4);
+  });
+
+  it("keeps coming back to a thin passage instead of abandoning it once covered", () => {
+    // Plain set cover saturates: with the opening covered once, a second player there is
+    // worth nothing and every remaining slot goes to the crowd, which keeps a player on
+    // the board and loses the SHAPE of a press. Scoring a frame at 1/(1+n) instead of a
+    // flag makes the sixth man in a crowd lose to the second in a thin passage.
+    const crowd = [1, 2, 3, 4, 5, 6].map((i) => seenFor(i, 100, 300));
+    const openers = [7, 8, 9].map((i) => seenFor(i, 1, 90));
+    const picked = bestCover([...crowd, ...openers], 1, 300, 6, 6);
+    expect(picked.filter((t) => t.id >= 7).length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("airborne", () => {
+  /** A ball whose projected path bows `bow` metres off the straight line and back. */
+  const arc = (from: number, to: number, bow: number) =>
+    Array.from({ length: to - from + 1 }, (_, i) => {
+      const t = i / (to - from);
+      return { f: from + i, x: 10 + t * 30, y: 30 - bow * Math.sin(Math.PI * t) };
+    });
+
+  it("finds a loft by the bow its own projection puts in it", () => {
+    // A homography puts everything on the grass, so a ball in the air lands further from
+    // the camera the higher it is -- by most at the apex. The coach's goalkeeper lofted
+    // one 35 m and the board drew two passes, the second of them to the phantom.
+    const air = airborne(arc(100, 160, 9), 25);
+    expect(air.size).toBeGreaterThan(0);
+    expect(air.has(130)).toBe(true);
+  });
+
+  it("leaves a ball rolling along the ground alone", () => {
+    expect(airborne(arc(100, 160, 0.5), 25).size).toBe(0);
+  });
+
+  it("leaves a ball curving towards the camera alone", () => {
+    // Only one direction is evidence. A ball lifted off the grass is projected AWAY from
+    // the near touchline; one bending the other way is bending, which balls do.
+    expect(airborne(arc(100, 160, -9), 25).size).toBe(0);
+  });
+
+  it("refuses to call five seconds of football a flight", () => {
+    // The runs this judges are delimited by the ball being LOST, not by it landing, so a
+    // long gentle curve across the pitch passes the bow test. Nothing kicked hangs that
+    // long: SNGS-100 had 91% of its ball called airborne before this.
+    expect(airborne(arc(100, 260, 9), 25).size).toBe(0);
+  });
+
+  it("leaves a bow that never comes down alone", () => {
+    const rising = arc(100, 160, 9).filter((s) => s.f <= 130);
+    expect(airborne(rising, 25).size).toBe(0);
   });
 });

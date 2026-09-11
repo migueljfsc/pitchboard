@@ -18,7 +18,6 @@ import {
   CARRIER_RADIUS_M,
   carrierAt,
   chooseScenes,
-  chooseWindow,
   BALL_EDGE_M,
   breaks,
   fitCurve,
@@ -26,14 +25,14 @@ import {
   handovers,
   kickedBy,
   MAX_PER_SIDE,
-  MIN_COVERAGE,
   MIN_OBSERVED_S,
+  airborne,
+  bestCover,
   MIN_WINDOW_S,
   observed,
   STILL_M,
   onPitch,
   onTheBall,
-  SCENE_BACKED_FLOOR,
   WITNESS_TOL_S,
   witnessed,
   positionAt,
@@ -73,7 +72,6 @@ export type ImportOptions = {
   /** What the board and its scenes are called. Passed in so a board made in Portuguese
    *  is seeded in Portuguese — locale never enters `BoardDoc` (D38). */
   labels?: { board?: string; scene?: string };
-  minCoverage?: number;
   /** How far a player must stray from the interpolation before a frame becomes a scene. */
   sceneToleranceM?: number;
   /** Most scenes to make. */
@@ -91,7 +89,6 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     return { ok: false, error: msg("import.tracks.invalid") };
   }
 
-  const minCoverage = options.minCoverage ?? MIN_COVERAGE;
   // How far either side of a sample a position may be drawn from it. Everything that asks
   // "how much of this player did we see" asks it with the same tolerance as the window
   // chooser, or the board fields a roster the passage was not chosen for.
@@ -107,17 +104,22 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     .filter((t) => sideOf(t) !== null && onPitch(t, file.pitch));
   // Read before the window is chosen, because it is one of the things choosing it: a
   // board made of a corner clip that does not contain the corner is the wrong board.
-  const ballSamples = file.ball?.samples ?? [];
-  const { from, to } = chooseWindow(
-    players,
-    file.source.startFrame,
-    file.source.endFrame,
-    file.source.fps,
-    minCoverage,
-    undefined,
-    restartAt(ballSamples, file.pitch, file.source.fps),
-    handovers(ballSamples, players, file.source.fps),
-  );
+  const located = file.ball?.samples ?? [];
+  // Dropped before anything reads the ball. A lofted ball's projected position is not
+  // where the ball is -- it runs out to the apex of an arc that exists only because the
+  // homography puts everything on the grass -- so a scene placed there draws one kick as
+  // two passes, through whichever player the phantom happened to pass over (D83).
+  const flying = airborne(located, file.source.fps);
+  const ballSamples = located.filter((s) => !flying.has(s.f));
+  // THE WHOLE CLIP. The board used to be trimmed to the best-watched passage inside it,
+  // to stop a track covering half the file forcing the other half to be invented — and
+  // the premise was wrong. A position outside a track's span is not invented, it is HELD:
+  // `positionAt` clamps to the first or last sighting, so the board says "last seen here"
+  // and stops, which is what a coach draws on a whiteboard for a player who ran off the
+  // edge of the picture. What the trim bought was honesty it already had; what it cost was
+  // the other half of the clip (D81).
+  const from = file.source.startFrame;
+  const to = file.source.endFrame;
 
   const sides: Record<"home" | "away", Track[]> = { home: [], away: [] };
   // The keeper of each side, best-observed first. Held apart from the outfielders because
@@ -169,14 +171,12 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     // Half of them would be on the wrong team and nothing on the board would say so.
     if (!side) continue;
     if (track === keepers[side]) continue;
-    // The same two tests `chooseWindow` scored the passage with. They have to agree: a
-    // window chosen for a roster this then declines to field is a window chosen for
-    // nothing.
-    if (
-      track !== taker &&
-      (witnessed(track, from, to, tol) < minCoverage ||
-        observed(track, from, to, file.source.fps) < MIN_OBSERVED_S)
-    ) {
+    // Long enough to be a player, and nothing about how much of the CLIP that is. The
+    // keeper and the restart taker were already exempted from a coverage test for the
+    // reason that applies to everybody — in shot only while play is near them — and over a
+    // whole clip that is most of the team. Coverage still ranks, because a fragment is the
+    // shorter half of something; it no longer excludes.
+    if (track !== taker && observed(track, from, to, file.source.fps) < MIN_OBSERVED_S) {
       continue;
     }
     // Somebody standing behind the goal is not a player, whatever the producer labelled
@@ -196,18 +196,9 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     const keeper = keepers[side];
     const reserved = sides[side].filter((t) => t === taker || involved.has(t));
     const room = MAX_PER_SIDE - (keeper ? 1 : 0) - reserved.length;
-    if (sides[side].length - reserved.length > room) {
-      sides[side] = [
-        ...reserved,
-        ...sides[side]
-          .filter((t) => t !== taker)
-          .sort(
-            (a, b) =>
-              witnessed(b, from, to, tol) - witnessed(a, from, to, tol) ||
-              b.samples.length - a.samples.length,
-          )
-          .slice(0, room),
-      ];
+    const rest = sides[side].filter((t) => !reserved.includes(t));
+    if (rest.length > room) {
+      sides[side] = [...reserved, ...bestCover(rest, from, to, tol, room)];
     }
     if (keeper) sides[side].unshift(keeper);
   }
@@ -233,10 +224,11 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     kept.filter((t) => t.samples.some((s) => Math.abs(s.f - f) <= tol)).length /
     Math.max(kept.length, 1);
 
-  // Trim the passage to where the players are on screen. A window's ends are the likeliest
-  // to be empty -- a track starting or stopping there is exactly what made that frame a
-  // candidate -- and a board whose last scene is drawn from memory is the one a coach
-  // notices, because it is where the play stops making sense.
+  // Trim the ends where the board knows NOTHING -- the seconds before the camera finds the
+  // play, and after it leaves. Not the ends where it merely knows LESS: half a roster is
+  // unseen at the first frame of any clip because half of it walks into shot later, and
+  // measuring that as emptiness trims away the opening of the play every time (D81). A
+  // held position is an answer; no sighting at all is not.
   //
   // It may never cross an EVENT. The restart and every change of possession are what the
   // passage was chosen for, and trimming a quiet opening straight past the kick-off is how
@@ -255,19 +247,21 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     // without these the board draws a move of six passes as one player carrying.
     ...touches(ballSamples, kept, file.source.fps, undefined, unnamed),
   ].sort((a, b) => a - b);
+  // An event only pins the window where somebody can be SEEN at it. The ball outlives the
+  // players on a clip whose tracking stops -- SNGS-100 has 348 straight frames with no
+  // player sampled at all -- and an event out in that stretch would otherwise hold the
+  // window open over a scene with nothing observed in it anywhere.
   const events = [
     ...(kick !== null && kick >= from && kick <= to ? [kick] : []),
     ...ballEvents.filter((f) => f >= from && f <= to),
-  ];
+  ].filter((f) => backedAt(f) > 0);
   const firstEvent = events.length ? Math.min(...events) : to;
   const lastEvent = events.length ? Math.max(...events) : from;
 
   let [start, end] = [from, to];
   const shortest = Math.round(MIN_WINDOW_S * file.source.fps);
-  while (end - start > shortest && start < firstEvent && backedAt(start) < SCENE_BACKED_FLOOR) {
-    start++;
-  }
-  while (end - start > shortest && end > lastEvent && backedAt(end) < SCENE_BACKED_FLOOR) end--;
+  while (end - start > shortest && start < firstEvent && backedAt(start) <= 0) start++;
+  while (end - start > shortest && end > lastEvent && backedAt(end) <= 0) end--;
 
   const frames = chooseScenes(
     kept,

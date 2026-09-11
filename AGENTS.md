@@ -361,13 +361,47 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
 - **A document does not change language when the reader does.** Boards keep the names they were
   given; only a NEW one is seeded from the active locale, through the labels `createBoardDoc` and
   the scene helpers accept. Locale itself is presentation and never enters `BoardDoc` (D38).
-- **The window's count is FRAGMENTS, and the board fields eleven a side** (D54). `splitImpossible`
-  runs first and the upstream tracker's switches make it frequent — 56 tracks arrive as 147
-  pieces — so an extra covering fragment is often somebody already on the board, and anything
-  past `MAX_PER_SIDE` is discarded anyway. Each side is scored against the cap, and the longest
-  window within `WINDOW_SLACK` of the fullest wins. The cap and the slack fix each other's
-  failure: capping alone lets a two-fragment side pick the window, slack alone buys seconds by
-  gutting a side (11 v 8 over 2.8 s became 17 v 1 over 8.6 s).
+- **The window is the WHOLE CLIP, and coverage ranks the roster without excluding from it**
+  (D81). A position outside a track's span is HELD, not invented -- `positionAt` clamps to the
+  first or last sighting -- so trimming the clip to where most of the roster is on screen bought
+  honesty the board already had and cost the other half of the play. Every clip fields eleven a
+  side now; the price is the `dens` column, which fell to 27-54% and now means "share drawn from
+  a live sighting" rather than "share that is not fiction".
+- **`dens` and `seen` falling is not automatically a regression any more.** They count live
+  sightings, and a board that holds a player who walked out of shot scores lower than one that
+  left him off the team entirely. Read them with the roster: 11 v 11 at 48% beats 5 v 10 at 69%.
+- **Trim an end only where NOTHING was seen** (D81). Half a roster is unseen at the first frame
+  of any clip because half of it walks into shot later, and scoring that as emptiness cuts the
+  opening of the play every time. Likewise a ball event pins the window open only where somebody
+  is visible at it -- SNGS-100 has 348 straight frames with no player sampled at all.
+- **The roster has FEWER SLOTS than the clip has appearances** (D82). Galatasaray produce
+  fifteen tracks across thirteen seconds of one coach's clip -- seven for the build-up, five
+  more for the attack -- against eleven places. No ranking fields them all, and weighting
+  coverage by distance to the ball was measured for exactly that and changed the ORDER without
+  changing the SET (543 points of `seen` across fourteen boards before, 542 after). The way out
+  is upstream: fewer fragments, or a board that can leave a player out of a scene.
+- **The roster is a COVER, not a ranking** (D82). Since the window is the whole clip, "seen for
+  most of it" means "wherever the camera settled", so ranking by it cuts every player from the
+  first half of a move -- it cut the two Galatasaray players pressing a goalkeeper from 7 and
+  12 metres. `bestCover` takes whoever adds most of the passage nobody chosen was seen in. Two
+  traps inside it: it must keep filling when the clip is already covered (stopping at zero gain
+  fields nine a side), and coverage is a DEPTH not a flag (1/(1+n)), or a second player in a
+  thin passage is worth nothing and the board loses the shape of a press.
+- **A ball in the AIR is not where the board would draw it** (D83, and D66 before it). Its
+  projection bows away from the near touchline and back, by up to ten metres -- a signature no
+  rolling ball has. `airborne` drops those frames before anything reads the ball, so one loft
+  is one pass. It needs BOTH tests: the bow, and `MAX_AIR_S`, because the runs being judged end
+  where the ball was lost rather than where it landed -- SNGS-100 had 91% of its ball called
+  airborne on the bow alone.
+- **`chooseWindow` is GONE** (D81), with its constants, helpers and tests. The board is the
+  whole clip. Do not reintroduce a passage chooser without reading D81 first -- the premise it
+  rested on, that an unseen position is invented, is false.
+- **A TRACK is not a player: `splitImpossible` runs first and the tracker's switches make it
+  frequent** (D54) — 56 tracks arrive as 147 pieces, so a side's fragments far outnumber its
+  players and anything past `MAX_PER_SIDE` is discarded. Anything counting tracks is counting
+  fragments. This sank the old window objective twice over (slack alone bought seconds by
+  gutting a side, 11 v 8 over 2.8 s becoming 17 v 1 over 8.6 s) and it still governs the roster
+  cut, which ranks fragments and keeps eleven.
 - **`coverage` measures a track's SPAN, not its samples** (D67). A track seen at both ends of a
   window and nowhere in between covers it completely, and the board draws that player standing
   still through the gap. Use `witnessed` for any question of the form "how much of this player
@@ -438,11 +472,10 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
   `chooseScenes` looks for the frame where a player deviates most from their interpolation, and
   a player the tracker just lost deviates hardest of all (D67).
 - **A coverage FLOOR is a fraction of the window, so a short window clears it more easily**
-  (D66). Anything that counts tracks passing `MIN_COVERAGE` is therefore biased towards short
+  (D66). Anything that counts tracks passing a coverage share is therefore biased towards short
   passages, and the bias is structural: SNGS-147's board was nineteen fragments over 3.2 s,
   which is eight real players. `MIN_OBSERVED_S` is the floor that cannot be gamed that way, and
-  `chooseWindow` and the fielding filter must apply the same tests or the window is chosen for
-  a roster the board declines to field.
+  since D81 it is the only one -- coverage ranks the roster and no longer excludes from it.
 - **Scoring a window by observed player-seconds trades the team for the clock** (D66): 86
   seconds bought with 21 real players over eleven clips. Measured, not shipped.
 - **Judge a window by coverage TIMES duration, not by either.** Duration flatters interpolation
@@ -450,8 +483,9 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
   Their product is the observed player-seconds the board is actually built from.
 - **The window objective is about PLAYERS, so it walks past set pieces** (D53). During a corner
   the players bunch in the box and occlude each other, their tracks fragment, and the coverage
-  count drops — so `chooseWindow` picks the open play afterwards and the board never contains
-  the corner. A restart now outranks a fuller roster; count and duration decide underneath it.
+  count drops — so a window objective built on players picks the open play afterwards and the
+  board never contains the corner. Moot since D81, which keeps the whole clip; `restartAt`
+  survives because the board still opens on the kick.
   `restartAt` reads the ball resting on a corner arc or the centre spot straight out of
   `ball.samples`, so nothing in `tracks.json` had to change and every existing file still works.
   A free kick has no canonical position and is deliberately unreachable by it.

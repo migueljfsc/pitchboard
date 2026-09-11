@@ -88,8 +88,6 @@ function label(path: string): string {
 const args = process.argv.slice(2);
 const asJson = args.includes("--json");
 // A sweep knob, not a setting: the importer's own default is the shipped one.
-const coverageArg = args.find((a) => a.startsWith("--min-coverage="));
-const minCoverage = coverageArg ? Number(coverageArg.split("=")[1]) : undefined;
 const files = args.filter((a) => !a.startsWith("--"));
 if (files.length === 0) {
   console.error("usage: pnpm board <tracks.json> [more...] [--json]");
@@ -98,7 +96,7 @@ if (files.length === 0) {
 
 const server = await createServer({ server: { middlewareMode: true }, logLevel: "error" });
 const { boardFromTracks } = (await server.ssrLoadModule("/src/import/index.ts")) as {
-  boardFromTracks: (raw: unknown, options?: { minCoverage?: number }) => ImportResult;
+  boardFromTracks: (raw: unknown) => ImportResult;
 };
 const { coverage, witnessed, restartAt, handovers, splitImpossible, sideOf, onPitch } =
   (await server.ssrLoadModule("/src/import/reduce.ts")) as {
@@ -113,7 +111,7 @@ const { coverage, witnessed, restartAt, handovers, splitImpossible, sideOf, onPi
 
 const rows: Row[] = files.map((file) => {
   const raw: unknown = JSON.parse(readFileSync(resolve(file), "utf8"));
-  const result = boardFromTracks(raw, minCoverage === undefined ? {} : { minCoverage });
+  const result = boardFromTracks(raw);
   if (!result.ok) return { file: label(file), ok: false, error: result.error.key };
 
   const { doc, window, sources, frames } = result;

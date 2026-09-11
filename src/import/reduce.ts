@@ -84,17 +84,17 @@ export const MIN_EVENT_GAP_S = 0.2;
  * Below about 0.25 the roster passes what a pitch can hold, which is fragments of the
  * same player arriving as two.
  */
-export const MIN_COVERAGE = 0.3;
 
 /**
  * The least time a player must be watched for, in seconds, whatever share of the window
  * that is.
  *
- * `MIN_COVERAGE` is a FRACTION of the window, so a shorter window clears it more easily
- * and the count of covering tracks rises as the passage shrinks. `chooseWindow` maximises
- * that count, so the bias is structural rather than a tuning problem: SNGS-147 came out
- * as nineteen fragments over 3.2 seconds of a thirty-second clip, and those nineteen are
- * eight real players seen for a second each.
+ * A share of the window cannot be this floor, because a shorter passage clears it more
+ * easily and the count of covering tracks rises as the passage shrinks -- a structural bias
+ * rather than a tuning problem: judged that way SNGS-147 came out as nineteen fragments over
+ * 3.2 seconds of a thirty-second clip, and those nineteen are eight real players seen for a
+ * second each. That is what retired the coverage floor entirely (D81); this is what is left,
+ * and it is the only bar between a track and a place on the board.
  *
  * A floor in seconds cannot be gamed by shrinking the window. It is a claim about football
  * rather than about the file: a player watched for under a second and a half has not made a
@@ -128,7 +128,6 @@ export const WITNESS_TOL_S = 0.25;
  * them — at a 0.85 average the eleven boards keep two or three scenes and no passes at
  * all, which is an accurate record of a moment rather than a play.
  */
-export const MIN_BOARD_DENSITY = 0.7;
 
 /**
  * How much of the roster must be on screen at a frame before a scene is put there.
@@ -212,7 +211,6 @@ export const MIN_WINDOW_S = 2.5;
  * fields at most `MAX_PER_SIDE` a side, so windows scoring 26 and 25 routinely produce
  * the same eleven.
  */
-export const WINDOW_SLACK = 1;
 
 /**
  * How much of the fullest honest passage's roster another may give up to hold more of the
@@ -225,7 +223,6 @@ export const WINDOW_SLACK = 1;
  * fragment; putting the ball first empties the pitch to six players. So honesty and the
  * roster are floors, and the ball chooses among what clears them.
  */
-export const MIN_ROSTER_SHARE = 0.75;
 
 /**
  * How near a restart spot the ball must sit, in metres, and how long it must sit there,
@@ -320,6 +317,84 @@ export const LOOSE_M = 8;
 
 /** A loose stretch shorter than this is a stray sighting, not a ball in flight. */
 export const MIN_FLIGHT_S = 0.2;
+
+/**
+ * How far a ball's path may bow away from the straight line before it was in the AIR, in
+ * metres, and how much of the run has to lie on one side of that line.
+ *
+ * A homography puts everything on the ground (D66), so a ball in flight is projected down
+ * the camera ray and lands further from the camera the higher it is -- by metres, and by
+ * most at the apex. The path therefore bows AWAY from the near touchline and comes back,
+ * which is a signature no ball rolling on the grass has: a curled pass bends the other way
+ * as often as this way, and by a metre or two rather than ten.
+ */
+export const AIR_BOW_M = 4.0;
+export const AIR_ONE_SIDED = 0.9;
+
+/**
+ * The longest a kicked ball stays up, in seconds. A goal kick hangs two to three; nothing
+ * struck by a foot hangs five.
+ *
+ * The bow test alone is not enough, because the runs it judges are delimited by the ball
+ * being LOST, not by it landing. On SNGS-100 the ball is located on 134 frames of the whole
+ * clip and one run of 124 of them curves gently across the pitch -- which passes a test for
+ * bowing away and returning, and is five seconds of ordinary football. Airborne is a claim
+ * about a second or two.
+ */
+export const MAX_AIR_S = 3.0;
+
+/**
+ * The frames the ball was off the ground, and therefore nowhere the board can draw it.
+ *
+ * The coach's goalkeeper lofted one 35 m and the board drew two passes: the ball out to the
+ * apex of its own projected arc, where it was snapped to whichever player stood nearest
+ * (D79), and on to the man who actually received it. The phantom is 9.5 m off the straight
+ * line at its worst and swings through the far side of the pitch.
+ *
+ * One kick is one pass. These frames are dropped before anything reads the ball, so no
+ * scene lands on them, no carrier is claimed from them and the pass is drawn once.
+ */
+export function airborne(ball: Sample[], fps: number): Set<number> {
+  const out = new Set<number>();
+  if (ball.length < 3) return out;
+  const gap = Math.max(2, Math.round(MIN_FLIGHT_S * fps));
+
+  let run: Sample[] = [];
+  const judge = () => {
+    if (run.length < 3) return;
+    const a = run[0];
+    const b = run[run.length - 1];
+    if ((b.f - a.f) / fps > MAX_AIR_S) return;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 1) return;
+    // Signed distance from the chord. Positive is the side the camera is NOT on: the
+    // broadcast camera sits on the near touchline, which this project's coordinates put
+    // at the high-y edge, so a ball lifted off the grass projects towards low y.
+    const off = run.map((s) => ((s.x - a.x) * dy - (s.y - a.y) * dx) / len);
+    const worst = Math.max(...off);
+    if (worst < AIR_BOW_M) return;
+    const sameSide = off.filter((d) => d >= 0).length / off.length;
+    if (sameSide < AIR_ONE_SIDED) return;
+    // And the high point has to be in the middle of the run, not at one end, or this is a
+    // ball curving away rather than one coming back down.
+    const peak = off.indexOf(worst) / (off.length - 1);
+    if (peak < 0.15 || peak > 0.85) return;
+    for (const s of run) out.add(s.f);
+  };
+
+  for (const s of ball) {
+    if (run.length > 0 && s.f - run[run.length - 1].f > gap) {
+      judge();
+      run = [];
+    }
+    run.push(s);
+  }
+  judge();
+  return out;
+}
+
 
 /** How far back from a flight to look for the player it came off. */
 export const KICK_S = 1.5;
@@ -643,8 +718,8 @@ export function sideOf(track: Track): "home" | "away" | null {
  * The ball resting on a corner arc or the centre spot is the one moment in a clip whose
  * position is known before it is seen, so it is worth finding: it is where the coach's
  * board should start. What is returned is the moment the ball LEAVES — the kick — because
- * that is what has to be on screen. How much of the wait to keep in front of it is left
- * to `chooseWindow`, which is already choosing between passages on other grounds.
+ * that is what has to be on screen. The wait in front of it is kept or trimmed by the end
+ * trim in `boardFromTracks`, on whether anybody was seen during it.
  *
  * Derived from the samples rather than read from a field, so it works on any tracks.json
  * that satisfies the contract, including every file written before this existed.
@@ -685,28 +760,6 @@ export function restartAt(
   return longest[longest.length - 1].f;
 }
 
-/**
- * The passage of play to build the board from.
- *
- * Not the whole clip. A board must give every player a position in every scene, so a
- * track covering half the file forces the other half to be invented — and the fuller
- * the roster, the more of it is fiction. Trimming to where the players are actually on
- * screen buys a real eleven over a shorter passage instead of a thin one over a long
- * passage padded out with people standing still.
- *
- * Candidates are the track endpoints themselves, since the count of covered tracks only
- * changes there. Each side is scored against `MAX_PER_SIDE`, since that is what the board
- * can field, and the longest window within `WINDOW_SLACK` of the fullest wins — a fragment
- * is not a player. The two rules need each other: the cap alone lets a side with two
- * fragments decide the window once the other is over eleven, and slack alone buys duration
- * by gutting a side.
- *
- * A set piece outranks both. During a corner the players are bunched in the box occluding
- * each other, so their tracks fragment and the count drops — which means this would
- * reliably walk past the corner and pick the open play afterwards, and did. A board made
- * of a corner clip that does not contain the corner is the wrong board however many
- * players it has. With no restart in the passage nothing changes.
- */
 /** How long after a handover to look for the moment the new holder actually has the ball. */
 export const SETTLE_S = 0.5;
 
@@ -755,140 +808,6 @@ export function handovers(
     held = who;
   }
   return out;
-}
-
-export function chooseWindow(
-  tracks: Track[],
-  from: number,
-  to: number,
-  fps: number,
-  minCoverage = MIN_COVERAGE,
-  minWindowS = MIN_WINDOW_S,
-  restart: number | null = null,
-  changes: number[] = [],
-  minObservedS = MIN_OBSERVED_S,
-  minDensity = MIN_BOARD_DENSITY,
-): { from: number; to: number } {
-  const minFrames = Math.round(minWindowS * fps);
-  const tol = Math.max(1, Math.round(WITNESS_TOL_S * fps));
-  if (to - from <= minFrames || tracks.length === 0) return { from, to };
-
-  // Candidate boundaries: where a track begins or ends, and where something HAPPENED.
-  //
-  // Track endpoints alone were the whole set, and they cannot express "the four seconds
-  // around that pass" unless some player's track happens to start there. On SNGS-067 that
-  // is exactly what went wrong: every passage holding a change of possession was too long
-  // to be honest, and the honest ones held no football, because the one candidate that was
-  // both — a short window bracketing the pass — was never offered.
-  const margin = Math.round(minWindowS * fps) / 2;
-  const events = [...changes, ...(restart === null ? [] : [restart])];
-  const around = events.flatMap((f) => [f, f - margin, f + margin]);
-  const starts = [from, ...tracks.map((t) => t.samples[0].f), ...around].filter(
-    (f) => f >= from && f < to,
-  );
-  const ends = [to, ...tracks.map((t) => t.samples[t.samples.length - 1].f), ...around].filter(
-    (f) => f > from && f <= to,
-  );
-
-  const candidates: {
-    from: number;
-    to: number;
-    count: number;
-    watched: number;
-    density: number;
-    covers: boolean;
-    passes: number;
-  }[] = [];
-  for (const a of new Set(starts)) {
-    for (const b of new Set(ends)) {
-      if (b - a < minFrames) continue;
-      const shares: Record<"home" | "away", number[]> = { home: [], away: [] };
-      for (const track of tracks) {
-        const side = sideOf(track);
-        if (side === null) continue;
-        // WITNESSED, not covered. A track's span reaching across the window says the
-        // player was here at some point; what the board can honestly draw is where the
-        // samples are.
-        const share = witnessed(track, a, b, tol);
-        if (share < minCoverage || observed(track, a, b, fps) < minObservedS) continue;
-        shares[side].push(share);
-      }
-      // Capped per side, because that is what the board fields, and the best-watched
-      // eleven are the ones it will keep.
-      const fielded = [...fieldable(shares.home), ...fieldable(shares.away)];
-      candidates.push({
-        from: a,
-        to: b,
-        count: fielded.length,
-        // The seconds of real observation this passage would put on the board.
-        watched: (fielded.reduce((x, y) => x + y, 0) * (b - a)) / fps,
-        // And how much of the board those seconds are. Every player needs a position in
-        // every scene, so a passage whose roster is half unwatched is drawn half from
-        // memory -- and nothing on the finished board says which half.
-        density: fielded.length ? fielded.reduce((x, y) => x + y, 0) / fielded.length : 0,
-        // A restart is AN event, not a trump card. Preferring any passage containing it
-        // over any passage without it is how SNGS-067 came out anchored to a kick-off
-        // with all four of its changes of possession outside the window: the board held
-        // the one moment nothing happens after. Counted alongside the passes, a corner
-        // still wins the clip it defines (D53) and stops winning the ones it does not.
-        covers: restart !== null && a <= restart && b > restart,
-        passes:
-          changes.filter((f) => f >= a && f <= b).length +
-          (restart !== null && a <= restart && b > restart ? 1 : 0),
-      });
-    }
-  }
-  if (candidates.length === 0) return { from, to };
-
-  // A set piece still decides the passage where the passage has anything else in it. What
-  // it may not do is win a clip on its own: SNGS-067 came out anchored to a kick-off with
-  // all four of its changes of possession outside the window, which is a board of the one
-  // moment nothing happens after (D53 refined).
-  // "Anything else" means anything else there IS: on a clip where the ball was never seen
-  // to change hands, the set piece is the only event and still decides.
-  const covering = candidates.filter((c) => c.covers && (changes.length === 0 || c.passes > 1));
-  const restarts = covering.length > 0 ? covering : candidates;
-  // HONESTY IS A CONSTRAINT, NOT THE OBJECTIVE. Maximising watched football alone fields
-  // two players for twelve seconds over eight for three, because it is indifferent to how
-  // many people are on the board; roster alone pads the passage with players the tracker
-  // lost. So the roster decides among the passages that can be drawn without inventing
-  // most of themselves, and nowhere else.
-  const honest = restarts.filter((c) => c.density >= minDensity && c.count > 0);
-  // If nothing clears the bar, the least invented passage is still the answer: refusing to
-  // import is not something a coach can use.
-  const pool = honest.length > 0 ? honest : [maxBy(restarts, (c) => c.density)];
-  // THE BALL FIRST, among passages that are honest. A board a coach can use is one with
-  // the football in it: a passage holding no change of possession is a formation, not a
-  // play, and the roster objective walks past the ball every time because possession
-  // changes where players occlude each other and tracks fragment. Honesty is still the
-  // constraint -- the passage may not stretch into frames nobody was seen in to collect
-  // another pass -- and the roster breaks ties underneath.
-  // Two constraints and then the ball. Honesty bounds how much of the board may be drawn
-  // from memory; the roster floor bounds how much of the TEAM may be given up to reach
-  // another pass -- a passage with the whole game in it and six players on the pitch is
-  // not a board either. Ordering these instead of constraining them sacrifices whichever
-  // comes last, and every ordering was tried: roster first walks past the ball, ball first
-  // empties the pitch.
-  const fullest = Math.max(...pool.map((c) => c.count));
-  const enough = pool.filter((c) => c.count >= fullest * MIN_ROSTER_SHARE);
-  const busiest = Math.max(...enough.map((c) => c.passes));
-  const best = enough
-    .filter((c) => c.passes === busiest)
-    // The set piece breaks the tie, which is what D53 was really asking for: among boards
-    // holding the same amount of football, the one that opens on the kick-off.
-    .reduce((x, y) =>
-      y.covers !== x.covers ? (y.covers ? y : x) : y.watched > x.watched ? y : x,
-    );
-  return { from: best.from, to: best.to };
-}
-
-function maxBy<T>(items: T[], score: (item: T) => number): T {
-  return items.reduce((best, item) => (score(item) > score(best) ? item : best));
-}
-
-/** The best-watched eleven of a side: what the board will actually field. */
-function fieldable(shares: number[]): number[] {
-  return [...shares].sort((x, y) => y - x).slice(0, MAX_PER_SIDE);
 }
 
 /**
@@ -1212,6 +1131,74 @@ export function breaks(
 
 /** Fewest sightings a player must be nearest the ball at before the board must field him. */
 export const MIN_ON_THE_BALL = 5;
+
+/**
+ * The eleven that between them cover the passage best, not the eleven seen longest.
+ *
+ * Ranking each player by how much of the clip he was watched for sounds like the same
+ * question and is not. On a clip that follows the ball the length of the pitch, being in
+ * shot for a long time means being wherever the camera settled — so every player from the
+ * first half of the move loses his slot to one who had not arrived yet. On the coach's
+ * Sporting clip the two Galatasaray players pressing his goalkeeper, seven and twelve
+ * metres off him, were both cut for players who appear forty metres downfield a second
+ * later, and the board showed an away side with nobody inside the D (D82).
+ *
+ * Greedy set cover over frames instead: repeatedly take whoever adds the most of the
+ * passage nobody chosen so far was seen in. A player watched throughout still wins the
+ * first slot, because he covers the most; a player watched only during the opening wins a
+ * later one, because by then the opening is what is missing. The eleven come out spread
+ * across the clip rather than bunched at the end of it.
+ */
+export function bestCover(
+  tracks: Track[],
+  from: number,
+  to: number,
+  tol: number,
+  room: number,
+): Track[] {
+  if (room <= 0 || tracks.length === 0) return [];
+  const span = to - from + 1;
+  const seen = (t: Track) => {
+    const value = new Float32Array(span);
+    for (const s of t.samples) {
+      const lo = Math.max(from, s.f - tol) - from;
+      const hi = Math.min(to, s.f + tol) - from;
+      for (let i = lo; i <= hi; i++) value[i] = 1;
+    }
+    return value;
+  };
+  const masks = new Map(tracks.map((t) => [t, seen(t)]));
+  // How many of the chosen were watched at each frame. Not a flag: plain set cover
+  // saturates, so once one player covers the opening a second one there is worth nothing
+  // and the slot goes downfield instead — which loses the SHAPE of a press even though it
+  // keeps a player in the picture. A frame already covered n times is worth 1/(1+n), so
+  // the second man in a thin passage still outbids the fifth in a crowded one.
+  const depth = new Uint8Array(span);
+  const chosen: Track[] = [];
+  const left = new Set(tracks);
+  while (chosen.length < room && left.size > 0) {
+    let best: Track | null = null;
+    // Below any real gain, so the slots keep filling once the passage is covered: eleven
+    // is a team, and stopping early fields nine.
+    let gain = -1;
+    for (const t of left) {
+      const mask = masks.get(t)!;
+      let adds = 0;
+      for (let i = 0; i < span; i++) if (mask[i] > 0) adds += mask[i] / (1 + depth[i]);
+      // Ties go to the better-watched player, which is what the ranking used to be and
+      // is still the right answer between two who cover the same ground.
+      const better =
+        adds > gain || (adds === gain && best !== null && t.samples.length > best.samples.length);
+      if (better) [best, gain] = [t, adds];
+    }
+    if (best === null) break;
+    const mask = masks.get(best)!;
+    for (let i = 0; i < span; i++) if (mask[i] > 0 && depth[i] < 255) depth[i]++;
+    chosen.push(best);
+    left.delete(best);
+  }
+  return chosen;
+}
 
 /**
  * The players the football goes through in a passage: whoever is nearest the ball, close
