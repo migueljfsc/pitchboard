@@ -866,11 +866,27 @@ export function carrierAt(
   const hold = HOLD_S * fps;
   let seen = 0;
   let theirs = 0;
+  // And does it ever reach them? Being the nearest for the whole hold is not having the
+  // ball: a pass threaded between two defenders is nearest to each of them in turn, for
+  // as long as it takes to go past, and never at either one's feet. On a coach's clip a
+  // through ball ran 3.5 m from one defender and then 2.7 m from the next for 0.6 s, and
+  // the board handed it to both -- a turnover the clip never had, which the one-scene
+  // rule then used to revert the attacker who DID receive it. `SNAP_M` is the distance
+  // at which the camera model cannot tell a ball at his feet from one a stride away, so a
+  // holder has to have it inside that at least once.
+  const holder = players.find((p) => p.id === who)?.track;
+  let reach = Infinity;
   for (const s of ball) {
-    if (s.f < f || s.f > f + hold) continue;
+    if (s.f < f - 2 || s.f > f + hold) continue;
+    if (holder && s.f >= holder.samples[0].f && s.f <= holder.samples[holder.samples.length - 1].f) {
+      const p = positionAt(holder, s.f);
+      reach = Math.min(reach, Math.hypot(p.x - s.x, p.y - s.y));
+    }
+    if (s.f < f) continue;
     seen++;
     if (nearestTo(ball, players, s.f, radiusM, blockers) === who) theirs++;
   }
+  if (reach > SNAP_M) return null;
   // Every sighting counts, not just the ones with somebody near: a ball crossing open
   // ground has no rival claimant, and counting only claimants would read "nobody else was
   // nearer" as possession. With no sighting at all there is nothing to judge, and the

@@ -11,6 +11,7 @@
  *
  *     pnpm board ../football-tracks/work/SNGS-151/tracks.json
  *     pnpm board ../football-tracks/work/*\/tracks.json --json
+ *     pnpm board ../football-tracks/work/Untitled/tracks.json --scenes
  *
  * What each column is, and why it is here rather than a fidelity score:
  *
@@ -22,6 +23,12 @@
  *   flatters interpolation.
  * - `travel` and `curves`. A board where nobody moves is a board of a stationary camera,
  *   which is what every registration gate produced when it was scored on per-frame error.
+ * - `turns` and `loose`. What a coach reads off a board is who has the ball, scene by scene:
+ *   `turns` counts the times the board hands it to the OTHER side, and `loose` the scenes
+ *   that draw it with nobody. Both were a coach's report before they were columns -- a
+ *   turnover the clip never had, and a through pass drawn as two movements.
+ *   `--scenes` lists every scene's carrier and the track behind it, which is how either
+ *   one is traced back to the file.
  */
 import { readFileSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
@@ -76,6 +83,10 @@ type Row = {
   travelM?: number;
   curves?: number;
   passes?: number;
+  turns?: number;
+  loose?: number;
+  sceneList?: { frame: number; carrier: string | null; track?: string; ball?: string }[];
+  roster?: Record<string, string[]>;
 };
 
 /** The clip a path names, so `work/SNGS-151/tracks.json` reads as its clip and variant. */
@@ -87,10 +98,11 @@ function label(path: string): string {
 
 const args = process.argv.slice(2);
 const asJson = args.includes("--json");
+const showScenes = args.includes("--scenes");
 // A sweep knob, not a setting: the importer's own default is the shipped one.
 const files = args.filter((a) => !a.startsWith("--"));
 if (files.length === 0) {
-  console.error("usage: pnpm board <tracks.json> [more...] [--json]");
+  console.error("usage: pnpm board <tracks.json> [more...] [--json] [--scenes]");
   process.exit(1);
 }
 
@@ -183,6 +195,32 @@ const rows: Row[] = files.map((file) => {
     (n, s, i) => n + (i > 0 && s.carrier !== null && s.carrier !== doc.scenes[i - 1].carrier ? 1 : 0),
     0,
   );
+  // Over the scenes that NAME somebody: a scene with nobody on the ball between two of the
+  // same side is not a turnover, and one between two sides still is.
+  const named = doc.scenes.flatMap((s) => (s.carrier === null ? [] : [s.carrier.split("-")[0]]));
+  const turns = named.reduce((n, side, i) => n + (i > 0 && side !== named[i - 1] ? 1 : 0), 0);
+  const loose = doc.scenes.filter((s) => s.carrier === null && s.ballPos).length;
+  const sceneList = doc.scenes.map((s, i) => {
+    const track = s.carrier ? sources[s.carrier] : undefined;
+    return {
+      frame: frames[i],
+      carrier: s.carrier,
+      ...(track ? { track: `${track.team} ${track.id}` } : {}),
+      ...(s.ballPos ? { ball: `${s.ballPos.x.toFixed(1)}, ${s.ballPos.y.toFixed(1)}` } : {}),
+    };
+  });
+
+  // Who the board fields, and the track behind each: a keeper who is really a referee, or a
+  // token standing still because its track is a few seconds long, is found here.
+  const roster = Object.fromEntries(
+    doc.teams.map((team) => [
+      team.id,
+      team.players.map((p) => {
+        const track = sources[p.id];
+        return `${p.id}=${track ? `${track.team} ${track.id}` : "?"}`;
+      }),
+    ]),
+  );
 
   return {
     file: label(file),
@@ -209,6 +247,10 @@ const rows: Row[] = files.map((file) => {
     travelM: travel,
     curves,
     passes,
+    turns,
+    loose,
+    sceneList,
+    roster,
   };
 });
 
@@ -221,9 +263,9 @@ if (asJson) {
     "board".padEnd(24) +
     [
       "players", "H/A", "scenes", "window", "watched", "dens", "seen", "worst", "last",
-      "travel", "curves", "passes", "restart",
+      "travel", "curves", "passes", "restart", "turns", "loose",
     ]
-      .map((h, i) => h.padStart([8, 7, 7, 8, 10, 7, 7, 7, 7, 8, 7, 11, 7][i]))
+      .map((h, i) => h.padStart([8, 7, 7, 8, 10, 7, 7, 7, 7, 8, 7, 11, 7, 6, 6][i]))
       .join("");
   console.log(head);
   console.log("-".repeat(head.length));
@@ -246,7 +288,18 @@ if (asJson) {
         `${r.travelM!.toFixed(1)} m`.padStart(8) +
         String(r.curves).padStart(7) +
         `${r.changesKept}/${r.changesInWindow}/${r.changes}`.padStart(11) +
-        (r.restart === null ? "  -" : r.restartKept ? "  yes" : "  LOST"),
+        (r.restart === null ? "  -" : r.restartKept ? "  yes" : "  LOST").padEnd(7) +
+        String(r.turns).padStart(6) +
+        String(r.loose).padStart(6),
     );
+    if (showScenes) {
+      for (const [side, players] of Object.entries(r.roster!)) {
+        console.log(`    ${side}: ${players.join("  ")}`);
+      }
+      for (const s of r.sceneList!) {
+        const who = s.carrier === null ? "nobody" : `${s.carrier} (track ${s.track ?? "?"})`;
+        console.log(`    f${String(s.frame).padEnd(5)} ${who.padEnd(28)} ${s.ball ? `ball loose at ${s.ball}` : ""}`);
+      }
+    }
   }
 }

@@ -589,6 +589,14 @@ describe("carrierAt", () => {
     const kept = [ball(15, 21, 30), ball(16, 21.2, 30), ball(17, 21.1, 30), ball(18, 21.3, 30)];
     expect(carrierAt(kept, players, 15, undefined, 25)).toBe("home-1");
   });
+
+  it("does not hand it to a player it only ever passes near", () => {
+    // A through ball threaded past a defender is nearest to him for the whole hold, three
+    // metres off his feet and never at them. On a coach's clip that drew a turnover the
+    // play never had; a holder has to have the ball inside SNAP_M at least once.
+    const past = [ball(15, 23, 30), ball(16, 23.2, 30), ball(17, 23.1, 30), ball(18, 23.3, 30)];
+    expect(carrierAt(past, players, 15, undefined, 25)).toBeNull();
+  });
 });
 
 describe("a holder the ball has left", () => {
@@ -925,6 +933,63 @@ describe("the ball on a board", () => {
     expect(lost.ok).toBe(true);
     if (!lost.ok) return;
     expect(lost.doc.scenes.some((s) => s.ballPos && s.ballPos.x < 0)).toBe(false);
+  });
+
+  it("draws a pass threaded past a defender as one pass between team-mates", () => {
+    // Played from home-1 to home-2 at 17 m/s, three metres past away-1's feet on the way.
+    // Named by nearness alone the defender held it for as long as it took to go past; drawn
+    // at its own position it stopped in space. Either way one pass became two movements,
+    // which a coach reported in so many words: the board is who has the ball, scene by
+    // scene. home-3's run far away is only there to put a scene in the middle of the flight.
+    // Sampled every frame: a scene only lands where the players are actually seen (D67).
+    const frames = Array.from({ length: 76 }, (_, i) => i + 1);
+    const still = (id: number, team: string, x: number, y: number) =>
+      track(id, team, frames.map((f) => [f, x, y] as [number, number, number]));
+    const runner = track(
+      4,
+      "home",
+      frames.map((f) => [f, 60, 60 - 10 * (1 - Math.abs(f - 38) / 38)] as [number, number, number]),
+    );
+    const tracks = [
+      still(1, "home", 10, 20),
+      still(2, "away", 20, 23),
+      still(3, "home", 30, 20),
+      runner,
+    ];
+    const samples = Array.from({ length: 76 }, (_, i) => {
+      const f = i + 1;
+      const x = f <= 20 ? 10.3 : f <= 50 ? 10 + ((f - 20) * 20) / 30 : 30.3;
+      return { f, x, y: 20 };
+    });
+    const result = boardFromTracks({ ...file(tracks, 76), ball: { samples } });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.frames.some((f) => f > 25 && f < 45)).toBe(true);
+    const carriers = result.doc.scenes.map((s) => s.carrier);
+    expect(carriers.some((c) => c?.startsWith("away"))).toBe(false);
+    expect(result.doc.scenes.some((s) => s.carrier === null && s.ballPos)).toBe(false);
+    expect(carriers[carriers.length - 1]).toBe("home-2");
+  });
+
+  it("does not give the ball to the other side on a single sighting", () => {
+    // The end of a coach's clip: the keeper saves and holds, and the ball's last sighting
+    // falls beside the attacker in front of him. One frame handed it back, and `steady`
+    // then took the save itself for the flicker. A turnover has to be seen.
+    const still = (id: number, team: string, x: number, y: number) =>
+      track(id, team, [[1, x, y], [51, x, y]]);
+    const tracks = [still(1, "home", 12, 20), still(2, "away", 3, 20), still(3, "home", 5, 21)];
+    const samples = Array.from({ length: 50 }, (_, i) => {
+      const f = i + 1;
+      if (f <= 15) return { f, x: 12.3, y: 20 };
+      if (f <= 20) return { f, x: 12 - ((f - 15) * 8.7) / 5, y: 20 };
+      if (f < 50) return { f, x: 3.2, y: 20 };
+      return { f, x: 4.9, y: 21 };
+    });
+    const result = boardFromTracks({ ...file(tracks), ball: { samples } });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const carriers = result.doc.scenes.map((s) => s.carrier).filter((c) => c !== null);
+    expect(carriers[carriers.length - 1]).toBe("away-1");
   });
 
   it("leaves the ball in the net once it has crossed the line", () => {

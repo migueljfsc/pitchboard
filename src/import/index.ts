@@ -23,6 +23,7 @@ import {
   fitCurve,
   flights,
   handovers,
+  HOLD_S,
   kickedBy,
   MAX_PER_SIDE,
   MIN_OBSERVED_S,
@@ -354,7 +355,22 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   // Scenes where the file DENIES a holder rather than merely failing to name one. The two
   // are not the same answer and only the second may be filled in below.
   const denied = frames.map(() => false);
-  const carriers = found.map((c, i) => {
+  // Who a sighting took the ball away from, at the scene it did -- the man who played it.
+  const playedBy = frames.map((): string | null => null);
+  // A change of SIDE has to be seen more than once. The hold test takes a single sighting as
+  // a hold, because a player the ball reaches with nothing after it to judge is usually
+  // receiving it -- but handing it to the other team on one frame is how a coach's clip
+  // ended: the ball's last sighting fell a metre from the attacker beside the goalkeeper
+  // who had just saved it, the board gave it back, and `steady` then read the save itself
+  // as the flicker and reverted it. A pass that never happened between team-mates is a
+  // detail; a turnover that never happened is a move a coach will try to coach (D71).
+  const hold = HOLD_S * file.source.fps;
+  const seenOnce = (f: number) =>
+    ballSamples.filter((s) => s.f >= f && s.f <= f + hold).length < 2;
+  const team = (id: string) => id.split("-")[0];
+  const carriers = found.map((named, i) => {
+    const turned = named !== null && holder !== null && team(named) !== team(holder);
+    const c = turned && seenOnce(frames[i]) ? null : named;
     if (c !== null && c !== takerId) released = true;
     if (i > 0 && !released) return null;
     if (c !== null) holder = c;
@@ -362,6 +378,7 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     // anybody else can be shown to have taken it. Otherwise he keeps it on the board all
     // the way through the pass he played, and out to the corner flag to celebrate.
     else if (leftBehind(ballSamples, withIds, frames[i], holder)) {
+      playedBy[i] = holder;
       holder = null;
       denied[i] = true;
     }
@@ -391,6 +408,19 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     const lands = carriers.findIndex((c, j) => j > i && c !== null);
     const from = kickedBy(ballSamples, withIds, frames[i], file.source.fps);
     if (from !== null && lands >= 0) carriers[i] = from;
+  });
+
+  // And the same pass when it flies near somebody. The rule above only reaches a ball eight
+  // metres from EVERYBODY, and a through ball is threaded between defenders -- two or three
+  // metres from them, never at their feet, so nobody holds it and it is not loose either.
+  // Drawn at its own position it split one pass into a ball stopping in space twice on the
+  // way, which a coach reported in so many words: the board is about who has the ball in
+  // each scene, and a pass is the carrier changing (D43). So a scene the ball left its
+  // holder at, when somebody later has it, is still the passer's; the travel into the
+  // receiver's scene is the pass. A shot, with nobody to land on, is left drawn as a shot.
+  playedBy.forEach((from, i) => {
+    if (from === null || carriers[i] !== null) return;
+    if (carriers.findIndex((c, j) => j > i && c !== null) >= 0) carriers[i] = from;
   });
 
   // Where the ball was NOT seen either, the old answer still stands: it starts with
