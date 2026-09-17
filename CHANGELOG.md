@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.52.1 (2026-09-17)
+
+### Fix
+
+- **import**: a tackle is not a turnover, and a keeper's catch is silent
+
 ## v0.52.0 (2026-09-16)
 
 ### Feat
