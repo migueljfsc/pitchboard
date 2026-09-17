@@ -7,7 +7,9 @@ import {
   bestCover,
   breaks,
   carrierAt,
+  contested,
   KICK_S,
+  keeperInBox,
   kickedBy,
   atFeet,
   onTheBall,
@@ -599,6 +601,43 @@ describe("carrierAt", () => {
   });
 });
 
+describe("contested", () => {
+  const ball = (f: number, x: number, y: number) => ({ f, x, y });
+  const at = [ball(15, 21.2, 30), ball(16, 21.1, 30), ball(17, 21.3, 30), ball(18, 21.2, 30)];
+  const pair = (awayX: number, awayTeam = "away") => [
+    { id: "home-1", track: track(1, "home", [[10, 20, 30], [20, 20, 30]]) },
+    { id: `${awayTeam}-2`, track: track(2, awayTeam, [[10, awayX, 30], [20, awayX, 30]]) },
+  ];
+
+  it("is a ball both sides are inside SNAP_M of", () => {
+    // Either player could be the one with it, at this camera model's accuracy (D85).
+    expect(contested(at, pair(21.5), 15, "away-2", 25)).toBe(true);
+    expect(contested(at, pair(21.5), 15, "home-1", 25)).toBe(true);
+  });
+
+  it("is not a ball the opponent is only marking, or a team-mate beside it", () => {
+    expect(contested(at, pair(24), 15, "home-1", 25)).toBe(false);
+    expect(contested(at, pair(21.5, "home"), 15, "home-1", 25)).toBe(false);
+  });
+});
+
+describe("keeperInBox", () => {
+  const pitch = { length: 105, width: 68 };
+  const standing = (team: string, x: number, y: number) =>
+    track(1, team, [[1, x, y], [50, x, y]]);
+
+  it("is a goalkeeper inside either penalty area", () => {
+    expect(keeperInBox(standing("gkAway", 102, 36), 20, pitch)).toBe(true);
+    expect(keeperInBox(standing("gkHome", 4, 30), 20, pitch)).toBe(true);
+  });
+
+  it("is not a goalkeeper out of his box, or anybody else in it", () => {
+    expect(keeperInBox(standing("gkAway", 80, 34), 20, pitch)).toBe(false);
+    expect(keeperInBox(standing("gkAway", 102, 60), 20, pitch)).toBe(false);
+    expect(keeperInBox(standing("away", 102, 36), 20, pitch)).toBe(false);
+  });
+});
+
 describe("a holder the ball has left", () => {
   const players = [
     { id: "home-1", track: track(1, "home", [[10, 20, 30], [20, 20, 30]]) },
@@ -1021,6 +1060,26 @@ describe("the ball on a board", () => {
     const carriers = result.doc.scenes.map((s) => s.carrier);
     expect(carriers[0]).toBe("home-1");
     expect(carriers[carriers.length - 1]).toBeNull();
+  });
+
+  it("lets a goalkeeper keep a ball he caught, though it is never seen again", () => {
+    // In his hands the ball is out of sight, so the save is its last sighting: seen once,
+    // then silent for longer than CARRY_S (D85).
+    const keeper = track(
+      3,
+      "gkAway",
+      Array.from({ length: 51 }, (_, i) => [i + 1, 100, 34] as [number, number, number]),
+    );
+    const dribble = Array.from({ length: 10 }, (_, i) => ({ f: i + 1, x: 10 + i * 0.2, y: 20.3 }));
+    const result = boardFromTracks({
+      ...file([straightRun(1, "home", 20), straightRun(2, "away", 40), keeper]),
+      ball: { samples: [...dribble, { f: 20, x: 100.3, y: 34 }] },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const keeperId = Object.entries(result.sources).find(([, t]) => t.team === "gkAway")![0];
+    const carriers = result.doc.scenes.map((s) => s.carrier);
+    expect(carriers[carriers.length - 1]).toBe(keeperId);
   });
 
   it("does not let the ball appear from nowhere partway through", () => {

@@ -18,12 +18,14 @@ import {
   CARRIER_RADIUS_M,
   carrierAt,
   chooseScenes,
+  contested,
   BALL_EDGE_M,
   breaks,
   fitCurve,
   flights,
   handovers,
   HOLD_S,
+  keeperInBox,
   kickedBy,
   MAX_PER_SIDE,
   MIN_OBSERVED_S,
@@ -368,9 +370,24 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   const seenOnce = (f: number) =>
     ballSamples.filter((s) => s.f >= f && s.f <= f + hold).length < 2;
   const team = (id: string) => id.split("-")[0];
+  // Except by a goalkeeper in his box. A ball he catches is out of sight in his hands, so
+  // its last sighting is the save and a second one never comes (D85).
+  const inHands = (id: string, f: number) => {
+    const track = withIds.find((w) => w.id === id)?.track;
+    return track !== undefined && keeperInBox(track, f, file.pitch);
+  };
+  // A tackle is not a turnover. A holder an opponent was at the ball with is only named
+  // where his side still has it at the next scene anybody is named at (D85).
+  found.forEach((named, i) => {
+    if (named === null || !contested(ballSamples, withIds, frames[i], named, file.source.fps)) {
+      return;
+    }
+    const after = found.slice(i + 1).find((c) => c !== null);
+    if (after !== undefined && team(after) !== team(named)) found[i] = null;
+  });
   const carriers = found.map((named, i) => {
     const turned = named !== null && holder !== null && team(named) !== team(holder);
-    const c = turned && seenOnce(frames[i]) ? null : named;
+    const c = turned && seenOnce(frames[i]) && !inHands(named, frames[i]) ? null : named;
     if (c !== null && c !== takerId) released = true;
     if (i > 0 && !released) return null;
     if (c !== null) holder = c;
@@ -387,7 +404,12 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     // about who has the ball, and the board says nothing either.
     // Only where there is a holder to lose: before anybody has been named, silence denies
     // nothing -- it is the opening of a board, not a statement about possession.
-    else if (holder !== null && !sighted(ballSamples, frames[i], file.source.fps)) {
+    // Nor for a goalkeeper in his box, whose ball is silent because he is holding it (D85).
+    else if (
+      holder !== null &&
+      !sighted(ballSamples, frames[i], file.source.fps) &&
+      !inHands(holder, frames[i])
+    ) {
       holder = null;
       denied[i] = true;
     }

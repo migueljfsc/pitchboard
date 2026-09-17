@@ -405,6 +405,28 @@ export const GOAL_HALF_WIDTH_M = 3.66;
 /** How deep the board draws its goals, and so how far into one the ball may be put. */
 export const GOAL_DEPTH_M = 2;
 
+/** The penalty area, in metres: how far it reaches from the goal line, and either side of centre. */
+export const PENALTY_DEPTH_M = 16.5;
+export const PENALTY_HALF_WIDTH_M = 20.16;
+
+/**
+ * Whether a track is a goalkeeper standing in a penalty area at `f` -- where he may hold the
+ * ball in his hands, out of the detector's sight (D85).
+ *
+ * Reads `positionAt`'s clamped position, so a keeper whose track ended a frame earlier is
+ * judged where he was last seen.
+ */
+export function keeperInBox(
+  track: Track,
+  f: number,
+  pitch: { length: number; width: number },
+): boolean {
+  if (track.team !== "gkHome" && track.team !== "gkAway") return false;
+  const p = positionAt(track, f);
+  const deep = p.x <= PENALTY_DEPTH_M || p.x >= pitch.length - PENALTY_DEPTH_M;
+  return deep && Math.abs(p.y - pitch.width / 2) <= PENALTY_HALF_WIDTH_M;
+}
+
 /**
  * Where the ball is when it has crossed a goal line between the posts: in the net.
  *
@@ -892,6 +914,38 @@ export function carrierAt(
   // nearer" as possession. With no sighting at all there is nothing to judge, and the
   // nearest player stands.
   return seen === 0 || theirs >= seen * HOLD_SHARE ? who : null;
+}
+
+/**
+ * Whether an opponent of `who` is at the ball as well, for most of the hold from `f`.
+ *
+ * Inside SNAP_M the camera model cannot say which of two players the ball is at, so a
+ * sighting an opponent is also that close to is a contest: a tackle, or a man shielding the
+ * ball from one. It says nothing about who came away with it (D85).
+ */
+export function contested(
+  ball: Sample[],
+  players: { id: string; track: Track }[],
+  f: number,
+  who: string,
+  fps: number,
+): boolean {
+  const hold = HOLD_S * fps;
+  const side = who.split("-")[0];
+  let seen = 0;
+  let at = 0;
+  for (const s of ball) {
+    if (s.f < f || s.f > f + hold) continue;
+    seen++;
+    const near = players.some(({ id, track }) => {
+      if (id.split("-")[0] === side) return false;
+      if (s.f < track.samples[0].f || s.f > track.samples[track.samples.length - 1].f) return false;
+      const p = positionAt(track, s.f);
+      return Math.hypot(p.x - s.x, p.y - s.y) <= SNAP_M;
+    });
+    if (near) at++;
+  }
+  return at > 0 && at >= seen * HOLD_SHARE;
 }
 
 /**
