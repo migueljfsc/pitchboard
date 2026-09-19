@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.53.0 (2026-09-19)
+
+### Feat
+
+- **import**: pnpm board --truth, possession against the truth board frame by frame
+
 ## v0.52.1 (2026-09-17)
 
 ### Fix
