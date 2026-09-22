@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.53.1 (2026-09-22)
+
+### Fix
+
+- **import**: a dribbler takes the ball, and the post is not a save
+
 ## v0.53.0 (2026-09-19)
 
 ### Feat
