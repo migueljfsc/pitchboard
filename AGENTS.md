@@ -128,6 +128,7 @@ runs are curved:
 ```
 pnpm board ../football-tracks/work/SNGS-151/tracks.json          # one clip
 pnpm board ../football-tracks/work/*/cmp.*.json --json           # a comparison, machine-readable
+pnpm board ../football-tracks/work/Untitled/tracks.json --scenes  # who has the ball, scene by scene
 ```
 
 Seven improvements measured on the producer's own frames have failed to move any of those
@@ -417,6 +418,19 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
   `pnpm board` reports `seen` (drawn positions with a sighting within 0.25 s) and `worst` (the
   emptiest scene); they are the fidelity bar, and a passage that scores well on watched
   player-seconds can still be mostly remembered (D67).
+- **Nearest is not holding: the ball has to REACH him.** A through ball threaded past two
+  defenders was nearest each of them for 0.6 s at 3.5 and 2.7 m and the hold test named both --
+  a turnover the clip never had, which `steady` then used to revert the attacker who received
+  it. `carrierAt` asks for the ball inside `SNAP_M` at least once. `turns` in `pnpm board` is
+  the count to watch; `--scenes` shows which track took it.
+- **A pass in flight is the passer's until somebody has it, near a defender or not.** The
+  kicker rule only reached a ball `LOOSE_M` from everybody, so a pass two or three metres past
+  a defender was drawn stopping in space -- one pass as two movements. A scene a sighting took
+  the ball away at stays with the player who lost it WHEN a later scene names a holder; a shot,
+  with nobody to land on, is still drawn as one.
+- **A change of SIDE has to be seen twice.** One sighting beside the attacker after a keeper's
+  save handed the ball back, and `steady` read the save as the flicker. Asking every hold for
+  two sightings is wrong -- `airborne` thins the ball, and it emptied a real carrier's scenes.
 - **A ball flying over a player is not a pass to him** (D71). `z = 0` makes a lofted ball's
   board position its shadow sweeping the pitch, so every player it crosses is briefly the
   nearest. The carrier is whoever KEEPS it. Speed cannot be the test -- half of all real

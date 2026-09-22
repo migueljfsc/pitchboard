@@ -405,6 +405,28 @@ export const GOAL_HALF_WIDTH_M = 3.66;
 /** How deep the board draws its goals, and so how far into one the ball may be put. */
 export const GOAL_DEPTH_M = 2;
 
+/** The penalty area, in metres: how far it reaches from the goal line, and either side of centre. */
+export const PENALTY_DEPTH_M = 16.5;
+export const PENALTY_HALF_WIDTH_M = 20.16;
+
+/**
+ * Whether a track is a goalkeeper standing in a penalty area at `f` -- where he may hold the
+ * ball in his hands, out of the detector's sight (D85).
+ *
+ * Reads `positionAt`'s clamped position, so a keeper whose track ended a frame earlier is
+ * judged where he was last seen.
+ */
+export function keeperInBox(
+  track: Track,
+  f: number,
+  pitch: { length: number; width: number },
+): boolean {
+  if (track.team !== "gkHome" && track.team !== "gkAway") return false;
+  const p = positionAt(track, f);
+  const deep = p.x <= PENALTY_DEPTH_M || p.x >= pitch.length - PENALTY_DEPTH_M;
+  return deep && Math.abs(p.y - pitch.width / 2) <= PENALTY_HALF_WIDTH_M;
+}
+
 /**
  * Where the ball is when it has crossed a goal line between the posts: in the net.
  *
@@ -866,16 +888,64 @@ export function carrierAt(
   const hold = HOLD_S * fps;
   let seen = 0;
   let theirs = 0;
+  // And does it ever reach them? Being the nearest for the whole hold is not having the
+  // ball: a pass threaded between two defenders is nearest to each of them in turn, for
+  // as long as it takes to go past, and never at either one's feet. On a coach's clip a
+  // through ball ran 3.5 m from one defender and then 2.7 m from the next for 0.6 s, and
+  // the board handed it to both -- a turnover the clip never had, which the one-scene
+  // rule then used to revert the attacker who DID receive it. `SNAP_M` is the distance
+  // at which the camera model cannot tell a ball at his feet from one a stride away, so a
+  // holder has to have it inside that at least once.
+  const holder = players.find((p) => p.id === who)?.track;
+  let reach = Infinity;
   for (const s of ball) {
-    if (s.f < f || s.f > f + hold) continue;
+    if (s.f < f - 2 || s.f > f + hold) continue;
+    if (holder && s.f >= holder.samples[0].f && s.f <= holder.samples[holder.samples.length - 1].f) {
+      const p = positionAt(holder, s.f);
+      reach = Math.min(reach, Math.hypot(p.x - s.x, p.y - s.y));
+    }
+    if (s.f < f) continue;
     seen++;
     if (nearestTo(ball, players, s.f, radiusM, blockers) === who) theirs++;
   }
+  if (reach > SNAP_M) return null;
   // Every sighting counts, not just the ones with somebody near: a ball crossing open
   // ground has no rival claimant, and counting only claimants would read "nobody else was
   // nearer" as possession. With no sighting at all there is nothing to judge, and the
   // nearest player stands.
   return seen === 0 || theirs >= seen * HOLD_SHARE ? who : null;
+}
+
+/**
+ * Whether an opponent of `who` is at the ball as well, for most of the hold from `f`.
+ *
+ * Inside SNAP_M the camera model cannot say which of two players the ball is at, so a
+ * sighting an opponent is also that close to is a contest: a tackle, or a man shielding the
+ * ball from one. It says nothing about who came away with it (D85).
+ */
+export function contested(
+  ball: Sample[],
+  players: { id: string; track: Track }[],
+  f: number,
+  who: string,
+  fps: number,
+): boolean {
+  const hold = HOLD_S * fps;
+  const side = who.split("-")[0];
+  let seen = 0;
+  let at = 0;
+  for (const s of ball) {
+    if (s.f < f || s.f > f + hold) continue;
+    seen++;
+    const near = players.some(({ id, track }) => {
+      if (id.split("-")[0] === side) return false;
+      if (s.f < track.samples[0].f || s.f > track.samples[track.samples.length - 1].f) return false;
+      const p = positionAt(track, s.f);
+      return Math.hypot(p.x - s.x, p.y - s.y) <= SNAP_M;
+    });
+    if (near) at++;
+  }
+  return at > 0 && at >= seen * HOLD_SHARE;
 }
 
 /**
@@ -983,6 +1053,66 @@ export function leftBehind(
   return Math.hypot(p.x - here.x, p.y - here.y) > radiusM;
 }
 
+/**
+ * How much nearer the ball another player must be, in metres, before the holder has lost it.
+ *
+ * Wide enough that the camera model's own error cannot take a ball off the man who has it:
+ * positions are within about two metres, so a metre of difference is noise and four is not.
+ */
+export const TAKE_MARGIN_M = 4;
+
+/**
+ * Who has taken the ball off `holder` by `f`, or null while it is still his.
+ *
+ * The hold test asks whether a player KEEPS the ball, and two players a metre apart chasing a
+ * ball this camera puts down to a metre neither keep it: the nearest flickers between them and
+ * no one passes the test. The holder then stands (D43) however far away he is, which on a
+ * coach's clip meant a defender who was briefly nearest at the start of a dribble was shown
+ * carrying the ball for three and a half seconds while the man who actually had it ran past him
+ * -- *"home-3 runs with it and cuts inside to shoot, nobody else gets it"*.
+ *
+ * So the holder is judged against the FIELD rather than against a threshold. Where somebody is
+ * nearer than him at every sighting of the window, and by `TAKE_MARGIN_M` at each, the ball is
+ * no longer his. It passes to the challenger who was nearest for most of those sightings, and
+ * where two of them share it evenly the answer is nobody -- which is honest, and which `looseAt`
+ * then draws.
+ */
+export function takenFrom(
+  ball: Sample[],
+  players: { id: string; track: Track }[],
+  f: number,
+  holder: string | null,
+  fps: number,
+): { lost: boolean; taker: string | null } {
+  const still: { lost: boolean; taker: string | null } = { lost: false, taker: null };
+  if (holder === null) return still;
+  const track = players.find((p) => p.id === holder)?.track;
+  if (!track) return still;
+  const window = ball.filter((s) => s.f >= f && s.f <= f + HOLD_S * fps);
+  if (window.length < 2) return still;
+
+  const nearest: string[] = [];
+  for (const s of window) {
+    const mine = positionAt(track, s.f);
+    const ours = Math.hypot(mine.x - s.x, mine.y - s.y);
+    let best: { id: string; d: number } | null = null;
+    for (const { id, track: other } of players) {
+      if (id === holder) continue;
+      if (s.f < other.samples[0].f || s.f > other.samples[other.samples.length - 1].f) continue;
+      const p = positionAt(other, s.f);
+      const d = Math.hypot(p.x - s.x, p.y - s.y);
+      if (!best || d < best.d) best = { id, d };
+    }
+    // One sighting where the ball is still his, or nobody else is clearly nearer, and it is his.
+    if (!best || best.d > ours - TAKE_MARGIN_M) return still;
+    nearest.push(best.id);
+  }
+  const count = new Map<string, number>();
+  for (const id of nearest) count.set(id, (count.get(id) ?? 0) + 1);
+  const [taker, n] = [...count.entries()].sort((a, b) => b[1] - a[1])[0];
+  return { lost: true, taker: n >= HOLD_SHARE * nearest.length ? taker : null };
+}
+
 /** How far the ball's direction must change beside a player before it is called a touch. */
 export const TOUCH_TURN_DEG = 40;
 
@@ -1006,13 +1136,22 @@ export const TOUCH_SPEED_MS = 2.5;
  * fake: a ball crossing a player carries straight on. Speed is required on both sides so
  * that noise in a slow ball's position — a metre of it, at this camera's accuracy — cannot
  * turn into a right angle.
+ *
+ * At `SNAP_M` rather than the carrier radius, because a deflection happens at the BODY and
+ * four metres is a radius for dribbling. What else turns a ball sharply is the woodwork: a
+ * coach's clip ends with a shot off the post, and the goalkeeper stood 2.99 m from where the
+ * path bent, so the board gave him a save he never made and the clip a turnover it never had.
+ * Nobody touches a ball three metres away. It costs 0.8 points of possession on the eleven
+ * benchmark clips — 1.6 fewer invented carriers for 2.7 more missed ones — and that trade is
+ * the one this file keeps making: a turnover nobody played is a move a coach will try to
+ * coach, and a missing one leaves the play looking continuous.
  */
 export function touchedAt(
   ball: Sample[],
   players: { id: string; track: Track }[],
   f: number,
   fps: number,
-  radiusM = CARRIER_RADIUS_M,
+  radiusM = SNAP_M,
   blockers: Track[] = [],
 ): string | null {
   const window = Math.max(1, Math.round(TOUCH_WINDOW_S * fps));

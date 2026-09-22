@@ -7,11 +7,14 @@ import {
   bestCover,
   breaks,
   carrierAt,
+  contested,
   KICK_S,
+  keeperInBox,
   kickedBy,
   atFeet,
   onTheBall,
   scored,
+  takenFrom,
   touchedAt,
   touches,
   leftBehind,
@@ -589,6 +592,51 @@ describe("carrierAt", () => {
     const kept = [ball(15, 21, 30), ball(16, 21.2, 30), ball(17, 21.1, 30), ball(18, 21.3, 30)];
     expect(carrierAt(kept, players, 15, undefined, 25)).toBe("home-1");
   });
+
+  it("does not hand it to a player it only ever passes near", () => {
+    // A through ball threaded past a defender is nearest to him for the whole hold, three
+    // metres off his feet and never at them. On a coach's clip that drew a turnover the
+    // play never had; a holder has to have the ball inside SNAP_M at least once.
+    const past = [ball(15, 23, 30), ball(16, 23.2, 30), ball(17, 23.1, 30), ball(18, 23.3, 30)];
+    expect(carrierAt(past, players, 15, undefined, 25)).toBeNull();
+  });
+});
+
+describe("contested", () => {
+  const ball = (f: number, x: number, y: number) => ({ f, x, y });
+  const at = [ball(15, 21.2, 30), ball(16, 21.1, 30), ball(17, 21.3, 30), ball(18, 21.2, 30)];
+  const pair = (awayX: number, awayTeam = "away") => [
+    { id: "home-1", track: track(1, "home", [[10, 20, 30], [20, 20, 30]]) },
+    { id: `${awayTeam}-2`, track: track(2, awayTeam, [[10, awayX, 30], [20, awayX, 30]]) },
+  ];
+
+  it("is a ball both sides are inside SNAP_M of", () => {
+    // Either player could be the one with it, at this camera model's accuracy (D85).
+    expect(contested(at, pair(21.5), 15, "away-2", 25)).toBe(true);
+    expect(contested(at, pair(21.5), 15, "home-1", 25)).toBe(true);
+  });
+
+  it("is not a ball the opponent is only marking, or a team-mate beside it", () => {
+    expect(contested(at, pair(24), 15, "home-1", 25)).toBe(false);
+    expect(contested(at, pair(21.5, "home"), 15, "home-1", 25)).toBe(false);
+  });
+});
+
+describe("keeperInBox", () => {
+  const pitch = { length: 105, width: 68 };
+  const standing = (team: string, x: number, y: number) =>
+    track(1, team, [[1, x, y], [50, x, y]]);
+
+  it("is a goalkeeper inside either penalty area", () => {
+    expect(keeperInBox(standing("gkAway", 102, 36), 20, pitch)).toBe(true);
+    expect(keeperInBox(standing("gkHome", 4, 30), 20, pitch)).toBe(true);
+  });
+
+  it("is not a goalkeeper out of his box, or anybody else in it", () => {
+    expect(keeperInBox(standing("gkAway", 80, 34), 20, pitch)).toBe(false);
+    expect(keeperInBox(standing("gkAway", 102, 60), 20, pitch)).toBe(false);
+    expect(keeperInBox(standing("away", 102, 36), 20, pitch)).toBe(false);
+  });
 });
 
 describe("a holder the ball has left", () => {
@@ -927,6 +975,63 @@ describe("the ball on a board", () => {
     expect(lost.doc.scenes.some((s) => s.ballPos && s.ballPos.x < 0)).toBe(false);
   });
 
+  it("draws a pass threaded past a defender as one pass between team-mates", () => {
+    // Played from home-1 to home-2 at 17 m/s, three metres past away-1's feet on the way.
+    // Named by nearness alone the defender held it for as long as it took to go past; drawn
+    // at its own position it stopped in space. Either way one pass became two movements,
+    // which a coach reported in so many words: the board is who has the ball, scene by
+    // scene. home-3's run far away is only there to put a scene in the middle of the flight.
+    // Sampled every frame: a scene only lands where the players are actually seen (D67).
+    const frames = Array.from({ length: 76 }, (_, i) => i + 1);
+    const still = (id: number, team: string, x: number, y: number) =>
+      track(id, team, frames.map((f) => [f, x, y] as [number, number, number]));
+    const runner = track(
+      4,
+      "home",
+      frames.map((f) => [f, 60, 60 - 10 * (1 - Math.abs(f - 38) / 38)] as [number, number, number]),
+    );
+    const tracks = [
+      still(1, "home", 10, 20),
+      still(2, "away", 20, 23),
+      still(3, "home", 30, 20),
+      runner,
+    ];
+    const samples = Array.from({ length: 76 }, (_, i) => {
+      const f = i + 1;
+      const x = f <= 20 ? 10.3 : f <= 50 ? 10 + ((f - 20) * 20) / 30 : 30.3;
+      return { f, x, y: 20 };
+    });
+    const result = boardFromTracks({ ...file(tracks, 76), ball: { samples } });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.frames.some((f) => f > 25 && f < 45)).toBe(true);
+    const carriers = result.doc.scenes.map((s) => s.carrier);
+    expect(carriers.some((c) => c?.startsWith("away"))).toBe(false);
+    expect(result.doc.scenes.some((s) => s.carrier === null && s.ballPos)).toBe(false);
+    expect(carriers[carriers.length - 1]).toBe("home-2");
+  });
+
+  it("does not give the ball to the other side on a single sighting", () => {
+    // The end of a coach's clip: the keeper saves and holds, and the ball's last sighting
+    // falls beside the attacker in front of him. One frame handed it back, and `steady`
+    // then took the save itself for the flicker. A turnover has to be seen.
+    const still = (id: number, team: string, x: number, y: number) =>
+      track(id, team, [[1, x, y], [51, x, y]]);
+    const tracks = [still(1, "home", 12, 20), still(2, "away", 3, 20), still(3, "home", 5, 21)];
+    const samples = Array.from({ length: 50 }, (_, i) => {
+      const f = i + 1;
+      if (f <= 15) return { f, x: 12.3, y: 20 };
+      if (f <= 20) return { f, x: 12 - ((f - 15) * 8.7) / 5, y: 20 };
+      if (f < 50) return { f, x: 3.2, y: 20 };
+      return { f, x: 4.9, y: 21 };
+    });
+    const result = boardFromTracks({ ...file(tracks), ball: { samples } });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const carriers = result.doc.scenes.map((s) => s.carrier).filter((c) => c !== null);
+    expect(carriers[carriers.length - 1]).toBe("away-1");
+  });
+
   it("leaves the ball in the net once it has crossed the line", () => {
     // Play is over: a goal drawn back on the pitch, among the defenders who were standing
     // on the line, reads as them winning it -- which is what a coach reported.
@@ -956,6 +1061,26 @@ describe("the ball on a board", () => {
     const carriers = result.doc.scenes.map((s) => s.carrier);
     expect(carriers[0]).toBe("home-1");
     expect(carriers[carriers.length - 1]).toBeNull();
+  });
+
+  it("lets a goalkeeper keep a ball he caught, though it is never seen again", () => {
+    // In his hands the ball is out of sight, so the save is its last sighting: seen once,
+    // then silent for longer than CARRY_S (D85).
+    const keeper = track(
+      3,
+      "gkAway",
+      Array.from({ length: 51 }, (_, i) => [i + 1, 100, 34] as [number, number, number]),
+    );
+    const dribble = Array.from({ length: 10 }, (_, i) => ({ f: i + 1, x: 10 + i * 0.2, y: 20.3 }));
+    const result = boardFromTracks({
+      ...file([straightRun(1, "home", 20), straightRun(2, "away", 40), keeper]),
+      ball: { samples: [...dribble, { f: 20, x: 100.3, y: 34 }] },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const keeperId = Object.entries(result.sources).find(([, t]) => t.team === "gkAway")![0];
+    const carriers = result.doc.scenes.map((s) => s.carrier);
+    expect(carriers[carriers.length - 1]).toBe(keeperId);
   });
 
   it("does not let the ball appear from nowhere partway through", () => {
@@ -1176,5 +1301,49 @@ describe("the ball is never given to somebody who was not there", () => {
       expect(f).toBeGreaterThanOrEqual(t.samples[0].f);
       expect(f).toBeLessThanOrEqual(t.samples[t.samples.length - 1].f);
     }
+  });
+});
+
+describe("takenFrom", () => {
+  const ball = (f: number, x: number, y: number) => ({ f, x, y });
+  const run = (id: string, team: string, from: number, to: number, x0: number, x1: number) => ({
+    id,
+    track: track(Number(id.split("-")[1]), team, [
+      [from, x0, 30],
+      [to, x1, 30],
+    ]),
+  });
+
+  it("leaves the ball with the holder while nobody is clearly nearer", () => {
+    // A defender a stride behind the man on the ball has not taken it off him.
+    const players = [run("home-1", "home", 1, 40, 20, 30), run("away-1", "away", 1, 40, 21, 31)];
+    const seen = [10, 14, 18, 22].map((f) => ball(f, 20 + (f - 1) / 4, 30));
+    expect(takenFrom(seen, players, 10, "home-1", 25).lost).toBe(false);
+  });
+
+  it("hands it to the man who is nearer at every sighting", () => {
+    // The dribbler runs with the ball; the holder named at the start is left behind, and
+    // eight metres is a long way to wait for `leftBehind` to notice.
+    const players = [run("away-1", "away", 1, 40, 20, 20), run("home-1", "home", 1, 40, 26, 34)];
+    const seen = [10, 14, 18, 22].map((f, i) => ball(f, 26 + i * 2, 30));
+    expect(takenFrom(seen, players, 10, "away-1", 25)).toEqual({ lost: true, taker: "home-1" });
+  });
+
+  it("names nobody where two players share the ball evenly", () => {
+    // Neither of them can be shown to have it, and a board that guesses draws a turnover.
+    const players = [
+      run("away-1", "away", 1, 40, 20, 20),
+      run("home-1", "home", 1, 40, 30, 30),
+      run("home-2", "home", 1, 40, 34, 34),
+    ];
+    // Four sightings inside the 0.4 s window, the nearest alternating between them.
+    const seen = [ball(10, 30, 30), ball(13, 34, 30), ball(16, 30, 30), ball(19, 34, 30)];
+    expect(takenFrom(seen, players, 10, "away-1", 25)).toEqual({ lost: true, taker: null });
+  });
+
+  it("says nothing without sightings to judge", () => {
+    const players = [run("home-1", "home", 1, 40, 20, 30)];
+    expect(takenFrom([ball(10, 20, 30)], players, 10, "home-1", 25).lost).toBe(false);
+    expect(takenFrom([], players, 10, "home-1", 25).lost).toBe(false);
   });
 });

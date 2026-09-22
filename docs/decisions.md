@@ -466,6 +466,86 @@ drawn from memory. What is left is short because THE TRACKER IS SHORT: a board c
 long as the roster is watched, and at today's fragmentation that is a handful of seconds. The
 fix for board length is upstream, not here.
 
+## D86 — A dribbler takes the ball off the man who was nearest when he started, and the post is not a save
+
+The same coach, scene by scene against the two Milan–Benfica clips, on a sheet of every scene the
+board drew. Two of his marks were the same failure from opposite ends.
+
+*"home-3 runs with it and cuts inside to shoot until the end of the clip, nobody else gets it."*
+The board had a defender carrying it for three and a half seconds. He was the nearest player when
+the dribble began, and after that nobody passed the hold test: two men a metre apart chasing a
+ball this camera locates to a metre take turns being nearest, so neither KEEPS it, and D43's
+carry-forward left it with whoever was named first — while he fell eight metres behind.
+
+So a holder is judged against the field, not against a threshold. `takenFrom` asks whether
+somebody was nearer at EVERY sighting of the hold window, by `TAKE_MARGIN_M`; if so the ball is
+no longer his, and it goes to whoever was nearest for most of those sightings, or to nobody where
+two of them share it evenly. It changes nothing on the eleven benchmark clips — there is no
+passage in them where this happens — and on the coach's clip it removes an invented away
+possession and the two turnovers around it, 6 turnovers to 2.
+
+*"After the shot the ball hits the post and rolls out of bounds, nobody else gets it."* The board
+had the goalkeeper saving it. `touchedAt` names whoever is nearest where the ball's path bends,
+which is how one-touch play is found (D71) — and the woodwork bends a ball too. The keeper stood
+2.99 m from the bend, inside the four-metre carrier radius. A deflection happens at the BODY, so
+a touch now asks for `SNAP_M`, and the shot ends with nobody, which is what the clip shows.
+
+That one is a trade: 0.8 points of possession on the benchmark, 1.6 fewer invented carriers for
+2.7 more missed ones, measured frame by frame against the truth boards. It is the trade this file
+keeps making, and for the reason D71 and D85 give — a turnover nobody played is a move a coach
+will try to coach, and a missing one leaves the play looking continuous. Three metres was
+available and scored better; it is the keeper's own distance on one clip, which is not a rule.
+
+## D85 — A tackle is not a turnover, and a keeper's catch is silent
+
+A coach on a new clip (`Untitled`, Milan–Benfica): *"the red ends up with possession, while in
+the real clip it's a through ball that ends up in a white team player, and then a shot and the
+GK defends and holds the ball"*. `tracks.json` was right about all of it -- the ball's path,
+every track's side, checked on the frames. Three readings of it were wrong.
+
+**The tackle.** White #11 has the ball; a red defender gets a foot to it for half a second and
+#11 comes away with it. The ball was 0.1-1 m from the defender's boot for 14 of the 20
+sightings in the hold, with #11 1.3-1.7 m away the whole time -- both inside `SNAP_M`, where the
+camera model cannot say whose feet it is at. So the hold test named the defender. `contested`
+reads that shape, and a contested holder is only named where his side still has the ball at
+the next scene anybody is named at. A tackle that wins it keeps its turnover; one that does
+not has none.
+
+It lives in the importer, not in `carrierAt`. Put there it also moved `handovers` -- and so
+where scenes fall -- and dropped real passes between team-mates marked tightly on three
+ground-truth boards, which is not what the rule is about.
+
+**The keeper.** He is 0.3 m from the ball at its last sighting and the file never sees it
+again, because it is in his hands. D71's "a change of side has to be seen twice" can never be
+met by a catch, and `CARRY_S` then drops him as holder a second later. A goalkeeper standing in
+a penalty area (`keeperInBox`) is exempt from both.
+
+    board                before                          after
+    Untitled f554        away (the tackler)              home (#11)
+    Untitled f663, f721  nobody                          the away keeper
+    nottingham f708      home (a sliding tackle, missed) away, who kept attacking
+
+Nothing else moves on the other twelve boards or the eleven ground-truth ones. Each changed
+scene was checked against the video.
+
+**The through ball is NOT fixed, and two attempts are recorded so they are not tried again.**
+The pass runs 1.97 m from a red defender at a scene frame -- 3 cm inside `SNAP_M` -- and he is
+nearest for the whole hold, so the board still draws red with the ball for two scenes. The ball
+data is right: the frames show it running past him at that distance.
+
+- *`steady` reading past unnamed scenes* (a one-scene possession with only flights either side
+  is noise). It fixed this clip and reverted two real turnovers on ground truth: SNGS-067's R50
+  dribbling for a second before white wins it back, and SNGS-075's R6 collecting a clearance at
+  the touchline. Scene count is not possession length.
+- *A ball that carries straight on past him, at pace, and ends the hold out of his reach* --
+  `touchedAt`'s own description of a fly-over, inverted. It flagged SNGS-067's L10 winning the
+  ball from R50, which the video shows plainly. D71 already said kinematics cannot separate a
+  fly-over from a reception on this ball, and this is that again.
+
+A pass two metres from a defender is exactly the distance the camera model cannot resolve.
+What would settle it is evidence from upstream -- a sharper ball position, or its height --
+not another rule here.
+
 ## D84 — A backfilled carrier still has to have been on the pitch
 
 Two rules hand the ball to somebody at a scene the file could not name a holder at: it goes

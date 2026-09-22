@@ -3,6 +3,30 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.53.1 (2026-09-22)
+
+### Fix
+
+- **import**: a dribbler takes the ball, and the post is not a save
+
+## v0.53.0 (2026-09-19)
+
+### Feat
+
+- **import**: pnpm board --truth, possession against the truth board frame by frame
+
+## v0.52.1 (2026-09-17)
+
+### Fix
+
+- **import**: a tackle is not a turnover, and a keeper's catch is silent
+
+## v0.52.0 (2026-09-16)
+
+### Feat
+
+- **import**: who has the ball, scene by scene
+
 ## v0.51.0 (2026-09-11)
 
 ### Feat

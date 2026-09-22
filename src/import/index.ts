@@ -18,11 +18,14 @@ import {
   CARRIER_RADIUS_M,
   carrierAt,
   chooseScenes,
+  contested,
   BALL_EDGE_M,
   breaks,
   fitCurve,
   flights,
   handovers,
+  HOLD_S,
+  keeperInBox,
   kickedBy,
   MAX_PER_SIDE,
   MIN_OBSERVED_S,
@@ -37,6 +40,7 @@ import {
   witnessed,
   positionAt,
   leftBehind,
+  takenFrom,
   looseAt,
   atFeet,
   restartAt,
@@ -354,23 +358,68 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   // Scenes where the file DENIES a holder rather than merely failing to name one. The two
   // are not the same answer and only the second may be filled in below.
   const denied = frames.map(() => false);
-  const carriers = found.map((c, i) => {
+  // Who a sighting took the ball away from, at the scene it did -- the man who played it.
+  const playedBy = frames.map((): string | null => null);
+  // A change of SIDE has to be seen more than once. The hold test takes a single sighting as
+  // a hold, because a player the ball reaches with nothing after it to judge is usually
+  // receiving it -- but handing it to the other team on one frame is how a coach's clip
+  // ended: the ball's last sighting fell a metre from the attacker beside the goalkeeper
+  // who had just saved it, the board gave it back, and `steady` then read the save itself
+  // as the flicker and reverted it. A pass that never happened between team-mates is a
+  // detail; a turnover that never happened is a move a coach will try to coach (D71).
+  const hold = HOLD_S * file.source.fps;
+  const seenOnce = (f: number) =>
+    ballSamples.filter((s) => s.f >= f && s.f <= f + hold).length < 2;
+  const team = (id: string) => id.split("-")[0];
+  // Except by a goalkeeper in his box. A ball he catches is out of sight in his hands, so
+  // its last sighting is the save and a second one never comes (D85).
+  const inHands = (id: string, f: number) => {
+    const track = withIds.find((w) => w.id === id)?.track;
+    return track !== undefined && keeperInBox(track, f, file.pitch);
+  };
+  // A tackle is not a turnover. A holder an opponent was at the ball with is only named
+  // where his side still has it at the next scene anybody is named at (D85).
+  found.forEach((named, i) => {
+    if (named === null || !contested(ballSamples, withIds, frames[i], named, file.source.fps)) {
+      return;
+    }
+    const after = found.slice(i + 1).find((c) => c !== null);
+    if (after !== undefined && team(after) !== team(named)) found[i] = null;
+  });
+  const carriers = found.map((named, i) => {
+    const turned = named !== null && holder !== null && team(named) !== team(holder);
+    const c = turned && seenOnce(frames[i]) && !inHands(named, frames[i]) ? null : named;
     if (c !== null && c !== takerId) released = true;
     if (i > 0 && !released) return null;
+    const taken = takenFrom(ballSamples, withIds, frames[i], holder, file.source.fps);
     if (c !== null) holder = c;
     // A sighting that puts the ball out of his reach ends his possession, whether or not
     // anybody else can be shown to have taken it. Otherwise he keeps it on the board all
     // the way through the pass he played, and out to the corner flag to celebrate.
     else if (leftBehind(ballSamples, withIds, frames[i], holder)) {
+      playedBy[i] = holder;
       holder = null;
       denied[i] = true;
+    }
+    // And a holder somebody else is nearer to at every sighting of the window has lost it,
+    // long before the eight metres `leftBehind` asks for: the man running past him with the
+    // ball at his feet never passes the hold test while the two of them are a metre apart,
+    // so without this the ball stays with whoever was nearest when the dribble began.
+    else if (taken.lost && taken.taker !== null) {
+      playedBy[i] = holder;
+      holder = taken.taker;
     }
     // Carrying a holder forward is a reading of the ball's silence, and it is only good
     // for as long as the silence is short (CARRY_S). Past that the file says nothing
     // about who has the ball, and the board says nothing either.
     // Only where there is a holder to lose: before anybody has been named, silence denies
     // nothing -- it is the opening of a board, not a statement about possession.
-    else if (holder !== null && !sighted(ballSamples, frames[i], file.source.fps)) {
+    // Nor for a goalkeeper in his box, whose ball is silent because he is holding it (D85).
+    else if (
+      holder !== null &&
+      !sighted(ballSamples, frames[i], file.source.fps) &&
+      !inHands(holder, frames[i])
+    ) {
       holder = null;
       denied[i] = true;
     }
@@ -391,6 +440,19 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     const lands = carriers.findIndex((c, j) => j > i && c !== null);
     const from = kickedBy(ballSamples, withIds, frames[i], file.source.fps);
     if (from !== null && lands >= 0) carriers[i] = from;
+  });
+
+  // And the same pass when it flies near somebody. The rule above only reaches a ball eight
+  // metres from EVERYBODY, and a through ball is threaded between defenders -- two or three
+  // metres from them, never at their feet, so nobody holds it and it is not loose either.
+  // Drawn at its own position it split one pass into a ball stopping in space twice on the
+  // way, which a coach reported in so many words: the board is about who has the ball in
+  // each scene, and a pass is the carrier changing (D43). So a scene the ball left its
+  // holder at, when somebody later has it, is still the passer's; the travel into the
+  // receiver's scene is the pass. A shot, with nobody to land on, is left drawn as a shot.
+  playedBy.forEach((from, i) => {
+    if (from === null || carriers[i] !== null) return;
+    if (carriers.findIndex((c, j) => j > i && c !== null) >= 0) carriers[i] = from;
   });
 
   // Where the ball was NOT seen either, the old answer still stands: it starts with
