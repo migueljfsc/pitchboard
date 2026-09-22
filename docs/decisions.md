@@ -466,6 +466,36 @@ drawn from memory. What is left is short because THE TRACKER IS SHORT: a board c
 long as the roster is watched, and at today's fragmentation that is a handful of seconds. The
 fix for board length is upstream, not here.
 
+## D86 — A dribbler takes the ball off the man who was nearest when he started, and the post is not a save
+
+The same coach, scene by scene against the two Milan–Benfica clips, on a sheet of every scene the
+board drew. Two of his marks were the same failure from opposite ends.
+
+*"home-3 runs with it and cuts inside to shoot until the end of the clip, nobody else gets it."*
+The board had a defender carrying it for three and a half seconds. He was the nearest player when
+the dribble began, and after that nobody passed the hold test: two men a metre apart chasing a
+ball this camera locates to a metre take turns being nearest, so neither KEEPS it, and D43's
+carry-forward left it with whoever was named first — while he fell eight metres behind.
+
+So a holder is judged against the field, not against a threshold. `takenFrom` asks whether
+somebody was nearer at EVERY sighting of the hold window, by `TAKE_MARGIN_M`; if so the ball is
+no longer his, and it goes to whoever was nearest for most of those sightings, or to nobody where
+two of them share it evenly. It changes nothing on the eleven benchmark clips — there is no
+passage in them where this happens — and on the coach's clip it removes an invented away
+possession and the two turnovers around it, 6 turnovers to 2.
+
+*"After the shot the ball hits the post and rolls out of bounds, nobody else gets it."* The board
+had the goalkeeper saving it. `touchedAt` names whoever is nearest where the ball's path bends,
+which is how one-touch play is found (D71) — and the woodwork bends a ball too. The keeper stood
+2.99 m from the bend, inside the four-metre carrier radius. A deflection happens at the BODY, so
+a touch now asks for `SNAP_M`, and the shot ends with nobody, which is what the clip shows.
+
+That one is a trade: 0.8 points of possession on the benchmark, 1.6 fewer invented carriers for
+2.7 more missed ones, measured frame by frame against the truth boards. It is the trade this file
+keeps making, and for the reason D71 and D85 give — a turnover nobody played is a move a coach
+will try to coach, and a missing one leaves the play looking continuous. Three metres was
+available and scored better; it is the keeper's own distance on one clip, which is not a rule.
+
 ## D85 — A tackle is not a turnover, and a keeper's catch is silent
 
 A coach on a new clip (`Untitled`, Milan–Benfica): *"the red ends up with possession, while in

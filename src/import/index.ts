@@ -40,6 +40,7 @@ import {
   witnessed,
   positionAt,
   leftBehind,
+  takenFrom,
   looseAt,
   atFeet,
   restartAt,
@@ -390,6 +391,7 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
     const c = turned && seenOnce(frames[i]) && !inHands(named, frames[i]) ? null : named;
     if (c !== null && c !== takerId) released = true;
     if (i > 0 && !released) return null;
+    const taken = takenFrom(ballSamples, withIds, frames[i], holder, file.source.fps);
     if (c !== null) holder = c;
     // A sighting that puts the ball out of his reach ends his possession, whether or not
     // anybody else can be shown to have taken it. Otherwise he keeps it on the board all
@@ -398,6 +400,14 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
       playedBy[i] = holder;
       holder = null;
       denied[i] = true;
+    }
+    // And a holder somebody else is nearer to at every sighting of the window has lost it,
+    // long before the eight metres `leftBehind` asks for: the man running past him with the
+    // ball at his feet never passes the hold test while the two of them are a metre apart,
+    // so without this the ball stays with whoever was nearest when the dribble began.
+    else if (taken.lost && taken.taker !== null) {
+      playedBy[i] = holder;
+      holder = taken.taker;
     }
     // Carrying a holder forward is a reading of the ball's silence, and it is only good
     // for as long as the silence is short (CARRY_S). Past that the file says nothing

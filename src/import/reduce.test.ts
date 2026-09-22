@@ -14,6 +14,7 @@ import {
   atFeet,
   onTheBall,
   scored,
+  takenFrom,
   touchedAt,
   touches,
   leftBehind,
@@ -1300,5 +1301,49 @@ describe("the ball is never given to somebody who was not there", () => {
       expect(f).toBeGreaterThanOrEqual(t.samples[0].f);
       expect(f).toBeLessThanOrEqual(t.samples[t.samples.length - 1].f);
     }
+  });
+});
+
+describe("takenFrom", () => {
+  const ball = (f: number, x: number, y: number) => ({ f, x, y });
+  const run = (id: string, team: string, from: number, to: number, x0: number, x1: number) => ({
+    id,
+    track: track(Number(id.split("-")[1]), team, [
+      [from, x0, 30],
+      [to, x1, 30],
+    ]),
+  });
+
+  it("leaves the ball with the holder while nobody is clearly nearer", () => {
+    // A defender a stride behind the man on the ball has not taken it off him.
+    const players = [run("home-1", "home", 1, 40, 20, 30), run("away-1", "away", 1, 40, 21, 31)];
+    const seen = [10, 14, 18, 22].map((f) => ball(f, 20 + (f - 1) / 4, 30));
+    expect(takenFrom(seen, players, 10, "home-1", 25).lost).toBe(false);
+  });
+
+  it("hands it to the man who is nearer at every sighting", () => {
+    // The dribbler runs with the ball; the holder named at the start is left behind, and
+    // eight metres is a long way to wait for `leftBehind` to notice.
+    const players = [run("away-1", "away", 1, 40, 20, 20), run("home-1", "home", 1, 40, 26, 34)];
+    const seen = [10, 14, 18, 22].map((f, i) => ball(f, 26 + i * 2, 30));
+    expect(takenFrom(seen, players, 10, "away-1", 25)).toEqual({ lost: true, taker: "home-1" });
+  });
+
+  it("names nobody where two players share the ball evenly", () => {
+    // Neither of them can be shown to have it, and a board that guesses draws a turnover.
+    const players = [
+      run("away-1", "away", 1, 40, 20, 20),
+      run("home-1", "home", 1, 40, 30, 30),
+      run("home-2", "home", 1, 40, 34, 34),
+    ];
+    // Four sightings inside the 0.4 s window, the nearest alternating between them.
+    const seen = [ball(10, 30, 30), ball(13, 34, 30), ball(16, 30, 30), ball(19, 34, 30)];
+    expect(takenFrom(seen, players, 10, "away-1", 25)).toEqual({ lost: true, taker: null });
+  });
+
+  it("says nothing without sightings to judge", () => {
+    const players = [run("home-1", "home", 1, 40, 20, 30)];
+    expect(takenFrom([ball(10, 20, 30)], players, 10, "home-1", 25).lost).toBe(false);
+    expect(takenFrom([], players, 10, "home-1", 25).lost).toBe(false);
   });
 });
