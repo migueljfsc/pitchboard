@@ -181,6 +181,12 @@ export function removePlayer(doc: BoardDoc, id: string): BoardDoc {
       else next.delay = delay;
     }
 
+    if (scene.unseen?.includes(id)) {
+      const unseen = scene.unseen.filter((u) => u !== id);
+      if (unseen.length === 0) delete next.unseen;
+      else next.unseen = unseen;
+    }
+
     if (scene.highlight) {
       const highlight = { ...scene.highlight };
       delete highlight[id];

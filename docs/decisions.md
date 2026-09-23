@@ -466,6 +466,30 @@ drawn from memory. What is left is short because THE TRACKER IS SHORT: a board c
 long as the roster is watched, and at today's fragmentation that is a handful of seconds. The
 fix for board length is upstream, not here.
 
+## D87 — A player nobody saw is drawn faded, and a coach placing him makes him solid
+
+A board imported from video holds all twenty-two players in every scene -- that is what a board
+is -- and a player the tracker had not found yet, or had lost, stands where he was first or last
+seen (D81). Drawn like everyone else he reads as a man standing still in the play. A coach, on
+`Untitled_1`: *"home-5 and away-11 are static but always visible to the camera"*. They were not
+static; they were not tracked yet.
+
+So `Scene.unseen` lists the players with no sighting within `WITNESS_TOL_S` of the scene's
+frame -- the same test everything else uses to ask whether a player was watched -- and they are
+drawn at `UNSEEN_ALPHA`. Filled rather than hollow, because hollow is what a ghost of another
+scene looks like and the two mean different things. A player fades in over his own run into the
+scene where he is first seen, rather than appearing at a cut. The coach's words for it: faded
+*"before they are relevant to the play"*.
+
+It lives in the document, not the view, so an export or a shared board shows it as the editor
+does (invariant 1). Dragging a faded token clears him for that scene -- moving a token is saying
+where he is -- and removing a player takes him out of every list. A board drawn by hand has no
+`unseen` and looks exactly as it did.
+
+On the coach's two clips 5 to 15 of the 22 are faded in a given scene. That is not a new fault,
+it is the old one made visible: a broadcast camera shows part of the pitch, and the board's own
+`seen` column already said about half of what it drew had no sighting behind it.
+
 ## D86 — A dribbler takes the ball off the man who was nearest when he started, and the post is not a save
 
 The same coach, scene by scene against the two Milan–Benfica clips, on a sheet of every scene the

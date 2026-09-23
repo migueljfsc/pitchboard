@@ -445,17 +445,46 @@ export type Frame = {
   /** `null` before the ball is first given to anyone — see D44. */
   ball: Vec2 | null;
   resolved: Resolved;
+  /** How solid each player is drawn, 1 for seen and `UNSEEN_ALPHA` for not (D87). */
+  visibility: Record<string, number>;
 };
+
+/**
+ * How solid a player nobody saw is drawn.
+ *
+ * Solid enough to find and to place the play against, faint enough that nobody reads him as
+ * standing in it. Filled rather than hollow, because hollow is what a ghost of another scene
+ * looks like, and the two mean different things.
+ */
+export const UNSEEN_ALPHA = 0.3;
+
+const seenIn = (scene: Scene, entityId: string): number =>
+  scene.unseen?.includes(entityId) ? UNSEEN_ALPHA : 1;
+
+/**
+ * How solid a player is at this moment: faded where he was not seen, and crossing between the
+ * two over his own run, so a player the play reaches fades in as he arrives rather than
+ * appearing at a cut (D87).
+ */
+export function visibilityOf(entityId: string, r: Resolved, doc: BoardDoc): number {
+  const from = seenIn(r.from, entityId);
+  const to = seenIn(r.to, entityId);
+  if (from === to) return to;
+  const u = progressOf(entityId, r, doc);
+  return from + (to - from) * u;
+}
 
 export function frameAt(doc: BoardDoc, t: number): Frame {
   const resolved = resolveAt(doc, t);
   const positions: Record<string, Vec2> = {};
+  const visibility: Record<string, number> = {};
   for (const team of doc.teams) {
     for (const player of team.players) {
       positions[player.id] = positionAt(player.id, resolved, doc);
+      visibility[player.id] = visibilityOf(player.id, resolved, doc);
     }
   }
-  return { positions, ball: ballAt(resolved, doc), resolved };
+  return { positions, ball: ballAt(resolved, doc), resolved, visibility };
 }
 
 const centre = (doc: BoardDoc): Vec2 => ({ x: doc.pitch.length / 2, y: doc.pitch.width / 2 });

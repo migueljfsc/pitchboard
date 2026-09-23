@@ -470,3 +470,18 @@ describe("hitTestTiltedText", () => {
     expect(hitTestGroundAnnotation(labelled, 0, { x: 30, y: 20 }, "mark")).toBeNull();
   });
 });
+
+describe("moveEntities and unseen players (D87)", () => {
+  it("makes a dragged player solid in the scene he was placed in, and nobody else", () => {
+    const [a, b] = doc.teams[0].players.slice(1, 3).map((p) => p.id);
+    const marked: BoardDoc = { ...doc, scenes: [{ ...doc.scenes[0], unseen: [a, b] }] };
+    const next = moveEntities(marked, 0, [a], { x: 2, y: 0 });
+    expect(next.scenes[0].unseen).toEqual([b]);
+  });
+
+  it("drops the field when the last unseen player is placed", () => {
+    const a = doc.teams[0].players[1].id;
+    const marked: BoardDoc = { ...doc, scenes: [{ ...doc.scenes[0], unseen: [a] }] };
+    expect(moveEntities(marked, 0, [a], { x: 2, y: 0 }).scenes[0].unseen).toBeUndefined();
+  });
+});

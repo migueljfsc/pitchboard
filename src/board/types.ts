@@ -89,6 +89,20 @@ export type Scene = {
    */
   hiddenRuns?: string[];
   /**
+   * Players nobody SAW at this scene, drawn faded.
+   *
+   * A board imported from video holds every player in every scene, and a player the tracker
+   * had not found yet -- or had lost -- stands where he was first or last seen. Drawn solid he
+   * reads as a man standing still in the play, which a coach reported as exactly that: two
+   * players *"static, but always visible to the camera"*. Faded, he reads as what he is, a
+   * place-holder until he matters (D87).
+   *
+   * Written by the importer from the tracks behind the board; cleared for a player the moment
+   * a coach drags him, because moving a token is saying where he is. Absent means everyone was
+   * seen, which is every board drawn by hand.
+   */
+  unseen?: string[];
+  /**
    * Pace for the travel INTO this scene, in metres per second, overriding
    * `flow.speed`. Flow mode only, and meaningless on scene 0 — nothing travels
    * into it. Absent means the board's pace, so a document written before

@@ -157,6 +157,7 @@ export function drawBoard(
         rotated: view.rotated,
         scale,
         pattern: team.pattern,
+        alpha: frame.visibility[player.id],
       });
     }
   }
@@ -567,6 +568,7 @@ function drawBillboards(
               rotated: false,
               scale,
               pattern: team.pattern,
+              alpha: frame.visibility[player.id],
             });
           }),
       });
@@ -1400,6 +1402,8 @@ type TokenState = {
   /** Kit pattern. Document data rather than view state, but it rides here to
    *  keep drawToken from growing an eighth positional argument. */
   pattern?: TeamPattern;
+  /** How solid the token is drawn: 1, or `UNSEEN_ALPHA` for a player nobody saw (D87). */
+  alpha?: number;
 };
 
 /**
@@ -1451,6 +1455,13 @@ function drawToken(
   textColor: string,
   state: TokenState,
 ): void {
+  if (state.alpha !== undefined && state.alpha < 1) {
+    ctx.save();
+    ctx.globalAlpha *= state.alpha;
+    drawToken(ctx, p, number, label, color, textColor, { ...state, alpha: 1 });
+    ctx.restore();
+    return;
+  }
   // Rings, strokes and type all scale with the token, so a bigger board is the
   // same drawing at a larger size rather than fat tokens with tiny numbers.
   const k = state.scale ?? 1;

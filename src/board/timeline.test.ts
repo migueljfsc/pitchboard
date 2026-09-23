@@ -15,6 +15,7 @@ import {
   resolveAt,
   sceneTimings,
   totalDurationMs,
+  UNSEEN_ALPHA,
   type Resolved,
 } from "./timeline";
 import { createBoardDoc } from "@/formations";
@@ -688,5 +689,42 @@ describe("highlightAt", () => {
       a.highlight = { "home-2": AMBER };
     });
     expect(highlightAt("home-2", resolveAt(doc, 2))!.color).toBe(AMBER);
+  });
+});
+
+describe("unseen players (D87)", () => {
+  const twoScenes = () => {
+    const doc = addSceneAfter(createBoardDoc(), 0);
+    const id = doc.teams[0].players[3].id;
+    return { doc, id };
+  };
+
+  it("draws a player nobody saw faded, and everyone else solid", () => {
+    const { doc, id } = twoScenes();
+    const both = { ...doc, scenes: doc.scenes.map((s) => ({ ...s, unseen: [id] })) };
+    const frame = frameAt(both, sceneStartSeconds(both, 1));
+    expect(frame.visibility[id]).toBeCloseTo(UNSEEN_ALPHA);
+    const other = doc.teams[0].players[4].id;
+    expect(frame.visibility[other]).toBe(1);
+  });
+
+  it("fades a player in over his run into the scene where he is first seen", () => {
+    const { doc, id } = twoScenes();
+    const first = { ...doc, scenes: [{ ...doc.scenes[0], unseen: [id] }, doc.scenes[1]] };
+    const start = sceneStartSeconds(first, 0) + 1e-6;
+    const end = sceneStartSeconds(first, 1);
+    const mid = (start + end) / 2;
+    const at = (t: number) => frameAt(first, t).visibility[id];
+    expect(at(start)).toBeCloseTo(UNSEEN_ALPHA, 1);
+    expect(at(mid)).toBeGreaterThan(UNSEEN_ALPHA);
+    expect(at(mid)).toBeLessThan(1);
+    expect(at(end)).toBeCloseTo(1);
+  });
+
+  it("is a field the schema keeps", () => {
+    const { doc, id } = twoScenes();
+    const marked = { ...doc, scenes: [{ ...doc.scenes[0], unseen: [id] }, doc.scenes[1]] };
+    const parsed = boardDocSchema.parse(marked) as BoardDoc;
+    expect(parsed.scenes[0].unseen).toEqual([id]);
   });
 });

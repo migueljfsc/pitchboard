@@ -45,6 +45,7 @@ const scene = z.object({
   travel: z.record(z.string(), z.number().int().min(0).max(60_000)).optional(),
   delay: z.record(z.string(), z.number().int().min(0).max(60_000)).optional(),
   hiddenRuns: z.array(z.string().min(1)).max(64).optional(),
+  unseen: z.array(z.string().min(1)).max(64).optional(),
   speed: z.number().min(MIN_FLOW_SPEED).max(MAX_FLOW_SPEED).optional(),
   shot: z.boolean().optional(),
   loft: z.boolean().optional(),

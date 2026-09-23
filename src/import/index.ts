@@ -542,6 +542,10 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
 
   const scenes: Scene[] = frames.map((f, i) => {
     const positions: Record<string, Vec2> = {};
+    // A player with no sighting near this scene stands where he was first or last seen, and
+    // is drawn faded so nobody reads him as standing in the play (D87). Asked with the same
+    // tolerance as everything else that asks whether a player was watched.
+    const unseen: string[] = [];
     for (const track of kept) {
       const id = idOf.get(track)!;
       const here = positionAt(track, f);
@@ -549,6 +553,7 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
       const still = before && Math.hypot(here.x - before.x, here.y - before.y) < STILL_M;
       positions[id] = still ? before : here;
       drawn[id] = positions[id];
+      if (!track.samples.some((s) => Math.abs(s.f - f) <= tol)) unseen.push(id);
     }
 
     const paths: Record<string, ReturnType<typeof fitCurve>> = {};
@@ -577,6 +582,7 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
       holdMs: 0,
       positions,
       paths,
+      ...(unseen.length > 0 ? { unseen } : {}),
       // A scene naming no carrier and storing no position has no ball at all (D44),
       // which is the right answer when nothing found one. A scene never holds both, so
       // the ball takes its OWN position only where it was seen and the holder the board

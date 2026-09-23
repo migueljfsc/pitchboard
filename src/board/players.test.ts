@@ -321,3 +321,13 @@ describe("removePlayer and the highlight", () => {
     expect(removePlayer(doc, "home-2").scenes[0].highlight).toBeUndefined();
   });
 });
+
+describe("removePlayer and unseen players (D87)", () => {
+  it("takes a removed player out of every scene's unseen list", () => {
+    const doc = createBoardDoc();
+    const [a, b] = doc.teams[0].players.slice(1, 3).map((p) => p.id);
+    const marked = { ...doc, scenes: [{ ...doc.scenes[0], unseen: [a, b] }] };
+    expect(removePlayer(marked, a).scenes[0].unseen).toEqual([b]);
+    expect(removePlayer(removePlayer(marked, a), b).scenes[0].unseen).toBeUndefined();
+  });
+});

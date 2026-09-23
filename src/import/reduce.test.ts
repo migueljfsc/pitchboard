@@ -16,6 +16,7 @@ import {
   scored,
   takenFrom,
   touchedAt,
+  WITNESS_TOL_S,
   touches,
   leftBehind,
   chooseScenes,
@@ -1345,5 +1346,29 @@ describe("takenFrom", () => {
     const players = [run("home-1", "home", 1, 40, 20, 30)];
     expect(takenFrom([ball(10, 20, 30)], players, 10, "home-1", 25).lost).toBe(false);
     expect(takenFrom([], players, 10, "home-1", 25).lost).toBe(false);
+  });
+});
+
+describe("boardFromTracks and players nobody saw (D87)", () => {
+  it("marks a player unseen in the scenes before his track begins, and seen after", () => {
+    const run = (id: number, team: string, from: number, y: number) =>
+      track(
+        id,
+        team,
+        Array.from({ length: 101 - from + 1 }, (_, i) => [from + i, 10 + (from + i) * 0.2, y] as [number, number, number]),
+      );
+    const result = boardFromTracks(file([run(1, "home", 1, 20), run(2, "away", 50, 40)], 101));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const late = Object.entries(result.sources).find(([, t]) => t.id === 2)?.[0];
+    expect(late).toBeDefined();
+    const unseenAt = result.frames.map((f, i) => ({ f, unseen: result.doc.scenes[i].unseen ?? [] }));
+    const tol = Math.round(WITNESS_TOL_S * 25);
+    const before = unseenAt.filter((s) => s.f < 50 - tol);
+    const after = unseenAt.filter((s) => s.f >= 50);
+    expect(before.length).toBeGreaterThan(0);
+    expect(after.length).toBeGreaterThan(0);
+    for (const s of before) expect(s.unseen).toContain(late);
+    for (const s of after) expect(s.unseen).not.toContain(late);
   });
 });

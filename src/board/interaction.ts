@@ -506,6 +506,12 @@ export function moveEntities(
       const positions = { ...s.positions };
       for (const [id, d] of here) if (id !== BALL_ID) positions[id] = add(positions[id], d);
       next.positions = positions;
+      // Moving a token is saying where he is, so he is no longer a place-holder there (D87).
+      if (s.unseen?.some((id) => here.has(id))) {
+        const unseen = s.unseen.filter((id) => !here.has(id));
+        if (unseen.length === 0) delete next.unseen;
+        else next.unseen = unseen;
+      }
       const ball = here.get(BALL_ID);
       if (ball && s.ballPos) next.ballPos = add(s.ballPos, ball);
       dirty = true;
