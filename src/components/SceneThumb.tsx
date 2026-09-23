@@ -8,7 +8,7 @@
  */
 
 import { memo, useEffect, useRef } from "react";
-import type { BoardDoc, PitchView } from "@/board/types";
+import type { BoardDoc, PitchView, TurfCache } from "@/board/types";
 import { drawBoard } from "@/board/render";
 import { sceneStartSeconds } from "@/board/scenes";
 import { exportView } from "@/export/frame";
@@ -20,6 +20,9 @@ import { exportView } from "@/export/frame";
  * whatever it is given — and that is the right trade in a strip: scenes the same
  * size are comparable at a glance, scenes that jump between aspects are not.
  */
+/** One set of turf textures for every thumbnail in the strip. */
+const TURF: TurfCache = new Map();
+
 export const THUMB_WIDTH = 112;
 export const THUMB_HEIGHT = 72;
 
@@ -52,7 +55,10 @@ function Thumb({ doc, index, view }: Props) {
     // `sceneStartSeconds` is the instant the scene comes to rest, so what is drawn
     // is its stored positions rather than anything interpolated — in flow mode too,
     // where the seam tolerance resolves a zero-length hold to the scene itself.
-    drawBoard(ctx, doc, sceneStartSeconds(doc, index), exportView(doc, size, flat));
+    drawBoard(ctx, doc, sceneStartSeconds(doc, index), {
+      ...exportView(doc, size, flat),
+      turf: TURF,
+    });
   }, [doc, index, view]);
 
   return (
@@ -84,6 +90,7 @@ const same = (a: Props, b: Props): boolean =>
   a.doc.links === b.doc.links &&
   a.doc.annotations === b.doc.annotations &&
   a.doc.pitch === b.doc.pitch &&
-  a.doc.tokenScale === b.doc.tokenScale;
+  a.doc.tokenScale === b.doc.tokenScale &&
+  a.doc.grass === b.doc.grass;
 
 export const SceneThumb = memo(Thumb, same);

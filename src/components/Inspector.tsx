@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeftRight, UserMinus } from "lucide-react";
+import { ArrowLeftRight, Shirt, UserMinus } from "lucide-react";
 import type { BoardDoc, Player } from "@/board/types";
 import { BALL_ID } from "@/board/types";
-import { displayName, shirtClash } from "@/board/players";
+import { displayName, keeperOf, shirtClash } from "@/board/players";
 import type { Carry } from "@/board/interaction";
 import { entityDelayMs, entityTravelMs, sceneTravelMs } from "@/board/timeline";
 import { cn } from "@/lib/utils";
@@ -35,6 +35,7 @@ type Props = {
   onCarryChange: (carry: Carry) => void;
   onRemovePlayer: (playerId: string) => void;
   onSwitchSide: (playerId: string) => void;
+  onMakeKeeper: (playerId: string) => void;
   /** True when every selected entity has its run arrow hidden in this scene. */
   runsHidden: boolean;
   onRunsHiddenChange: (hidden: boolean) => void;
@@ -68,6 +69,7 @@ export function Inspector({
   onCarryChange,
   onRemovePlayer,
   onSwitchSide,
+  onMakeKeeper,
   runsHidden,
   onRunsHiddenChange,
   highlighted,
@@ -107,6 +109,7 @@ export function Inspector({
   const players = [...selection].filter((id) => id !== BALL_ID);
   const only = players.length === 1 ? players[0] : null;
   const player = only ? doc.teams.flatMap((t) => t.players).find((p) => p.id === only) : null;
+  const isKeeper = !!player && doc.teams.some((t) => keeperOf(t) === player.id);
   const carries = only !== null && scene?.carrier === only;
 
   // Travel time is per-entity; a mixed selection shows the scene default.
@@ -292,6 +295,17 @@ export function Inspector({
 
       {/* Last, and on their own. Switching or removing a player belongs to neither the
           ball nor the run, and sitting under either read as part of it. */}
+      {player && !isKeeper && (
+        <button
+          type="button"
+          title={t("inspect.makeKeeper.hint")}
+          onClick={() => onMakeKeeper(player.id)}
+          className="flex w-full items-center justify-center gap-1.5 rounded-md border border-ink-600 px-2 py-1.5 text-xs text-ink-300 transition hover:border-ink-400 hover:text-ink-100"
+        >
+          <Shirt size={13} />
+          {t("inspect.makeKeeper", { who: displayName(doc, player.id) })}
+        </button>
+      )}
       {player && (
         <button
           type="button"

@@ -3,7 +3,9 @@ import {
   MAX_SQUAD,
   addPlayer,
   displayName,
+  keeperOf,
   removePlayer,
+  setKeeper,
   setPlayerLabel,
   setPlayerNumber,
   shirtClash,
@@ -355,5 +357,50 @@ describe("switchSide (D88)", () => {
   it("does nothing for a player who is not on the board", () => {
     const doc = createBoardDoc();
     expect(switchSide(doc, "nobody")).toBe(doc);
+  });
+});
+
+describe("the keeper's kit (D90)", () => {
+  const kit = { color: "#f59e0b", textColor: "#0b1210" };
+
+  it("is worn by nobody until a side has one", () => {
+    expect(keeperOf(createBoardDoc().teams[0])).toBeNull();
+  });
+
+  it("goes to whoever wears 1 until somebody is named", () => {
+    const doc = createBoardDoc();
+    const team = { ...doc.teams[0], keeper: kit };
+    expect(keeperOf(team)).toBe(team.players.find((p) => p.number === 1)!.id);
+  });
+
+  it("dresses the player named, and gives a side a kit nobody is wearing", () => {
+    const doc = createBoardDoc();
+    const next = setKeeper(doc, A);
+    expect(keeperOf(next.teams[0])).toBe(A);
+    const worn = [doc.teams[0].color, doc.teams[1].color];
+    expect(worn).not.toContain(next.teams[0].keeper!.color);
+    const both = setKeeper(next, doc.teams[1].players[0].id);
+    expect(both.teams[1].keeper!.color).not.toBe(next.teams[0].keeper!.color);
+  });
+
+  it("keeps a side's chosen colour when the keeper changes", () => {
+    let doc = createBoardDoc();
+    doc.teams[0] = { ...doc.teams[0], keeper: kit };
+    doc = setKeeper(doc, A);
+    expect(doc.teams[0].keeper).toEqual({ ...kit, player: A });
+  });
+
+  it("is taken off a player who leaves the side, and the kit stays", () => {
+    const doc = setKeeper(createBoardDoc(), A);
+    for (const next of [switchSide(doc, A), removePlayer(doc, A)]) {
+      expect(next.teams[0].keeper?.player).toBeUndefined();
+      expect(next.teams[0].keeper?.color).toBe(doc.teams[0].keeper!.color);
+      expect(keeperOf(next.teams[1])).not.toBe(A);
+    }
+  });
+
+  it("survives the schema", () => {
+    const doc = setKeeper(createBoardDoc(), A);
+    expect(boardDocSchema.safeParse(doc).success).toBe(true);
   });
 });

@@ -607,7 +607,13 @@ describe("highlight halos", () => {
   const lit = (ids: string[]) => setHighlight(createBoardDoc(), 0, ids, AMBER);
 
   /** Each halo opens with its own gradient, so counting those counts the glows. */
-  const halos = (log: string[]) => log.filter((e) => e.startsWith("createRadialGradient(")).length;
+  // A halo glows from the token's centre; the ball's shading is lit from off it.
+  const halos = (log: string[]) =>
+    log.filter((e) => {
+      if (!e.startsWith("createRadialGradient(")) return false;
+      const [x0, y0, , x1, y1] = e.slice(21, -1).split(",");
+      return x0 === x1 && y0 === y1;
+    }).length;
 
   it("draws nothing when nobody is highlighted", () => {
     const r = createRecordingCtx();

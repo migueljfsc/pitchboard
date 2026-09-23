@@ -68,7 +68,14 @@ import {
   setTravel,
   totalSeconds,
 } from "@/board/scenes";
-import { addPlayer, removePlayer, setPlayerLabel, setPlayerNumber, switchSide } from "@/board/players";
+import {
+  addPlayer,
+  removePlayer,
+  setKeeper,
+  setPlayerLabel,
+  setPlayerNumber,
+  switchSide,
+} from "@/board/players";
 import {
   AWAY,
   HOME,
@@ -779,6 +786,7 @@ export function Editor({ initialDoc }: Props = {}) {
               onChange={setPitchView}
               doc={doc}
               onTokenScaleChange={(tokenScale) => setDoc({ ...doc, tokenScale }, "token-scale")}
+              onGrassChange={(grass) => setDoc({ ...doc, grass }, "grass")}
               ghosts={ghosts}
               onGhostsChange={setGhosts}
             />
@@ -881,6 +889,7 @@ export function Editor({ initialDoc }: Props = {}) {
               onCarryChange={setCarry}
               onRemovePlayer={(id) => setDoc(removePlayer(doc, id))}
               onSwitchSide={(id) => setDoc(switchSide(doc, id))}
+              onMakeKeeper={(id) => setDoc(setKeeper(doc, id))}
               runsHidden={runsHidden}
               onRunsHiddenChange={onRunsHiddenChange}
               highlighted={highlighted}

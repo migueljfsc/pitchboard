@@ -1,5 +1,5 @@
 import { Box, RotateCw } from "lucide-react";
-import type { BoardDoc, PitchHalf, PitchView } from "@/board/types";
+import type { BoardDoc, Grass, PitchHalf, PitchView } from "@/board/types";
 import { framingOf } from "@/board/projection";
 import { DEFAULT_TOKEN_SCALE, MAX_TOKEN_SCALE, MIN_TOKEN_SCALE, tokenScaleOf } from "@/board/pitch";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,8 @@ type Props = {
    */
   doc?: BoardDoc;
   onTokenScaleChange?: (scale: number) => void;
+  /** The grass is the document's too, for the same reason: an export has to match it. */
+  onGrassChange?: (grass: Grass | undefined) => void;
   /**
    * False on a shared board, where the crop is the sharer's and not the
    * viewer's (D35). Rotation and 3D stay available — those are how you look at
@@ -55,6 +57,7 @@ export function ViewControls({
   onChange,
   doc,
   onTokenScaleChange,
+  onGrassChange,
   showHalves = true,
   ghosts,
   onGhostsChange,
@@ -142,6 +145,10 @@ export function ViewControls({
         </label>
       )}
 
+      {doc && onGrassChange && (
+        <GrassControls grass={doc.grass} onChange={onGrassChange} />
+      )}
+
       {ghosts && onGhostsChange && (
         <div className="flex flex-col gap-1.5 pt-1">
           <span className="text-[11px] uppercase tracking-wide text-ink-400">
@@ -179,6 +186,74 @@ export function ViewControls({
           {t("view.halfHint")}
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * How dark the grass is and how it is drawn. The green stays green: a coach asked for a
+ * lighter or darker pitch, not a blue one, and every kit on the palette is chosen to read on it.
+ */
+function GrassControls({
+  grass,
+  onChange,
+}: {
+  grass: Grass | undefined;
+  onChange: (grass: Grass | undefined) => void;
+}) {
+  const { t } = useI18n();
+  const shade = grass?.shade ?? 0;
+  const texture = grass?.texture ?? "stripes";
+  // Absent fields are the defaults, and a board at all defaults carries no `grass` at all.
+  const set = (next: Grass) => {
+    const clean: Grass = {};
+    if (next.shade) clean.shade = next.shade;
+    if (next.texture === "natural") clean.texture = "natural";
+    onChange(Object.keys(clean).length ? clean : undefined);
+  };
+  return (
+    <div className="flex flex-col gap-1.5 pt-1">
+      <label className="flex flex-col gap-1.5">
+        <span className="flex items-baseline justify-between text-[11px] uppercase tracking-wide text-ink-400">
+          {t("view.grass")}
+          <span className="font-mono normal-case tracking-normal text-ink-300">
+            {t(shade < 0 ? "view.grass.darker" : shade > 0 ? "view.grass.lighter" : "view.grass.default")}
+          </span>
+        </span>
+        <input
+          type="range"
+          min={-1}
+          max={1}
+          step={0.1}
+          value={shade}
+          aria-label={t("view.grass.shadeAria")}
+          onChange={(e) => set({ texture, shade: Math.round(Number(e.target.value) * 10) / 10 })}
+          className="h-1 w-full cursor-pointer appearance-none rounded-full bg-ink-600 accent-accent"
+        />
+      </label>
+      <div className="flex gap-1">
+        {(
+          [
+            ["stripes", "view.grass.stripes"],
+            ["natural", "view.grass.natural"],
+          ] as const
+        ).map(([value, key]) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={texture === value}
+            onClick={() => set({ shade, texture: value })}
+            className={cn(
+              "flex-1 rounded border px-1 py-1.5 text-[11px] transition",
+              texture === value
+                ? "border-accent text-accent"
+                : "border-ink-600 text-ink-400 hover:text-ink-200",
+            )}
+          >
+            {t(key)}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

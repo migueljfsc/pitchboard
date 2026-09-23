@@ -55,7 +55,7 @@ export async function encodeVideo(
   output.addVideoTrack(source, { frameRate: fps });
   await output.start();
 
-  const view = exportView(doc, size, pitchView);
+  const view = { ...exportView(doc, size, pitchView), turf: new Map() };
   const frames = frameCount(totalSeconds(doc), fps);
 
   try {

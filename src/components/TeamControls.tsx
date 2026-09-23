@@ -160,6 +160,38 @@ export function TeamControls({
           />
         ))}
       </div>
+
+      <div className="flex flex-col gap-1.5">
+        <span className="text-[11px] uppercase tracking-wide text-ink-400">
+          {t("team.keeperKit")}
+        </span>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            aria-label={t("team.keeperNoneAria", { team: team.name })}
+            title={t("team.keeperNone")}
+            onClick={() => patch({ keeper: undefined })}
+            className={cn(
+              "size-5 rounded-full ring-1 transition",
+              !team.keeper ? "ring-2 ring-accent" : "ring-white/15 hover:ring-white/40",
+            )}
+            style={{ background: noKit(team.color) }}
+          />
+          {PALETTE.map((c) => (
+            <button
+              key={c}
+              type="button"
+              aria-label={t("team.keeperColorAria", { team: team.name, color: c })}
+              onClick={() => patch({ keeper: { ...team.keeper, color: c, textColor: contrastOn(c) } })}
+              className={cn(
+                "size-5 rounded-full ring-1 transition",
+                team.keeper?.color === c ? "ring-2 ring-accent" : "ring-white/15 hover:ring-white/40",
+              )}
+              style={{ background: c }}
+            />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -184,4 +216,9 @@ function swatch(pattern: TeamPattern, color: string): string {
   const angle = pattern === "vertical" ? "90deg" : "180deg";
   const w = "rgba(255,255,255,0.92)";
   return `linear-gradient(${angle}, ${color} 0 20%, ${w} 20% 40%, ${color} 40% 60%, ${w} 60% 80%, ${color} 80%)`;
+}
+
+/** "No keeper's kit": the team's own colour, struck through. */
+function noKit(color: string): string {
+  return `linear-gradient(135deg, ${color} 0 44%, rgba(255,255,255,0.85) 44% 56%, ${color} 56%)`;
 }

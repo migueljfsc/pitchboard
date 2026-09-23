@@ -16,13 +16,15 @@ import type {
   BoardDoc,
   PitchHalf,
   RenderView,
+  Team,
   TeamPattern,
   Vec2,
 } from "./types";
 import { BALL_ID } from "./types";
+import { keeperOf } from "./players";
 import {
   BALL_RADIUS,
-  DEFAULT_THEME,
+  themeFor,
   PITCH,
   PITCH_PADDING,
   TEAM_NAME_OFFSET,
@@ -90,6 +92,16 @@ import {
 export { TOKEN_RADIUS, BALL_RADIUS };
 export type { Frame };
 
+/**
+ * The shirt a player is drawn in: the keeper's kit if he is his side's keeper, the team's
+ * otherwise. A keeper's kit is plain; stripes are how two SIDES are told apart (D90).
+ */
+function kitOf(team: Team, id: string): { color: string; textColor: string; pattern?: TeamPattern } {
+  const keeper = team.keeper;
+  if (keeper && keeperOf(team) === id) return { color: keeper.color, textColor: keeper.textColor };
+  return { color: team.color, textColor: team.textColor, pattern: team.pattern };
+}
+
 /** Steps used to stroke a curved path. Purely cosmetic; the maths is exact. */
 const PATH_STEPS = 24;
 
@@ -98,7 +110,7 @@ export function drawBoard(
   doc: BoardDoc,
   t: number,
   view: RenderView,
-  theme: PitchTheme = DEFAULT_THEME,
+  theme: PitchTheme = themeFor(doc),
 ): void {
   const frame = frameAt(doc, t);
 
@@ -124,7 +136,7 @@ export function drawBoard(
 
   clipToHalf(ctx, doc, view.half);
 
-  drawPitch(ctx, doc.pitch, theme);
+  drawPitch(ctx, doc.pitch, theme, true, view.turf);
   drawTeamNames(ctx, doc, view.rotated);
 
   // Annotations split across the stack. A shaded zone is background — it belongs
@@ -151,12 +163,13 @@ export function drawBoard(
     for (const player of team.players) {
       const p = frame.positions[player.id];
       if (!p) continue;
-      drawToken(ctx, p, player.number, player.label, team.color, team.textColor, {
+      const kit = kitOf(team, player.id);
+      drawToken(ctx, p, player.number, player.label, kit.color, kit.textColor, {
         selected: view.selection?.has(player.id) ?? false,
         hovered: view.interactive && view.hover === player.id,
         rotated: view.rotated,
         scale,
-        pattern: team.pattern,
+        pattern: kit.pattern,
         alpha: frame.visibility[player.id],
       });
     }
@@ -169,6 +182,7 @@ export function drawBoard(
     drawBall(ctx, frame.ball, ballRadius(doc) * (1 + LOFT_GROWTH * lift), {
       selected: view.selection?.has(BALL_ID) ?? false,
       hovered: view.interactive && view.hover === BALL_ID,
+      shadow: true,
     });
   }
 
@@ -249,7 +263,7 @@ function drawTilted(
 
   const marks = annotationsFor(doc, frame, view);
 
-  drawPitch(gctx, doc.pitch, theme);
+  drawPitch(gctx, doc.pitch, theme, false, view.turf);
   drawTeamNames(gctx, doc, true, TEAM_NAME_OFFSET_3D);
   for (const ann of marks) if (isZone(ann)) drawZone(gctx, ann);
   drawLinks(gctx, doc, frame, true);
@@ -562,12 +576,13 @@ function drawBillboards(
         draw: () =>
           billboard(ctx, p, at, () => {
             drawGroundShadow(ctx, p, TOKEN_RADIUS * scale);
-            drawToken(ctx, p, player.number, player.label, team.color, team.textColor, {
+            const kit = kitOf(team, player.id);
+            drawToken(ctx, p, player.number, player.label, kit.color, kit.textColor, {
               selected: view.selection?.has(player.id) ?? false,
               hovered: view.interactive && view.hover === player.id,
               rotated: false,
               scale,
-              pattern: team.pattern,
+              pattern: kit.pattern,
               alpha: frame.visibility[player.id],
             });
           }),
@@ -1404,6 +1419,8 @@ type TokenState = {
   pattern?: TeamPattern;
   /** How solid the token is drawn: 1, or `UNSEEN_ALPHA` for a player nobody saw (D87). */
   alpha?: number;
+  /** The ball only: a shadow on the grass, where no 3D view is casting one. */
+  shadow?: boolean;
 };
 
 /**
@@ -1539,62 +1556,100 @@ function drawBall(ctx: Ctx, p: Vec2, radius: number, state: TokenState): void {
     ctx.stroke();
   }
 
+  // Sitting on the grass: a soft shadow down and to the right of it, the way the light falls
+  // on the rest of the board. The 3D view casts its own, at the ball's real height.
+  if (state.shadow) {
+    ctx.beginPath();
+    ctx.ellipse(p.x + radius * 0.18, p.y + radius * 0.3, radius * 1.02, radius * 0.82, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(0,0,0,0.28)";
+    ctx.fill();
+  }
+
+  // Round, not flat: lit from the upper left and falling to grey at the rim.
+  const lit = ctx.createRadialGradient(
+    p.x - radius * 0.38,
+    p.y - radius * 0.42,
+    radius * 0.1,
+    p.x,
+    p.y,
+    radius,
+  );
+  lit.addColorStop(0, "#ffffff");
+  lit.addColorStop(0.55, "#f1f2f4");
+  lit.addColorStop(1, "#c3c8d0");
   ctx.beginPath();
   ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
-  ctx.fillStyle = "#ffffff";
+  ctx.fillStyle = lit;
   ctx.fill();
-  ctx.strokeStyle = "rgba(0,0,0,0.7)";
-  ctx.lineWidth = 0.1;
-  ctx.stroke();
 
   drawBallPanels(ctx, p, radius, k);
+
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(0,0,0,0.6)";
+  ctx.lineWidth = 0.07 * k;
+  ctx.stroke();
+
+  // A glint, which is most of what makes a small circle read as a sphere.
+  ctx.beginPath();
+  ctx.ellipse(p.x - radius * 0.36, p.y - radius * 0.42, radius * 0.2, radius * 0.12, -0.6, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255,255,255,0.75)";
+  ctx.fill();
 }
 
 /**
- * The black centre panel and its seams — a football rather than a white dot.
+ * The panels of a real football -- a black pentagon in the middle and the edges of the five
+ * around it, joined by seams -- turning as the ball rolls (D89).
  *
- * Drawn rather than set as an emoji: `drawBoard` has to emit the same pixels in a
- * worker as on screen (the first invariant), and a colour-emoji glyph is whatever
- * font the machine happens to carry — Apple's, Noto's or Segoe's, at whatever
- * baseline. Five lines and a pentagon are the same everywhere and stay sharp at
- * export resolution.
- *
- * It turns with the board on a vertical pitch. A pentagon has no up, so nothing
- * is lost by letting it.
+ * Drawn rather than set as an emoji: `drawBoard` has to emit the same pixels in a worker as on
+ * screen (the first invariant), and a colour-emoji glyph is whatever font the machine happens
+ * to carry. The turn is a function of where the ball IS, not of time or of a counter, so the
+ * same frame is the same picture everywhere and a moving ball still rolls.
  */
 function drawBallPanels(ctx: Ctx, p: Vec2, radius: number, k: number): void {
-  const inner = radius * 0.4;
-  const corner = (i: number): Vec2 => {
-    // Point-up, so the seams fall symmetrically about the vertical.
-    const a = -Math.PI / 2 + (i * 2 * Math.PI) / 5;
-    return { x: Math.cos(a), y: Math.sin(a) };
+  const turn = (p.x * 0.8 + p.y * 0.55) / radius;
+  const pentagon = (cx: number, cy: number, r: number, spin: number) => {
+    ctx.beginPath();
+    for (let i = 0; i < 5; i++) {
+      const a = spin - Math.PI / 2 + (i * 2 * Math.PI) / 5;
+      const x = cx + Math.cos(a) * r;
+      const y = cy + Math.sin(a) * r;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
   };
 
+  ctx.save();
   ctx.beginPath();
-  for (let i = 0; i < 5; i++) {
-    const c = corner(i);
-    const x = p.x + c.x * inner;
-    const y = p.y + c.y * inner;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.closePath();
+  ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+  ctx.clip();
+
+  const inner = radius * 0.34;
   ctx.fillStyle = BALL_PANEL_COLOR;
+  pentagon(p.x, p.y, inner, turn);
   ctx.fill();
 
-  // Out to the rim from each corner. The circle's own stroke crops them, which is
-  // what makes them read as seams rather than as spokes.
+  // The five around it, seen edge-on at the rim, so only part of each shows inside the circle.
+  for (let i = 0; i < 5; i++) {
+    const a = turn - Math.PI / 2 + ((i + 0.5) * 2 * Math.PI) / 5;
+    pentagon(p.x + Math.cos(a) * radius * 0.93, p.y + Math.sin(a) * radius * 0.93, radius * 0.3, a);
+    ctx.fill();
+  }
+
+  // Seams from each corner of the middle panel out towards the rim.
   ctx.beginPath();
   for (let i = 0; i < 5; i++) {
-    const c = corner(i);
-    ctx.moveTo(p.x + c.x * inner, p.y + c.y * inner);
-    ctx.lineTo(p.x + c.x * radius, p.y + c.y * radius);
+    const a = turn - Math.PI / 2 + (i * 2 * Math.PI) / 5;
+    ctx.moveTo(p.x + Math.cos(a) * inner, p.y + Math.sin(a) * inner);
+    ctx.lineTo(p.x + Math.cos(a) * radius * 0.72, p.y + Math.sin(a) * radius * 0.72);
   }
-  ctx.strokeStyle = BALL_PANEL_COLOR;
-  ctx.lineWidth = 0.085 * k;
+  ctx.strokeStyle = "rgba(24,24,27,0.55)";
+  ctx.lineWidth = 0.045 * k;
   ctx.lineCap = "round";
   ctx.stroke();
   ctx.lineCap = "butt";
+  ctx.restore();
 }
 
 /** Near-black rather than black: the same ink the darkest kit uses. */

@@ -55,6 +55,7 @@ describe("the dictionaries", () => {
       "export.bitrate",
       "inspect.travel.unit",
       "view.3d",
+      "view.grass.natural",
       "view.horizontal",
       "view.vertical",
     ]);

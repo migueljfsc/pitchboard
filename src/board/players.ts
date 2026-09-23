@@ -7,6 +7,7 @@
 
 import type { BoardDoc, Player, Scene, Team, Vec2 } from "./types";
 import { pruneLinks } from "./links";
+import { contrastOn } from "@/lib/color";
 
 /** The name to show for a player: their label if given, otherwise their number. */
 export function displayName(doc: BoardDoc, id: string): string {
@@ -15,6 +16,51 @@ export function displayName(doc: BoardDoc, id: string): string {
     if (p) return p.label.trim() || String(p.number);
   }
   return id;
+}
+
+/**
+ * Which player wears the keeper's kit: the one the team names, or whoever wears 1 (D90).
+ * Null where the team has no keeper's kit, or nobody to wear it.
+ */
+export function keeperOf(team: Team): string | null {
+  if (!team.keeper) return null;
+  if (team.keeper.player) return team.keeper.player;
+  return team.players.find((p) => p.number === 1)?.id ?? null;
+}
+
+/**
+ * Put a player in his side's keeper kit. A side with no keeper's kit yet is given one that
+ * cannot be taken for either side's.
+ */
+export function setKeeper(doc: BoardDoc, id: string): BoardDoc {
+  const index = doc.teams.findIndex((t) => t.players.some((p) => p.id === id));
+  if (index < 0) return doc;
+  const team = doc.teams[index];
+  const kit = team.keeper ?? freeKeeperKit(doc.teams);
+  const teams = doc.teams.slice() as [Team, Team];
+  teams[index] = { ...team, keeper: { ...kit, player: id } };
+  return { ...doc, teams };
+}
+
+/** The first keeper's kit no shirt on the board is already wearing. */
+export function freeKeeperKit(teams: readonly Team[]): { color: string; textColor: string } {
+  const worn = new Set(
+    teams.flatMap((t) => [t.color, t.keeper?.color ?? ""]).map((c) => c.toLowerCase()),
+  );
+  const color = KEEPER_COLORS.find((c) => !worn.has(c)) ?? KEEPER_COLORS[0];
+  return { color, textColor: contrastOn(color) };
+}
+
+/**
+ * The kit colours a keeper is given, in order, from the team picker's palette. No green: a
+ * keeper is the player a coach looks for first, and a green shirt is the one the pitch hides.
+ */
+export const KEEPER_COLORS = ["#f59e0b", "#0891b2", "#7c3aed", "#18181b", "#e11d48"] as const;
+
+/** The team without `id` in its keeper's kit: the kit stays for whoever is named next. */
+function dropKeeper(team: Team, id: string): Team {
+  if (team.keeper?.player !== id) return team;
+  return { ...team, keeper: { color: team.keeper.color, textColor: team.keeper.textColor } };
 }
 
 /** Team a player belongs to, or null. */
@@ -131,7 +177,7 @@ export function switchSide(doc: BoardDoc, id: string): BoardDoc {
   if (from < 0) return doc;
   const player = doc.teams[from].players.find((p) => p.id === id)!;
   const teams = doc.teams.map((team, i) => ({
-    ...team,
+    ...dropKeeper(team, id),
     players: i === from ? team.players.filter((p) => p.id !== id) : [...team.players, player],
   })) as [Team, Team];
   const links = doc.links
@@ -175,7 +221,7 @@ export function removePlayer(doc: BoardDoc, id: string): BoardDoc {
   if (!allIds(doc).has(id)) return doc;
 
   const teams = doc.teams.map((team) => ({
-    ...team,
+    ...dropKeeper(team, id),
     players: team.players.filter((p) => p.id !== id),
   })) as [Team, Team];
 

@@ -28,6 +28,21 @@ export type Player = {
  */
 export type TeamPattern = "solid" | "vertical" | "horizontal";
 
+/**
+ * The goalkeeper's kit, and which player wears it.
+ *
+ * A keeper plays in a different shirt from his outfield team-mates, and a board that paints
+ * him in theirs loses the one player every coach looks for first. One player per side, by id,
+ * so he keeps it wherever he is dragged; the importer names him where the video fielded a
+ * keeper, and the coach can name anyone else. Unnamed, the keeper is whoever wears 1 -- which
+ * is where every formation puts him -- so a kit chosen for a drawn board lands on the right man.
+ */
+export type TeamKeeper = {
+  player?: string;
+  color: string;
+  textColor: string;
+};
+
 export type Team = {
   id: string;
   name: string;
@@ -48,6 +63,8 @@ export type Team = {
    * reset without also resetting names, links and scenes.
    */
   formation?: string;
+  /** Absent means the keeper wears the team's kit, as every board did before this existed. */
+  keeper?: TeamKeeper;
 };
 
 export type Scene = {
@@ -237,6 +254,21 @@ export const DASHED_KINDS = ["arrow", "line"] as const;
 export const ZONE_KINDS = ["rect", "ellipse"] as const;
 
 /**
+ * The grass: a lighter or darker shade of the one green, and how real it looks.
+ *
+ * A shade rather than a colour, because a coach asking for "a different pitch" wants his
+ * stadium's green at night or in the sun, not a purple one -- and a board's tokens, lines and
+ * kits were all chosen against green. On the document rather than the view, so an export and a
+ * shared board look the way their author left them.
+ */
+export type Grass = {
+  /** -1 darkest to 1 lightest; absent or 0 is the default green. */
+  shade?: number;
+  /** "stripes" is the plain mow every board has had; "natural" adds the texture of real turf. */
+  texture?: "stripes" | "natural";
+};
+
+/**
  * What the importer answered for one scene: the video frame it was cut at, who it said had the
  * ball, and where it put everyone, in metres rounded to the centimetre.
  */
@@ -308,6 +340,8 @@ export type BoardDoc = {
   annotations?: Annotation[];
   /** Present on a board imported from video, and only there. */
   origin?: Origin;
+  /** Absent means the default green, mown in stripes. */
+  grass?: Grass;
 };
 
 /** Which part of the pitch is on screen. */
@@ -362,6 +396,14 @@ export type Viewport = {
 /** The tool a pointer drag is currently bound to. */
 export type Tool = "select" | AnnotationKind;
 
+/**
+ * Turf textures kept between draws, by whoever draws a board many times: the live canvas, a
+ * video export. A memo and not an input -- `drawBoard` paints the same pixels with it or
+ * without it, it is only faster the second time (D89). Its values are canvases; declared as
+ * `object` so this file needs no DOM types, which the Node scripts compile it without.
+ */
+export type TurfCache = Map<string, object>;
+
 export type RenderView = Viewport & {
   /** Canvas size in CSS pixels. drawBoard paints the full surround itself so a
    *  single call yields a complete frame — the export worker depends on that. */
@@ -369,6 +411,7 @@ export type RenderView = Viewport & {
   height: number;
   /** False during export: suppresses handles, marquee and hover chrome. */
   interactive: boolean;
+  turf?: TurfCache;
   /**
    * Render through the angled camera. The viewport fields are still filled in and
    * still describe the flat board — the tilted path builds its own ground-layer

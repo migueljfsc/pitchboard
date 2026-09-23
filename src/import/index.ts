@@ -11,6 +11,7 @@
 
 import type { BoardDoc, Origin, Scene, Vec2 } from "@/board/types";
 import { clamp } from "@/board/geometry";
+import { freeKeeperKit } from "@/board/players";
 import { PALETTE } from "@/components/ui/palette";
 import { buildSquad, HOME, AWAY } from "@/formations";
 import { msg, type Message } from "@/i18n/core";
@@ -296,6 +297,13 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   const idOf = new Map<Track, string>();
   (["home", "away"] as const).forEach((side, i) => {
     sides[side].forEach((track, j) => idOf.set(track, teams[i].players[j].id));
+  });
+
+  // The keeper the video fielded goes in a keeper's kit, as he would be on the pitch (D90).
+  (["home", "away"] as const).forEach((side, i) => {
+    const keeper = keepers[side];
+    const id = keeper ? idOf.get(keeper) : undefined;
+    if (id) teams[i] = { ...teams[i], keeper: { ...freeKeeperKit(teams), player: id } };
   });
 
   // The ball, resolved to a holder at each scene. Where nobody can be said to have it —

@@ -28,6 +28,9 @@ const team = z.object({
   textColor: z.string().min(1),
   pattern: z.enum(["solid", "vertical", "horizontal"]).optional(),
   players: z.array(player).max(30),
+  keeper: z
+    .object({ player: z.string().min(1).optional(), color: z.string().min(1), textColor: z.string().min(1) })
+    .optional(),
   hidden: z.boolean().optional(),
   formation: z.string().min(1).max(20).optional(),
 });
@@ -125,6 +128,12 @@ const boardDocShape = z.object({
   scenes: z.array(scene).min(1).max(60),
   links: z.array(link).max(20),
   annotations: z.array(annotation).max(200).optional(),
+  grass: z
+    .object({
+      shade: z.number().min(-1).max(1).optional(),
+      texture: z.enum(["stripes", "natural"]).optional(),
+    })
+    .optional(),
   origin: z
     .object({
       clip: z.string().min(1).max(200),

@@ -85,6 +85,13 @@ export const pt: Dictionary = {
   "view.ghosts.hint":
     "Contorna onde cada jogador está na cena vizinha, para ver de relance quem se move e quanto.",
   "view.playerSize": "Tamanho dos jogadores",
+  "view.grass": "Relvado",
+  "view.grass.shadeAria": "Tom do relvado, de mais escuro a mais claro",
+  "view.grass.darker": "mais escuro",
+  "view.grass.lighter": "mais claro",
+  "view.grass.default": "normal",
+  "view.grass.stripes": "Às riscas",
+  "view.grass.natural": "Natural",
   "view.halfHint":
     "Meio campo é mais alto do que comprido. Vire o quadro na vertical e ele preenche o espaço.",
 
@@ -101,6 +108,10 @@ export const pt: Dictionary = {
   "team.colorAria": "Definir a cor do {team} como {color}",
   "team.patternAria": "Equipamento {pattern} do {team}",
 
+  "team.keeperKit": "Equipamento do guarda-redes",
+  "team.keeperNone": "O mesmo equipamento da equipa",
+  "team.keeperNoneAria": "O guarda-redes do {team} usa o equipamento da equipa",
+  "team.keeperColorAria": "Pôr o equipamento do guarda-redes do {team} em {color}",
   "pattern.solid": "Liso",
   "pattern.vertical": "Riscas verticais",
   "pattern.horizontal": "Riscas horizontais",
@@ -288,6 +299,8 @@ export const pt: Dictionary = {
   "inspect.switchSide": "Passar {who} para a outra equipa",
   "inspect.switchSide.hint":
     "Para um jogador que o vídeo pôs na equipa errada. Mantém as corridas, os tempos e a bola; só muda de equipa.",
+  "inspect.makeKeeper": "Fazer de {who} o guarda-redes",
+  "inspect.makeKeeper.hint": "Veste este jogador com o equipamento de guarda-redes da equipa. O anterior volta ao equipamento da equipa.",
   "inspect.remove.hint": "Retira este jogador do quadro, em todas as cenas.",
   "inspect.run": "Corrida — {scene}",
   "inspect.straighten": "Endireitar",

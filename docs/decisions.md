@@ -466,6 +466,67 @@ drawn from memory. What is left is short because THE TRACKER IS SHORT: a board c
 long as the roster is watched, and at today's fragmentation that is a handful of seconds. The
 fix for board length is upstream, not here.
 
+## D90 — A goalkeeper wears his own kit, and one player per side wears it
+
+A coach looks for the keepers first, and a board that paints them in their outfield colours
+makes him find them by position. So a team may carry `keeper`: a colour, its text colour, and
+optionally which player wears it. Unnamed, it is whoever wears 1 -- every formation puts the
+keeper there -- so choosing a keeper's colour on a drawn board dresses the right man with no
+second step. The Inspector names anyone else; the importer names the keeper the video fielded.
+
+**Plain, never striped.** Stripes and hoops are how two SIDES are told apart, and a keeper is
+told apart from his own side by colour alone.
+
+**The kit belongs to the side, the player is a pointer.** Moving the keeper to the other side
+or removing him clears the pointer and keeps the colour, so the next keeper named is dressed
+the same. A kit given automatically is the first of amber, cyan, violet, black and red that no
+shirt on the board already wears. No green: it is the one colour the pitch hides.
+
+## D89 — Goals with a net, a ball that reads as a ball, and a grass the coach can shade
+
+From a coach's feedback, three things a flat board drew as diagrams and a coach reads as a
+pitch.
+
+**Goals.** The flat board drew each goal as an outline. It now draws what a camera straight
+above sees: the net as a pale mesh, the frame it hangs from, a crossbar along the goal line and
+two posts. The 3D view already had real goals and draws its ground without these, so there is
+one goal per end in each view.
+
+**The ball.** Shaded as a sphere lit from the upper left, a middle pentagon and the edges of
+the five around it, seams, a glint, and on the flat board a shadow (the 3D view already casts
+one at the ball's height). It turns as it travels, and the turn comes from where it IS, not from
+time: `drawBoard` is pure, and a frame has to draw the same in the export worker as on screen.
+Drawn, not an emoji, for the same reason -- a colour glyph is whatever font the machine carries.
+
+**The grass.** `grass.shade` moves the green's lightness, -1 to 1, and never its hue: the ask was
+darker or lighter, and every kit on the palette was chosen to read on green.
+`grass.texture: "natural"` lays real turf over the mowing stripes: each stripe shading across its
+width and no two alike, the light over a stadium falling into the shade of a stand, lush, thin
+and straw patches, clumps, a grain of blades lying along the mow, and the wear of the goalmouths
+and centre. The grain is laid again over the markings, because paint sits IN grass, and a crisp
+line on a textured pitch is the first thing that gives it away.
+
+**Texture is per-pixel noise, never shapes.** The first two attempts drew it: rectangles read as
+bricks, and discs read as polka dots even stacked soft. Noise is tinted, never white and black,
+which grey a green: blade tips yellower than the grass, the shade between them bluer. Every texel
+is a hash of its position, not `Math.random()`, for the purity rule again. The blades repeat a
+small tile at a little over a device pixel a texel, so they are grain on a phone and in a 4K
+export alike rather than specks that grow with the zoom. Everything that varies over metres is
+computed into ONE canvas and drawn once -- eight layers drawn one by one were eight full-canvas
+fills a frame. The noise needs an OffscreenCanvas, as the 3D ground does; without one (the
+tests) the stripes draw plain.
+
+**The textures are cached by the caller, not the renderer.** Making them is cheap arithmetic
+and expensive canvases -- about 3 ms each to create -- so drawing them fresh cost 13 ms a frame
+against 3 for the plain board. `RenderView.turf` is a map the caller owns and keeps between
+draws: the live canvas holds one, the thumbnail strip shares one, a video or GIF export makes one
+for its frames. It is a memo and not an input -- the same pixels with it or without it, checked
+pixel for pixel -- so `drawBoard` stays pure and holds no state of its own. With it a natural
+board costs 5 ms a frame.
+
+Both sit in the document because an export must match the board, the way
+`tokenScale` does (D18), and a board without `grass` draws exactly as it did before.
+
 ## D88 — A board from video remembers what the importer said, so a coach's corrections can teach it
 
 Every correction a coach makes to an imported board is a label nobody else has -- on his club,

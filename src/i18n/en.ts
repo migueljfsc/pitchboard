@@ -90,6 +90,13 @@ export const en = {
   "view.ghosts.hint":
     "Outlines where everyone stands in the neighbouring scene, so you can see at a glance who moves and how far.",
   "view.playerSize": "Player size",
+  "view.grass": "Grass",
+  "view.grass.shadeAria": "Grass shade, darker to lighter",
+  "view.grass.darker": "darker",
+  "view.grass.lighter": "lighter",
+  "view.grass.default": "default",
+  "view.grass.stripes": "Striped",
+  "view.grass.natural": "Natural",
   "view.halfHint":
     "Half a pitch is taller than it is long. Turn the board vertical and it fills the frame.",
 
@@ -106,6 +113,10 @@ export const en = {
   "team.colorAria": "Set {team} colour to {color}",
   "team.patternAria": "{pattern} kit for {team}",
 
+  "team.keeperKit": "Goalkeeper kit",
+  "team.keeperNone": "Same kit as the team",
+  "team.keeperNoneAria": "{team} goalkeeper wears the team kit",
+  "team.keeperColorAria": "Set {team} goalkeeper kit to {color}",
   "pattern.solid": "Solid",
   "pattern.vertical": "Vertical stripes",
   "pattern.horizontal": "Hooped",
@@ -297,6 +308,8 @@ export const en = {
   "inspect.switchSide": "Move {who} to the other side",
   "inspect.switchSide.hint":
     "For a player the video put on the wrong team. He keeps his runs, timings and the ball; only his side changes.",
+  "inspect.makeKeeper": "Make {who} the goalkeeper",
+  "inspect.makeKeeper.hint": "Dresses this player in his side's goalkeeper kit. The previous keeper goes back to the team kit.",
   "inspect.remove.hint": "Takes this player off the board, in every scene.",
   "inspect.run": "Run — {scene}",
   "inspect.straighten": "Straighten",

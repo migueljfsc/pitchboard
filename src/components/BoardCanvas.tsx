@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Annotation, BoardDoc, PitchView, Tool, Vec2 } from "@/board/types";
+import type { Annotation, BoardDoc, PitchView, Tool, TurfCache, Vec2 } from "@/board/types";
 import type { Change } from "@/lib/history";
 import { BALL_ID, DEFAULT_PITCH_VIEW } from "@/board/types";
 import { fitViewport, toPitch } from "@/board/geometry";
@@ -171,6 +171,7 @@ export function BoardCanvas({
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const turf = useRef<TurfCache>(new Map());
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [hover, setHover] = useState<string | null>(null);
   /**
@@ -217,6 +218,7 @@ export function BoardCanvas({
       width: size.w,
       height: size.h,
       interactive: live,
+      turf: turf.current,
       tilt: framing.tilt,
       selection,
       hover,
