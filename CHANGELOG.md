@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.56.0 (2026-09-23)
+
+### Feat
+
+- **board**: goals with a net, a real ball, goalkeeper kits and a shadeable natural grass
+
 ## v0.55.0 (2026-09-23)
 
 ### Feat
