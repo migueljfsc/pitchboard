@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.55.0 (2026-09-23)
+
+### Feat
+
+- **import**: a board from video remembers what the importer said, and a player can switch side
+
 ## v0.54.0 (2026-09-23)
 
 ### Feat
