@@ -7,6 +7,7 @@ import {
   setPlayerLabel,
   setPlayerNumber,
   shirtClash,
+  switchSide,
   teamOf,
 } from "./players";
 import { setCarrier, setHighlight, setPath, setTravel } from "./scenes";
@@ -329,5 +330,30 @@ describe("removePlayer and unseen players (D87)", () => {
     const marked = { ...doc, scenes: [{ ...doc.scenes[0], unseen: [a, b] }] };
     expect(removePlayer(marked, a).scenes[0].unseen).toEqual([b]);
     expect(removePlayer(removePlayer(marked, a), b).scenes[0].unseen).toBeUndefined();
+  });
+});
+
+describe("switchSide (D88)", () => {
+  it("moves a player to the other side and keeps everything he did", () => {
+    const doc = createBoardDoc();
+    const id = doc.teams[0].players[4].id;
+    const next = switchSide(doc, id);
+    expect(next.teams[0].players.some((p) => p.id === id)).toBe(false);
+    expect(next.teams[1].players.some((p) => p.id === id)).toBe(true);
+    expect(next.scenes[0].positions[id]).toEqual(doc.scenes[0].positions[id]);
+    expect(teamOf(next, id)?.id).toBe(doc.teams[1].id);
+  });
+
+  it("takes him out of his old side's links", () => {
+    let doc = createBoardDoc();
+    const [a, b, c] = doc.teams[0].players.slice(1, 4).map((p) => p.id);
+    doc = createLink(doc, [a, b, c], { name: "Back 3" });
+    const next = switchSide(doc, a);
+    expect(next.links.flatMap((l) => l.members)).not.toContain(a);
+  });
+
+  it("does nothing for a player who is not on the board", () => {
+    const doc = createBoardDoc();
+    expect(switchSide(doc, "nobody")).toBe(doc);
   });
 });

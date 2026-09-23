@@ -68,7 +68,7 @@ import {
   setTravel,
   totalSeconds,
 } from "@/board/scenes";
-import { addPlayer, removePlayer, setPlayerLabel, setPlayerNumber } from "@/board/players";
+import { addPlayer, removePlayer, setPlayerLabel, setPlayerNumber, switchSide } from "@/board/players";
 import {
   AWAY,
   HOME,
@@ -880,6 +880,7 @@ export function Editor({ initialDoc }: Props = {}) {
               carry={carry}
               onCarryChange={setCarry}
               onRemovePlayer={(id) => setDoc(removePlayer(doc, id))}
+              onSwitchSide={(id) => setDoc(switchSide(doc, id))}
               runsHidden={runsHidden}
               onRunsHiddenChange={onRunsHiddenChange}
               highlighted={highlighted}

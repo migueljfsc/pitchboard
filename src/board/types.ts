@@ -236,6 +236,51 @@ export const DASHED_KINDS = ["arrow", "line"] as const;
 /** Zones sit under everything; the rest sit above the tokens. */
 export const ZONE_KINDS = ["rect", "ellipse"] as const;
 
+/**
+ * What the importer answered for one scene: the video frame it was cut at, who it said had the
+ * ball, and where it put everyone, in metres rounded to the centimetre.
+ */
+export type OriginScene = {
+  frame: number;
+  carrier: string | null;
+  positions: Record<string, [number, number]>;
+};
+
+/**
+ * What the importer answered for one player: the track he was built from and the frames it
+ * spans, the side it put him on, and his shirt number.
+ *
+ * `track` is the id in the source file, or `id * 1000 + n` for the n-th piece of a track the
+ * importer split (`splitImpossible`); `from`/`to` say which piece either way.
+ */
+export type OriginPlayer = {
+  track: number;
+  from: number;
+  to: number;
+  side: "home" | "away";
+  number: number;
+};
+
+/**
+ * Where a board built from video came from, and what the importer said about it (D88).
+ *
+ * A coach's corrections are the only labels anybody has on his club, his broadcaster and his
+ * camera, and without this none of them can be read: nothing else in the document says which
+ * token is which track or which scene is which frame. So the importer's own answers are kept,
+ * keyed by scene id and player id -- both survive reordering, and a scene or player the coach
+ * adds has no entry, which is right: it was never measured. football-tracks' `ft learn` diffs
+ * the board against this and keeps what changed.
+ *
+ * Dropped from share links, which are for showing a play, not for teaching a model.
+ */
+export type Origin = {
+  /** football-tracks' name for the clip, which is where `ft learn` finds its files. */
+  clip: string;
+  fps: number;
+  scenes: Record<string, OriginScene>;
+  players: Record<string, OriginPlayer>;
+};
+
 export type BoardDoc = {
   version: 1;
   name: string;
@@ -261,6 +306,8 @@ export type BoardDoc = {
   links: Link[];
   /** Optional: a board drawn before annotations existed simply has none. */
   annotations?: Annotation[];
+  /** Present on a board imported from video, and only there. */
+  origin?: Origin;
 };
 
 /** Which part of the pitch is on screen. */

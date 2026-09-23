@@ -294,6 +294,9 @@ export const en = {
   "inspect.highlight.on.hint": "Glow around these players on this scene only.",
   "inspect.highlight.off.hint": "Stop them glowing on this scene.",
   "inspect.highlight.colour": "Highlight in {color}",
+  "inspect.switchSide": "Move {who} to the other side",
+  "inspect.switchSide.hint":
+    "For a player the video put on the wrong team. He keeps his runs, timings and the ball; only his side changes.",
   "inspect.remove.hint": "Takes this player off the board, in every scene.",
   "inspect.run": "Run — {scene}",
   "inspect.straighten": "Straighten",

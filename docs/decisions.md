@@ -466,6 +466,32 @@ drawn from memory. What is left is short because THE TRACKER IS SHORT: a board c
 long as the roster is watched, and at today's fragmentation that is a handful of seconds. The
 fix for board length is upstream, not here.
 
+## D88 — A board from video remembers what the importer said, so a coach's corrections can teach it
+
+Every correction a coach makes to an imported board is a label nobody else has -- on his club,
+his broadcaster, his camera -- and it was being thrown away. Not deliberately: nothing in a saved
+board said which token was which track or which scene was which frame of the video, so there was
+nothing to read a correction against. football-tracks measured twice that labels like these are
+what it lacks: a model that has SEEN a side's players names them far better (its D98, D100), and
+a ball verifier trained on three matches does not carry to a fourth (its D101).
+
+So the importer writes `origin` onto the board: per scene id, the video frame and what it said --
+carrier and positions; per player id, the track and span it built him from, the side and the
+number. Scene and player ids are the keys because both survive reordering, and anything the
+coach adds has no entry, which is correct: it was never measured.
+
+Nothing here reads it. The coach exports the board as always, and football-tracks' `ft learn`
+diffs it against its own `origin` and keeps four kinds of label: a carrier changed, a number
+set, a player dragged, a player moved to the other side. The last needed an operation the
+editor did not have -- `switchSide`, which keeps a player's id and so everything he did, and
+takes him out of his old side's links.
+
+**Kept out of share links.** A link shows a play; `origin` is a working record, and it would
+roughly double the length of every link. A JSON export keeps it, because that file IS the
+hand-off. Where to draw the line between Pitchboard's schema and football-tracks' labels is the
+one-contract rule again: this repo records what it was told and what the coach changed, and the
+label format lives on the other side.
+
 ## D87 — A player nobody saw is drawn faded, and a coach placing him makes him solid
 
 A board imported from video holds all twenty-two players in every scene -- that is what a board

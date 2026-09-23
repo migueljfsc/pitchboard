@@ -175,3 +175,23 @@ describe("the framing", () => {
     expect(decodeView(null)).toBeNull();
   });
 });
+
+describe("share links and a board's origin (D88)", () => {
+  it("leaves out where a board came from, and keeps everything else", async () => {
+    const doc = createBoardDoc();
+    const id = doc.teams[0].players[0].id;
+    const withOrigin = {
+      ...doc,
+      origin: {
+        clip: "Untitled_1",
+        fps: 25,
+        scenes: { [doc.scenes[0].id]: { frame: 12, carrier: null, positions: { [id]: [10, 20] as [number, number] } } },
+        players: { [id]: { track: 7, from: 1, to: 90, side: "home" as const, number: 9 } },
+      },
+    };
+    const out = await decodeBoard(await encodeBoard(withOrigin));
+    if (!out.ok) throw new Error(out.error.key);
+    expect(out.doc.origin).toBeUndefined();
+    expect(out.doc).toEqual(doc);
+  });
+});

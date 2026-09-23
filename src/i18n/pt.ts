@@ -285,6 +285,9 @@ export const pt: Dictionary = {
   "inspect.highlight.on.hint": "Halo à volta destes jogadores, apenas nesta cena.",
   "inspect.highlight.off.hint": "Deixar de os destacar nesta cena.",
   "inspect.highlight.colour": "Destacar a {color}",
+  "inspect.switchSide": "Passar {who} para a outra equipa",
+  "inspect.switchSide.hint":
+    "Para um jogador que o vídeo pôs na equipa errada. Mantém as corridas, os tempos e a bola; só muda de equipa.",
   "inspect.remove.hint": "Retira este jogador do quadro, em todas as cenas.",
   "inspect.run": "Corrida — {scene}",
   "inspect.straighten": "Endireitar",

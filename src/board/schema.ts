@@ -125,6 +125,30 @@ const boardDocShape = z.object({
   scenes: z.array(scene).min(1).max(60),
   links: z.array(link).max(20),
   annotations: z.array(annotation).max(200).optional(),
+  origin: z
+    .object({
+      clip: z.string().min(1).max(200),
+      fps: z.number().positive().max(240),
+      scenes: z.record(
+        z.string(),
+        z.object({
+          frame: z.number().int().min(0),
+          carrier: z.string().nullable(),
+          positions: z.record(z.string(), z.tuple([z.number(), z.number()])),
+        }),
+      ),
+      players: z.record(
+        z.string(),
+        z.object({
+          track: z.number().int(),
+          from: z.number().int(),
+          to: z.number().int(),
+          side: z.enum(["home", "away"]),
+          number: z.number().int(),
+        }),
+      ),
+    })
+    .optional(),
 });
 
 export const boardDocSchema = boardDocShape.superRefine((doc, ctx) => {

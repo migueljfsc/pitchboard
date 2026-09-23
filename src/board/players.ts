@@ -118,6 +118,28 @@ function freeSpot(doc: BoardDoc, teamIndex: 0 | 1): Vec2 {
  * A position goes into EVERY scene, not just the current one — the schema
  * requires it, and a player missing from a later scene would vanish mid-animation.
  */
+/**
+ * Move a player to the other side, keeping everything he did.
+ *
+ * What a coach does when the kit split got a player wrong -- a white shirt drawn red. He keeps
+ * his id, so his positions, runs, timings and the ball stay his; only the side changes. A link
+ * is a unit of one side, so he leaves any he was in. On a board from video it is also a label:
+ * this track wears the other kit (D88).
+ */
+export function switchSide(doc: BoardDoc, id: string): BoardDoc {
+  const from = doc.teams.findIndex((t) => t.players.some((p) => p.id === id));
+  if (from < 0) return doc;
+  const player = doc.teams[from].players.find((p) => p.id === id)!;
+  const teams = doc.teams.map((team, i) => ({
+    ...team,
+    players: i === from ? team.players.filter((p) => p.id !== id) : [...team.players, player],
+  })) as [Team, Team];
+  const links = doc.links
+    .map((link) => ({ ...link, members: link.members.filter((m) => m !== id) }))
+    .filter((link) => link.members.length >= 2);
+  return pruneLinks({ ...doc, teams, links });
+}
+
 export function addPlayer(doc: BoardDoc, teamIndex: 0 | 1): BoardDoc {
   const team = doc.teams[teamIndex];
   if (team.players.length >= MAX_SQUAD) return doc;

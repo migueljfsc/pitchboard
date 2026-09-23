@@ -89,7 +89,11 @@ async function inflate(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
 // --------------------------------------------------------------------- public
 
 export async function encodeBoard(doc: BoardDoc): Promise<string> {
-  return toBase64Url(await deflate(JSON.stringify(doc)));
+  // A link shows a play. Where it came from is a working record for teaching the video side,
+  // and it would roughly double the length of every link that carried it (D88).
+  const shown: BoardDoc = { ...doc };
+  delete shown.origin;
+  return toBase64Url(await deflate(JSON.stringify(shown)));
 }
 
 /**

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { UserMinus } from "lucide-react";
+import { ArrowLeftRight, UserMinus } from "lucide-react";
 import type { BoardDoc, Player } from "@/board/types";
 import { BALL_ID } from "@/board/types";
 import { displayName, shirtClash } from "@/board/players";
@@ -34,6 +34,7 @@ type Props = {
   carry: Carry;
   onCarryChange: (carry: Carry) => void;
   onRemovePlayer: (playerId: string) => void;
+  onSwitchSide: (playerId: string) => void;
   /** True when every selected entity has its run arrow hidden in this scene. */
   runsHidden: boolean;
   onRunsHiddenChange: (hidden: boolean) => void;
@@ -66,6 +67,7 @@ export function Inspector({
   carry,
   onCarryChange,
   onRemovePlayer,
+  onSwitchSide,
   runsHidden,
   onRunsHiddenChange,
   highlighted,
@@ -288,8 +290,19 @@ export function Inspector({
         </div>
       </div>
 
-      {/* Last, and on its own. Removing a player belongs to neither the ball nor
-          the run, and sitting under either read as part of it. */}
+      {/* Last, and on their own. Switching or removing a player belongs to neither the
+          ball nor the run, and sitting under either read as part of it. */}
+      {player && (
+        <button
+          type="button"
+          title={t("inspect.switchSide.hint")}
+          onClick={() => onSwitchSide(player.id)}
+          className="flex w-full items-center justify-center gap-1.5 rounded-md border border-ink-600 px-2 py-1.5 text-xs text-ink-300 transition hover:border-ink-400 hover:text-ink-100"
+        >
+          <ArrowLeftRight size={13} />
+          {t("inspect.switchSide", { who: displayName(doc, player.id) })}
+        </button>
+      )}
       {player && (
         <button
           type="button"

@@ -9,7 +9,7 @@
  * language and neither do this one's (D38).
  */
 
-import type { BoardDoc, Scene, Vec2 } from "@/board/types";
+import type { BoardDoc, Origin, Scene, Vec2 } from "@/board/types";
 import { clamp } from "@/board/geometry";
 import { PALETTE } from "@/components/ui/palette";
 import { buildSquad, HOME, AWAY } from "@/formations";
@@ -601,6 +601,36 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
   const sources: Record<string, Track> = {};
   for (const track of kept) sources[idOf.get(track)!] = track;
 
+  // What this importer answered, kept on the board so a coach's corrections can be read back
+  // as labels by football-tracks' `ft learn` (D88). Centimetres are finer than any of it.
+  const cm = (v: number) => Math.round(v * 100) / 100;
+  const origin: Origin = {
+    clip: file.source.clip,
+    fps: file.source.fps,
+    scenes: Object.fromEntries(
+      scenes.map((scene, i) => [
+        scene.id,
+        {
+          frame: frames[i],
+          carrier: scene.carrier,
+          positions: Object.fromEntries(
+            Object.entries(scene.positions).map(([id, at]) => [id, [cm(at.x), cm(at.y)] as [number, number]]),
+          ),
+        },
+      ]),
+    ),
+    players: Object.fromEntries(
+      (["home", "away"] as const).flatMap((side, i) =>
+        teams[i].players.flatMap((player) => {
+          const track = sources[player.id];
+          if (!track) return [];
+          const span = { from: track.samples[0].f, to: track.samples[track.samples.length - 1].f };
+          return [[player.id, { track: track.id, ...span, side, number: player.number }]];
+        }),
+      ),
+    ),
+  };
+
   return {
     ok: true,
     window: { from: start, to: end },
@@ -624,6 +654,7 @@ export function boardFromTracks(raw: unknown, options: ImportOptions = {}): Impo
       // No links: a link is a claim about which players form a unit, and nothing in a
       // tracks file makes that claim. The coach draws them.
       links: [],
+      origin,
     },
   };
 }

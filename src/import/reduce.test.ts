@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { PALETTE } from "@/components/ui/palette";
 import { AWAY, HOME } from "@/formations";
 import { boardFromTracks } from "./index";
+import { boardDocSchema } from "@/board/schema";
 import {
   airborne,
   bestCover,
@@ -1370,5 +1371,32 @@ describe("boardFromTracks and players nobody saw (D87)", () => {
     expect(after.length).toBeGreaterThan(0);
     for (const s of before) expect(s.unseen).toContain(late);
     for (const s of after) expect(s.unseen).not.toContain(late);
+  });
+});
+
+describe("boardFromTracks keeps where the board came from (D88)", () => {
+  it("records each scene's frame and each player's track, side and number", () => {
+    const result = boardFromTracks(file([straightRun(1, "home", 20), straightRun(2, "away", 40)]));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const origin = result.doc.origin!;
+    expect(origin.clip).toBe("goal.mp4");
+    expect(origin.fps).toBe(25);
+    result.doc.scenes.forEach((scene, i) => {
+      expect(origin.scenes[scene.id].frame).toBe(result.frames[i]);
+      expect(origin.scenes[scene.id].carrier).toBe(scene.carrier);
+    });
+    for (const [id, track] of Object.entries(result.sources)) {
+      const kept = origin.players[id];
+      expect(kept.track).toBe(track.id);
+      expect([kept.from, kept.to]).toEqual([track.samples[0].f, track.samples[track.samples.length - 1].f]);
+      expect(kept.side).toBe(track.team === "away" ? "away" : "home");
+    }
+  });
+
+  it("is a field the schema keeps", () => {
+    const result = boardFromTracks(file([straightRun(1, "home", 20), straightRun(2, "away", 40)]));
+    if (!result.ok) throw new Error("refused");
+    expect(boardDocSchema.parse(result.doc).origin).toEqual(result.doc.origin);
   });
 });
