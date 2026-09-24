@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.60.0 (2026-09-24)
+
+### Feat
+
+- **editor**: a Selection panel split by scope, with pass timing in the scene bar
+
 ## v0.59.0 (2026-09-24)
 
 ### Feat
