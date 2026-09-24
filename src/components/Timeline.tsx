@@ -14,18 +14,22 @@ import {
   Repeat,
 } from "lucide-react";
 import type { BoardDoc, PitchView } from "@/board/types";
+import { BALL_ID } from "@/board/types";
 import { SceneThumb, THUMB_WIDTH } from "@/components/SceneThumb";
 import { NumberField } from "@/components/ui/NumberField";
 import {
   addSceneAfter,
+  ballTravelBetween,
   canLoft as canLoftInto,
   canShoot as canShootInto,
   duplicateScene,
   moveScene,
   renameScene,
   sceneStartSeconds,
+  setDelay,
   setSceneTiming,
   setLoft,
+  setTravel,
   setShot,
   totalSeconds,
   setScenePace,
@@ -35,7 +39,11 @@ import {
   DEFAULT_FLOW_SPEED,
   MAX_FLOW_SPEED,
   MIN_FLOW_SPEED,
+  entityDelayMs,
+  entityTravelMs,
+  passEnds,
   resolveAt,
+  transitionInto,
   sceneTimings,
   scenePace,
 } from "@/board/timeline";
@@ -474,6 +482,8 @@ export function Timeline({
             </label>
           )}
 
+          {activeScene > 0 && <PassTiming doc={doc} index={activeScene} onDocChange={onDocChange} />}
+
           <div className="ml-auto flex items-center gap-1.5">
             <IconButton
               label={t("timeline.moveEarlier")}
@@ -544,6 +554,95 @@ function Duration({
       unit="s"
       onCommit={(v) => onChange(v * 1000)}
     />
+  );
+}
+
+/**
+ * When the ball is struck and how long it travels, for the pass INTO this scene.
+ *
+ * Here rather than in the Selection panel because it describes the scene's pass,
+ * like Shot and Loft beside it, and needs no ball selected to find. Always shown
+ * from the second scene on, and greyed with the reason where there is no pass to
+ * time — a carried ball goes where its carrier goes (D97).
+ */
+function PassTiming({
+  doc,
+  index,
+  onDocChange,
+}: {
+  doc: BoardDoc;
+  index: number;
+  onDocChange: Change<BoardDoc>;
+}) {
+  const { t } = useI18n();
+  const scene = doc.scenes[index];
+  const played = ballTravelBetween(doc, doc.scenes[index - 1], scene) !== "none";
+  const reason = doc.flow
+    ? t("timeline.pass.flow")
+    : !played
+      ? t("timeline.pass.carried")
+      : null;
+  const disabled = reason !== null;
+
+  const takesMs = entityTravelMs(scene, BALL_ID);
+  const releaseMs = entityDelayMs(scene, BALL_ID);
+  const own = scene.travel?.[BALL_ID] !== undefined;
+
+  // How far the pass goes and how hard, so "tension" is a number and not a feel.
+  const r = transitionInto(doc, index);
+  const ends = !disabled && r ? passEnds(r, doc) : null;
+  const metres = ends ? Math.hypot(ends.end.x - ends.start.x, ends.end.y - ends.start.y) : 0;
+  const readout =
+    ends && metres >= 0.5 && takesMs > 0
+      ? t("timeline.pass.speed", {
+          metres: Math.round(metres),
+          seconds: (takesMs / 1000).toFixed(1),
+          speed: Math.round(metres / (takesMs / 1000)),
+        })
+      : null;
+
+  return (
+    <div className="flex items-end gap-2" title={reason ?? undefined}>
+      <NumberField
+        key={`release:${scene.id}`}
+        label={t("timeline.pass.release")}
+        title={reason ?? t("timeline.pass.release.hint")}
+        value={releaseMs / 1000}
+        min={0}
+        max={60}
+        step={0.1}
+        decimals={1}
+        unit="s"
+        disabled={disabled}
+        onCommit={(v) => onDocChange(setDelay(doc, index, BALL_ID, v * 1000), `pass-release:${scene.id}`)}
+      />
+      <NumberField
+        key={`takes:${scene.id}`}
+        label={t("timeline.pass.takes")}
+        title={reason ?? t("timeline.pass.takes.hint")}
+        value={takesMs / 1000}
+        min={0.1}
+        max={60}
+        step={0.1}
+        decimals={1}
+        unit="s"
+        disabled={disabled}
+        onCommit={(v) => onDocChange(setTravel(doc, index, BALL_ID, v * 1000), `pass-takes:${scene.id}`)}
+        action={
+          own &&
+          !disabled && (
+            <button
+              type="button"
+              onClick={() => onDocChange(setTravel(doc, index, BALL_ID, null))}
+              className="normal-case tracking-normal text-ink-300 underline-offset-2 hover:text-white hover:underline"
+            >
+              {t("timeline.pass.matchScene")}
+            </button>
+          )
+        }
+      />
+      {readout && <span className="pb-1.5 font-mono text-[11px] text-ink-400">{readout}</span>}
+    </div>
   );
 }
 

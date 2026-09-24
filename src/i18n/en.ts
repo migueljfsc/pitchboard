@@ -271,7 +271,7 @@ export const en = {
   // ------------------------------------------------------------- inspector
   "inspect.empty":
     "Click a player to select, double-click to rename. Shift-click to add, or drag on empty grass to marquee. Arrow keys nudge; hold shift for 5 m. Space plays.",
-  "inspect.carry": "Carry the move",
+  "inspect.carry": "When I drag or nudge",
   "inspect.carry.scene": "This scene",
   "inspect.carry.scene.hint":
     "Moves the selection in this scene only. Hold Alt to do it once without switching mode.",
@@ -281,33 +281,59 @@ export const en = {
   "inspect.carry.all": "Every scene",
   "inspect.carry.all.hint":
     "Moves the selection in every later scene too, carrying its runs along with it.",
-  "inspect.delay": "Wait before starting",
-  "inspect.delay.together": "Start with everyone",
   "inspect.delay.hint":
     "Holds this player still for a moment, then runs. One scene can carry a sequence — the winger goes, the full-back overlaps behind them.",
-  "inspect.travelTime": "Travel time",
   "inspect.matchScene": "match scene",
-  "inspect.travel.default": "s — scene default",
-  "inspect.travel.unit": "s",
   "inspect.travel.hint":
     "Shorter than the scene and this player arrives early and waits. Longer stretches the scene, which now runs for {seconds} s.",
   "inspect.travel.reset": "Use the scene default",
-  "inspect.ball": "Ball — {scene}",
   "inspect.ball.release": "Release the ball",
   "inspect.ball.give": "Give ball to {who}",
   "inspect.ball.hint":
     "The ball follows whoever holds it. Handing it to someone else in the next scene makes a pass, and giving it out carries through the scenes that follow until something else happens to it.",
+  "inspect.count.one": "1 selected",
+  "inspect.count.other": "{count} selected",
+  "inspect.scope.hint": "The scene these settings change. Pick another scene in the strip below the timeline.",
+  "inspect.tab.scene": "This scene",
+  "inspect.tab.scene.hint": "How the selection moves, carries the ball and is highlighted in this scene",
+  "inspect.tab.player": "Player",
+  "inspect.tab.player.hint": "Name, number and side — the same in every scene",
+  "inspect.tab.player.note": "These apply to the player in every scene.",
+  "inspect.group.movement": "Movement",
+  "inspect.group.ball": "Ball",
+  "inspect.group.highlight": "Highlight",
+  "inspect.why.firstScene": "The first scene is where everyone starts, so runs are timed on the scenes after it.",
+  "inspect.why.firstScene.go": "Go to {scene}",
+  "inspect.why.ball":
+    "The ball goes where it is played. Its timing, shot and loft are in the scene bar under the timeline.",
+  "inspect.why.flow":
+    "Seamless flow paces everyone together. Turn it off in the timeline to time runs one by one.",
+  "inspect.travelShort": "Travel",
+  "inspect.delayShort": "Wait",
+  "inspect.delay.none": "none",
+  "inspect.mixed": "mixed",
+  "inspect.runStyle": "Run style",
+  "inspect.runStyle.summary": "{start} → {end}",
+  "inspect.runStyle.default": "Default",
+  "inspect.scope.all": "All scenes",
+  "inspect.showRuns.short": "Show arrow",
+  "inspect.hideRuns.short": "Hide arrow",
+  "inspect.highlight.none": "Off",
+  "inspect.ball.heldBy": "{who} has the ball in this scene.",
+  "inspect.ball.loose": "The ball is loose in this scene.",
+  "inspect.ball.timingWhere": "The pass into it — timing, shot, loft — is set in the scene bar under the timeline.",
   "inspect.ballName": "Ball",
-  "inspect.pass.takes": "Pass takes",
-  "inspect.pass.takes.hint":
+  "timeline.pass.takes": "Pass takes",
+  "timeline.pass.takes.hint":
     "How long the ball is travelling. Shorter is a firmer pass. It is met wherever the receiver has run to by then, and he carries it on.",
-  "inspect.pass.release": "Released after",
-  "inspect.pass.release.hint":
+  "timeline.pass.release": "Released after",
+  "timeline.pass.release.hint":
     "How long the passer keeps the ball, running with it, before he plays it.",
-  "inspect.pass.releaseAtOnce": "Release at once",
-  "inspect.pass.carried":
+  "timeline.pass.matchScene": "match scene",
+  "timeline.pass.flow": "Seamless flow paces the ball with everyone else. Turn it off to time the pass.",
+  "timeline.pass.carried":
     "The ball is carried in this scene, so it moves with its carrier. Its own timing applies where it is played — a pass, a release or a shot.",
-  "inspect.pass.speed": "{metres} m in {seconds} s · {speed} m/s",
+  "timeline.pass.speed": "{metres} m in {seconds} s · {speed} m/s",
   "inspect.runStart": "Start",
   "inspect.runStart.gradual": "Gradual",
   "inspect.runStart.gradual.hint": "Eases up from a standstill — the default.",
@@ -325,9 +351,6 @@ export const en = {
   "inspect.runEnd.through.blocked":
     "He has a wait on the next scene, so he stops here. Clear the wait to let him run on.",
   "inspect.remove": "Remove {who}",
-  "inspect.highlight": "Highlight — {scene}",
-  "inspect.highlight.on": "Highlight selection",
-  "inspect.highlight.off": "Remove highlight",
   "inspect.highlight.on.hint": "Glow around these players on this scene only.",
   "inspect.highlight.off.hint": "Stop them glowing on this scene.",
   "inspect.highlight.colour": "Highlight in {color}",
@@ -341,9 +364,7 @@ export const en = {
   "inspect.straighten": "Straighten",
   "inspect.straighten.hint": "Puts the curved runs in this scene back to a straight line.",
   "inspect.straighten.none": "Curve a run first, by dragging the amber handles on its arrow.",
-  "inspect.showRuns": "Show movement arrows",
   "inspect.showRuns.hint": "Draws the arrows for this scene again.",
-  "inspect.hideRuns": "Hide movement arrows",
   "inspect.hideRuns.hint": "Hides the arrows in this scene. The players still run.",
   "inspect.name": "Name",
   "inspect.number": "No.",

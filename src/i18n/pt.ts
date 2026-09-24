@@ -262,7 +262,7 @@ export const pt: Dictionary = {
   // ------------------------------------------------------------- inspector
   "inspect.empty":
     "Clique num jogador para o selecionar, duplo clique para lhe mudar o nome. Shift+clique para juntar, ou arraste sobre a relva vazia para marcar uma área. As setas deslocam; com shift, 5 m. O espaço reproduz.",
-  "inspect.carry": "Levar o movimento",
+  "inspect.carry": "Ao arrastar ou mover",
   "inspect.carry.scene": "Só esta cena",
   "inspect.carry.scene.hint":
     "Move a seleção apenas nesta cena. Carregue em Alt para o fazer uma vez sem mudar de modo.",
@@ -272,33 +272,59 @@ export const pt: Dictionary = {
   "inspect.carry.all": "Todas as cenas",
   "inspect.carry.all.hint":
     "Move a seleção também em todas as cenas seguintes, levando as corridas com ela.",
-  "inspect.delay": "Esperar antes de arrancar",
-  "inspect.delay.together": "Arrancar com os outros",
   "inspect.delay.hint":
     "Mantém este jogador parado por um instante e só depois corre. Uma cena passa a conter uma sequência — o extremo arranca, o lateral sobrepõe-se por trás.",
-  "inspect.travelTime": "Tempo de deslocação",
   "inspect.matchScene": "igualar à cena",
-  "inspect.travel.default": "s — valor da cena",
-  "inspect.travel.unit": "s",
   "inspect.travel.hint":
     "Menos do que a cena e este jogador chega cedo e espera. Mais estica a cena, que passa a durar {seconds} s.",
   "inspect.travel.reset": "Usar o valor da cena",
-  "inspect.ball": "Bola — {scene}",
   "inspect.ball.release": "Libertar a bola",
   "inspect.ball.give": "Dar a bola a {who}",
   "inspect.ball.hint":
     "A bola acompanha quem a tem. Entregá-la a outro jogador na cena seguinte faz um passe, e dar a bola segue pelas cenas seguintes até algo mais lhe acontecer.",
+  "inspect.count.one": "1 selecionado",
+  "inspect.count.other": "{count} selecionados",
+  "inspect.scope.hint": "A cena que estas definições alteram. Escolha outra cena na faixa por baixo da linha do tempo.",
+  "inspect.tab.scene": "Esta cena",
+  "inspect.tab.scene.hint": "Como a seleção se move, leva a bola e é destacada nesta cena",
+  "inspect.tab.player": "Jogador",
+  "inspect.tab.player.hint": "Nome, número e equipa — iguais em todas as cenas",
+  "inspect.tab.player.note": "Isto aplica-se ao jogador em todas as cenas.",
+  "inspect.group.movement": "Movimento",
+  "inspect.group.ball": "Bola",
+  "inspect.group.highlight": "Destaque",
+  "inspect.why.firstScene": "A primeira cena é onde todos começam, por isso as corridas definem-se nas cenas seguintes.",
+  "inspect.why.firstScene.go": "Ir para {scene}",
+  "inspect.why.ball":
+    "A bola vai para onde é jogada. O tempo, o remate e o passe alto estão na barra da cena, por baixo da linha do tempo.",
+  "inspect.why.flow":
+    "O fluxo contínuo dá o mesmo ritmo a todos. Desligue-o na linha do tempo para definir as corridas uma a uma.",
+  "inspect.travelShort": "Deslocação",
+  "inspect.delayShort": "Espera",
+  "inspect.delay.none": "nenhuma",
+  "inspect.mixed": "vários",
+  "inspect.runStyle": "Tipo de corrida",
+  "inspect.runStyle.summary": "{start} → {end}",
+  "inspect.runStyle.default": "Normal",
+  "inspect.scope.all": "Todas as cenas",
+  "inspect.showRuns.short": "Mostrar seta",
+  "inspect.hideRuns.short": "Ocultar seta",
+  "inspect.highlight.none": "Limpar",
+  "inspect.ball.heldBy": "{who} tem a bola nesta cena.",
+  "inspect.ball.loose": "A bola está solta nesta cena.",
+  "inspect.ball.timingWhere": "O passe para esta cena — tempo, remate, passe alto — define-se na barra da cena, por baixo da linha do tempo.",
   "inspect.ballName": "Bola",
-  "inspect.pass.takes": "O passe demora",
-  "inspect.pass.takes.hint":
+  "timeline.pass.takes": "O passe demora",
+  "timeline.pass.takes.hint":
     "Quanto tempo a bola viaja. Mais curto é um passe mais tenso. É recebida onde o recetor estiver nesse momento, e ele segue com ela.",
-  "inspect.pass.release": "Solta a bola após",
-  "inspect.pass.release.hint":
+  "timeline.pass.release": "Solta a bola após",
+  "timeline.pass.release.hint":
     "Quanto tempo o passador fica com a bola, a correr com ela, antes de a jogar.",
-  "inspect.pass.releaseAtOnce": "Soltar logo",
-  "inspect.pass.carried":
+  "timeline.pass.matchScene": "igual à cena",
+  "timeline.pass.flow": "O fluxo contínuo dá à bola o ritmo de todos. Desligue-o para definir o tempo do passe.",
+  "timeline.pass.carried":
     "Nesta cena a bola vai com quem a conduz. O tempo próprio da bola aplica-se quando é jogada — um passe, uma bola solta ou um remate.",
-  "inspect.pass.speed": "{metres} m em {seconds} s · {speed} m/s",
+  "timeline.pass.speed": "{metres} m em {seconds} s · {speed} m/s",
   "inspect.runStart": "Arranque",
   "inspect.runStart.gradual": "Progressivo",
   "inspect.runStart.gradual.hint": "Arranca parado e acelera aos poucos — o normal.",
@@ -316,9 +342,6 @@ export const pt: Dictionary = {
   "inspect.runEnd.through.blocked":
     "Tem uma espera na cena seguinte, por isso para aqui. Tire a espera para ele continuar.",
   "inspect.remove": "Remover {who}",
-  "inspect.highlight": "Destaque — {scene}",
-  "inspect.highlight.on": "Destacar seleção",
-  "inspect.highlight.off": "Retirar destaque",
   "inspect.highlight.on.hint": "Halo à volta destes jogadores, apenas nesta cena.",
   "inspect.highlight.off.hint": "Deixar de os destacar nesta cena.",
   "inspect.highlight.colour": "Destacar a {color}",
@@ -332,9 +355,7 @@ export const pt: Dictionary = {
   "inspect.straighten": "Endireitar",
   "inspect.straighten.hint": "Volta a pôr as corridas curvas desta cena em linha reta.",
   "inspect.straighten.none": "Curve primeiro uma corrida, arrastando as pegas âmbar da seta.",
-  "inspect.showRuns": "Mostrar as setas de movimento",
   "inspect.showRuns.hint": "Volta a desenhar as setas desta cena.",
-  "inspect.hideRuns": "Ocultar as setas de movimento",
   "inspect.hideRuns.hint": "Esconde as setas nesta cena. Os jogadores continuam a correr.",
   "inspect.name": "Nome",
   "inspect.number": "N.º",

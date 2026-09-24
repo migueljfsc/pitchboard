@@ -3,6 +3,9 @@ import { ballAt, ballGlue, frameAt, passEnds, positionAt, resolveAt, runsThrough
 import { setDelay, setRunStyle, setTravel } from "./scenes";
 import { boardDocSchema } from "./schema";
 import { createBoardDoc } from "@/formations";
+import { drawBoard } from "./render";
+import { createRecordingCtx } from "./recording-ctx";
+import { fitViewport } from "./geometry";
 import { BALL_ID, type BoardDoc, type Scene, type Vec2 } from "./types";
 
 const doc0 = createBoardDoc();
@@ -91,6 +94,22 @@ describe("running through a scene", () => {
     const doc = through(fourScenes(), 1);
     const other = doc.scenes[1].positions[OTHER];
     expect(positionAt(OTHER, resolveAt(doc, 1.75), doc)).toEqual(other);
+  });
+
+  it("draws his arrow as soon as he sets off, not only once the next scene starts", () => {
+    const view = { ...fitViewport(1200, 800, 105, 68), width: 1200, height: 800, interactive: false };
+    const strokes = (doc: BoardDoc, t: number) => {
+      const r = createRecordingCtx();
+      drawBoard(r.ctx, doc, t, view);
+      return r.log;
+    };
+    const plain = fourScenes();
+    const running = through(fourScenes(), 1);
+    // In the hold, he is running and the others are not: one more arrow than without.
+    const count = (log: string[]) => log.filter((e) => e === "stroke()").length;
+    expect(count(strokes(running, 1.75))).toBeGreaterThan(count(strokes(plain, 1.75)));
+    // At the instant the scene rests he is on his mark, and nothing is drawn differently.
+    expect(strokes(running, 1.5)).toEqual(strokes(plain, 1.5));
   });
 
   it("gives way to a wait on the next scene, and to the last scene", () => {

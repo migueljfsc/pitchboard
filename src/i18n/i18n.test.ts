@@ -47,13 +47,14 @@ describe("the dictionaries", () => {
   });
 
   it("is actually translated, not copied", () => {
-    // Proper nouns, an SI unit and a format name are the same word in both, and
-    // should be. Anything joining this list is a string somebody forgot.
+    // Proper nouns, an SI unit, a format name and a pattern with no words in it are
+    // the same in both, and should be. Anything joining this list is a string
+    // somebody forgot.
     const shared = keys.filter((k) => en[k] === pt[k]);
     expect(shared.sort()).toEqual([
       "app.name",
       "export.bitrate",
-      "inspect.travel.unit",
+      "inspect.runStyle.summary",
       "view.3d",
       "view.grass.natural",
       "view.horizontal",

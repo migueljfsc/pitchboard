@@ -40,9 +40,11 @@ import {
   LOFT_APEX,
   LOFT_GROWTH,
   UNSEEN_ALPHA,
+  absoluteMs,
   ballAt,
   ballLift,
   displayCurve,
+  runsThrough,
   frameAt,
   highlightAt,
   transitionInto,
@@ -1317,6 +1319,24 @@ function drawPaths(ctx: Ctx, doc: BoardDoc, frame: Frame, view: RenderView): voi
     }
     drawBallPath(ctx, doc, r);
     return;
+  }
+
+  // A player running on through this scene is already on his next run during its
+  // hold, while the timeline says nobody is moving (D98). His arrow is the next
+  // scene's, and it shows the moment he sets off — but not at the instant the
+  // scene comes to rest, which is where the editor parks and where he is still
+  // on his mark.
+  const next = transitionInto(doc, r.index + 1);
+  if (next && absoluteMs(r, doc) > absoluteMs({ ...r, ms: undefined }, doc)) {
+    const scene = doc.scenes[r.index + 1];
+    for (const team of doc.teams) {
+      if (team.hidden) continue;
+      for (const player of team.players) {
+        if (!runsThrough(doc, player.id, r.index) || isRunHidden(scene, player.id)) continue;
+        const b = displayCurve(player.id, next);
+        if (b) drawPath(ctx, b, team.color, false, clear);
+      }
+    }
   }
 
   // At rest, the editor still shows the selected players' runs into the scene

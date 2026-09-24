@@ -1187,6 +1187,7 @@ export function Editor({ initialDoc }: Props = {}) {
               highlighted={highlighted}
               highlightColor={highlightColor}
               onHighlightChange={onHighlightChange}
+              onGoToScene={(index) => selectScene(index)}
               focusName={focusName}
             />
           </Section>

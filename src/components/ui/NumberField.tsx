@@ -14,6 +14,7 @@
 
 import { useState, type ReactNode } from "react";
 import { useI18n } from "@/i18n/context";
+import { cn } from "@/lib/utils";
 
 type Props = {
   label: string;
@@ -28,6 +29,14 @@ type Props = {
   onCommit: (value: number) => void;
   /** Sits opposite the label — a reset link, typically. */
   action?: ReactNode;
+  /** Shown greyed and inert; `title` is where to say why. */
+  disabled?: boolean;
+  /**
+   * The selection disagrees — several players with different values. The field shows
+   * `mixedLabel` rather than one of them, and typing sets them all.
+   */
+  mixed?: boolean;
+  mixedLabel?: string;
 };
 
 export function NumberField({
@@ -41,6 +50,9 @@ export function NumberField({
   decimals = 0,
   onCommit,
   action,
+  disabled = false,
+  mixed = false,
+  mixedLabel,
 }: Props) {
   const { locale } = useI18n();
   /** null while the field is showing the committed value rather than a draft. */
@@ -52,7 +64,7 @@ export function NumberField({
   // accepted when typed.
   const comma = locale === "pt";
   const shown = decimals > 0 ? value.toFixed(decimals) : String(value);
-  const text = draft ?? (comma ? shown.replace(".", ",") : shown);
+  const text = draft ?? (mixed ? "" : comma ? shown.replace(".", ",") : shown);
   const parse = (raw: string) => (raw.trim() === "" ? NaN : Number(raw.replace(",", ".")));
   const inRange = (n: number) => Number.isFinite(n) && n >= min && n <= max;
 
@@ -66,7 +78,7 @@ export function NumberField({
   };
 
   return (
-    <label className="flex flex-col gap-1" title={title}>
+    <label className={cn("flex flex-col gap-1", disabled && "opacity-45")} title={title}>
       <span className="flex items-baseline justify-between gap-2 text-[11px] uppercase tracking-wide text-ink-400">
         {label}
         {action}
@@ -76,6 +88,8 @@ export function NumberField({
           type="text"
           inputMode="decimal"
           value={text}
+          disabled={disabled}
+          placeholder={mixed ? mixedLabel : undefined}
           onChange={(e) => {
             setDraft(e.target.value);
             const n = parse(e.target.value);
@@ -87,7 +101,7 @@ export function NumberField({
             stepBy(e.key === "ArrowUp" ? 1 : -1);
           }}
           onBlur={() => setDraft(null)}
-          className="w-16 rounded-md border border-ink-600 bg-ink-900 px-2 py-1 font-mono text-xs text-ink-200 outline-none focus:border-accent"
+          className="w-16 rounded-md border border-ink-600 bg-ink-900 px-2 py-1 font-mono text-xs text-ink-200 outline-none placeholder:text-ink-400 focus:border-accent disabled:cursor-not-allowed"
         />
         <span className="text-[11px] text-ink-400">{unit}</span>
       </div>
