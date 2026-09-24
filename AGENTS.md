@@ -218,7 +218,16 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
   you think you are looking at. Re-pin the scrubber to the selected scene on every change.
 - **Zero holds is not seamless.** `easeInOutCubic` starts and ends at zero velocity, so removing
   the holds still leaves every player stopping dead at each scene boundary. Flow mode is linear
-  for that reason — see D27.
+  for that reason — see D27. For ONE player, a run style of `end: "through"` is the answer (D98).
+- **A run through a scene is placed by TIME, not by the scene being travelled into** (D98). A
+  player who runs on through scene k moves during k's hold, when `resolveAt` says nothing is
+  moving and `u` is 1. That is why `Resolved` carries `ms`, and why a Resolved built by hand
+  for another instant must drop it (`ms: undefined`) — spreading `...r` with a new `u` keeps
+  the old time, and a runner is drawn where he was, not where `u` says.
+- **Both-gradual is `easeInOutCubic`, exactly, and every other run style is a Hermite** (D98).
+  Replacing the default with smoothstep or any other "equivalent" ease moves every board ever
+  drawn. `runsThrough` is the only rule for whether a "through" applies — a wait on the next
+  scene, the last scene, a standstill on either side and flow mode all turn it off.
 - **`Scene.shot` must not outlive the travel it describes.** It marks the ball's arrival, so
   setting a carrier invalidates it on that scene AND the next, and deleting or reordering a scene
   invalidates it for a neighbour. `pruneBallFlags` runs inside `replace` for that reason. `canShoot`
@@ -247,9 +256,15 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
   a shaft drawn all the way to that tip emerges from under it wherever the triangle gets narrower
   than the shaft is wide. On a shot that is two rails appearing to overshoot the arrow and run on
   to the ball. The shaft stops inside the head instead (`SHAFT_INTO_HEAD`).
-- **The ball's line is sampled from `ballAt`, not guessed.** Endpoints come from the function
-  that actually moves the ball, at `u=0` and `u=1`, so carrier glue and travel overrides are
-  included rather than reimplemented.
+- **The ball's line comes from `passEnds`, not guessed.** It is the one definition of where a
+  pass is struck and where it is met, shared with `ballAt`, so carrier glue, the ball's own
+  wait and travel, and the receiver's own run are included rather than reimplemented (D97).
+  Sampling the ends at `u=0` and `u=1` instead is right only while the ball has no timing of
+  its own, and silently wrong the moment it does.
+- **The ball keeps its own time, and the pass is met in stride** (D97). Before its release the
+  passer still has it, glued to him wherever he has run; after its arrival the receiver has it
+  and carries it on. The meeting point is the receiver where he IS when the ball gets there,
+  not the end of his run — sampled once, never re-read per frame, or the ball homes in.
 - **A drag emits a document per `pointermove`.** Anything recording document history has to be
   told where the gesture ends, or one drag becomes forty undo steps — hence the merge key in
   `useHistory`. See D26.
@@ -297,8 +312,9 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
   in `pitch.ts` had to learn about the camera (D34).
 - **In 3D, metre space lands on the grass.** Anything new drawn inside the ground layer takes the
   perspective — which is usually right. Anything that must stay upright and unsquashed has to be
-  added to the billboard pass explicitly; it will not get there by itself. Tokens, the ball and
-  text annotations are the current list.
+  added to the billboard pass explicitly; it will not get there by itself. Tokens, the ball,
+  text annotations and drawn balls are the current list — `isStanding` names the two
+  annotations.
 - **A billboard's axes are the screen's, not the pitch's.** Inside `billboard()` one unit is still
   a metre, but +y is down the frame however the board is oriented underneath. That is what makes a
   token a circle rather than an ellipse — and it means a pitch-space offset copied into there
@@ -324,9 +340,17 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
   against the grass beneath it grabs an ellipse nowhere near the pixels, which is the objection
   that kept the view read-only in the first place.
 - **The 3D draw order is not the flat one, so neither is the hit-test order.** Flat, marks sit
-  above the tokens. Under the camera only TEXT does — the rest of its layer is in the ground
-  image, under the players. `hitTestGroundAnnotation` exists to leave text out of that pass,
-  because `hitTestTiltedText` has already had it.
+  above the tokens. Under the camera only TEXT does, and a drawn ball stands AMONG them — the
+  rest of their layer is in the ground image, under the players. `hitTestGroundAnnotation`
+  leaves both out of that pass (`isStanding`), because `hitTestTiltedText` has already had them.
+- **A drawn ball is not the match ball** (D96). It is an annotation: scene-ranged, placed with a
+  click, and invisible to `ballAt`, carriers, shots and lofts. Anything that reads "the ball"
+  means the match ball; a drawn one only ever reaches the renderer and the shape hit-tests.
+- **An outline zone is grabbed by its edge** (D95). `filled: false` is the only way to say it and
+  absent means filled, so a check written as `ann.filled` rather than `ann.filled !== false`
+  empties every zone drawn before the choice existed.
+- **Anything that deletes or replaces work goes through `notify`** (D93), so it can be undone
+  from the notice. A delete wired straight to `setDoc` works and silently loses the Undo.
 - **There is ONE camera.** `cameraFor` is called by the renderer and by every hit test. Building
   a projection beside the pointer handling is a second answer to where a player is on screen, and
   the two drift exactly the way preview and export would.

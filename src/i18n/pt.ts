@@ -289,6 +289,32 @@ export const pt: Dictionary = {
   "inspect.ball.hint":
     "A bola acompanha quem a tem. Entregá-la a outro jogador na cena seguinte faz um passe, e dar a bola segue pelas cenas seguintes até algo mais lhe acontecer.",
   "inspect.ballName": "Bola",
+  "inspect.pass.takes": "O passe demora",
+  "inspect.pass.takes.hint":
+    "Quanto tempo a bola viaja. Mais curto é um passe mais tenso. É recebida onde o recetor estiver nesse momento, e ele segue com ela.",
+  "inspect.pass.release": "Solta a bola após",
+  "inspect.pass.release.hint":
+    "Quanto tempo o passador fica com a bola, a correr com ela, antes de a jogar.",
+  "inspect.pass.releaseAtOnce": "Soltar logo",
+  "inspect.pass.carried":
+    "Nesta cena a bola vai com quem a conduz. O tempo próprio da bola aplica-se quando é jogada — um passe, uma bola solta ou um remate.",
+  "inspect.pass.speed": "{metres} m em {seconds} s · {speed} m/s",
+  "inspect.runStart": "Arranque",
+  "inspect.runStart.gradual": "Progressivo",
+  "inspect.runStart.gradual.hint": "Arranca parado e acelera aos poucos — o normal.",
+  "inspect.runStart.sharp": "Imediato",
+  "inspect.runStart.sharp.hint": "Em velocidade logo desde o primeiro passo.",
+  "inspect.runEnd": "Chegada",
+  "inspect.runEnd.gradual": "Progressiva",
+  "inspect.runEnd.gradual.hint": "Abranda até parar na marca — o normal.",
+  "inspect.runEnd.sharp": "Seca",
+  "inspect.runEnd.sharp.hint": "Chega em velocidade e para de repente.",
+  "inspect.runEnd.through": "Continua",
+  "inspect.runEnd.through.hint":
+    "Não para aqui: passa pela marca em velocidade e segue para a cena seguinte enquanto os outros esperam. Ative em várias cenas seguidas para uma corrida contínua.",
+  "inspect.runEnd.through.last": "Não há cena seguinte para onde continuar.",
+  "inspect.runEnd.through.blocked":
+    "Tem uma espera na cena seguinte, por isso para aqui. Tire a espera para ele continuar.",
   "inspect.remove": "Remover {who}",
   "inspect.highlight": "Destaque — {scene}",
   "inspect.highlight.on": "Destacar seleção",

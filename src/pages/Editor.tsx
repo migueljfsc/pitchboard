@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AnnotationDash, BoardDoc, PitchView, Tool } from "@/board/types";
+import type { AnnotationDash, BoardDoc, PitchView, RunEnd, RunStart, Tool } from "@/board/types";
 import { BALL_ID, DEFAULT_PITCH_VIEW } from "@/board/types";
 import { BoardCanvas } from "@/components/BoardCanvas";
 import { TeamControls } from "@/components/TeamControls";
@@ -75,6 +75,7 @@ import {
   setHighlight,
   setPath,
   setRunHidden,
+  setRunStyle,
   setTravel,
   totalSeconds,
 } from "@/board/scenes";
@@ -600,6 +601,16 @@ export function Editor({ initialDoc }: Props = {}) {
     let next = doc;
     for (const id of visible) next = setDelay(next, editScene, id, ms);
     setDoc(next, `delay:${editScene}`);
+  };
+
+  /** Every selected player's run into this scene; the ball's motion is its own (D45). */
+  const onRunStyleChange = (style: { start?: RunStart; end?: RunEnd }) => {
+    if (editScene === undefined) return;
+    let next = doc;
+    for (const id of visible) {
+      if (id !== BALL_ID) next = setRunStyle(next, editScene, id, style);
+    }
+    setDoc(next);
   };
 
   const onTravelChange = (ms: number | null) => {
@@ -1165,6 +1176,7 @@ export function Editor({ initialDoc }: Props = {}) {
               onRenumber={(id, n) => setDoc(setPlayerNumber(doc, id, n), `number:${id}`)}
               onTravelChange={onTravelChange}
               onDelayChange={onDelayChange}
+              onRunStyleChange={onRunStyleChange}
               carry={carry}
               onCarryChange={setCarry}
               onRemovePlayer={onRemovePlayer}

@@ -152,7 +152,24 @@ export type Scene = {
    * position is a fact that persists until something changes it; attention is not.
    */
   highlight?: Record<string, string>;
+  /**
+   * How each entity's run into this scene starts and finishes, where it is not the default.
+   *
+   * Absent is a gradual start and a gradual stop — the ease every run had before the choice
+   * existed — so a document written before it reads exactly as it did. `end: "through"` is a
+   * player who does not stop here: he passes his mark at pace and runs straight on into the
+   * next scene, skipping this scene's hold while everyone else keeps it. Ignored in flow mode,
+   * where every run is already continuous, exactly as `travel` and `delay` are.
+   */
+  run?: Record<string, RunStyle>;
 };
+
+/** How a run sets off: easing up from a standstill, or at full pace from the first step. */
+export type RunStart = "gradual" | "sharp";
+/** How a run finishes: easing to a stop, stopping dead, or running on into the next scene. */
+export type RunEnd = "gradual" | "sharp" | "through";
+/** A run's shape. Only what differs from gradual is stored. */
+export type RunStyle = { start?: Exclude<RunStart, "gradual">; end?: Exclude<RunEnd, "gradual"> };
 
 export type LinkStyle = "chain" | "polygon" | "filled";
 

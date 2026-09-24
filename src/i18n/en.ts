@@ -298,6 +298,32 @@ export const en = {
   "inspect.ball.hint":
     "The ball follows whoever holds it. Handing it to someone else in the next scene makes a pass, and giving it out carries through the scenes that follow until something else happens to it.",
   "inspect.ballName": "Ball",
+  "inspect.pass.takes": "Pass takes",
+  "inspect.pass.takes.hint":
+    "How long the ball is travelling. Shorter is a firmer pass. It is met wherever the receiver has run to by then, and he carries it on.",
+  "inspect.pass.release": "Released after",
+  "inspect.pass.release.hint":
+    "How long the passer keeps the ball, running with it, before he plays it.",
+  "inspect.pass.releaseAtOnce": "Release at once",
+  "inspect.pass.carried":
+    "The ball is carried in this scene, so it moves with its carrier. Its own timing applies where it is played — a pass, a release or a shot.",
+  "inspect.pass.speed": "{metres} m in {seconds} s · {speed} m/s",
+  "inspect.runStart": "Start",
+  "inspect.runStart.gradual": "Gradual",
+  "inspect.runStart.gradual.hint": "Eases up from a standstill — the default.",
+  "inspect.runStart.sharp": "Sharp",
+  "inspect.runStart.sharp.hint": "At full pace from the first step.",
+  "inspect.runEnd": "Finish",
+  "inspect.runEnd.gradual": "Gradual",
+  "inspect.runEnd.gradual.hint": "Eases down to a stop on his mark — the default.",
+  "inspect.runEnd.sharp": "Sharp",
+  "inspect.runEnd.sharp.hint": "Arrives at pace and stops dead.",
+  "inspect.runEnd.through": "Runs on",
+  "inspect.runEnd.through.hint":
+    "Doesn't stop here: passes his mark at pace and runs straight on into the next scene while the others hold. Set it on several scenes in a row for one continuous run.",
+  "inspect.runEnd.through.last": "There is no next scene to run on into.",
+  "inspect.runEnd.through.blocked":
+    "He has a wait on the next scene, so he stops here. Clear the wait to let him run on.",
   "inspect.remove": "Remove {who}",
   "inspect.highlight": "Highlight — {scene}",
   "inspect.highlight.on": "Highlight selection",

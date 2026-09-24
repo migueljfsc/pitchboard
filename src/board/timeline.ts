@@ -6,14 +6,16 @@
  * `frameAt` does the whole board.
  */
 
-import type { BoardDoc, Scene, Vec2 } from "./types";
+import type { BoardDoc, RunEnd, RunStart, Scene, Vec2 } from "./types";
 import { BALL_ID } from "./types";
 import { ballRadius, tokenRadius, tokenScaleOf } from "./pitch";
 import {
   buildArcTable,
   cubicAtDistance,
+  clamp,
   easeInOutCubic,
   easeOutQuad,
+  hermiteEase,
   lerpVec,
   type Bezier,
 } from "./geometry";
@@ -32,6 +34,13 @@ export type Resolved = {
   moving: boolean;
   /** Index of `to` in doc.scenes. */
   index: number;
+  /**
+   * The absolute time this was resolved at, in milliseconds, where the resolver
+   * knew it. A run that keeps going through a scene moves during that scene's hold,
+   * which `u` — exactly 1 for every instant of a hold — cannot say. Absent on the
+   * Resolved values built by hand; `absoluteMs` recovers it from `u` for those.
+   */
+  ms?: number;
 };
 
 /**
@@ -191,7 +200,14 @@ export function resolveAt(doc: BoardDoc, tSeconds: number): Resolved {
   const total = timing.reduce((n, t) => n + t.travelMs + t.holdMs, 0);
   const ms = Math.min(Math.max(tSeconds * 1000, 0), total);
 
-  const hold = (i: number): Resolved => ({ from: scenes[i], to: scenes[i], u: 1, moving: false, index: i });
+  const hold = (i: number): Resolved => ({
+    from: scenes[i],
+    to: scenes[i],
+    u: 1,
+    moving: false,
+    index: i,
+    ms,
+  });
 
   if (ms <= timing[0].holdMs || last === 0) return hold(0);
 
@@ -199,7 +215,14 @@ export function resolveAt(doc: BoardDoc, tSeconds: number): Resolved {
   for (let i = 1; i <= last; i++) {
     const travel = timing[i].travelMs;
     if (travel > 0 && ms < acc + travel - SEAM_MS) {
-      return { from: scenes[i - 1], to: scenes[i], u: (ms - acc) / travel, moving: true, index: i };
+      return {
+        from: scenes[i - 1],
+        to: scenes[i],
+        u: (ms - acc) / travel,
+        moving: true,
+        index: i,
+        ms,
+      };
     }
     acc += travel;
     if (ms <= acc + timing[i].holdMs) return hold(i);
@@ -249,6 +272,193 @@ function bezierFor(entityId: string, r: Resolved): Bezier | null {
   return { p0, c1: curve.c1, c2: curve.c2, p1 };
 }
 
+// ------------------------------------------------------------------ the clock
+
+/**
+ * When each scene's travel window opens and when the scene comes to rest, in
+ * absolute milliseconds. Scene 0 rests from the start.
+ */
+type Clock = { opens: number[]; rests: number[] };
+
+function clockOf(doc: BoardDoc): Clock {
+  const timing = sceneTimings(doc);
+  const opens: number[] = [0];
+  const rests: number[] = [0];
+  for (let i = 1; i < timing.length; i++) {
+    opens[i] = rests[i - 1] + timing[i - 1].holdMs;
+    rests[i] = opens[i] + timing[i].travelMs;
+  }
+  return { opens, rests };
+}
+
+/**
+ * The absolute time a Resolved stands for, in milliseconds.
+ *
+ * `resolveAt` records it. For one built by hand it is recovered from `u`, which
+ * is exact while moving and is the moment of arrival during a hold — the scene
+ * at rest, which is what a hand-built hold means.
+ */
+export function absoluteMs(r: Resolved, doc: BoardDoc, clock = clockOf(doc)): number {
+  if (r.ms !== undefined) return r.ms;
+  const opens = clock.opens[r.index] ?? 0;
+  const rests = clock.rests[r.index] ?? 0;
+  return r.moving ? opens + r.u * (rests - opens) : rests;
+}
+
+/**
+ * The same Resolved, `dms` milliseconds later — for sampling a direction of travel.
+ * Stays in the same transition or hold: it moves the instant, not the scene.
+ */
+function later(r: Resolved, doc: BoardDoc, dms: number): Resolved {
+  const clock = clockOf(doc);
+  const ms = absoluteMs(r, doc, clock) + dms;
+  if (!r.moving) return { ...r, ms };
+  const window = (clock.rests[r.index] ?? 0) - (clock.opens[r.index] ?? 0);
+  return { ...r, u: window > 0 ? Math.min(r.u + dms / window, 1) : 1, ms };
+}
+
+// ----------------------------------------------------------------- run styles
+
+/** How an entity's run into `scene` sets off. Gradual unless it says otherwise. */
+export const runStartOf = (scene: Scene, entityId: string): RunStart =>
+  scene.run?.[entityId]?.start ?? "gradual";
+
+/** How an entity's run into `scene` finishes. Gradual unless it says otherwise. */
+export const runEndOf = (scene: Scene, entityId: string): RunEnd =>
+  scene.run?.[entityId]?.end ?? "gradual";
+
+/** Does anything about this entity's running differ from the default anywhere? */
+function hasRunStyle(doc: BoardDoc, entityId: string): boolean {
+  return doc.scenes.some((scene) => scene.run?.[entityId] !== undefined);
+}
+
+/** How far an entity runs into scene `k`, along its curve where it has one. */
+function runLength(doc: BoardDoc, entityId: string, k: number): number {
+  const from = doc.scenes[k - 1]?.positions[entityId];
+  const to = doc.scenes[k]?.positions[entityId];
+  if (!from || !to) return 0;
+  const curve = doc.scenes[k].paths[entityId];
+  if (!curve) return Math.hypot(to.x - from.x, to.y - from.y);
+  return buildArcTable({ p0: from, c1: curve.c1, c2: curve.c2, p1: to }).total;
+}
+
+/** A run shorter than this is standing still, and nothing runs through a standstill. */
+const STILL_M = 0.05;
+
+/**
+ * Does the entity run straight on through scene `k` rather than stopping there?
+ *
+ * Only where it asked to AND it can: there has to be a next scene, a run on both
+ * sides of the mark, and no wait set on the next one — a wait is a stop, and the
+ * stop wins. Never in flow mode, where every run is continuous already.
+ */
+export function runsThrough(doc: BoardDoc, entityId: string, k: number): boolean {
+  if (doc.flow || k < 1 || k >= doc.scenes.length - 1) return false;
+  if (runEndOf(doc.scenes[k], entityId) !== "through") return false;
+  if (entityDelayMs(doc.scenes[k + 1], entityId) > 0) return false;
+  return runLength(doc, entityId, k) > STILL_M && runLength(doc, entityId, k + 1) > STILL_M;
+}
+
+/** One entity's run into one scene: when it starts and ends, and its speed at each end. */
+type Segment = { start: number; end: number; ease: (u: number) => number };
+
+/**
+ * An entity's run into scene `k`, in absolute time.
+ *
+ * On its own a run starts after its wait and takes its own travel time, as it
+ * always has. Running THROUGH a scene changes both ends: it arrives exactly as the
+ * scene comes to rest — so the scene still shows him on his mark — and sets off
+ * again at that same instant rather than after the hold, at the speed it arrived
+ * with. The speed across the mark is the mean of the two runs' average paces, so
+ * a run of four scenes reads as one run and not four.
+ */
+function segmentOf(doc: BoardDoc, entityId: string, k: number, clock: Clock): Segment {
+  const span = (j: number): [number, number] => {
+    const scene = doc.scenes[j];
+    const before = j >= 2 && runsThrough(doc, entityId, j - 1);
+    const after = runsThrough(doc, entityId, j);
+    const leaves = before
+      ? clock.rests[j - 1]
+      : clock.opens[j] + entityDelayMs(scene, entityId);
+    const arrives = after
+      ? clock.rests[j]
+      : Math.min(clock.opens[j] + entityDelayMs(scene, entityId) + entityTravelMs(scene, entityId), clock.rests[j]);
+    return [leaves, Math.max(leaves, arrives)];
+  };
+
+  // Speed across the boundary at the end of run `j`, in metres per millisecond.
+  const pace = (j: number): number => {
+    const [a, b] = span(j);
+    return b > a ? runLength(doc, entityId, j) / (b - a) : 0;
+  };
+  const across = (j: number): number => (pace(j) + pace(j + 1)) / 2;
+
+  const [start, end] = span(k);
+  const length = runLength(doc, entityId, k);
+  const duration = end - start;
+  // In units of this run's average pace, which is what a Hermite slope is.
+  const slope = (speed: number) =>
+    length > 0 && duration > 0 ? clamp((speed * duration) / length, 0, 3) : 0;
+
+  const scene = doc.scenes[k];
+  const fromBefore = k >= 2 && runsThrough(doc, entityId, k - 1);
+  const onAfter = runsThrough(doc, entityId, k);
+
+  // A matched speed where the run carries on, a standstill where it eases, and
+  // "sharp" where it was asked to go or stop at pace — resolved below.
+  const m0: number | "sharp" = fromBefore
+    ? slope(across(k - 1))
+    : runStartOf(scene, entityId) === "sharp"
+      ? "sharp"
+      : 0;
+  const m1: number | "sharp" = onAfter
+    ? slope(across(k))
+    : runEndOf(scene, entityId) === "sharp"
+      ? "sharp"
+      : 0;
+
+  // Both ends gradual is the ease every run had before the choice existed, kept
+  // exactly so that a board written then moves exactly as it did.
+  if (m0 === 0 && m1 === 0) return { start, end, ease: easeInOutCubic };
+
+  // Sharp against a standstill is a quadratic — full pace at one end, easing at the
+  // other; sharp against sharp is constant pace; sharp against a matched speed
+  // takes whatever keeps the average right without dropping below it.
+  const sharp = (other: number | "sharp") =>
+    other === "sharp" ? 1 : Math.max(1, 2 - other);
+  const a = m0 === "sharp" ? sharp(m1) : m0;
+  const b = m1 === "sharp" ? sharp(m0) : m1;
+  return { start, end, ease: (u) => hermiteEase(u, a, b) };
+}
+
+/**
+ * Where an entity with a run style is at an absolute time.
+ *
+ * Walked by time rather than by the scene being travelled into, because a run
+ * that carries on through a scene is moving during that scene's hold, and the
+ * scene the timeline is on is not the scene the runner is on.
+ */
+function styledPosition(entityId: string, ms: number, doc: BoardDoc): Vec2 | null {
+  const clock = clockOf(doc);
+  const scenes = doc.scenes;
+  for (let k = 1; k < scenes.length; k++) {
+    const seg = segmentOf(doc, entityId, k, clock);
+    if (ms < seg.start) return scenes[k - 1].positions[entityId] ?? null;
+    if (ms <= seg.end) {
+      const from = scenes[k - 1].positions[entityId];
+      const to = scenes[k].positions[entityId];
+      if (!from || !to) return to ?? from ?? null;
+      const u = seg.end > seg.start ? (ms - seg.start) / (seg.end - seg.start) : 1;
+      const eased = seg.ease(u);
+      const curve = scenes[k].paths[entityId];
+      if (!curve) return lerpVec(from, to, eased);
+      const b: Bezier = { p0: from, c1: curve.c1, c2: curve.c2, p1: to };
+      return cubicAtDistance(b, eased, buildArcTable(b));
+    }
+  }
+  return scenes[scenes.length - 1]?.positions[entityId] ?? null;
+}
+
 /**
  * Where one entity is within the scene's travel window, 0..1.
  *
@@ -271,6 +481,14 @@ export function progressOf(entityId: string, r: Resolved, doc?: BoardDoc): numbe
 }
 
 export function positionAt(entityId: string, r: Resolved, doc: BoardDoc): Vec2 {
+  // A run with a style of its own is placed by time — see `styledPosition`. Every
+  // other run takes the path below unchanged, so nothing about a board without
+  // styles moves differently for their existing.
+  if (!doc.flow && entityId !== BALL_ID && hasRunStyle(doc, entityId)) {
+    const at = styledPosition(entityId, absoluteMs(r, doc), doc);
+    if (at) return at;
+  }
+
   const to = r.to.positions[entityId];
   if (!r.moving) return to ?? r.from.positions[entityId] ?? centre(doc);
 
@@ -305,19 +523,23 @@ function facingOf(entityId: string, doc: BoardDoc): Vec2 {
 function gluedTo(carrier: string, r: Resolved, doc: BoardDoc): Vec2 {
   const at = positionAt(carrier, r, doc);
 
-  // Point the offset along the direction of travel, sampled either side of now.
+  // Point the offset along the direction of travel, sampled a moment ahead. A
+  // carrier running through a scene is moving during its hold, so a hold is
+  // sampled too — for anyone standing still the two samples agree and the facing
+  // stands.
   let dir = facingOf(carrier, doc);
-  if (r.moving) {
-    const ahead = positionAt(carrier, { ...r, u: Math.min(r.u + 0.02, 1) }, doc);
-    const dx = ahead.x - at.x;
-    const dy = ahead.y - at.y;
-    const len = Math.hypot(dx, dy);
-    if (len > 1e-6) dir = { x: dx / len, y: dy / len };
-  }
+  const ahead = positionAt(carrier, later(r, doc, GLUE_LOOKAHEAD_MS), doc);
+  const dx = ahead.x - at.x;
+  const dy = ahead.y - at.y;
+  const len = Math.hypot(dx, dy);
+  if (len > 1e-6) dir = { x: dx / len, y: dy / len };
 
   const glue = ballGlue(doc);
   return { x: at.x + dir.x * glue, y: at.y + dir.y * glue };
 }
+
+/** How far ahead a carrier is sampled for the way he is facing. */
+const GLUE_LOOKAHEAD_MS = 30;
 
 /** Height of a lofted ball at the top of its flight, in metres. */
 export const LOFT_APEX = 7;
@@ -375,20 +597,16 @@ export function ballAt(r: Resolved, doc: BoardDoc): Vec2 | null {
     return toCarrier ? gluedTo(toCarrier, r, doc) : (r.to.ballPos ?? null);
   }
 
-  // Endpoints are sampled ONCE, not per frame: the release point at u=0 and the
-  // meeting point at u=1. A ball is struck once and travels straight; the
-  // receiver runs onto it. Re-reading the receiver's live position every frame
-  // made the ball bend after them like a homing missile (BUG-1).
-  //
-  // Both are still resolved through positionAt, so the receiver's own path and
-  // per-player travel time are respected — only the sampling instant is fixed.
-  // Continuity holds because the receiver reaches that same point at u=1.
-  const release: Resolved = { ...r, u: 0 };
-  const arrival: Resolved = { ...r, u: 1 };
-  // Both scenes hold a ball by here, so neither end can be missing.
-  const start = fromCarrier ? gluedTo(fromCarrier, release, doc) : r.from.ballPos;
-  const end = toCarrier ? gluedTo(toCarrier, arrival, doc) : r.to.ballPos;
-  if (!start || !end) return end ?? start ?? null;
+  // The ball keeps its own time (D97). Until it is released the passer still has
+  // it, at his feet wherever he has run to; once it arrives the receiver has it and
+  // carries it on — which is what meeting a pass in stride means.
+  const u = progressOf(BALL_ID, r, doc);
+  if (u <= 0 && fromCarrier) return gluedTo(fromCarrier, r, doc);
+  if (u >= 1 && toCarrier) return gluedTo(toCarrier, r, doc);
+
+  const ends = passEnds(r, doc);
+  if (!ends) return toCarrier ? gluedTo(toCarrier, r, doc) : (r.to.ballPos ?? null);
+  const { start, end } = ends;
 
   // A pass along the ground is struck hard and decelerates; easing it in like a
   // jogging player looks wrong immediately. The ball honours its own travel
@@ -399,13 +617,53 @@ export function ballAt(r: Resolved, doc: BoardDoc): Vec2 | null {
   // the air is not touching it — its horizontal speed is very nearly constant all
   // the way. Decelerating it instead lands it beside the receiver at the top of
   // its arc, where it hangs and then drops straight down (D45).
-  const u = progressOf(BALL_ID, r, doc);
   const eased = r.to.loft === true ? u : easeOutQuad(u);
   const curve = r.to.ballPath;
   if (!curve) return lerpVec(start, end, eased);
 
   const b: Bezier = { p0: start, c1: curve.c1, c2: curve.c2, p1: end };
   return cubicAtDistance(b, eased, buildArcTable(b));
+}
+
+/**
+ * When the ball is struck and when it arrives, within the travel into `r.to`, as
+ * fractions of the scene's window.
+ *
+ * Its own wait and its own travel time, like any player's — "released after" and
+ * "pass takes" in the panel. With neither set it leaves at the start of the window
+ * and arrives when the scene's baseline travel is done, which is where it always
+ * did. Flow mode sets the pace for everyone, the ball included.
+ */
+function passWindow(r: Resolved, doc: BoardDoc): { release: number; arrive: number } {
+  if (doc.flow) return { release: 0, arrive: 1 };
+  const window = sceneTravelMs(r.to);
+  if (window <= 0) return { release: 0, arrive: 1 };
+  const delay = entityDelayMs(r.to, BALL_ID);
+  const travel = entityTravelMs(r.to, BALL_ID);
+  return { release: Math.min(delay / window, 1), arrive: Math.min((delay + travel) / window, 1) };
+}
+
+/**
+ * Where a pass is struck and where it is met — the two ends of its flight.
+ *
+ * Each sampled ONCE, at its own instant: the passer where he is at the release,
+ * the receiver where he is at the arrival. A ball is struck once and travels
+ * straight at a point; re-reading the receiver every frame made it bend after him
+ * like a homing missile (BUG-1). Sampling the arrival at the moment the ball gets
+ * there, rather than when his run ends, is what lets a pass meet a runner in his
+ * stride instead of waiting for him on his mark (D97).
+ *
+ * Shared by `ballAt` and the pass line, so the arrow is drawn to where the ball
+ * actually goes. Null where the travel has no ball at one end.
+ */
+export function passEnds(r: Resolved, doc: BoardDoc): { start: Vec2; end: Vec2 } | null {
+  if (!hasBall(r.from) || !hasBall(r.to)) return null;
+  const { release, arrive } = passWindow(r, doc);
+  const at = (u: number): Resolved => ({ ...r, u, moving: true, ms: undefined });
+  const start = r.from.carrier ? gluedTo(r.from.carrier, at(release), doc) : r.from.ballPos;
+  const end = r.to.carrier ? gluedTo(r.to.carrier, at(arrive), doc) : r.to.ballPos;
+  if (!start || !end) return null;
+  return { start, end };
 }
 
 /** Resolved board state at an instant — everything the renderer needs. */

@@ -53,6 +53,15 @@ const scene = z.object({
   shot: z.boolean().optional(),
   loft: z.boolean().optional(),
   highlight: z.record(z.string(), z.string().min(1)).optional(),
+  run: z
+    .record(
+      z.string(),
+      z.object({
+        start: z.literal("sharp").optional(),
+        end: z.enum(["sharp", "through"]).optional(),
+      }),
+    )
+    .optional(),
 });
 
 const link = z.object({

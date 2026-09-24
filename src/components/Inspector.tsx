@@ -1,15 +1,36 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeftRight, Shirt, UserMinus } from "lucide-react";
-import type { BoardDoc, Player } from "@/board/types";
+import type { BoardDoc, Player, RunEnd, RunStart } from "@/board/types";
 import { BALL_ID } from "@/board/types";
 import { displayName, keeperOf, shirtClash } from "@/board/players";
+import { ballTravelBetween } from "@/board/scenes";
 import type { Carry } from "@/board/interaction";
-import { entityDelayMs, entityTravelMs, sceneTravelMs } from "@/board/timeline";
+import {
+  entityDelayMs,
+  entityTravelMs,
+  passEnds,
+  runEndOf,
+  runStartOf,
+  runsThrough,
+  sceneTravelMs,
+  transitionInto,
+} from "@/board/timeline";
 import { cn } from "@/lib/utils";
 import { NumberField } from "@/components/ui/NumberField";
 import { PALETTE } from "@/components/ui/palette";
 import { useI18n } from "@/i18n/context";
 import type { Message } from "@/i18n/core";
+
+const RUN_STARTS = [
+  { value: "gradual", key: "inspect.runStart.gradual" },
+  { value: "sharp", key: "inspect.runStart.sharp" },
+] as const satisfies readonly { value: RunStart; key: string }[];
+
+const RUN_ENDS = [
+  { value: "gradual", key: "inspect.runEnd.gradual" },
+  { value: "sharp", key: "inspect.runEnd.sharp" },
+  { value: "through", key: "inspect.runEnd.through" },
+] as const satisfies readonly { value: RunEnd; key: string }[];
 
 const CARRY_MODES = [
   { mode: "scene", key: "inspect.carry.scene" },
@@ -30,6 +51,8 @@ type Props = {
   onRenumber: (playerId: string, number: number) => void;
   onTravelChange: (ms: number | null) => void;
   onDelayChange: (ms: number | null) => void;
+  /** How the selected players' runs into this scene start and finish. */
+  onRunStyleChange: (style: { start?: RunStart; end?: RunEnd }) => void;
   /** How far a move of this selection reaches forward through the scenes. */
   carry: Carry;
   onCarryChange: (carry: Carry) => void;
@@ -65,6 +88,7 @@ export function Inspector({
   onRenumber,
   onTravelChange,
   onDelayChange,
+  onRunStyleChange,
   carry,
   onCarryChange,
   onRemovePlayer,
@@ -112,13 +136,56 @@ export function Inspector({
   const isKeeper = !!player && doc.teams.some((t) => keeperOf(t) === player.id);
   const carries = only !== null && scene?.carrier === only;
 
+  // The ball alone keeps its own time too — when it is struck, and how long the
+  // pass takes — and the same two fields say so in the words of a pass (D97).
+  const ballOnly = players.length === 0 && selection.has(BALL_ID);
+  const timed = only ?? (ballOnly ? BALL_ID : null);
+  // A carried ball goes where its carrier goes, so its own timing only means
+  // something where it is actually played — a pass, a release, a shot.
+  const played =
+    ballOnly &&
+    !!scene &&
+    activeScene > 0 &&
+    ballTravelBetween(doc, doc.scenes[activeScene - 1], scene) !== "none";
+  const carried = ballOnly && !played;
+
   // Travel time is per-entity; a mixed selection shows the scene default.
   const sceneMs = scene?.transitionMs ?? 0;
-  const ownMs = only && scene ? entityTravelMs(scene, only) : sceneMs;
-  const overridden = only !== null && scene?.travel?.[only] !== undefined;
+  const ownMs = timed && scene ? entityTravelMs(scene, timed) : sceneMs;
+  const overridden = timed !== null && scene?.travel?.[timed] !== undefined;
   // A wait is per-entity too, and zero unless one was set.
-  const ownDelayMs = only && scene ? entityDelayMs(scene, only) : 0;
-  const waits = only !== null && ownDelayMs > 0;
+  const ownDelayMs = timed && scene ? entityDelayMs(scene, timed) : 0;
+  const waits = timed !== null && ownDelayMs > 0;
+
+  // How far the pass goes and how hard, so "tension" is a number and not a feel.
+  const passLine = (() => {
+    if (!played || !canEditPaths) return null;
+    const r = transitionInto(doc, activeScene);
+    const ends = r && passEnds(r, doc);
+    if (!ends || ownMs <= 0) return null;
+    const metres = Math.hypot(ends.end.x - ends.start.x, ends.end.y - ends.start.y);
+    if (metres < 0.5) return null;
+    return t("inspect.pass.speed", {
+      metres: Math.round(metres),
+      seconds: (ownMs / 1000).toFixed(1),
+      speed: Math.round(metres / (ownMs / 1000)),
+    });
+  })();
+
+  // A run's start and finish, read across the selection: shown when every
+  // selected player agrees, and nothing pressed when they do not.
+  const shared = <T,>(read: (id: string) => T): T | null => {
+    if (!scene || players.length === 0) return null;
+    const first = read(players[0]);
+    return players.every((id) => read(id) === first) ? first : null;
+  };
+  const runStart = shared((id) => runStartOf(scene!, id));
+  const runEnd = shared((id) => runEndOf(scene!, id));
+  const lastScene = activeScene >= doc.scenes.length - 1;
+  // Asked to run on, but a wait on the next scene stops him here — say so rather
+  // than leave a setting that visibly does nothing.
+  const blockedThrough =
+    only !== null && runEnd === "through" && !lastScene && !runsThrough(doc, only, activeScene);
 
   return (
     // No count and no clear at the top: the section header already carries the
@@ -171,13 +238,21 @@ export function Inspector({
 
       {/* Flow mode paces the whole board, so a per-entity time has nothing to
           override — hidden rather than shown doing nothing. */}
-      {canEditPaths && scene && !doc.flow && (
+      {canEditPaths && scene && !doc.flow && carried && (
+        <p className="text-[11px] leading-relaxed text-ink-300">{t("inspect.pass.carried")}</p>
+      )}
+
+      {canEditPaths && scene && !doc.flow && !carried && (
         <div className="flex flex-col gap-2.5">
           <NumberField
-            label={t("inspect.travelTime")}
-            title={t("inspect.travel.hint", {
-              seconds: (sceneTravelMs(scene) / 1000).toFixed(1),
-            })}
+            label={t(ballOnly ? "inspect.pass.takes" : "inspect.travelTime")}
+            title={
+              ballOnly
+                ? t("inspect.pass.takes.hint")
+                : t("inspect.travel.hint", {
+                    seconds: (sceneTravelMs(scene) / 1000).toFixed(1),
+                  })
+            }
             value={ownMs / 1000}
             min={0}
             max={60}
@@ -200,9 +275,13 @@ export function Inspector({
 
           {/* A wait is what lets one scene hold a sequence instead of two scenes
               existing only to order it — see D42. */}
+          {passLine && (
+            <p className="-mt-1 font-mono text-[11px] text-ink-400">{passLine}</p>
+          )}
+
           <NumberField
-            label={t("inspect.delay")}
-            title={t("inspect.delay.hint")}
+            label={t(ballOnly ? "inspect.pass.release" : "inspect.delay")}
+            title={t(ballOnly ? "inspect.pass.release.hint" : "inspect.delay.hint")}
             value={ownDelayMs / 1000}
             min={0}
             max={60}
@@ -217,11 +296,48 @@ export function Inspector({
                   onClick={() => onDelayChange(null)}
                   className="normal-case tracking-normal text-ink-300 underline-offset-2 hover:text-white hover:underline"
                 >
-                  {t("inspect.delay.together")}
+                  {t(ballOnly ? "inspect.pass.releaseAtOnce" : "inspect.delay.together")}
                 </button>
               )
             }
           />
+
+          {/* How the run starts and finishes. Gradual at both ends is the default and
+              what every run did before the choice existed; "runs on" is what lets one
+              player keep going across several scenes while the rest stop and start. */}
+          {players.length > 0 && (
+            <>
+              <Segmented
+                label={t("inspect.runStart")}
+                options={RUN_STARTS.map(({ value, key }) => ({
+                  value,
+                  label: t(key),
+                  title: t(`${key}.hint` as Message["key"]),
+                }))}
+                value={runStart}
+                onChange={(start) => onRunStyleChange({ start })}
+              />
+              <Segmented
+                label={t("inspect.runEnd")}
+                options={RUN_ENDS.map(({ value, key }) => ({
+                  value,
+                  label: t(key),
+                  title:
+                    value === "through" && lastScene
+                      ? t("inspect.runEnd.through.last")
+                      : t(`${key}.hint` as Message["key"]),
+                  disabled: value === "through" && lastScene,
+                }))}
+                value={runEnd}
+                onChange={(end) => onRunStyleChange({ end })}
+              />
+              {blockedThrough && (
+                <p className="-mt-1 text-[11px] leading-relaxed text-amber-300">
+                  {t("inspect.runEnd.through.blocked")}
+                </p>
+              )}
+            </>
+          )}
         </div>
       )}
 
@@ -460,5 +576,44 @@ function SmallButton({
     </span>
   ) : (
     button
+  );
+}
+
+/** A labelled row of mutually exclusive choices, none pressed when `value` is null. */
+function Segmented<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: { value: T; label: string; title: string; disabled?: boolean }[];
+  value: T | null;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-[11px] uppercase tracking-wide text-ink-400">{label}</span>
+      <div className="flex gap-1">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={value === option.value}
+            title={option.title}
+            disabled={option.disabled}
+            onClick={() => onChange(option.value)}
+            className={cn(
+              "flex-1 rounded border px-1 py-1.5 text-[11px] transition disabled:opacity-40",
+              value === option.value
+                ? "border-accent text-accent"
+                : "border-ink-600 text-ink-400 enabled:hover:text-ink-200",
+            )}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

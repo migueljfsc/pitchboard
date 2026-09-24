@@ -33,6 +33,12 @@ before any React touches it, and every phase ends at a state you can look at.
 | — | Moving players and shaping runs in the 3D view (D49) |
 | — | Moving and resizing the drawing in the 3D view (D50) |
 | — | Drawing, and widening a label, in the 3D view — it edits everything the flat board does (D91) |
+| — | Unseen players keep their team's colour; ghosts are smaller (D92) |
+| — | Editor split into play and drawing, undo notices, the command palette (D93) |
+| — | Export shapes, captions and transparent PNGs (D94) |
+| — | Outline zones (D95) and a drawn ball, the first prop (D96) |
+| — | The ball's own timing, and passes met in stride (D97) |
+| — | Run starts and finishes, and runs that carry on through a scene (D98) |
 | — | Nested project folders, with cycle and depth guards (D51) |
 | — | Video import — `tracks.json` from the `football-tracks` sibling repo becomes a board (D52) |
 | — | The window starts at a set piece (D53) and is scored against a legal eleven (D54) |

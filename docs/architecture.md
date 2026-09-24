@@ -285,7 +285,10 @@ positionAt(entityId, resolved, doc): Vec2
 - no path → `lerp(from.positions[e], to.positions[e], ease(u))`
 - path → cubic bezier at `s(ease(u))`, endpoints from the two scenes, controls from the path
 
-Default easing is `easeInOutCubic`.
+Default easing is `easeInOutCubic`. A run may choose a sharp start or finish, or run on through
+its scene into the next (`Scene.run`, D98); those are Hermite eases with a chosen speed at each
+end, and a run carried on through a scene is placed by absolute time (`Resolved.ms`), because it
+moves during that scene's hold.
 
 ### Arc-length reparameterisation — the one piece of real maths
 
@@ -337,8 +340,10 @@ Two details that matter:
 **Pass easing is different.** Player movement uses `easeInOutCubic`; a pass uses `easeOutQuad` —
 struck hard, decelerating. A ball that eases in like a jogging player looks wrong immediately.
 
-**Endpoints are evaluated live.** Both ends of a pass come from `positionAt`, never from raw
-scene data, so the ball tracks a receiver who is still running and arrives with them. Aiming at
+**Endpoints are evaluated live, each at its own instant** (`passEnds`, D97). The ball has its
+own wait and travel: until the release it stays at the passer's feet, and the pass is met where
+the receiver is when it arrives — in his stride — after which he carries it. Both ends come from
+`positionAt`, never from raw scene data. Aiming at
 the receiver's scene-*start* position instead lands the ball tens of metres adrift and teleports
 it onto them at the handoff — there is a test for exactly that.
 
@@ -486,14 +491,15 @@ billboard and are tested there, like the words.
 | Where it lies | How it is tested |
 |---|---|
 | On the grass — zones, connectors, the marquee | `unprojectPitch`, then the flat tests unchanged |
-| Standing — token, ball, text label | `unbillboard`, in the metre space it was drawn in |
+| Standing — token, ball, text label, drawn ball | `unbillboard`, in the metre space it was drawn in |
 
 `unproject` is the ground map rearranged rather than searched, so the first row is exact; the
 second is what keeps a token's grab area the size it looks, near camera and far. `cameraFor`
 builds the one camera that both the renderer and the hit tests use.
 
-The 3D draw order is not the flat one, so the hit-test order differs too: only text stands above
-the players, while the rest of its layer is in the ground image beneath them.
+The 3D draw order is not the flat one, so the hit-test order differs too: text stands above the
+players and a drawn ball stands among them (both `isStanding`), while the rest of their layer is
+in the ground image beneath them.
 
 ---
 

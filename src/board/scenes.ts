@@ -5,13 +5,14 @@
  * paths with it and cannot orphan anything.
  */
 
-import type { BoardDoc, PathCurve, Scene, Vec2 } from "./types";
+import type { BoardDoc, PathCurve, RunEnd, RunStart, RunStyle, Scene, Vec2 } from "./types";
 import { BALL_ID } from "./types";
 import {
   MAX_FLOW_SPEED,
   MIN_FLOW_SPEED,
   ballAt,
   hasBall,
+  passEnds,
   resolveAt,
   type Resolved,
   sceneTimings,
@@ -332,6 +333,45 @@ export function setDelay(
 }
 
 /**
+ * Set how an entity's run into scene `index` starts and finishes.
+ *
+ * `"gradual"` is the default at both ends and is stored as absence, so a run put
+ * back to gradual serialises exactly as it did before the choice existed. A
+ * `"through"` finish is kept even where it cannot apply yet — the last scene, a
+ * wait on the next one — because the timeline decides that at playback, and a
+ * setting that vanished when a scene was added after it would be a surprise.
+ */
+export function setRunStyle(
+  doc: BoardDoc,
+  index: number,
+  entityId: string,
+  style: { start?: RunStart; end?: RunEnd },
+): BoardDoc {
+  const scene = doc.scenes[index];
+  if (!scene) return doc;
+
+  const current = scene.run?.[entityId] ?? {};
+  const start = style.start ?? current.start ?? "gradual";
+  const end = style.end ?? current.end ?? "gradual";
+  const own: RunStyle = {
+    ...(start !== "gradual" ? { start } : {}),
+    ...(end !== "gradual" ? { end } : {}),
+  };
+
+  const run = { ...(scene.run ?? {}) };
+  if (own.start || own.end) run[entityId] = own;
+  else delete run[entityId];
+
+  const next: Scene = { ...scene };
+  if (Object.keys(run).length === 0) delete next.run;
+  else next.run = run;
+
+  const scenes = doc.scenes.slice();
+  scenes[index] = next;
+  return replace(doc, scenes);
+}
+
+/**
  * Show or hide the arrow drawn for an entity's run into scene `index`.
  *
  * Per scene and per entity, because a run that needs explaining in one scene is
@@ -582,9 +622,13 @@ export const MIN_BALL_TRAVEL = 1.5;
 export function ballCurve(doc: BoardDoc, r: Resolved): Bezier | null {
   if (ballTravelBetween(doc, r.from, r.to) === "none") return null;
 
-  const p0 = ballAt({ ...r, u: 0 }, doc);
-  const p1 = ballAt({ ...r, u: 1 }, doc);
-  if (!p0 || !p1 || distance(p0, p1) < MIN_BALL_TRAVEL) return null;
+  // Where the ball is struck and where it is met, which are not the ends of the
+  // scene's window once the ball keeps its own time: a pass released after a wait
+  // leaves from where the passer has got to, and is met in the receiver's stride.
+  const ends = passEnds(r, doc);
+  if (!ends) return null;
+  const { start: p0, end: p1 } = ends;
+  if (distance(p0, p1) < MIN_BALL_TRAVEL) return null;
 
   const curve = r.to.ballPath ?? straightCurve(p0, p1);
   return { p0, c1: curve.c1, c2: curve.c2, p1 };

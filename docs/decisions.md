@@ -466,6 +466,126 @@ drawn from memory. What is left is short because THE TRACKER IS SHORT: a board c
 long as the roster is watched, and at today's fragmentation that is a handful of seconds. The
 fix for board length is upstream, not here.
 
+## D98 — A run chooses how it starts and finishes, and may run on through a scene
+Every run eased up from a standstill and down to one, so a player running across several scenes
+stopped dead at every mark — the stutter D27 fixed for the whole board by making everyone keep
+one pace. A coach wanted the opposite for ONE player: "put a player running across two or three
+scenes, because different things need to happen to other players, with different stops and
+starts, while he makes that run". So a run into a scene has a start and a finish of its own:
+
+| | choices | default |
+|---|---|---|
+| Start | gradual, sharp (at pace from the first step) | gradual |
+| Finish | gradual, sharp (stops dead), runs on | gradual |
+
+`Scene.run` stores only what differs from gradual, so a board written before the choice reads,
+and moves, exactly as it did: both-gradual is still `easeInOutCubic`, not an equivalent. Every
+other combination is a cubic Hermite with a chosen slope at each end, in units of the run's
+average pace — sharp against gradual is a quadratic, sharp against sharp is constant pace.
+
+**"Runs on" is not a slider, and that is deliberate.** An acceleration slider per scene leaves
+the coach to match his speed out of one scene to his speed into the next by hand, and anything
+short of exact is a visible jolt. Running on through scene k instead lets the engine do it: he
+arrives exactly as k comes to rest — so the scene, its thumbnail and editing on it still show
+him on his mark — sets off again at that instant rather than after the hold, and crosses the mark
+at the mean of the two runs' average paces. Only the first run of a chain accelerates and only
+the last decelerates. Everybody else keeps the hold.
+
+**It gives way.** A wait on the next scene is a stop, and wins; the last scene has nothing to run
+on into; a standstill on either side is not a run; flow mode is continuous already. `runsThrough`
+answers all of that in one place, and the panel says when a "runs on" it shows is not applying.
+
+**Placed by time.** A runner on through scene k moves during k's hold, which the timeline's
+"which transition are we in" cannot express. `Resolved` carries the absolute time it was resolved
+at, and a styled run is placed by walking that player's own runs in time (`styledPosition`).
+A player without a style never takes that path.
+
+## D97 — The ball keeps its own time, and a pass is met in stride
+The ball always had a wait and a travel time of its own in the document, and nothing showed them:
+select the ball and the panel displayed the scene's numbers, and saved to the ball numbers it
+never read back. Worse, a wait froze the ball where the passer had stood at the start of the
+scene, and he ran on without it; and a pass always landed where the receiver's run ENDED, so a
+through ball waited on his mark for him instead of meeting him.
+
+**Released after** is how long the passer keeps it: the ball stays at his feet, running with him,
+and leaves from wherever he is at that moment. **Pass takes** is how long it travels — a shorter
+pass is a firmer one, and the panel shows the distance and the resulting speed so the tension is
+a number. It is **met in stride**: the arrival point is the receiver where he is when the ball
+gets there, and from then he carries it. With no timing of its own the ball leaves at once and
+arrives when the scene's baseline travel ends — exactly where it always did, unless the receiver
+himself runs longer or later, in which case it now meets him rather than his final mark.
+
+Both ends are sampled once, at their own instants, in `passEnds` — shared with the pass line, so
+the arrow points to where the ball goes. A carried ball has no pass to time, and the panel says
+so instead of offering fields that would do nothing.
+
+## D96 — A ball can be drawn, and that opens the door to props
+A coach setting up a drill or a set piece needs balls where no match ball is — a row of them at
+a corner flag, one at each station. The match ball cannot be that: there is one, it belongs to a
+carrier or a stored position, and passes, shots and lofts all read it (D44). So a drawn ball is
+an ANNOTATION — `kind: "ball"`, an anchor and nothing else — ranged over scenes like any shape,
+placed with a click, moved by dragging, and ignored by everything that reads the match ball.
+
+**It looks exactly like the match ball**, drawn by the same `drawBall` at `ballRadius(doc)`, so
+it follows the board's player size. A ball drawn as a symbol for one would be a second idea of
+what a ball looks like. `color` is carried like every shape's and never used.
+
+**Under the camera it stands**, like a label (`isStanding`): a billboard, depth-sorted among the
+players so a player in front of it hides it, and hit where it is drawn by the same
+`hitTestTiltedText` pass that finds labels. The ground pass leaves it out.
+
+**This is the first prop, and cones are still a non-goal.** The deferral of cones was about
+scope, not about the model — a drawn ball proves the model takes props at one small kind each.
+The next one should be asked for, not assumed.
+
+## D95 — Boxes and ovals can be outlines
+A filled zone is "this area"; an outline is "this line around them" — a press trap, the edge of
+the box. `filled: false` on a rect or ellipse draws the edge alone. Absent is filled, which is
+what every zone was, so nothing is migrated and a filled zone serialises exactly as before.
+
+**An outline is grabbed by its edge**, within the line's half-width plus the usual margin, and a
+click inside it reaches the pitch — the players standing in the marked area, a marquee started
+there. Grabbing an outline by its interior would make the one shape that frames players the one
+that stops you picking them.
+
+## D94 — Exports choose their shape, and may carry a caption
+D28 made an export tight to the board, and that is still the default. A clip is often going
+somewhere with a shape of its own — a square feed, a 16:9 player — so an export may be `square`
+or `wide`, with the board letterboxed inside on the surround. The surround now darkens towards
+the edges (a vignette), which is what makes the letterbox read as a frame rather than dead space.
+
+**A caption is view data, not document data.** A title, and optionally the name of the scene
+being played into, drawn in screen space in a corner by `drawBoard` itself, so every frame of a
+clip carries it and preview cannot disagree with export. It rides in `RenderView` beside
+`transparent`, which leaves the surround unpainted for a PNG with no background. A clip is never
+transparent: neither container keeps an alpha channel.
+
+## D93 — The editor is split by subject: the play on the left, the drawing on the right
+The right rail held only the list of what was drawn, while the tools that drew it sat in the left
+sidebar. The rail is now the drawing: tools, colour and style on top, the list below. It opens
+when a tool is armed or a shape selected and closes when neither is left — judged on the
+transition, during render, so opening it by hand to browse the list is not undone by the next
+click on the grass.
+
+**Selection stays with the play, and Formations make room for it.** Selection sits under
+Formations, which fold away while anything is selected and come back when the selection clears.
+Both follow the selection however it changed — a click, a marquee, a link's members, an undo —
+because they are adjusted from what was rendered, not from each handler that can select.
+
+**Everything that deletes or replaces work says so and offers Undo** — a scene, a shape, a
+player, a reset, clearing the links, an import — through one `notify`. Undo already existed; the
+notice is what makes it discoverable at the moment it is wanted. The command palette (Cmd/Ctrl+K)
+lists every action the panels offer, so none of them is three clicks deep.
+
+## D92 — A player nobody saw keeps his team's colour
+D87 fades an unseen player to 30%. On grass, 30% of red is brown and 30% of white is grey, so the
+two sides stopped reading as sides and faded players looked like a third team. The fill still
+fades, and a dashed rim in the kit's own colour is drawn over it at the strength of the fade —
+same team, uncertain place — so a player the play reaches sharpens rather than changing style.
+
+A ghost of another scene is drawn smaller than a token (0.78) and stays hollow, so the two kinds
+of faint player are told apart by shape as well as by fill.
+
 ## D91 — Everything the flat board edits, the 3D view edits
 Supersedes the drawing half of D49 and the label-handle half of D50. The two gates D48 opened
 become one: `interactive` is the whole of it, and a coach no longer switches to flat to draw.

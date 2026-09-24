@@ -69,6 +69,24 @@ export const easeOutQuad = (u: number): number => 1 - (1 - u) * (1 - u);
 
 export const linear = (u: number): number => u;
 
+/**
+ * An ease with a chosen speed at each end, as a cubic Hermite from 0 to 1.
+ *
+ * `m0` and `m1` are the slopes at the start and the end, in units of the average
+ * speed: 0 is a standstill, 1 is the average pace, 2 is twice it. The average is
+ * always 1 — the curve still gets from 0 to 1 in the time it has — so a fast end
+ * is paid for by a slower middle. Monotonic while both slopes are within [0, 3],
+ * which is the range callers clamp to; outside it the curve would run backwards.
+ *
+ * `(0, 0)` is smoothstep, `(0, 2)` is u², `(2, 0)` is easeOutQuad, `(1, 1)` is linear.
+ */
+export function hermiteEase(u: number, m0: number, m1: number): number {
+  const t = clamp(u, 0, 1);
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return (t3 - 2 * t2 + t) * m0 + (-2 * t3 + 3 * t2) + (t3 - t2) * m1;
+}
+
 // ---------------------------------------------------------------- viewport
 
 export const toScreen = (p: Vec2, v: Viewport): Vec2 =>
