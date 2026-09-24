@@ -466,6 +466,37 @@ drawn from memory. What is left is short because THE TRACKER IS SHORT: a board c
 long as the roster is watched, and at today's fragmentation that is a handful of seconds. The
 fix for board length is upstream, not here.
 
+## D91 — Everything the flat board edits, the 3D view edits
+Supersedes the drawing half of D49 and the label-handle half of D50. The two gates D48 opened
+become one: `interactive` is the whole of it, and a coach no longer switches to flat to draw.
+
+**The objection to drawing was about the gesture, never the document.** Every point the pointer
+hands over is unprojected to pitch metres before anything reads it, so a shape made under the
+camera is ordinary pitch geometry and reads the same on the flat board. Shape by shape:
+
+- **Text** is one click, unprojected. Exact, and there was never an objection to it.
+- **Arrow and line**: a homography maps straight lines to straight lines, so both ends land
+  under the cursor and the shaft between them is the one drawn.
+- **Rect and ellipse**: the corners land under the cursor, and the draft is already drawn in the
+  ground layer, so the trapezoid on screen is the rectangle that is committed, seen at an angle.
+- **Pen**: every sample is exactly under the cursor when taken, and the straight segments between
+  them stay straight. What changes is the hand: a circle scribbled under the camera is an oval
+  about 1.5x longer up-pitch once laid flat. That is honest -- it encircles the same grass and
+  the same players -- and it is the precision cost D49 already accepted for dragging a player.
+
+"A stroke sampled through a warp is not the stroke that was drawn" was the wrong way round: it is
+exactly the stroke drawn on the screen, and the flat board is what shows it differently.
+
+**A label's width handle is part of its billboard.** Its grab points are drawn inside the
+billboard, around the words, and tested there with `unbillboard` -- the same space the words are
+hit in -- rather than computed in pitch metres around an anchor the words are not standing on.
+The drag hands `dragAnnotationHandle` that billboard point unrotated, because a billboard's axes
+are the screen's. Its move handle sits in the middle of the words and is not tested separately:
+grabbing the words already moves it by the grass (D50).
+
+**Not changed:** a shape on the grass is still grabbed within 0.35 m, which is a few pixels at
+the far touchline. It predates this and is left for when it bites.
+
 ## D90 — A goalkeeper wears his own kit, and one player per side wears it
 
 A coach looks for the keepers first, and a board that paints them in their outfield colours

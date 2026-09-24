@@ -26,7 +26,9 @@ import {
   hitTestLink,
   hitTestTilted,
   hitTestTiltedText,
+  hitTestTiltedTextHandle,
   moveEntities,
+  tiltedTextPoint,
   type AnnotationHandleHit,
   type Carry,
   type HandleHit,
@@ -83,7 +85,8 @@ type Drag =
   /** Dragging a new shape out. `start` is the anchor; `ann` is the live preview. */
   | { kind: "draw"; start: Vec2; points: Vec2[]; ann: Annotation }
   | { kind: "ann-move"; id: string; last: Vec2 }
-  | { kind: "ann-handle"; hit: AnnotationHandleHit }
+  /** `billboard` when the handle belongs to a label under the camera (D91). */
+  | { kind: "ann-handle"; hit: AnnotationHandleHit; billboard: boolean }
   | null;
 
 export function BoardCanvas({
@@ -108,33 +111,16 @@ export function BoardCanvas({
   interactive = true,
 }: Props) {
   /**
-   * Two gates, not one (D48, D49).
+   * One gate (D91). Everything the flat board can do, the angled view can too.
    *
-   * `live` is any pointer input at all, and the angled view has it: selecting,
-   * sweeping a marquee, clicking a connector, and — since D49 — moving players and
-   * shaping their runs. Everything the panels offer is an edit to the document and
-   * never cared which way the board was being looked at.
-   *
-   * `canDraw` is the coach's DRAWING: making a shape, moving one, dragging its
-   * handles. That stays flat, and not for want of an inverse — a freehand stroke
-   * sampled through a warp, or a rectangle held axis-aligned in pitch metres while
-   * the cursor traces a trapezoid, is not the shape that was drawn.
-   *
-   * A player is different: a token is drawn where it stands, so under the camera it
-   * follows the cursor's own place on the grass exactly.
+   * Every point the pointer hands over is a place on the pitch — unprojected under
+   * the camera — so a token follows the cursor, a shape's corner lands under it, and
+   * what was drawn in 3D is ordinary pitch geometry on the flat board. The one thing
+   * the view changes is the gesture: a metre up-pitch is fewer pixels than a metre
+   * across, so a circle scribbled under the camera is an oval once laid flat.
    */
   const live = interactive;
-  const canDraw = interactive && !pitchView.tilt;
   const tilted = !!framingOf(pitchView).tilt;
-
-  /**
-   * What a drag on empty grass does, given where we are.
-   *
-   * A tool left armed in 2D would otherwise make every click in 3D do nothing at
-   * all. It falls back to select there and is picked straight back up on the way
-   * out, which is better than a live tool that quietly refuses.
-   */
-  const activeTool: Tool = canDraw ? tool : "select";
 
   /**
    * True where the pointer has ground under it.
@@ -145,20 +131,6 @@ export function BoardCanvas({
    * that consume a point.
    */
   const onGrass = (p: Vec2) => Number.isFinite(p.x) && Number.isFinite(p.y);
-
-  /**
-   * Whether the selected shape's grab points can be reached from here.
-   *
-   * A shape's handles are pitch geometry, drawn into the ground layer and warped
-   * with it — so under the camera they are grabbed like anything else on the grass.
-   * A LABEL's are not: it is a billboard, and its handles would be computed in
-   * pitch metres while the words themselves stand somewhere else entirely. Those
-   * stay flat, which is why they are not drawn in 3D either (D50).
-   */
-  const selectedAnnotation = annotationSelection
-    ? (doc.annotations ?? []).find((a) => a.id === annotationSelection)
-    : undefined;
-  const canGrabShapeHandles = canDraw || (tilted && selectedAnnotation?.kind !== "text");
 
   /**
    * Framing the pointer is working in.
@@ -294,6 +266,37 @@ export function BoardCanvas({
   const annotationScene = () => frameAt(doc, t).resolved.index;
 
   /**
+   * The selected shape's grab point under the pointer, and which space it lives in.
+   *
+   * A shape's handles are pitch geometry, drawn into the ground layer and warped
+   * with it — so under the camera they are grabbed at the unprojected point like
+   * anything else on the grass. A LABEL's are drawn inside its billboard, around the
+   * words, and are tested there. Only its width handle: its move handle sits in the
+   * middle of the words, and the words already move it by the grass (D50, D91).
+   */
+  const shapeHandleAt = (
+    e: React.MouseEvent<HTMLCanvasElement>,
+    p: Vec2,
+  ): { hit: AnnotationHandleHit; billboard: boolean } | null => {
+    const scene = annotationScene();
+    const selected = annotationSelection
+      ? (doc.annotations ?? []).find((a) => a.id === annotationSelection)
+      : undefined;
+    if (tilted && selected?.kind === "text") {
+      const hit = hitTestTiltedTextHandle(
+        doc,
+        scene,
+        annotationSelection,
+        screenFrom(e),
+        cameraFrom(e),
+      );
+      return hit?.which === "w" ? { hit, billboard: true } : null;
+    }
+    const hit = hitTestAnnotationHandle(doc, scene, annotationSelection, p, rotated);
+    return hit ? { hit, billboard: false } : null;
+  };
+
+  /**
    * Undo key for the drag in progress.
    *
    * A drag writes a document per pointermove; tagging them all with one key
@@ -309,25 +312,17 @@ export function BoardCanvas({
     e.currentTarget.setPointerCapture(e.pointerId);
 
     // A drawing tool takes the whole gesture: no selecting, no marquee.
-    if (activeTool !== "select") {
+    if (tool !== "select") {
       startDrawing(p);
       return;
     }
 
     // The selected shape's own handles come first, above even run handles: they are
     // drawn on top of everything and are the most deliberate target there is.
-    if (canGrabShapeHandles) {
-      const annHandle = hitTestAnnotationHandle(
-        doc,
-        annotationScene(),
-        annotationSelection,
-        p,
-        rotated,
-      );
-      if (annHandle) {
-        setDrag({ kind: "ann-handle", hit: annHandle });
-        return;
-      }
+    const annHandle = shapeHandleAt(e, p);
+    if (annHandle) {
+      setDrag({ kind: "ann-handle", ...annHandle });
+      return;
     }
 
     // Control handles win over tokens: they can overlap one, and they are the
@@ -458,15 +453,15 @@ export function BoardCanvas({
    * immediately and hands the panel the cursor for its content.
    */
   const startDrawing = (p: Vec2) => {
-    if (activeTool === "select" || !onGrass(p)) return;
+    if (tool === "select" || !onGrass(p)) return;
     const sceneId = doc.scenes[annotationScene()]?.id ?? doc.scenes[0].id;
-    const ann = draftAnnotation(doc, activeTool, sceneId, p, p, {
+    const ann = draftAnnotation(doc, tool, sceneId, p, p, {
       color: drawColor,
       dash: drawDash,
       points: [p],
     });
 
-    if (activeTool === "text") {
+    if (tool === "text") {
       onDocChange(addAnnotation(doc, ann));
       onAnnotationSelect?.(ann.id);
       onToolChange?.("select");
@@ -480,44 +475,32 @@ export function BoardCanvas({
 
     // Dragged up past the horizon there is no ground to read, so the gesture holds
     // where it was rather than putting NaN into a position. Releasing up there is
-    // handled the same way, in onPointerUp.
-    if (drag && !onGrass(p)) return;
+    // handled the same way, in onPointerUp. A label's width is read off its
+    // billboard, not the grass, and needs no ground.
+    const onBillboard = drag?.kind === "ann-handle" && drag.billboard;
+    if (drag && !onBillboard && !onGrass(p)) return;
 
     if (!drag) {
-      if (activeTool !== "select") {
+      if (tool !== "select") {
         setHover(null);
         setGrip(null);
         return;
       }
-      if (tilted) {
-        // Same order as pointerdown: the shape's own handles, then run handles.
-        // A label's are neither drawn nor tested here, so the cursor cannot promise
-        // one that is not there.
-        const annHandle = canGrabShapeHandles
-          ? hitTestAnnotationHandle(doc, annotationScene(), annotationSelection, p, rotated)
-          : null;
-        const onHandle =
-          annHandle ??
-          (editScene === undefined || !onGrass(p)
-            ? null
-            : hitTestHandle(doc, editScene, selection, p));
-        setGrip(annHandle?.which === "w" ? "resize" : onHandle ? "grab" : null);
-        setHover(hitTestTilted(doc, frameAt(doc, t), screenFrom(e), cameraFrom(e))?.id ?? null);
-        return;
-      }
       // Same order as pointerdown: the shape's own handles, then run handles,
       // then the tokens. The cursor has to promise what the click will do.
-      const annHandle = hitTestAnnotationHandle(
-        doc,
-        annotationScene(),
-        annotationSelection,
-        p,
-        rotated,
-      );
+      const annHandle = shapeHandleAt(e, p);
       const onHandle =
-        annHandle ?? (editScene === undefined ? null : hitTestHandle(doc, editScene, selection, p));
-      setGrip(annHandle?.which === "w" ? "resize" : onHandle ? "grab" : null);
-      setHover(hitTest(doc, frameAt(doc, t), p)?.id ?? null);
+        annHandle ??
+        (editScene === undefined || !onGrass(p)
+          ? null
+          : hitTestHandle(doc, editScene, selection, p));
+      setGrip(annHandle?.hit.which === "w" ? "resize" : onHandle ? "grab" : null);
+      setHover(
+        (tilted
+          ? hitTestTilted(doc, frameAt(doc, t), screenFrom(e), cameraFrom(e))
+          : hitTest(doc, frameAt(doc, t), p)
+        )?.id ?? null,
+      );
       return;
     }
 
@@ -549,8 +532,18 @@ export function BoardCanvas({
     if (drag.kind === "ann-handle") {
       const ann = (doc.annotations ?? []).find((a) => a.id === drag.hit.id);
       if (!ann) return;
+      // A billboard's axes are the screen's, so its width runs along screen x
+      // however the board is turned underneath.
+      const to = drag.billboard
+        ? tiltedTextPoint(doc, annotationScene(), ann.id, screenFrom(e), cameraFrom(e))
+        : p;
+      if (!to) return;
       onDocChange(
-        updateAnnotation(doc, ann.id, dragAnnotationHandle(ann, drag.hit.which, p, rotated)),
+        updateAnnotation(
+          doc,
+          ann.id,
+          dragAnnotationHandle(ann, drag.hit.which, to, rotated && !drag.billboard),
+        ),
         dragKey(),
       );
       return;
@@ -589,7 +582,7 @@ export function BoardCanvas({
    * when exactly one is selected.
    */
   const onDoubleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!onEditName || activeTool !== "select") return;
+    if (!onEditName || tool !== "select") return;
     const frame = frameAt(doc, t);
     const hit = tilted
       ? hitTestTilted(doc, frame, screenFrom(e), cameraFrom(e))
@@ -659,11 +652,12 @@ export function BoardCanvas({
    * The width handle resizes along the pitch's x-axis, which is down the screen
    * once the board is stood on end — so the arrows follow the framing rather than
    * the document, or they point across the one direction the drag cannot go.
+   * Under the camera a label is a billboard and its width runs along the screen.
    */
   const cursor = (): string => {
     if (!live) return "default";
-    if (activeTool !== "select") return "crosshair";
-    const resize = rotated ? "ns-resize" : "ew-resize";
+    if (tool !== "select") return "crosshair";
+    const resize = rotated && !tilted ? "ns-resize" : "ew-resize";
     if (drag?.kind === "ann-handle") return drag.hit.which === "w" ? resize : "grabbing";
     if (drag?.kind === "move" || drag?.kind === "handle" || drag?.kind === "ann-move") {
       return "grabbing";

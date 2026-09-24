@@ -32,6 +32,7 @@ before any React touches it, and every phase ends at a state you can look at.
 | — | Selection, marquee and restyling in the 3D view (D48) |
 | — | Moving players and shaping runs in the 3D view (D49) |
 | — | Moving and resizing the drawing in the 3D view (D50) |
+| — | Drawing, and widening a label, in the 3D view — it edits everything the flat board does (D91) |
 | — | Nested project folders, with cycle and depth guards (D51) |
 | — | Video import — `tracks.json` from the `football-tracks` sibling repo becomes a board (D52) |
 | — | The window starts at a set piece (D53) and is scored against a legal eleven (D54) |

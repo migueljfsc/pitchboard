@@ -278,9 +278,8 @@ function drawTilted(
   if (view.interactive) {
     // The selected shape, with its grab points: they are pitch geometry lying in
     // this layer, so they warp with the grass and can be grabbed like anything else
-    // on it. A text label is a billboard and gets its own outline below — without
-    // handles, because its would be computed in metres while the words stand
-    // somewhere else entirely (D50).
+    // on it. A text label is a billboard and gets its chrome below, inside its own
+    // billboard, where its handles sit around the words (D91).
     const selected = view.annotationSelection
       ? marks.find((a) => a.id === view.annotationSelection)
       : undefined;
@@ -624,10 +623,10 @@ function drawBillboards(
     const at = projectPitch(ann.at, cam);
     billboard(ctx, ann.at, at, () => {
       drawAnnotationText(ctx, ann, false);
-      // Inside the billboard, so the outline is the box the words are really in
-      // — and unrotated, because a billboard's axes are the screen's.
+      // Inside the billboard, so the outline and handles sit where the words
+      // really are — and unrotated, because a billboard's axes are the screen's.
       if (view.interactive && view.annotationSelection === ann.id) {
-        drawAnnotationChrome(ctx, ann, false, false);
+        drawAnnotationChrome(ctx, ann, false);
       }
     });
   }
@@ -1120,12 +1119,7 @@ function drawAnnotationText(
  * board while staying upright, so its box and its width handle have to turn with
  * it. Everything else is drawn in pitch space and ignores the flag.
  */
-function drawAnnotationChrome(
-  ctx: Ctx,
-  ann: Annotation,
-  rotated: boolean,
-  handles = true,
-): void {
+function drawAnnotationChrome(ctx: Ctx, ann: Annotation, rotated: boolean): void {
   const { x, y, w, h } = boundsOf(ann, rotated);
 
   ctx.save();
@@ -1135,9 +1129,6 @@ function drawAnnotationChrome(
   ctx.strokeRect(x - 0.7, y - 0.7, w + 1.4, h + 1.4);
   ctx.restore();
 
-  // Off in 3D. A grab point that cannot be dragged is a promise the view does not
-  // keep — under the camera a shape is selectable and restylable, not movable (D48).
-  if (!handles) return;
   for (const handle of annotationHandles(ann, rotated)) drawAnnotationHandle(ctx, handle);
 }
 

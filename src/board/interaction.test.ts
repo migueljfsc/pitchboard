@@ -6,12 +6,14 @@ import {
   hitTestGroundAnnotation,
   hitTestTilted,
   hitTestTiltedText,
+  hitTestTiltedTextHandle,
   moveEntities,
   nudgeEntities,
+  tiltedTextPoint,
 } from "./interaction";
 import { cameraFor, projectPitch } from "./projection";
 import { PITCH, tokenRadius } from "./pitch";
-import { addAnnotation } from "./annotations";
+import { addAnnotation, dragAnnotationHandle, textExtent } from "./annotations";
 import { addSceneAfter } from "./scenes";
 import { TOKEN_RADIUS } from "./render";
 import { frameAt } from "./timeline";
@@ -468,6 +470,42 @@ describe("hitTestTiltedText", () => {
   // two are hit-tested in different spaces and must not both claim a label.
   it("is the only thing that answers for a label — the ground pass skips it", () => {
     expect(hitTestGroundAnnotation(labelled, 0, { x: 30, y: 20 }, "mark")).toBeNull();
+  });
+});
+
+describe("a label's width handle under the camera (D91)", () => {
+  const cam = cameraFor(PITCH, "full", 1000, 700, 1);
+  const label: Extract<Annotation, { kind: "text" }> = {
+    id: "ann-1",
+    kind: "text",
+    from: doc.scenes[0].id,
+    to: null,
+    color: "#ffffff",
+    at: { x: 30, y: 20 },
+    text: "Press here",
+  };
+  const labelled = addAnnotation(doc, label);
+  const at = projectPitch(label.at, cam);
+  const { w } = textExtent(label);
+  // The far end of the line, in the billboard's own axes: screen x, a metre to `at.scale`.
+  const edge = { x: at.x + (w / 2) * at.scale, y: at.y };
+
+  it("is found beside the words, along the screen, however the board is turned", () => {
+    expect(hitTestTiltedTextHandle(labelled, 0, "ann-1", edge, cam)).toEqual({
+      id: "ann-1",
+      which: "w",
+    });
+  });
+
+  it("answers only for the selected label", () => {
+    expect(hitTestTiltedTextHandle(labelled, 0, null, edge, cam)).toBeNull();
+  });
+
+  it("widens by what the pointer moved, in the label's own metres", () => {
+    const to = tiltedTextPoint(labelled, 0, "ann-1", { x: edge.x + 2 * at.scale, y: edge.y }, cam);
+    expect(to).not.toBeNull();
+    const next = dragAnnotationHandle(label, "w", to!, false);
+    expect((next as { width: number }).width).toBeCloseTo(w + 4, 6);
   });
 });
 

@@ -303,16 +303,17 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
   a metre, but +y is down the frame however the board is oriented underneath. That is what makes a
   token a circle rather than an ellipse — and it means a pitch-space offset copied into there
   points somewhere else.
-- **The 3D view has TWO interaction gates, not one** (D48, D49). `live` is any pointer input and
-  the angled view has it, including moving players and shaping their runs; `canDraw` is the
-  coach's DRAWING — making a shape, moving one, dragging its handles — and only the flat board
-  has that. Collapsing them back into one is how the view ended up holding a selection it could
-  not clear.
-- **A label's handles are the one grab that stays flat** (D50). Everything else a coach draws is
-  pitch geometry in the ground layer and warps with it, handles included. A text label is a
-  billboard, so handles computed in pitch metres land nowhere near the words — which is what
-  `drawAnnotationChrome`'s `handles` switch is for, and why the tilted path turns it off for text
-  and on for everything else. Turning it on for text draws grab points on empty grass.
+- **The 3D view edits everything the flat board does** (D91). Every point the pointer hands
+  over is unprojected to pitch metres before anything reads it, so nothing drawn under the camera
+  is special once laid flat. A freehand circle drawn in 3D is an oval on the flat board — that is
+  the foreshortening of the hand, not a bug. Anything new that consumes a pointer point must take
+  it from `pointFrom` and check `onGrass`, or it gets NaN above the horizon.
+- **A label's handles live in its billboard, not on the grass** (D91). Everything else a coach
+  draws is pitch geometry in the ground layer and its handles warp with it. A text label's are
+  drawn inside `billboard()` around the words and tested with `hitTestTiltedTextHandle`; the width
+  drag hands `dragAnnotationHandle` a point from `tiltedTextPoint` with `rotated` FALSE, because a
+  billboard's axes are the screen's. Handles computed in pitch metres around the anchor land on
+  empty grass.
 - **Above the horizon there is no ground, and `unproject` returns NaN.** One NaN reaching a delta
   puts NaN into a position and the board is gone. `onGrass` is checked once in `BoardCanvas`
   rather than in each of the six places a point is consumed — a drag holds where it was, and a

@@ -278,6 +278,7 @@ function annotationCovers(ann: Annotation, p: Vec2, margin: number, rotated: boo
 // keeps the grab area the size it looks: a metre near the camera is many more
 // pixels than a metre at the far touchline, which is the objection that kept the
 // 3D view read-only, and it disappears the moment the target is the pixels (D48).
+// A label's grab points are part of its billboard and are tested the same way (D91).
 
 /** How near a click has to land, in metres of the billboard's own scale. */
 const TILTED_MARGIN = 0.25;
@@ -356,6 +357,61 @@ export function hitTestTiltedText(
   }
   return null;
 }
+
+/**
+ * Grab point of the selected label under a SCREEN point, or null — for the 3D view.
+ *
+ * A label's handles belong to its billboard, not to the grass: they are drawn inside
+ * it, around the words, so they are tested in the same unbillboarded metre space the
+ * words are (D91). Unrotated in there, like the words.
+ */
+export function hitTestTiltedTextHandle(
+  doc: BoardDoc,
+  sceneIndex: number,
+  selected: string | null,
+  screen: Vec2,
+  cam: Camera,
+  margin = TILTED_MARGIN,
+): AnnotationHandleHit | null {
+  const ann = tiltedText(doc, sceneIndex, selected);
+  if (!ann) return null;
+  const at = projectPitch(ann.at, cam);
+  if (!Number.isFinite(at.scale) || at.scale <= 0) return null;
+  return hitTestAnnotationHandle(
+    doc,
+    sceneIndex,
+    selected,
+    unbillboard(screen, at, ann.at),
+    false,
+    margin,
+  );
+}
+
+/**
+ * A screen point in the metre space of the selected label's billboard, or null.
+ *
+ * What a width drag under the camera hands to `dragAnnotationHandle`, unrotated —
+ * the edge moves along the line of the words, which on a billboard is screen x.
+ */
+export function tiltedTextPoint(
+  doc: BoardDoc,
+  sceneIndex: number,
+  id: string,
+  screen: Vec2,
+  cam: Camera,
+): Vec2 | null {
+  const ann = tiltedText(doc, sceneIndex, id);
+  if (!ann) return null;
+  const at = projectPitch(ann.at, cam);
+  if (!Number.isFinite(at.scale) || at.scale <= 0) return null;
+  return unbillboard(screen, at, ann.at);
+}
+
+const tiltedText = (doc: BoardDoc, sceneIndex: number, id: string | null) => {
+  if (!id) return undefined;
+  const ann = visibleAt(doc, sceneIndex).find((a) => a.id === id);
+  return ann?.kind === "text" ? ann : undefined;
+};
 
 /** The place on the grass under a screen point. NaN above the horizon, where there is none. */
 export const tiltedPitchPoint = (screen: Vec2, cam: Camera): Vec2 => unprojectPitch(screen, cam);
