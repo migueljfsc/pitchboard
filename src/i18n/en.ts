@@ -322,6 +322,18 @@ export const en = {
   "inspect.ball.heldBy": "{who} has the ball in this scene.",
   "inspect.ball.loose": "The ball is loose in this scene.",
   "inspect.ball.timingWhere": "The pass into it — timing, shot, loft — is set in the scene bar under the timeline.",
+  "inspect.resetMove": "Reset this move",
+  "inspect.resetMove.hint":
+    "Puts the selection back where it was in {scene}, and clears the run. Carried forward as “{mode}” says, like a drag.",
+  "inspect.resetMove.none": "Nothing to reset — there is no move into this scene.",
+  "inspect.resetMove.first": "Back to formation mark",
+  "inspect.resetMove.first.hint":
+    "Puts the selection back on its formation mark. Carried forward as “{mode}” says, like a drag.",
+  "inspect.resetMove.first.none": "Already on the formation mark, or added by hand with no mark to go back to.",
+  "inspect.removeMovement": "Remove all movement",
+  "inspect.removeMovement.hint":
+    "Keeps him where he starts in the first scene, in every scene, and clears all his runs, timings and run styles.",
+  "inspect.removeMovement.none": "He doesn't move in any scene.",
   "inspect.ballName": "Ball",
   "timeline.pass.takes": "Pass takes",
   "timeline.pass.takes.hint":
@@ -712,6 +724,8 @@ export const en = {
   "palette.highlight.off": "Remove the highlight in this scene",
   "palette.link": "Link the selected players",
   "palette.deselect": "Clear the selection",
+  "palette.resetMove": "Reset the selection's move into this scene",
+  "palette.removeMovement": "Remove all movement of the selection",
   "shortcuts.palette": "Find any action by name",
   // ---------------------------------------------------------------- notices
   "toast.undo": "Undo",
@@ -723,6 +737,8 @@ export const en = {
   "toast.sceneDeleted": "Deleted “{name}”",
   "toast.playerRemoved": "Removed number {number}",
   "toast.shapeDeleted": "Deleted the shape",
+  "toast.moveReset": "Reset the move into “{scene}”",
+  "toast.movementRemoved": "Removed all movement",
   "bar.savedLocally": "Saved in this browser",
   "tip.board":
     "Drag a player to move them · double-click to rename · [ and ] step through scenes · {palette} for every action",

@@ -12,7 +12,17 @@
  * rather than overlapping around the halfway line.
  */
 
-import type { BoardDoc, Link, LinkStyle, Player, Team, TeamPattern, Vec2 } from "@/board/types";
+import type {
+  BoardDoc,
+  Link,
+  LinkStyle,
+  Player,
+  Scene,
+  Team,
+  TeamPattern,
+  Vec2,
+} from "@/board/types";
+import { moveEntities, type Carry } from "@/board/interaction";
 import { pruneLinks, replaceTeamLinks } from "@/board/links";
 import { pruneBallFlags } from "@/board/scenes";
 
@@ -494,6 +504,28 @@ export const directionOf = (teamIndex: number): Direction =>
  * length.
  */
 export function resetPositions(doc: BoardDoc): BoardDoc {
+  const target = formationMarks(doc);
+
+  const scenes = doc.scenes.map((scene) => {
+    const positions = { ...scene.positions };
+    const paths = { ...scene.paths };
+    for (const [id, at] of Object.entries(target)) {
+      positions[id] = { ...at };
+      delete paths[id];
+    }
+    return { ...scene, positions, paths };
+  });
+
+  return { ...doc, scenes };
+}
+
+/**
+ * Where each player's formation puts him, by id.
+ *
+ * Players added by hand sit past the last slot of the shape and have no mark, so
+ * they are simply absent.
+ */
+export function formationMarks(doc: BoardDoc): Record<string, Vec2> {
   const target: Record<string, Vec2> = {};
 
   doc.teams.forEach((team, i) => {
@@ -518,17 +550,119 @@ export function resetPositions(doc: BoardDoc): BoardDoc {
     });
   });
 
-  const scenes = doc.scenes.map((scene) => {
-    const positions = { ...scene.positions };
-    const paths = { ...scene.paths };
-    for (const [id, at] of Object.entries(target)) {
-      positions[id] = { ...at };
-      delete paths[id];
-    }
-    return { ...scene, positions, paths };
-  });
+  return target;
+}
 
-  return { ...doc, scenes };
+/**
+ * The same scene, with nothing left of an entity's run into it: its curve, its own
+ * travel time, its wait and its run style. A run of zero length has no use for
+ * any of them, and leaving them behind would let a later drag resurrect a timing
+ * nobody can see.
+ */
+function withoutRun(scene: Scene, id: string): Scene {
+  const next: Scene = { ...scene, paths: { ...scene.paths } };
+  delete next.paths[id];
+  for (const field of ["travel", "delay", "run"] as const) {
+    const record = scene[field];
+    if (!record || !(id in record)) continue;
+    const rest = { ...record };
+    delete rest[id];
+    if (Object.keys(rest).length === 0) delete next[field];
+    else (next[field] as Record<string, unknown>) = rest;
+  }
+  return next;
+}
+
+/**
+ * Take back players' moves into one scene.
+ *
+ * Each goes back to where he stood in the scene before — on the first scene, where
+ * there is no scene before, back to his formation mark — and the run into it goes
+ * with the move. The change is carried forward exactly as a drag is (`carry`), so
+ * a player moved by mistake while "While still" was on comes back out of every
+ * scene the mistake reached, and stops where it stopped.
+ */
+export function resetMove(
+  doc: BoardDoc,
+  sceneIndex: number,
+  ids: Iterable<string>,
+  carry: Carry,
+): BoardDoc {
+  const scene = doc.scenes[sceneIndex];
+  if (!scene) return doc;
+  const marks = sceneIndex === 0 ? formationMarks(doc) : null;
+
+  let next = doc;
+  for (const id of ids) {
+    const at = scene.positions[id];
+    const back = marks ? marks[id] : doc.scenes[sceneIndex - 1].positions[id];
+    if (!at || !back) continue;
+    next = moveEntities(next, sceneIndex, [id], { x: back.x - at.x, y: back.y - at.y }, carry);
+    if (sceneIndex > 0) {
+      const scenes = next.scenes.slice();
+      scenes[sceneIndex] = withoutRun(scenes[sceneIndex], id);
+      next = { ...next, scenes };
+    }
+  }
+  return next;
+}
+
+/** Is there a move into this scene for any of these players to take back? */
+export function canResetMove(doc: BoardDoc, sceneIndex: number, ids: Iterable<string>): boolean {
+  const scene = doc.scenes[sceneIndex];
+  if (!scene) return false;
+  const marks = sceneIndex === 0 ? formationMarks(doc) : null;
+  for (const id of ids) {
+    const at = scene.positions[id];
+    const back = marks ? marks[id] : doc.scenes[sceneIndex - 1].positions[id];
+    if (!at || !back) continue;
+    if (Math.hypot(at.x - back.x, at.y - back.y) > 1e-6) return true;
+    if (sceneIndex > 0 && runLeftovers(scene, id)) return true;
+  }
+  return false;
+}
+
+const runLeftovers = (scene: Scene, id: string): boolean =>
+  scene.paths[id] != null ||
+  scene.travel?.[id] !== undefined ||
+  scene.delay?.[id] !== undefined ||
+  scene.run?.[id] !== undefined;
+
+/**
+ * Take away every move players make: each stands where the first scene has him, in
+ * every scene, with no runs, timings or run styles left anywhere. The first scene
+ * is his starting position, not a move, so it is kept — "Back to formation" on it
+ * is the single-scene reset.
+ */
+export function removeAllMovement(doc: BoardDoc, ids: Iterable<string>): BoardDoc {
+  const list = [...ids];
+  const start = doc.scenes[0];
+  const scenes = doc.scenes.map((scene, k) => {
+    let next: Scene = { ...scene, positions: { ...scene.positions } };
+    for (const id of list) {
+      const at = start.positions[id];
+      if (!at || !next.positions[id]) continue;
+      next.positions[id] = { ...at };
+      if (k > 0) next = withoutRun(next, id);
+    }
+    return next;
+  });
+  return pruneBallFlags({ ...doc, scenes });
+}
+
+/** Does any of these players move, or keep any run, anywhere after the first scene? */
+export function hasMovement(doc: BoardDoc, ids: Iterable<string>): boolean {
+  const list = [...ids];
+  const start = doc.scenes[0];
+  return doc.scenes.some(
+    (scene, k) =>
+      k > 0 &&
+      list.some((id) => {
+        const a = start.positions[id];
+        const b = scene.positions[id];
+        return (!!a && !!b && Math.hypot(a.x - b.x, a.y - b.y) > 1e-6) || runLeftovers(scene, id);
+      }),
+  );
 }
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");

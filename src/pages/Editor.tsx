@@ -91,7 +91,11 @@ import {
   AWAY,
   FORMATIONS,
   HOME,
+  canResetMove,
   changeFormation,
+  hasMovement,
+  removeAllMovement,
+  resetMove,
   createBoardDoc,
   resetPositions,
   type Direction,
@@ -613,6 +617,21 @@ export function Editor({ initialDoc }: Props = {}) {
     setDoc(next);
   };
 
+  // Players only: the ball's movement is its carrier's, or its own stored position.
+  const selectedPlayers = [...visible].filter((id) => id !== BALL_ID);
+
+  /** Take back the selection's moves into this scene, carried as a drag would be. */
+  const onResetMove = () => {
+    setDoc(resetMove(doc, activeScene, selectedPlayers, carry));
+    notify(t("toast.moveReset", { scene: doc.scenes[activeScene]?.name ?? "" }));
+  };
+
+  /** Take away every move the selection makes, in every scene. */
+  const onRemoveAllMovement = () => {
+    setDoc(removeAllMovement(doc, selectedPlayers));
+    notify(t("toast.movementRemoved"));
+  };
+
   const onTravelChange = (ms: number | null) => {
     if (editScene === undefined) return;
     let next = doc;
@@ -790,6 +809,22 @@ export function Editor({ initialDoc }: Props = {}) {
     }
     if (players.length >= 2) {
       list.push({ id: "link", group: group.selection, label: t("palette.link"), run: onCreateLink });
+    }
+    if (players.length > 0 && canResetMove(doc, activeScene, players)) {
+      list.push({
+        id: "reset-move",
+        group: group.selection,
+        label: t("palette.resetMove"),
+        run: onResetMove,
+      });
+    }
+    if (players.length > 0 && hasMovement(doc, players)) {
+      list.push({
+        id: "remove-movement",
+        group: group.selection,
+        label: t("palette.removeMovement"),
+        run: onRemoveAllMovement,
+      });
     }
     if (visible.size > 0) {
       list.push({
@@ -1188,6 +1223,10 @@ export function Editor({ initialDoc }: Props = {}) {
               highlightColor={highlightColor}
               onHighlightChange={onHighlightChange}
               onGoToScene={(index) => selectScene(index)}
+              onResetMove={onResetMove}
+              canResetMove={canResetMove(doc, activeScene, selectedPlayers)}
+              onRemoveAllMovement={onRemoveAllMovement}
+              hasMovement={hasMovement(doc, selectedPlayers)}
               focusName={focusName}
             />
           </Section>

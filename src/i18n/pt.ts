@@ -313,6 +313,18 @@ export const pt: Dictionary = {
   "inspect.ball.heldBy": "{who} tem a bola nesta cena.",
   "inspect.ball.loose": "A bola está solta nesta cena.",
   "inspect.ball.timingWhere": "O passe para esta cena — tempo, remate, passe alto — define-se na barra da cena, por baixo da linha do tempo.",
+  "inspect.resetMove": "Repor este movimento",
+  "inspect.resetMove.hint":
+    "Põe a seleção onde estava em {scene} e limpa a corrida. A alteração segue como diz “{mode}”, tal como ao arrastar.",
+  "inspect.resetMove.none": "Nada a repor — não há movimento para esta cena.",
+  "inspect.resetMove.first": "Voltar à posição do sistema",
+  "inspect.resetMove.first.hint":
+    "Põe a seleção na posição do sistema. A alteração segue como diz “{mode}”, tal como ao arrastar.",
+  "inspect.resetMove.first.none": "Já está na posição do sistema, ou foi adicionado à mão e não tem posição para onde voltar.",
+  "inspect.removeMovement": "Remover todo o movimento",
+  "inspect.removeMovement.hint":
+    "Mantém-no onde começa na primeira cena, em todas as cenas, e limpa todas as corridas, tempos e tipos de corrida.",
+  "inspect.removeMovement.none": "Não se move em nenhuma cena.",
   "inspect.ballName": "Bola",
   "timeline.pass.takes": "O passe demora",
   "timeline.pass.takes.hint":
@@ -703,6 +715,8 @@ export const pt: Dictionary = {
   "palette.highlight.off": "Tirar o destaque nesta cena",
   "palette.link": "Ligar os jogadores selecionados",
   "palette.deselect": "Limpar a seleção",
+  "palette.resetMove": "Repor o movimento da seleção para esta cena",
+  "palette.removeMovement": "Remover todo o movimento da seleção",
   "shortcuts.palette": "Encontrar qualquer ação pelo nome",
   // ---------------------------------------------------------------- notices
   "toast.undo": "Anular",
@@ -714,6 +728,8 @@ export const pt: Dictionary = {
   "toast.sceneDeleted": "Apagada “{name}”",
   "toast.playerRemoved": "Removido o número {number}",
   "toast.shapeDeleted": "Forma apagada",
+  "toast.moveReset": "Movimento para “{scene}” reposto",
+  "toast.movementRemoved": "Todo o movimento removido",
   "bar.savedLocally": "Guardado neste navegador",
   "tip.board":
     "Arraste um jogador para o mover · duplo clique para mudar o nome · [ e ] percorrem as cenas · {palette} para qualquer ação",

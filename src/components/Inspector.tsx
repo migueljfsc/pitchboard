@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeftRight, ChevronRight, Shirt, UserMinus } from "lucide-react";
+import { ArrowLeftRight, ChevronRight, RotateCcw, Shirt, Undo2, UserMinus } from "lucide-react";
 import type { BoardDoc, Player, RunEnd, RunStart } from "@/board/types";
 import { BALL_ID } from "@/board/types";
 import { displayName, keeperOf, shirtClash } from "@/board/players";
@@ -67,6 +67,14 @@ type Props = {
   onHighlightChange: (color: string | null) => void;
   /** Jump to a scene — where a group that cannot apply here points instead. */
   onGoToScene: (index: number) => void;
+  /** Take back the selected players' moves into this scene, carried as a drag is. */
+  onResetMove: () => void;
+  /** False when there is no move into this scene to take back. */
+  canResetMove: boolean;
+  /** Take away every move the selected players make, in every scene. */
+  onRemoveAllMovement: () => void;
+  /** False when none of them moves anywhere. */
+  hasMovement: boolean;
   /**
    * Bumped to put the cursor in the name field — a double-click on the board.
    * A counter rather than a boolean so renaming the same player twice in a row
@@ -99,6 +107,10 @@ export function Inspector({
   highlightColor,
   onHighlightChange,
   onGoToScene,
+  onResetMove,
+  canResetMove,
+  onRemoveAllMovement,
+  hasMovement,
   focusName,
 }: Props) {
   const { t, tn } = useI18n();
@@ -150,6 +162,28 @@ export function Inspector({
   const carries = only !== null && scene?.carrier === only;
   const ballOnly = players.length === 0 && selection.has(BALL_ID);
   const holder = scene?.carrier ?? null;
+  const carryLabel = t(CARRY_MODES.find((m) => m.mode === carry)!.key);
+
+  // Taking back a move into this scene. On the first scene there is no scene before
+  // to go back to, so it is the formation mark instead.
+  const resetButton = players.length > 0 && (
+    <SmallButton
+      label={t(activeScene === 0 ? "inspect.resetMove.first" : "inspect.resetMove")}
+      title={
+        !canResetMove
+          ? t(activeScene === 0 ? "inspect.resetMove.first.none" : "inspect.resetMove.none")
+          : activeScene === 0
+            ? t("inspect.resetMove.first.hint", { mode: carryLabel })
+            : t("inspect.resetMove.hint", {
+                scene: doc.scenes[activeScene - 1]?.name ?? "",
+                mode: carryLabel,
+              })
+      }
+      icon={<Undo2 size={13} />}
+      disabled={!canResetMove}
+      onClick={onResetMove}
+    />
+  );
   const tabs = player !== null && player !== undefined;
   const showing: Tab = tabs ? tab : "scene";
 
@@ -227,6 +261,13 @@ export function Inspector({
           />
           <p className="text-[11px] leading-relaxed text-ink-400">{t("inspect.tab.player.note")}</p>
           <div className="flex flex-col gap-1.5">
+            <SmallButton
+              label={t("inspect.removeMovement")}
+              title={t(hasMovement ? "inspect.removeMovement.hint" : "inspect.removeMovement.none")}
+              icon={<RotateCcw size={13} />}
+              disabled={!hasMovement}
+              onClick={onRemoveAllMovement}
+            />
             {!isKeeper && (
               <SmallButton
                 label={t("inspect.makeKeeper", { who: displayName(doc, player.id) })}
@@ -274,7 +315,9 @@ export function Inspector({
                   </button>
                 )}
               </Why>
-            ) : ballOnly ? (
+            ) : null}
+            {!canEditPaths && resetButton}
+            {!canEditPaths ? null : ballOnly ? (
               <Why>{t("inspect.why.ball")}</Why>
             ) : doc.flow ? (
               <Why>{t("inspect.why.flow")}</Why>
@@ -373,6 +416,8 @@ export function Inspector({
                 </Disclosure>
               </>
             )}
+
+            {canEditPaths && resetButton}
 
             {canEditPaths && (
               <div className="grid grid-cols-2 gap-1.5">
