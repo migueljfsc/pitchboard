@@ -55,7 +55,10 @@ export async function encodeVideo(
   output.addVideoTrack(source, { frameRate: fps });
   await output.start();
 
-  const view = { ...exportView(doc, size, pitchView), turf: new Map() };
+  // A clip carries the caption but never a transparent background: neither
+  // container keeps an alpha channel.
+  const look = { caption: request.look?.caption };
+  const view = { ...exportView(doc, size, pitchView, look), turf: new Map() };
   const frames = frameCount(totalSeconds(doc), fps);
 
   try {

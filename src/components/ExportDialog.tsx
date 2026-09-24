@@ -10,9 +10,12 @@ import {
   DEFAULT_GIF_RESOLUTION,
   DEFAULT_RESOLUTION,
   MAX_GIF_RESOLUTION,
+  EXPORT_SHAPES,
   RESOLUTIONS,
   exportSize,
   frameCount,
+  type ExportLook,
+  type ExportShape,
 } from "@/export/frame";
 import {
   BITRATES,
@@ -53,6 +56,12 @@ const BLURB: Record<ExportFormat, MessageKey> = {
   png: "export.blurb.png",
 };
 
+const SHAPE: Record<ExportShape, MessageKey> = {
+  board: "export.shape.board",
+  square: "export.shape.square",
+  wide: "export.shape.wide",
+};
+
 const PHASE: Record<ExportPhase, MessageKey> = {
   palette: "export.phase.palette",
   render: "export.phase.render",
@@ -85,6 +94,12 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
   const [gifEdge, setGifEdge] = useState<number>(DEFAULT_GIF_RESOLUTION);
   const [fps, setFps] = useState(DEFAULT_FPS.mp4);
   const [bitrate, setBitrate] = useState<number>(DEFAULT_BITRATE);
+  const [shape, setShape] = useState<ExportShape>("board");
+  // A caption is off until asked for, and seeded with the board's name when it is.
+  const [captioned, setCaptioned] = useState(false);
+  const [title, setTitle] = useState(doc.name);
+  const [sceneCaption, setSceneCaption] = useState(true);
+  const [transparent, setTransparent] = useState(false);
   const [job, setJob] = useState<Job | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
@@ -99,7 +114,15 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
   const setLongEdge = format === "gif" ? setGifEdge : setVideoEdge;
 
   const duration = totalSeconds(doc);
-  const size = useMemo(() => exportSize(longEdge, doc, pitchView), [longEdge, doc, pitchView]);
+  const size = useMemo(
+    () => exportSize(longEdge, doc, pitchView, shape),
+    [longEdge, doc, pitchView, shape],
+  );
+  const look: ExportLook = {
+    caption: captioned ? { title, scene: sceneCaption } : null,
+    // Only a still keeps an alpha channel.
+    transparent: format === "png" && transparent,
+  };
   const { width, height } = size;
   const frames = format === "png" ? 1 : frameCount(duration, fps);
 
@@ -184,7 +207,7 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
 
     if (format === "png") {
       setJob({ phase: "render", fraction: 0 });
-      void renderPng(doc, t, pitchView, longEdge)
+      void renderPng(doc, t, pitchView, longEdge, shape, look)
         .then((png) => save(png, "png"))
         .catch((err: unknown) => setError(message(err)))
         .finally(() => setJob(null));
@@ -193,7 +216,7 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
 
     setJob({ phase: "render", fraction: 0 });
     handle.current = runExport(
-      { doc, pitchView, format, size, fps, bitrate },
+      { doc, pitchView, format, size, fps, bitrate, look },
       {
         onProgress: (phase, fraction) => setJob({ phase, fraction }),
         onDone: (result) => {
@@ -307,6 +330,80 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
                     {r}
                   </Choice>
                 ))}
+              </div>
+            </Field>
+
+            <Field label={i18n.t("export.shape")}>
+              <div className="flex flex-wrap gap-1">
+                {EXPORT_SHAPES.map((s) => (
+                  <Choice
+                    key={s}
+                    active={shape === s}
+                    onClick={() => {
+                      forget();
+                      setShape(s);
+                    }}
+                  >
+                    {i18n.t(SHAPE[s])}
+                  </Choice>
+                ))}
+              </div>
+            </Field>
+
+            <Field label={i18n.t("export.look")}>
+              <div className="flex flex-col gap-2 text-[11px] text-ink-200">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={captioned}
+                    onChange={(e) => {
+                      forget();
+                      setCaptioned(e.target.checked);
+                    }}
+                    className="accent-accent"
+                  />
+                  {i18n.t("export.caption")}
+                </label>
+                {captioned && (
+                  <div className="flex flex-col gap-2 pl-5">
+                    <input
+                      value={title}
+                      onChange={(e) => {
+                        forget();
+                        setTitle(e.target.value);
+                      }}
+                      placeholder={i18n.t("export.caption.placeholder")}
+                      aria-label={i18n.t("export.caption.title")}
+                      className="rounded-md border border-ink-600 bg-ink-900 px-2 py-1 text-xs text-ink-200 outline-none focus:border-accent"
+                    />
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={sceneCaption}
+                        onChange={(e) => {
+                          forget();
+                          setSceneCaption(e.target.checked);
+                        }}
+                        className="accent-accent"
+                      />
+                      {i18n.t("export.caption.scene")}
+                    </label>
+                  </div>
+                )}
+                {format === "png" && (
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={transparent}
+                      onChange={(e) => {
+                        forget();
+                        setTransparent(e.target.checked);
+                      }}
+                      className="accent-accent"
+                    />
+                    {i18n.t("export.transparent")}
+                  </label>
+                )}
               </div>
             </Field>
 

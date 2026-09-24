@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Pause,
   Play,
@@ -20,10 +20,10 @@ import {
   addSceneAfter,
   canLoft as canLoftInto,
   canShoot as canShootInto,
-  deleteScene,
   duplicateScene,
   moveScene,
   renameScene,
+  sceneStartSeconds,
   setSceneTiming,
   setLoft,
   setShot,
@@ -58,6 +58,8 @@ type Props = {
   onPlayingChange: (playing: boolean) => void;
   loop: boolean;
   onLoopChange: (loop: boolean) => void;
+  /** Deleting a scene goes through the editor, which can offer to undo it. */
+  onDeleteScene: (index: number) => void;
 };
 
 export function Timeline({
@@ -72,6 +74,7 @@ export function Timeline({
   onPlayingChange,
   loop,
   onLoopChange,
+  onDeleteScene,
 }: Props) {
   const { t } = useI18n();
   const total = totalSeconds(doc);
@@ -92,6 +95,38 @@ export function Timeline({
     if (playing) liveRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [live.index, playing]);
 
+  // A scene chosen from the keyboard or the scrubber's ticks can be off the end of
+  // the strip; bring it into view. Choosing one never happens mid-scrub.
+  const activeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!playing) activeRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [activeScene, playing]);
+
+  // Which ends of the strip have more scenes past them, so the edge can say so.
+  const stripRef = useRef<HTMLDivElement>(null);
+  const [overflow, setOverflow] = useState({ before: false, after: false });
+  const measure = useCallback(() => {
+    const el = stripRef.current;
+    if (!el) return;
+    const before = el.scrollLeft > 1;
+    const after = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+    setOverflow((o) => (o.before === before && o.after === after ? o : { before, after }));
+  }, []);
+  useEffect(() => {
+    measure();
+    const el = stripRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [measure, doc.scenes.length, thumbs]);
+  const scrollStrip = (direction: 1 | -1) =>
+    stripRef.current?.scrollBy({ left: direction * stripRef.current.clientWidth * 0.8, behavior: "smooth" });
+
+  // Scene being dragged to a new place in the strip, and where it would land.
+  const [dragging, setDragging] = useState<number | null>(null);
+  const [dropAt, setDropAt] = useState<number | null>(null);
+
   const canShoot = canShootInto(doc, activeScene);
   const canLoft = canLoftInto(doc, activeScene);
   // What each scene is really worth, which is not its own fields in flow mode.
@@ -108,8 +143,8 @@ export function Timeline({
 
   return (
     <div className="flex flex-col gap-3 border-t border-ink-700 bg-ink-800 px-4 py-3">
-      {/* Transport */}
-      <div className="flex items-center gap-3">
+      {/* Transport. Bottom margin makes room for the scene ticks under the scrubber. */}
+      <div className="mb-2 flex items-center gap-3">
         <button
           type="button"
           onClick={() => onPlayingChange(!playing)}
@@ -166,27 +201,64 @@ export function Timeline({
           <Images size={14} />
         </button>
 
-        <input
-          type="range"
-          min={0}
-          max={Math.max(total, 0.001)}
-          step={0.01}
-          value={Math.min(time, total)}
-          onChange={(e) => {
-            onPlayingChange(false);
-            onTimeChange(Number(e.target.value));
-          }}
-          className="h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-ink-600 accent-accent"
-          aria-label={t("timeline.scrub")}
-        />
+        {/* The ticks sit where each scene comes to rest, measured across the track
+            the thumb actually travels — the full width less the thumb itself. */}
+        <div className="relative min-w-0 flex-1">
+          <input
+            type="range"
+            min={0}
+            max={Math.max(total, 0.001)}
+            step={0.01}
+            value={Math.min(time, total)}
+            onChange={(e) => {
+              onPlayingChange(false);
+              onTimeChange(Number(e.target.value));
+            }}
+            className="block h-1 w-full cursor-pointer appearance-none rounded-full bg-ink-600 accent-accent"
+            aria-label={t("timeline.scrub")}
+          />
+          {total > 0 && (
+            <div className="absolute inset-x-0 top-full mt-1.5 h-2.5">
+              {doc.scenes.map((s, i) => {
+                const at = Math.min(1, sceneStartSeconds(doc, i) / total);
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => onActiveSceneChange(i)}
+                    title={t("timeline.tick", { n: i + 1, name: s.name })}
+                    aria-label={t("timeline.tick", { n: i + 1, name: s.name })}
+                    style={{ left: `calc(${SCRUB_THUMB / 2}px + (100% - ${SCRUB_THUMB}px) * ${at})` }}
+                    className="group absolute top-0 flex h-2.5 w-3 -translate-x-1/2 justify-center"
+                  >
+                    <span
+                      className={cn(
+                        "block h-full w-0.5 rounded-full transition",
+                        i === activeScene
+                          ? "bg-accent"
+                          : "bg-ink-400/60 group-hover:bg-ink-200",
+                      )}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         <span className="w-20 shrink-0 text-right font-mono text-[11px] tabular-nums text-ink-400">
           {time.toFixed(1)}s / {total.toFixed(1)}s
         </span>
       </div>
 
-      {/* Scene strip */}
-      <div className="flex items-stretch gap-2 overflow-x-auto pb-1">
+      {/* Scene strip. The edges fade and offer a scroll where there are more scenes
+          past them — a row that simply stops at the panel edge read as the end. */}
+      <div className="relative">
+      <div
+        ref={stripRef}
+        onScroll={measure}
+        className="flex items-stretch gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]"
+      >
         {doc.scenes.map((s, i) => {
           const isLive = i === live.index;
           // Filling while travelling in, full once the scene is held.
@@ -195,22 +267,70 @@ export function Timeline({
           return (
             <button
               key={s.id}
-              ref={isLive ? liveRef : undefined}
+              ref={(el) => {
+                if (isLive) liveRef.current = el;
+                if (i === activeScene) activeRef.current = el;
+              }}
               type="button"
               onClick={() => onActiveSceneChange(i)}
               aria-current={isLive ? "true" : undefined}
+              // Drag a scene to reorder the strip. The chevrons below do the same a
+              // step at a time; this is for moving one a long way.
+              draggable
+              onDragStart={(e) => {
+                setDragging(i);
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", String(i));
+              }}
+              onDragOver={(e) => {
+                if (dragging === null) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                if (dropAt !== i) setDropAt(i);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (dragging !== null && dragging !== i) mutate(moveScene(doc, dragging, i), i);
+                setDragging(null);
+                setDropAt(null);
+              }}
+              onDragEnd={() => {
+                setDragging(null);
+                setDropAt(null);
+              }}
               style={thumbs ? { width: THUMB_WIDTH + 20 } : undefined}
               className={cn(
-                "flex min-w-28 shrink-0 flex-col items-start gap-0.5 rounded-md border px-2.5 py-1.5 text-left transition",
+                "relative flex min-w-28 shrink-0 flex-col items-start gap-0.5 rounded-md border px-2.5 py-1.5 text-left transition",
                 i === activeScene
                   ? "border-accent bg-ink-700"
                   : "border-ink-600 hover:border-ink-400",
                 // The playhead is its own signal, so a scene can be selected,
                 // playing, or both without the two states blurring together.
                 isLive && i !== activeScene && "border-accent/50 bg-accent/5",
+                dragging === i && "opacity-40",
+                // Where the dragged scene lands: before this one when coming from
+                // the right, after it when coming from the left.
+                dropAt === i &&
+                  dragging !== null &&
+                  dragging !== i &&
+                  (dragging > i
+                    ? "shadow-[inset_3px_0_0_0_var(--color-accent)]"
+                    : "shadow-[inset_-3px_0_0_0_var(--color-accent)]"),
               )}
             >
-              {thumbs && <SceneThumb doc={doc} index={i} view={view} />}
+              {thumbs && (
+                <span className="relative block">
+                  <SceneThumb doc={doc} index={i} view={view} />
+                  <span
+                    className={cn(
+                      "absolute left-1 top-1 min-w-4 rounded px-1 text-center font-mono text-[10px] leading-4",
+                      i === activeScene ? "bg-accent text-ink-900" : "bg-ink-900/80 text-ink-200",
+                    )}
+                  >
+                    {i + 1}
+                  </span>
+                </span>
+              )}
               <span
                 className={cn(
                   "max-w-full truncate text-xs font-medium",
@@ -243,6 +363,13 @@ export function Timeline({
         >
           <Plus size={15} />
         </button>
+      </div>
+      {overflow.before && (
+        <StripEdge side="before" label={t("timeline.scrollEarlier")} onClick={() => scrollStrip(-1)} />
+      )}
+      {overflow.after && (
+        <StripEdge side="after" label={t("timeline.scrollLater")} onClick={() => scrollStrip(1)} />
+      )}
       </div>
 
       {/* Active scene controls */}
@@ -374,7 +501,7 @@ export function Timeline({
             <IconButton
               label={t("timeline.deleteScene")}
               disabled={doc.scenes.length <= 1}
-              onClick={() => mutate(deleteScene(doc, activeScene), Math.max(0, activeScene - 1))}
+              onClick={() => onDeleteScene(activeScene)}
             >
               <Trash2 size={14} />
             </IconButton>
@@ -417,6 +544,41 @@ function Duration({
       unit="s"
       onCommit={(v) => onChange(v * 1000)}
     />
+  );
+}
+
+/** Diameter of the scrubber's thumb, in CSS pixels — the browser default. */
+const SCRUB_THUMB = 16;
+
+/** A fade over one end of the scene strip, with a button that scrolls it. */
+function StripEdge({
+  side,
+  label,
+  onClick,
+}: {
+  side: "before" | "after";
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "pointer-events-none absolute inset-y-0 flex w-14 items-center",
+        side === "before"
+          ? "left-0 justify-start bg-gradient-to-r from-ink-800 to-transparent"
+          : "right-0 justify-end bg-gradient-to-l from-ink-800 to-transparent",
+      )}
+    >
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={label}
+        title={label}
+        className="pointer-events-auto flex size-7 items-center justify-center rounded-full border border-ink-600 bg-ink-900/90 text-ink-200 shadow transition hover:border-accent hover:text-accent"
+      >
+        {side === "before" ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+      </button>
+    </div>
   );
 }
 

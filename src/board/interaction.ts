@@ -28,6 +28,7 @@ import {
   MARK_WIDTH,
   annotationHandles,
   boundsOf,
+  isStanding,
   strokePoints,
   visibleAt,
   type AnnotationHandle,
@@ -211,7 +212,7 @@ export function hitTestGroundAnnotation(
     p,
     margin,
     false,
-    (a) => layerOf(a) === layer && a.kind !== "text",
+    (a) => layerOf(a) === layer && !isStanding(a),
   );
 }
 
@@ -227,23 +228,38 @@ function topmostAnnotation(
   for (let i = list.length - 1; i >= 0; i--) {
     const ann = list[i];
     if (!accept(ann)) continue;
-    if (annotationCovers(ann, p, margin, rotated)) return ann;
+    if (annotationCovers(ann, p, margin, rotated, ballRadius(doc))) return ann;
   }
   return null;
 }
 
-function annotationCovers(ann: Annotation, p: Vec2, margin: number, rotated: boolean): boolean {
+function annotationCovers(
+  ann: Annotation,
+  p: Vec2,
+  margin: number,
+  rotated: boolean,
+  ballR: number,
+): boolean {
+  if (ann.kind === "ball") return dist(p, ann.at) <= ballR + margin;
+
   if (ann.kind === "rect" || ann.kind === "ellipse") {
     const { x, y, w, h } = boundsOf(ann);
     const cx = x + w / 2;
     const cy = y + h / 2;
-    if (ann.kind === "rect") {
-      return Math.abs(p.x - cx) <= w / 2 + margin && Math.abs(p.y - cy) <= h / 2 + margin;
-    }
-    const rx = w / 2 + margin;
-    const ry = h / 2 + margin;
-    if (rx <= 0 || ry <= 0) return false;
-    return ((p.x - cx) / rx) ** 2 + ((p.y - cy) / ry) ** 2 <= 1;
+    const within = (grow: number): boolean => {
+      if (ann.kind === "rect") {
+        return Math.abs(p.x - cx) <= w / 2 + grow && Math.abs(p.y - cy) <= h / 2 + grow;
+      }
+      const rx = w / 2 + grow;
+      const ry = h / 2 + grow;
+      if (rx <= 0 || ry <= 0) return false;
+      return ((p.x - cx) / rx) ** 2 + ((p.y - cy) / ry) ** 2 <= 1;
+    };
+    const edge = MARK_WIDTH / 2 + margin;
+    // An outline is grabbed by its line, so a click inside it reaches the pitch —
+    // the players standing in a marked area, or a marquee started there.
+    if (ann.filled === false) return within(edge) && !within(-edge);
+    return within(margin);
   }
 
   if (ann.kind === "text") {
@@ -332,13 +348,14 @@ export function hitTestTilted(
 }
 
 /**
- * Topmost text label under a SCREEN point, or null.
+ * Topmost STANDING annotation under a SCREEN point — a text label or a drawn
+ * ball — or null.
  *
- * A label is the one annotation that stands up off the grass — squashed type is
- * unreadable, so it is billboarded like a token. Unbillboarding puts the pointer
- * back into the label's own metre space, where the existing box test applies
- * unchanged; `rotated` is false in there, because a billboard's axes are the
- * screen's however the board is turned underneath.
+ * These are the annotations that stand up off the grass: squashed type is
+ * unreadable and a squashed ball is a disc, so both are billboarded like a token.
+ * Unbillboarding puts the pointer back into the shape's own metre space, where the
+ * flat test applies unchanged; `rotated` is false in there, because a billboard's
+ * axes are the screen's however the board is turned underneath.
  */
 export function hitTestTiltedText(
   doc: BoardDoc,
@@ -350,10 +367,11 @@ export function hitTestTiltedText(
   const list = visibleAt(doc, sceneIndex);
   for (let i = list.length - 1; i >= 0; i--) {
     const ann = list[i];
-    if (ann.kind !== "text") continue;
+    if (ann.kind !== "text" && ann.kind !== "ball") continue;
     const at = projectPitch(ann.at, cam);
     if (!Number.isFinite(at.scale) || at.scale <= 0) continue;
-    if (annotationCovers(ann, unbillboard(screen, at, ann.at), margin, false)) return ann;
+    const q = unbillboard(screen, at, ann.at);
+    if (annotationCovers(ann, q, margin, false, ballRadius(doc))) return ann;
   }
   return null;
 }

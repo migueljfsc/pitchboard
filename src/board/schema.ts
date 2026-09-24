@@ -86,11 +86,24 @@ const curve = pathCurve.nullable().optional();
 const annotation = z.discriminatedUnion("kind", [
   z.object({ ...annotationBase, kind: z.literal("arrow"), a: vec2, b: vec2, curve, dash }),
   z.object({ ...annotationBase, kind: z.literal("line"), a: vec2, b: vec2, curve, dash }),
-  z.object({ ...annotationBase, kind: z.literal("rect"), a: vec2, b: vec2 }),
-  z.object({ ...annotationBase, kind: z.literal("ellipse"), a: vec2, b: vec2 }),
+  z.object({
+    ...annotationBase,
+    kind: z.literal("rect"),
+    a: vec2,
+    b: vec2,
+    filled: z.boolean().optional(),
+  }),
+  z.object({
+    ...annotationBase,
+    kind: z.literal("ellipse"),
+    a: vec2,
+    b: vec2,
+    filled: z.boolean().optional(),
+  }),
   // Capped: a freehand stroke is simplified on commit, and every point of it
   // ends up in the share URL.
   z.object({ ...annotationBase, kind: z.literal("pen"), points: z.array(vec2).min(2).max(400) }),
+  z.object({ ...annotationBase, kind: z.literal("ball"), at: vec2 }),
   z.object({
     ...annotationBase,
     kind: z.literal("text"),

@@ -10,6 +10,7 @@
 import { memo, useEffect, useRef } from "react";
 import type { BoardDoc, PitchView, TurfCache } from "@/board/types";
 import { drawBoard } from "@/board/render";
+import { tokenScaleOf } from "@/board/pitch";
 import { sceneStartSeconds } from "@/board/scenes";
 import { exportView } from "@/export/frame";
 
@@ -25,6 +26,15 @@ const TURF: TurfCache = new Map();
 
 export const THUMB_WIDTH = 112;
 export const THUMB_HEIGHT = 72;
+
+/**
+ * How much bigger a token is drawn in a thumbnail than on the board.
+ *
+ * At board size a token is a speck at 112 px, and the tile says nothing about who
+ * stands where. The document is copied, never changed: this is how the strip
+ * looks, not what the board is.
+ */
+const THUMB_TOKEN_BOOST = 1.8;
 
 type Props = {
   doc: BoardDoc;
@@ -55,7 +65,8 @@ function Thumb({ doc, index, view }: Props) {
     // `sceneStartSeconds` is the instant the scene comes to rest, so what is drawn
     // is its stored positions rather than anything interpolated — in flow mode too,
     // where the seam tolerance resolves a zero-length hold to the scene itself.
-    drawBoard(ctx, doc, sceneStartSeconds(doc, index), {
+    const legible = { ...doc, tokenScale: tokenScaleOf(doc) * THUMB_TOKEN_BOOST };
+    drawBoard(ctx, legible, sceneStartSeconds(doc, index), {
       ...exportView(doc, size, flat),
       turf: TURF,
     });

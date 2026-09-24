@@ -83,6 +83,80 @@ describe("drawBoard", () => {
     expect(r.calls("fillRect")[0]).toBe(`fillRect(0,0,${W},${H})`);
   });
 
+  it("leaves the surround unpainted for a transparent export", () => {
+    const r = createRecordingCtx();
+    drawBoard(r.ctx, createBoardDoc(), 0, view({ interactive: false, transparent: true }));
+    expect(r.calls("fillRect")).not.toContain(`fillRect(0,0,${W},${H})`);
+  });
+
+  it("draws a caption only when asked, with the scene being played into", () => {
+    const doc = createBoardDoc();
+    const plain = createRecordingCtx();
+    const captioned = createRecordingCtx();
+    drawBoard(plain.ctx, doc, 0, view({ interactive: false }));
+    drawBoard(
+      captioned.ctx,
+      doc,
+      0,
+      view({ interactive: false, caption: { title: "High press", scene: true } }),
+    );
+    const texts = (log: string[]) => log.filter((e) => e.startsWith("fillText("));
+    expect(texts(captioned.log).length - texts(plain.log).length).toBe(2);
+    expect(captioned.log.some((e) => e.includes("High press"))).toBe(true);
+    expect(captioned.log.some((e) => e.includes(doc.scenes[0].name))).toBe(true);
+  });
+
+  it("draws a drawn ball as a ball, beside the match ball's own drawing", () => {
+    const doc = createBoardDoc();
+    const withBall = {
+      ...doc,
+      annotations: [
+        {
+          id: "ann-ball",
+          kind: "ball" as const,
+          from: doc.scenes[0].id,
+          to: null,
+          color: "#fff",
+          at: { x: 40, y: 30 },
+        },
+      ],
+    };
+    const plain = createRecordingCtx();
+    const drawn = createRecordingCtx();
+    drawBoard(plain.ctx, doc, 0, view({ interactive: false }));
+    drawBoard(drawn.ctx, withBall, 0, view({ interactive: false }));
+    // Lit like the match ball: one radial gradient off its centre per ball.
+    const shading = (log: string[]) =>
+      log.filter((e) => e.startsWith("createRadialGradient(")).length;
+    expect(shading(drawn.log) - shading(plain.log)).toBe(1);
+  });
+
+  it("fills a zone unless it is an outline", () => {
+    const doc = createBoardDoc();
+    const zone = (filled?: boolean) => ({
+      ...doc,
+      annotations: [
+        {
+          id: "ann-zone",
+          kind: "rect" as const,
+          from: doc.scenes[0].id,
+          to: null,
+          color: "#fbbf24",
+          a: { x: 20, y: 20 },
+          b: { x: 40, y: 30 },
+          ...(filled === undefined ? {} : { filled }),
+        },
+      ],
+    });
+    const fills = (d: ReturnType<typeof zone>) => {
+      const r = createRecordingCtx();
+      drawBoard(r.ctx, d, 0, view({ interactive: false }));
+      return r.log.filter((e) => e === "fill()").length;
+    };
+    expect(fills(zone())).toBe(fills(zone(true)));
+    expect(fills(zone())).toBe(fills(zone(false)) + 1);
+  });
+
   it("applies the viewport as one matrix, then works in metres", () => {
     const r = createRecordingCtx();
     const v = view();
@@ -607,11 +681,13 @@ describe("highlight halos", () => {
   const lit = (ids: string[]) => setHighlight(createBoardDoc(), 0, ids, AMBER);
 
   /** Each halo opens with its own gradient, so counting those counts the glows. */
-  // A halo glows from the token's centre; the ball's shading is lit from off it.
+  // A halo glows from the token's centre; the ball's shading is lit from off it,
+  // and the surround's vignette is centred on the frame rather than on anybody.
   const halos = (log: string[]) =>
     log.filter((e) => {
       if (!e.startsWith("createRadialGradient(")) return false;
       const [x0, y0, , x1, y1] = e.slice(21, -1).split(",");
+      if (Number(x0) === W / 2 && Number(y0) === H / 2) return false;
       return x0 === x1 && y0 === y1;
     }).length;
 

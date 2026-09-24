@@ -39,6 +39,7 @@ import {
 import {
   LOFT_APEX,
   LOFT_GROWTH,
+  UNSEEN_ALPHA,
   ballAt,
   ballLift,
   displayCurve,
@@ -59,6 +60,7 @@ import {
   ZONE_ALPHA,
   annotationHandles,
   boundsOf,
+  isStanding,
   strokePoints,
   TEXT_LINE_H,
   textBgAlpha,
@@ -117,8 +119,11 @@ export function drawBoard(
   ctx.save();
 
   // Surround first, so one call yields a complete frame.
-  ctx.fillStyle = theme.surround;
-  ctx.fillRect(0, 0, view.width, view.height);
+  if (!view.transparent) {
+    ctx.fillStyle = theme.surround;
+    ctx.fillRect(0, 0, view.width, view.height);
+    drawVignette(ctx, view.width, view.height);
+  }
 
   // The angled camera is a different composition of the same drawing, so it
   // branches here rather than threading a flag through every call below. It needs
@@ -127,6 +132,7 @@ export function drawBoard(
   if (view.tilt && typeof OffscreenCanvas !== "undefined") {
     drawTilted(ctx, doc, frame, view, theme);
     ctx.restore();
+    drawCaption(ctx, doc, frame, view);
     return;
   }
 
@@ -186,11 +192,11 @@ export function drawBoard(
     });
   }
 
-  for (const ann of marks) if (!isZone(ann)) drawMark(ctx, ann, view.rotated);
+  for (const ann of marks) if (!isZone(ann)) drawMark(ctx, ann, view.rotated, ballRadius(doc));
 
   if (view.interactive && view.annotationSelection) {
     const selected = marks.find((a) => a.id === view.annotationSelection);
-    if (selected) drawAnnotationChrome(ctx, selected, view.rotated);
+    if (selected) drawAnnotationChrome(ctx, selected, view.rotated, ballRadius(doc));
   }
 
   if (view.interactive && view.marquee) {
@@ -198,6 +204,88 @@ export function drawBoard(
   }
 
   ctx.restore();
+  drawCaption(ctx, doc, frame, view);
+}
+
+/**
+ * The export's caption, in screen space in the lower-left corner: a title, and
+ * under it the scene being played into.
+ *
+ * Sized off the frame's height so it reads the same at 960 and at 3840. On a
+ * dark plate, because it can land on grass, lines or players alike.
+ */
+function drawCaption(ctx: Ctx, doc: BoardDoc, frame: Frame, view: RenderView): void {
+  const caption = view.caption;
+  if (!caption) return;
+  const title = caption.title.trim();
+  const scene = caption.scene ? (doc.scenes[frame.resolved.index]?.name.trim() ?? "") : "";
+  if (!title && !scene) return;
+
+  const unit = Math.max(10, view.height * 0.028);
+  const pad = unit * 0.6;
+  const margin = unit;
+  const lines: { text: string; font: string; size: number; color: string }[] = [];
+  if (title) {
+    lines.push({
+      text: title,
+      font: `700 ${unit}px Inter, system-ui, -apple-system, sans-serif`,
+      size: unit,
+      color: "#ffffff",
+    });
+  }
+  if (scene) {
+    lines.push({
+      text: scene,
+      font: `500 ${unit * 0.75}px Inter, system-ui, -apple-system, sans-serif`,
+      size: unit * 0.75,
+      color: "rgba(255,255,255,0.8)",
+    });
+  }
+
+  ctx.save();
+  let w = 0;
+  for (const line of lines) {
+    ctx.font = line.font;
+    w = Math.max(w, ctx.measureText(line.text).width);
+  }
+  const gap = unit * 0.3;
+  const h = lines.reduce((sum, l) => sum + l.size, 0) + gap * (lines.length - 1);
+  const x = margin;
+  const y = view.height - margin - h - pad * 2;
+
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.beginPath();
+  ctx.roundRect(x, y, w + pad * 2, h + pad * 2, unit * 0.3);
+  ctx.fill();
+
+  ctx.textBaseline = "top";
+  ctx.textAlign = "left";
+  let at = y + pad;
+  for (const line of lines) {
+    ctx.font = line.font;
+    ctx.fillStyle = line.color;
+    ctx.fillText(line.text, x + pad, at);
+    at += line.size + gap;
+  }
+  ctx.restore();
+}
+
+/**
+ * Darken the surround towards the edges of the frame.
+ *
+ * Wherever the board does not fill the canvas — beside a vertical or 3D pitch, or
+ * around a letterboxed export — a flat band of one colour reads as dead space. A
+ * falloff puts the light on the pitch and lets the edges recede.
+ */
+function drawVignette(ctx: Ctx, width: number, height: number): void {
+  const cx = width / 2;
+  const cy = height / 2;
+  const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.hypot(cx, cy));
+  glow.addColorStop(0, "rgba(40,64,52,0.35)");
+  glow.addColorStop(0.55, "rgba(0,0,0,0)");
+  glow.addColorStop(1, "rgba(0,0,0,0.45)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, width, height);
 }
 
 /**
@@ -273,7 +361,9 @@ function drawTilted(
   // as they do on the flat board. A mark that ignores the perspective reads as a
   // sticker on the lens. Text is the exception, below — squashed type is simply
   // unreadable, and a label is the one annotation nobody imagines painted on turf.
-  for (const ann of marks) if (!isZone(ann) && ann.kind !== "text") drawMark(gctx, ann, true);
+  for (const ann of marks) {
+    if (!isZone(ann) && !isStanding(ann)) drawMark(gctx, ann, true, ballRadius(doc));
+  }
 
   if (view.interactive) {
     // The selected shape, with its grab points: they are pitch geometry lying in
@@ -283,7 +373,7 @@ function drawTilted(
     const selected = view.annotationSelection
       ? marks.find((a) => a.id === view.annotationSelection)
       : undefined;
-    if (selected && selected.kind !== "text") drawAnnotationChrome(gctx, selected, true);
+    if (selected && !isStanding(selected)) drawAnnotationChrome(gctx, selected, true);
 
     // The marquee is a region of the PITCH here rather than of the screen, so it
     // lies on the grass and warps with it — and `entitiesInRect` needs no 3D of
@@ -612,6 +702,25 @@ function drawBillboards(
     });
   }
 
+  // A drawn ball stands among the players rather than over them: it is a thing
+  // on the pitch, and a player in front of it hides it.
+  const drawnR = ballRadius(doc);
+  for (const ann of marks) {
+    if (ann.kind !== "ball") continue;
+    const at = projectPitch(ann.at, cam);
+    standing.push({
+      at,
+      draw: () =>
+        billboard(ctx, ann.at, at, () => {
+          drawGroundShadow(ctx, ann.at, drawnR);
+          drawBall(ctx, ann.at, drawnR, { selected: false, hovered: false });
+          if (view.interactive && view.annotationSelection === ann.id) {
+            drawAnnotationChrome(ctx, ann, false, drawnR);
+          }
+        }),
+    });
+  }
+
   // Nearest last. A billboard standing on the grass has to cover the one behind
   // it, and draw order is the only depth test there is.
   standing.sort((a, b) => a.at.y - b.at.y);
@@ -638,6 +747,9 @@ function drawBillboards(
  */
 const GHOST_ALPHA = 0.4;
 
+/** A ghost's size as a share of a token's. */
+const GHOST_SIZE = 0.78;
+
 /**
  * A player as another scene has them: an outline, never a token.
  *
@@ -652,7 +764,9 @@ function drawGhost(
   rotated: boolean,
   scale: number,
 ): void {
-  const radius = TOKEN_RADIUS * scale;
+  // Smaller than a token, so an outline of another scene is never taken for a
+  // player nobody saw -- who is drawn full size, filled and dashed (D87).
+  const radius = TOKEN_RADIUS * scale * GHOST_SIZE;
 
   ctx.save();
   ctx.globalAlpha = GHOST_ALPHA;
@@ -660,11 +774,11 @@ function drawGhost(
   ctx.beginPath();
   ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
   ctx.strokeStyle = color;
-  ctx.lineWidth = 0.16 * scale;
+  ctx.lineWidth = 0.14 * scale;
   ctx.stroke();
 
   upright(ctx, p, rotated, () => {
-    ctx.font = `600 ${1.1 * scale}px Inter, system-ui, -apple-system, sans-serif`;
+    ctx.font = `600 ${0.9 * scale}px Inter, system-ui, -apple-system, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = color;
@@ -979,17 +1093,26 @@ function drawZone(ctx: Ctx, ann: Annotation): void {
     ctx.rect(x, y, w, h);
   }
 
-  ctx.fillStyle = withAlpha(ann.color, ZONE_ALPHA);
-  ctx.fill();
+  if (!("filled" in ann) || ann.filled !== false) {
+    ctx.fillStyle = withAlpha(ann.color, ZONE_ALPHA);
+    ctx.fill();
+  }
   ctx.lineWidth = MARK_WIDTH * 0.7;
   ctx.strokeStyle = ann.color;
   ctx.stroke();
 }
 
 /** Arrows, lines, freehand and text — everything drawn over the play. */
-function drawMark(ctx: Ctx, ann: Annotation, rotated: boolean): void {
+function drawMark(ctx: Ctx, ann: Annotation, rotated: boolean, ballR: number): void {
   if (ann.kind === "text") {
     drawAnnotationText(ctx, ann, rotated);
+    return;
+  }
+  // The match ball's own drawing, shadow and all, so a drawn ball is a ball and
+  // not a symbol for one. Never selected or hovered as an entity: its chrome is a
+  // shape's.
+  if (ann.kind === "ball") {
+    drawBall(ctx, ann.at, ballR, { selected: false, hovered: false, shadow: true });
     return;
   }
 
@@ -1119,8 +1242,13 @@ function drawAnnotationText(
  * board while staying upright, so its box and its width handle have to turn with
  * it. Everything else is drawn in pitch space and ignores the flag.
  */
-function drawAnnotationChrome(ctx: Ctx, ann: Annotation, rotated: boolean): void {
-  const { x, y, w, h } = boundsOf(ann, rotated);
+function drawAnnotationChrome(
+  ctx: Ctx,
+  ann: Annotation,
+  rotated: boolean,
+  ballR?: number,
+): void {
+  const { x, y, w, h } = boundsOf(ann, rotated, ballR);
 
   ctx.save();
   ctx.setLineDash([0.7, 0.7]);
@@ -1463,26 +1591,44 @@ function drawToken(
   textColor: string,
   state: TokenState,
 ): void {
-  if (state.alpha !== undefined && state.alpha < 1) {
-    ctx.save();
-    ctx.globalAlpha *= state.alpha;
-    drawToken(ctx, p, number, label, color, textColor, { ...state, alpha: 1 });
-    ctx.restore();
-    return;
-  }
   // Rings, strokes and type all scale with the token, so a bigger board is the
   // same drawing at a larger size rather than fat tokens with tiny numbers.
   const k = state.scale ?? 1;
   const radius = TOKEN_RADIUS * k;
 
-  // Selection and hover rings sit outside the token so they never cover the number.
-  if (state.selected || state.hovered) {
+  if (state.alpha !== undefined && state.alpha < 1) {
+    // The ring is about the editor, not about the player, so it stays at full
+    // strength on a player nobody saw.
+    drawFocusRing(ctx, p, radius, 0.42 * k, k, state);
+    ctx.save();
+    ctx.globalAlpha *= state.alpha;
+    drawToken(ctx, p, number, label, color, textColor, {
+      ...state,
+      alpha: 1,
+      selected: false,
+      hovered: false,
+    });
+    ctx.restore();
+
+    // A faded fill alone turns every kit into the colour of wet grass, and the two
+    // sides stop reading as sides. The kit's own colour as a dashed rim keeps him
+    // on his team and says the place is uncertain -- as strong as the fade is deep,
+    // so a player the play is reaching sharpens rather than switching style.
+    const doubt = clamp((1 - state.alpha) / (1 - UNSEEN_ALPHA), 0, 1);
+    ctx.save();
+    ctx.globalAlpha *= doubt * UNSEEN_RIM_ALPHA;
+    ctx.setLineDash([0.5 * k, 0.32 * k]);
     ctx.beginPath();
-    ctx.arc(p.x, p.y, radius + 0.42 * k, 0, Math.PI * 2);
-    ctx.strokeStyle = state.selected ? "#fbbf24" : "rgba(255,255,255,0.55)";
-    ctx.lineWidth = (state.selected ? 0.26 : 0.18) * k;
+    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 0.18 * k;
     ctx.stroke();
+    ctx.restore();
+    return;
   }
+
+  // Selection and hover rings sit outside the token so they never cover the number.
+  drawFocusRing(ctx, p, radius, 0.42 * k, k, state);
 
   ctx.beginPath();
   ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
@@ -1537,15 +1683,47 @@ function drawToken(
   });
 }
 
+/** How strong the dashed rim of a player nobody saw is drawn, fully faded. */
+const UNSEEN_RIM_ALPHA = 0.9;
+
+/**
+ * The editor's ring around a selected or hovered entity.
+ *
+ * Selection wears a soft amber glow under its ring: a thin ring alone vanished
+ * against the white of the centre circle and the touchlines. Hover is a plain
+ * white ring, bright enough to promise what a click will pick up.
+ */
+function drawFocusRing(
+  ctx: Ctx,
+  p: Vec2,
+  radius: number,
+  gap: number,
+  k: number,
+  state: TokenState,
+): void {
+  if (!state.selected && !state.hovered) return;
+  const ring = radius + gap;
+
+  if (state.selected) {
+    const glow = ctx.createRadialGradient(p.x, p.y, radius, p.x, p.y, ring + 1.1 * k);
+    glow.addColorStop(0, "rgba(251,191,36,0.5)");
+    glow.addColorStop(1, "rgba(251,191,36,0)");
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, ring + 1.1 * k, 0, Math.PI * 2);
+    ctx.fillStyle = glow;
+    ctx.fill();
+  }
+
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, ring, 0, Math.PI * 2);
+  ctx.strokeStyle = state.selected ? "#fbbf24" : "rgba(255,255,255,0.8)";
+  ctx.lineWidth = (state.selected ? 0.28 : 0.2) * k;
+  ctx.stroke();
+}
+
 function drawBall(ctx: Ctx, p: Vec2, radius: number, state: TokenState): void {
   const k = radius / BALL_RADIUS;
-  if (state.selected || state.hovered) {
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, radius + 0.3 * k, 0, Math.PI * 2);
-    ctx.strokeStyle = state.selected ? "#fbbf24" : "rgba(255,255,255,0.55)";
-    ctx.lineWidth = 0.16 * k;
-    ctx.stroke();
-  }
+  drawFocusRing(ctx, p, radius, 0.3 * k, k * 0.6, state);
 
   // Sitting on the grass: a soft shadow down and to the right of it, the way the light falls
   // on the rest of the board. The 3D view casts its own, at the ball's real height.

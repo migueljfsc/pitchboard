@@ -7,7 +7,7 @@
  */
 
 import type { BoardDoc, PitchView } from "@/board/types";
-import type { Size } from "./frame";
+import type { ExportLook, Size } from "./frame";
 
 /** Containers mediabunny writes for us. */
 export type VideoFormat = "mp4" | "webm";
@@ -26,6 +26,8 @@ export type ExportRequest = {
   fps: number;
   /** Video only, bits per second. Ignored for GIF. */
   bitrate: number;
+  /** Caption; a clip has no transparent background. */
+  look?: ExportLook;
 };
 
 export type ExportResult = {

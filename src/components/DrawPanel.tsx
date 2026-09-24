@@ -3,6 +3,7 @@ import {
   ArrowUpRight,
   Ban,
   Circle,
+  CircleDot,
   Copy,
   Eye,
   EyeOff,
@@ -18,7 +19,6 @@ import type { Annotation, AnnotationDash, BoardDoc, Tool } from "@/board/types";
 import {
   TEXT_SCALE_MAX,
   TEXT_SCALE_MIN,
-  deleteAnnotation,
   textBgAlpha,
   updateAnnotation,
 } from "@/board/annotations";
@@ -41,11 +41,15 @@ type Props = {
   onColorChange: (color: string) => void;
   dash: AnnotationDash;
   onDashChange: (dash: AnnotationDash) => void;
+  /** Whether the next box or oval is filled. */
+  filled: boolean;
+  onFilledChange: (filled: boolean) => void;
   selected: string | null;
-  onSelect: (id: string | null) => void;
   /** Copies the shape and selects the copy. Owned by the editor, so the Drawings
    *  list on the other side duplicates through exactly the same call. */
   onDuplicate: (id: string) => void;
+  /** Deletes the shape, through the same call as the list and the Delete key. */
+  onDelete: (id: string) => void;
   /** Bumped to put the cursor in the selected shape's text field. */
   focusText?: number;
 };
@@ -58,6 +62,7 @@ const TOOLS: { value: Tool; icon: typeof Minus; key: string }[] = [
   { value: "ellipse", icon: Circle, key: "ellipse" },
   { value: "pen", icon: Pencil, key: "pen" },
   { value: "text", icon: Type, key: "text" },
+  { value: "ball", icon: CircleDot, key: "ball" },
 ];
 
 const DASHES: { value: AnnotationDash; key: string }[] = [
@@ -78,9 +83,11 @@ export function DrawPanel({
   onColorChange,
   dash,
   onDashChange,
+  filled,
+  onFilledChange,
   selected,
-  onSelect,
   onDuplicate,
+  onDelete,
   focusText,
 }: Props) {
   const { t } = useI18n();
@@ -90,9 +97,21 @@ export function DrawPanel({
   const patch = (id: string, fields: Partial<Annotation>, merge?: string) =>
     onDocChange(updateAnnotation(doc, id, fields), merge);
 
+  // The style row follows what is being worked on: the selected shape if there is
+  // one, the armed tool otherwise. A zone has a fill and no line style; everything
+  // else the other way round.
+  const zone =
+    active !== null
+      ? active.kind === "rect" || active.kind === "ellipse"
+      : tool === "rect" || tool === "ellipse";
+  const activeFilled =
+    active && (active.kind === "rect" || active.kind === "ellipse")
+      ? active.filled !== false
+      : filled;
+
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-4 gap-1">
+      <div className="grid grid-cols-5 gap-1">
         {TOOLS.map((item) => (
           <button
             key={item.value}
@@ -139,7 +158,8 @@ export function DrawPanel({
             aria-label={t("draw.colorAria", { color: c })}
             onClick={() => {
               onColorChange(c);
-              if (active) patch(active.id, { color: c });
+              // A drawn ball is always drawn as a ball, so a colour would change nothing.
+              if (active && active.kind !== "ball") patch(active.id, { color: c });
             }}
             className={cn(
               "size-4 rounded-full ring-1 transition",
@@ -152,6 +172,33 @@ export function DrawPanel({
         ))}
       </div>
 
+      {zone ? (
+        <div className="flex gap-1">
+          {([true, false] as const).map((value) => (
+            <button
+              key={String(value)}
+              type="button"
+              aria-pressed={activeFilled === value}
+              title={t(value ? "draw.fill.filled.hint" : "draw.fill.outline.hint")}
+              onClick={() => {
+                onFilledChange(value);
+                if (active && (active.kind === "rect" || active.kind === "ellipse")) {
+                  // Undefined rather than true, so a filled zone serialises as it always did.
+                  patch(active.id, { filled: value ? undefined : false });
+                }
+              }}
+              className={cn(
+                "flex-1 rounded border px-1 py-1 text-[11px] transition",
+                activeFilled === value
+                  ? "border-accent text-accent"
+                  : "border-ink-600 text-ink-400 hover:text-ink-200",
+              )}
+            >
+              {t(value ? "draw.fill.filled" : "draw.fill.outline")}
+            </button>
+          ))}
+        </div>
+      ) : (
       <div className="flex gap-1">
         {DASHES.map((d) => (
           <button
@@ -177,16 +224,14 @@ export function DrawPanel({
           </button>
         ))}
       </div>
+      )}
 
       {active ? (
         <Selected
           doc={doc}
           ann={active}
           onPatch={(fields, merge) => patch(active.id, fields, merge)}
-          onDelete={() => {
-            onDocChange(deleteAnnotation(doc, active.id));
-            onSelect(null);
-          }}
+          onDelete={() => onDelete(active.id)}
           onDuplicate={() => onDuplicate(active.id)}
           focusText={focusText}
         />

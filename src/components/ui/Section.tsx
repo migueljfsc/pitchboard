@@ -14,6 +14,8 @@ type Props = {
    */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** No padding around the body, for a panel that brings its own. */
+  flush?: boolean;
   children: ReactNode;
 };
 
@@ -24,6 +26,7 @@ export function Section({
   defaultOpen = true,
   open: controlled,
   onOpenChange,
+  flush = false,
   children,
 }: Props) {
   const [uncontrolled, setUncontrolled] = useState(defaultOpen);
@@ -52,7 +55,7 @@ export function Section({
         {badge && <span className="font-mono text-[11px] text-ink-400">{badge}</span>}
       </button>
 
-      {open && <div className="px-4 pb-4">{children}</div>}
+      {open && <div className={flush ? undefined : "px-4 pb-4"}>{children}</div>}
     </section>
   );
 }

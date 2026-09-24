@@ -41,6 +41,7 @@ const GROUPS: Group[] = [
       { keys: ["Del"], label: "shortcuts.deleteShape" },
       { keys: ["Esc"], label: "shortcuts.escape" },
       { keys: ["?"], label: "shortcuts.help" },
+      { keys: [`${MODIFIER}K`], label: "shortcuts.palette" },
     ],
   },
 ];

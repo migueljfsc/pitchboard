@@ -473,6 +473,30 @@ describe("hitTestTiltedText", () => {
   });
 });
 
+describe("a drawn ball under the camera", () => {
+  const cam = cameraFor(PITCH, "full", 1000, 700, 1);
+  const ball: Annotation = {
+    id: "ann-ball",
+    kind: "ball",
+    from: doc.scenes[0].id,
+    to: null,
+    color: "#ffffff",
+    at: { x: 40, y: 30 },
+  };
+  const placed = addAnnotation(doc, ball);
+
+  // It stands up off the grass like a label, so it is found where it is drawn and
+  // the ground pass leaves it alone.
+  it("is found where it stands", () => {
+    const at = projectPitch(ball.at, cam);
+    expect(hitTestTiltedText(placed, 0, { x: at.x, y: at.y }, cam)?.id).toBe("ann-ball");
+  });
+
+  it("is not answered for by the ground pass", () => {
+    expect(hitTestGroundAnnotation(placed, 0, ball.at, "mark")).toBeNull();
+  });
+});
+
 describe("a label's width handle under the camera (D91)", () => {
   const cam = cameraFor(PITCH, "full", 1000, 700, 1);
   const label: Extract<Annotation, { kind: "text" }> = {

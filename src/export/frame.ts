@@ -15,6 +15,22 @@ import { PITCH_PADDING } from "@/board/pitch";
 export type Size = { width: number; height: number };
 
 /**
+ * The shape of the frame. `board` is tight to the board (D28); the other two are
+ * fixed shapes for where a clip is going — a square feed, a 16:9 player — with the
+ * board letterboxed inside on the surround.
+ */
+export type ExportShape = "board" | "square" | "wide";
+
+export const EXPORT_SHAPES: readonly ExportShape[] = ["board", "square", "wide"];
+
+/** Everything about an export's look that is not the board: the caption and the background. */
+export type ExportLook = {
+  caption?: { title: string; scene: boolean } | null;
+  /** PNG only: no surround behind the pitch. */
+  transparent?: boolean;
+};
+
+/**
  * Export sizes, given as the LONG edge in pixels.
  *
  * The short edge follows the board's own aspect rather than a fixed 16:9, so a
@@ -57,7 +73,10 @@ export function exportSize(
   longEdge: number,
   doc: BoardDoc,
   view: PitchView = DEFAULT_PITCH_VIEW,
+  shape: ExportShape = "board",
 ): Size {
+  if (shape === "square") return { width: even(longEdge), height: even(longEdge) };
+  if (shape === "wide") return { width: even(longEdge), height: even((longEdge * 9) / 16) };
   const aspect = boardAspect(doc, view);
   return aspect >= 1
     ? { width: even(longEdge), height: even(longEdge / aspect) }
@@ -75,6 +94,7 @@ export function exportView(
   doc: BoardDoc,
   size: Size,
   view: PitchView = DEFAULT_PITCH_VIEW,
+  look: ExportLook = {},
 ): RenderView {
   const framing = framingOf(view);
   return {
@@ -83,6 +103,8 @@ export function exportView(
     height: size.height,
     interactive: false,
     tilt: framing.tilt,
+    ...(look.caption ? { caption: look.caption } : {}),
+    ...(look.transparent ? { transparent: true } : {}),
   };
 }
 

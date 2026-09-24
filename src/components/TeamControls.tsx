@@ -1,4 +1,5 @@
-import { Eye, EyeOff, UserPlus } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, Eye, EyeOff, UserPlus } from "lucide-react";
 import type { BoardDoc, TeamPattern } from "@/board/types";
 import { FORMATIONS, FORMATION_GROUPS, type Direction } from "@/formations";
 import { MAX_SQUAD } from "@/board/players";
@@ -44,6 +45,9 @@ export function TeamControls({
 }: Props) {
   const { t } = useI18n();
   const team = doc.teams[teamIndex];
+  // The kit is set once and read constantly, so its twenty-odd swatches fold
+  // behind one row that shows what the side is wearing.
+  const [kitOpen, setKitOpen] = useState(false);
 
   // `merge` collapses a burst of keystrokes into one undo step; the colour
   // swatches pass nothing, so each is a step of its own.
@@ -125,6 +129,31 @@ export function TeamControls({
         {t("team.addPlayer", { n: team.players.length })}
       </button>
 
+      <button
+        type="button"
+        onClick={() => setKitOpen(!kitOpen)}
+        aria-expanded={kitOpen}
+        title={t("team.kit.title")}
+        className="flex items-center gap-2 rounded-md border border-ink-600 bg-ink-900 px-2 py-1.5 text-xs text-ink-200 transition hover:border-ink-400"
+      >
+        <span
+          className="h-4 w-6 shrink-0 rounded-sm ring-1 ring-white/20"
+          style={{ background: swatch(team.pattern ?? "solid", team.color) }}
+        />
+        <span
+          className="size-4 shrink-0 rounded-full ring-1 ring-white/20"
+          title={t("team.keeperKit")}
+          style={{ background: team.keeper ? team.keeper.color : noKit(team.color) }}
+        />
+        <span className="flex-1 text-left">{t("team.kit")}</span>
+        <ChevronDown
+          size={13}
+          className={cn("shrink-0 text-ink-400 transition-transform", !kitOpen && "-rotate-90")}
+        />
+      </button>
+
+      {kitOpen && (
+      <div className="flex flex-col gap-3 rounded-md border border-ink-700 bg-ink-900/40 p-2">
       <div className="flex flex-wrap gap-1.5">
         {PALETTE.map((c) => (
           <button
@@ -192,6 +221,8 @@ export function TeamControls({
           ))}
         </div>
       </div>
+      </div>
+      )}
     </div>
   );
 }

@@ -7,6 +7,8 @@ import { ViewControls, type Ghosts } from "@/components/ViewControls";
 import { Section } from "@/components/ui/Section";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
+  Check,
+  Command as CommandIcon,
   Download,
   Keyboard,
   Pause,
@@ -30,6 +32,10 @@ import { ImportDialog, type ImportKind } from "@/components/ImportDialog";
 import { LinkPanel } from "@/components/LinkPanel";
 import { DrawPanel } from "@/components/DrawPanel";
 import { Timeline } from "@/components/Timeline";
+import { CommandPalette, type Command } from "@/components/CommandPalette";
+import { Toaster } from "@/components/Toaster";
+import { BoardTip } from "@/components/BoardTip";
+import { useToasts } from "@/lib/useToasts";
 import { nudgeEntities, type Carry } from "@/board/interaction";
 import { useHistory, type Change } from "@/lib/history";
 import { useAutosave } from "@/lib/useAutosave";
@@ -55,7 +61,11 @@ import {
   sceneRange,
 } from "@/board/annotations";
 import { concealedPlayers } from "@/board/render";
+import { resolveAt } from "@/board/timeline";
 import {
+  addSceneAfter,
+  deleteScene,
+  duplicateScene,
   isHighlighted,
   isRunHidden,
   pathOf,
@@ -78,6 +88,7 @@ import {
 } from "@/board/players";
 import {
   AWAY,
+  FORMATIONS,
   HOME,
   changeFormation,
   createBoardDoc,
@@ -93,6 +104,9 @@ type Pending =
   | { kind: "preset"; preset: SquadPreset; replacing: SquadPreset }
   /** `source` is what the file turned out to be, so the confirmation can say. */
   | { kind: "import"; doc: BoardDoc; source: ImportKind };
+
+/** How long "Saved" stays beside the board's name after an autosave, in milliseconds. */
+const SAVED_MS = 1800;
 
 type Props = {
   /**
@@ -139,12 +153,20 @@ export function Editor({ initialDoc }: Props = {}) {
   const [importOpen, setImportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [selectionOpen, setSelectionOpen] = useState(true);
-  const [drawingsOpen, setDrawingsOpen] = useState(false);
+  // Formations fold away while something is selected, so the Selection panel under
+  // them is in reach without scrolling, and come back when the selection clears.
+  const [formationsOpen, setFormationsOpen] = useState(true);
+  const [formationsFolded, setFormationsFolded] = useState(false);
+  // The right rail is the drawing: its tools and everything drawn. It opens with a
+  // draw tool or a selected shape, and closes once neither is left.
+  const [railOpen, setRailOpen] = useState(false);
   // Presenting is a way of looking at the board, so it is editor state and
   // never reaches the document — the same rule the framing follows (D12).
   const [present, setPresent] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [focusName, setFocusName] = useState(0);
+  const { toasts, push: pushToast, dismiss: dismissToast } = useToasts();
 
   // Squad presets live outside the document: they are a library the board draws
   // from, not part of what the board IS. Nothing about them is undoable, and
@@ -163,9 +185,21 @@ export function Editor({ initialDoc }: Props = {}) {
   // part of what the board is.
   const [highlightColor, setHighlightColor] = useState("#f59e0b");
   const [drawDash, setDrawDash] = useState<AnnotationDash>("solid");
+  const [drawFilled, setDrawFilled] = useState(true);
   const [annotation, setAnnotation] = useState<string | null>(null);
-  const [drawOpen, setDrawOpen] = useState(false);
   const [focusText, setFocusText] = useState(0);
+
+  // The drawing rail follows whether there is any drawing going on: a tool armed or
+  // a shape selected. Judged on what was rendered rather than per setter, because
+  // committing a shape selects it and drops back to select in one event, and the
+  // rail must see both. Only the change opens or closes it, so it can still be
+  // opened by hand to look at the list.
+  const drawing = tool !== "select" || annotation !== null;
+  const [wasDrawing, setWasDrawing] = useState(drawing);
+  if (wasDrawing !== drawing) {
+    setWasDrawing(drawing);
+    setRailOpen(drawing);
+  }
 
   const directions = useMemo<[Direction, Direction]>(() => [HOME.direction, AWAY.direction], []);
   const total = totalSeconds(doc);
@@ -203,8 +237,21 @@ export function Editor({ initialDoc }: Props = {}) {
   );
 
   // Debounced so a drag, which emits a document per pointermove, does not
-  // serialise the whole board forty times a second on the main thread.
-  useAutosave(doc, saveBoard, AUTOSAVE_MS);
+  // serialise the whole board forty times a second on the main thread. A save
+  // that landed says so beside the name for a moment, and then gets out of the way.
+  const [justSaved, setJustSaved] = useState(false);
+  const savedTimer = useRef(0);
+  useEffect(() => () => window.clearTimeout(savedTimer.current), []);
+  useAutosave(
+    doc,
+    (next) => {
+      if (!saveBoard(next)) return;
+      setJustSaved(true);
+      window.clearTimeout(savedTimer.current);
+      savedTimer.current = window.setTimeout(() => setJustSaved(false), SAVED_MS);
+    },
+    AUTOSAVE_MS,
+  );
 
   // Accounts are optional, so none of this is allowed to gate the editor: signed out, the
   // hook resolves to null and the board behaves exactly as it always has (D39). The account
@@ -225,6 +272,12 @@ export function Editor({ initialDoc }: Props = {}) {
   const redo = useCallback(() => {
     pinScrubber(redoHistory(), chosenScene);
   }, [redoHistory, pinScrubber, chosenScene]);
+
+  /** Say what just happened to the board, and offer to take it back. */
+  const notify = useCallback(
+    (text: string) => pushToast(text, { label: t("toast.undo"), run: undo }),
+    [pushToast, t, undo],
+  );
 
   // The chosen formation lives on the team, not in this component, so a board
   // that arrives by import still knows its own shape.
@@ -264,6 +317,22 @@ export function Editor({ initialDoc }: Props = {}) {
     const kept = [...selection].filter((id) => live.has(id) && !concealed.has(id));
     return kept.length === selection.size ? selection : new Set(kept);
   }, [doc, selection]);
+
+  // Adjusted while rendering rather than in an effect: it follows the selection
+  // however it changed — a click, a marquee, a link's members, an undo.
+  const hasSelection = visible.size > 0;
+  const [hadSelection, setHadSelection] = useState(hasSelection);
+  if (hadSelection !== hasSelection) {
+    setHadSelection(hasSelection);
+    if (hasSelection && formationsOpen) {
+      setFormationsOpen(false);
+      setFormationsFolded(true);
+      setSelectionOpen(true);
+    } else if (!hasSelection && formationsFolded) {
+      setFormationsOpen(true);
+      setFormationsFolded(false);
+    }
+  }
 
   // Playback. Driven by wall-clock delta rather than a fixed step so the animation
   // runs at the right speed regardless of frame rate.
@@ -388,9 +457,7 @@ export function Editor({ initialDoc }: Props = {}) {
    */
   const selectAnnotation = (id: string | null) => {
     setAnnotation(id);
-    if (id === null) return;
-    setDrawOpen(true);
-    if (tool === "text") setFocusText((n) => n + 1);
+    if (id !== null && tool === "text") setFocusText((n) => n + 1);
   };
 
   /**
@@ -466,24 +533,66 @@ export function Editor({ initialDoc }: Props = {}) {
       ),
     );
     clearEditorState();
+    notify(t("toast.reset"));
   };
 
   const dropLinks = () => {
     setDoc(clearLinks(doc));
     setExpandedLink(null);
     setPending(null);
+    notify(t("toast.linksCleared"));
   };
 
   /** The narrow one: back to the formation marks, keeping everything else. */
   const restoreShape = () => {
     setDoc(resetPositions(doc));
     setPending(null);
+    notify(t("toast.positions"));
   };
 
   const importDoc = (next: BoardDoc) => {
     setDoc(next);
     clearEditorState();
     setImportOpen(false);
+    notify(t("toast.imported", { name: next.name }));
+  };
+
+  const removeScene = (index: number) => {
+    const name = doc.scenes[index]?.name ?? "";
+    const next = deleteScene(doc, index);
+    setDoc(next);
+    selectScene(Math.max(0, index - 1), next);
+    notify(t("toast.sceneDeleted", { name }));
+  };
+
+  const addScene = () => {
+    const next = addSceneAfter(doc, activeScene, t("doc.scene", { n: doc.scenes.length + 1 }));
+    setDoc(next);
+    selectScene(activeScene + 1, next);
+  };
+
+  const copyScene = () => {
+    const scene = doc.scenes[activeScene];
+    if (!scene) return;
+    const next = duplicateScene(doc, activeScene, t("doc.sceneCopy", { name: scene.name }));
+    setDoc(next);
+    selectScene(activeScene + 1, next);
+  };
+
+  /** Every way of deleting a shape comes through here, so each can be undone. */
+  const deleteShape = useCallback(
+    (id: string) => {
+      setDoc(deleteAnnotation(doc, id));
+      if (annotation === id) setAnnotation(null);
+      notify(t("toast.shapeDeleted"));
+    },
+    [doc, annotation, setDoc, notify, t],
+  );
+
+  const onRemovePlayer = (id: string) => {
+    const player = doc.teams.flatMap((team) => team.players).find((p) => p.id === id);
+    setDoc(removePlayer(doc, id));
+    if (player) notify(t("toast.playerRemoved", { number: player.number }));
   };
 
   const onDelayChange = (ms: number | null) => {
@@ -551,6 +660,173 @@ export function Editor({ initialDoc }: Props = {}) {
     setDoc(setHighlight(doc, activeScene, visible, color));
   };
 
+  /**
+   * Everything the palette offers. Built when it opens rather than on every render:
+   * a list with every formation for both sides is one nobody needs until they ask.
+   */
+  const commands = (): Command[] => {
+    const group = {
+      playback: t("palette.group.playback"),
+      scenes: t("palette.group.scenes"),
+      view: t("palette.group.view"),
+      teams: t("palette.group.teams"),
+      selection: t("palette.group.selection"),
+      draw: t("palette.group.draw"),
+      board: t("palette.group.board"),
+    };
+    const teamName = (i: 0 | 1) =>
+      doc.teams[i].name.trim() || t(i === 0 ? "doc.home" : "doc.away");
+    const players = [...visible].filter((id) => id !== BALL_ID);
+
+    const list: Command[] = [
+      {
+        id: "play",
+        group: group.playback,
+        label: t(playing ? "viewer.pause" : "viewer.play"),
+        hint: "Space",
+        run: () => setPlayback(!playing),
+      },
+      {
+        id: "loop",
+        group: group.playback,
+        label: t(loop ? "palette.loop.off" : "palette.loop.on"),
+        run: () => setLoop(!loop),
+      },
+      { id: "present", group: group.playback, label: t("present.enter"), run: () => setPresent(true) },
+
+      ...doc.scenes.map((scene, i) => ({
+        id: `scene-${scene.id}`,
+        group: group.scenes,
+        label: t("timeline.tick", { n: i + 1, name: scene.name }),
+        run: () => selectScene(i),
+      })),
+      { id: "scene-add", group: group.scenes, label: t("timeline.addScene"), run: addScene },
+      { id: "scene-copy", group: group.scenes, label: t("timeline.duplicate"), run: copyScene },
+    ];
+    if (doc.scenes.length > 1) {
+      list.push({
+        id: "scene-delete",
+        group: group.scenes,
+        label: t("timeline.deleteScene"),
+        run: () => removeScene(activeScene),
+      });
+    }
+
+    list.push({
+      id: "tilt",
+      group: group.view,
+      label: t(pitchView.tilt ? "palette.view.flat" : "palette.view.3d"),
+      run: () => setPitchView({ ...pitchView, tilt: !pitchView.tilt }),
+    });
+    // Tilt implies a vertical board, so the rotation is not the viewer's to change there.
+    if (!pitchView.tilt) {
+      list.push({
+        id: "rotate",
+        group: group.view,
+        label: t("palette.view.rotate"),
+        run: () => setPitchView({ ...pitchView, rotated: !pitchView.rotated }),
+      });
+    }
+    for (const half of ["full", "left", "right"] as const) {
+      list.push({
+        id: `half-${half}`,
+        group: group.view,
+        label: t(`palette.view.${half}`),
+        run: () => setPitchView({ ...pitchView, half }),
+      });
+    }
+    list.push(
+      {
+        id: "ghosts-before",
+        group: group.view,
+        label: t(ghosts.before ? "palette.ghosts.before.off" : "palette.ghosts.before.on"),
+        run: () => setGhosts({ ...ghosts, before: !ghosts.before }),
+      },
+      {
+        id: "ghosts-after",
+        group: group.view,
+        label: t(ghosts.after ? "palette.ghosts.after.off" : "palette.ghosts.after.on"),
+        run: () => setGhosts({ ...ghosts, after: !ghosts.after }),
+      },
+    );
+
+    for (const i of [0, 1] as const) {
+      for (const f of FORMATIONS) {
+        list.push({
+          id: `formation-${i}-${f.id}`,
+          group: group.teams,
+          label: t("palette.formation", { team: teamName(i), formation: f.name }),
+          run: () => onFormationChange(i, f.id),
+        });
+      }
+    }
+
+    if (players.length === 1) {
+      list.push({
+        id: "give-ball",
+        group: group.selection,
+        label: t("palette.giveBall"),
+        run: () => onCarrierChange(players[0]),
+      });
+    }
+    if (visible.size > 0) {
+      list.push({
+        id: "highlight",
+        group: group.selection,
+        label: t(highlighted ? "palette.highlight.off" : "palette.highlight.on"),
+        run: () => onHighlightChange(highlighted ? null : highlightColor),
+      });
+    }
+    if (players.length >= 2) {
+      list.push({ id: "link", group: group.selection, label: t("palette.link"), run: onCreateLink });
+    }
+    if (visible.size > 0) {
+      list.push({
+        id: "deselect",
+        group: group.selection,
+        label: t("palette.deselect"),
+        run: () => setSelection(new Set()),
+      });
+    }
+
+    for (const kind of ["arrow", "line", "rect", "ellipse", "pen", "text", "ball"] as const) {
+      list.push({
+        id: `tool-${kind}`,
+        group: group.draw,
+        label: t(`draw.tool.${kind}`),
+        run: () => setTool(kind),
+      });
+    }
+
+    list.push(
+      { id: "undo", group: group.board, label: t("history.undo"), hint: `${MODIFIER}Z`, run: undo },
+      { id: "redo", group: group.board, label: t("history.redo"), hint: `${MODIFIER}⇧Z`, run: redo },
+      { id: "export", group: group.board, label: t("bar.export"), run: () => setExportOpen(true) },
+      { id: "share", group: group.board, label: t("share.dialog"), run: () => setShareOpen(true) },
+      { id: "import", group: group.board, label: t("bar.import"), run: () => setImportOpen(true) },
+      {
+        id: "shortcuts",
+        group: group.board,
+        label: t("shortcuts.open"),
+        hint: "?",
+        run: () => setShortcutsOpen(true),
+      },
+      {
+        id: "reset-positions",
+        group: group.board,
+        label: t("reset.positions"),
+        run: () => setPending({ kind: "positions" }),
+      },
+      {
+        id: "reset-board",
+        group: group.board,
+        label: t("reset.board"),
+        run: () => setPending({ kind: "reset" }),
+      },
+    );
+    return list;
+  };
+
   // Arrow keys nudge the selection: 1 m, or 5 m with shift. Space toggles playback.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -567,11 +843,19 @@ export function Editor({ initialDoc }: Props = {}) {
         redo();
         return;
       }
+      // Ahead of the field guard too: the palette is reachable from anywhere, and
+      // a second press closes it.
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        if (pending || shareOpen || importOpen || exportOpen || shortcutsOpen) return;
+        e.preventDefault();
+        setPaletteOpen((open) => !open);
+        return;
+      }
 
       if (e.target instanceof HTMLElement && ["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName)) return;
       // A dialog owns the keyboard while it is up — Space must not start
       // playback behind it, and Escape belongs to the dialog.
-      if (pending || shareOpen || importOpen || exportOpen || shortcutsOpen) return;
+      if (pending || shareOpen || importOpen || exportOpen || shortcutsOpen || paletteOpen) return;
 
       // Escape leaves presenting first: there is no tool armed in there, and
       // getting out is the only thing the key can usefully mean.
@@ -607,8 +891,7 @@ export function Editor({ initialDoc }: Props = {}) {
 
       if ((e.key === "Delete" || e.key === "Backspace") && annotation) {
         e.preventDefault();
-        setDoc(deleteAnnotation(doc, annotation));
-        setAnnotation(null);
+        deleteShape(annotation);
         return;
       }
 
@@ -648,10 +931,14 @@ export function Editor({ initialDoc }: Props = {}) {
     selectScene,
     present,
     shortcutsOpen,
+    paletteOpen,
     doc,
     setDoc,
     undo,
     redo,
+    notify,
+    t,
+    deleteShape,
   ]);
 
   return (
@@ -675,6 +962,17 @@ export function Editor({ initialDoc }: Props = {}) {
           className="w-56 shrink rounded border border-transparent bg-transparent px-2 py-1 text-xs text-ink-200 outline-none transition placeholder:text-ink-400 hover:border-ink-600 focus:border-accent focus:bg-ink-900"
         />
 
+        <span
+          aria-live="polite"
+          className={cn(
+            "flex shrink-0 items-center gap-1 text-[11px] text-ink-400 transition-opacity duration-500",
+            justSaved ? "opacity-100" : "opacity-0",
+          )}
+        >
+          <Check size={12} />
+          {t("bar.savedLocally")}
+        </span>
+
         <div className="ml-auto flex shrink-0 items-center gap-2">
           <HistoryButton
             label={t("history.undo")}
@@ -694,6 +992,17 @@ export function Editor({ initialDoc }: Props = {}) {
           </HistoryButton>
 
           <span className="mx-1 h-5 w-px bg-ink-600" />
+
+          <button
+            type="button"
+            onClick={() => setPaletteOpen(true)}
+            aria-label={t("palette.open")}
+            title={t("palette.open.title", { keys: `${MODIFIER}K` })}
+            className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
+          >
+            <CommandIcon size={13} />
+            <span className="font-mono text-[11px] text-ink-400">{MODIFIER}K</span>
+          </button>
 
           <button
             type="button"
@@ -795,7 +1104,15 @@ export function Editor({ initialDoc }: Props = {}) {
           {/* Both sides in one place: they are set up together and read against
               each other, and two identical panels stacked was twice the chrome
               for the same job. */}
-          <Section title={t("section.formations")} badge={`${formationOf(0)} v ${formationOf(1)}`}>
+          <Section
+            title={t("section.formations")}
+            badge={`${formationOf(0)} v ${formationOf(1)}`}
+            open={formationsOpen}
+            onOpenChange={(open) => {
+              setFormationsOpen(open);
+              setFormationsFolded(false);
+            }}
+          >
             <div className="flex flex-col gap-4">
               {([0, 1] as const).map((i) => (
                 <div
@@ -831,43 +1148,6 @@ export function Editor({ initialDoc }: Props = {}) {
           </Section>
 
           <Section
-            title={t("section.draw")}
-            badge={annotationsOf(doc).length ? String(annotationsOf(doc).length) : undefined}
-            open={drawOpen}
-            onOpenChange={setDrawOpen}
-          >
-            <DrawPanel
-              doc={doc}
-              onDocChange={setDoc}
-              tool={tool}
-              onToolChange={setTool}
-              sticky={sticky}
-              onStickyChange={setSticky}
-              color={drawColor}
-              onColorChange={setDrawColor}
-              dash={drawDash}
-              onDashChange={setDrawDash}
-              selected={annotation}
-              onSelect={setAnnotation}
-              onDuplicate={onDuplicateAnnotation}
-              focusText={focusText}
-            />
-          </Section>
-
-          <Section title={t("section.links")} badge={String(doc.links.length)} defaultOpen={false}>
-            <LinkPanel
-              doc={doc}
-              onDocChange={setDoc}
-              selection={visible}
-              onSelectMembers={(members) => setSelection(new Set(members))}
-              onCreateFromSelection={onCreateLink}
-              onClearAll={() => setPending({ kind: "links" })}
-              expanded={expandedLink}
-              onExpandedChange={setExpandedLink}
-            />
-          </Section>
-
-          <Section
             title={t("section.selection")}
             badge={visible.size ? String(visible.size) : undefined}
             open={selectionOpen}
@@ -887,7 +1167,7 @@ export function Editor({ initialDoc }: Props = {}) {
               onDelayChange={onDelayChange}
               carry={carry}
               onCarryChange={setCarry}
-              onRemovePlayer={(id) => setDoc(removePlayer(doc, id))}
+              onRemovePlayer={onRemovePlayer}
               onSwitchSide={(id) => setDoc(switchSide(doc, id))}
               onMakeKeeper={(id) => setDoc(setKeeper(doc, id))}
               runsHidden={runsHidden}
@@ -898,6 +1178,19 @@ export function Editor({ initialDoc }: Props = {}) {
               focusName={focusName}
             />
           </Section>
+          <Section title={t("section.links")} badge={String(doc.links.length)} defaultOpen={false}>
+            <LinkPanel
+              doc={doc}
+              onDocChange={setDoc}
+              selection={visible}
+              onSelectMembers={(members) => setSelection(new Set(members))}
+              onCreateFromSelection={onCreateLink}
+              onClearAll={() => setPending({ kind: "links" })}
+              expanded={expandedLink}
+              onExpandedChange={setExpandedLink}
+            />
+          </Section>
+
           <div className="mt-auto flex flex-col gap-1.5 border-t border-ink-700 p-4">
             {/* Two resets, because they answer different questions: one puts the
                 shape back, the other starts again. */}
@@ -1000,6 +1293,10 @@ export function Editor({ initialDoc }: Props = {}) {
 
         {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
 
+        {paletteOpen && (
+          <CommandPalette commands={commands()} onClose={() => setPaletteOpen(false)} />
+        )}
+
         {exportOpen && (
           <ExportDialog
             doc={doc}
@@ -1010,7 +1307,17 @@ export function Editor({ initialDoc }: Props = {}) {
         )}
 
         <main className="flex min-w-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1">
+          <div className="relative min-h-0 flex-1">
+            {!present && <BoardTip />}
+            {present && (
+              <PresentOverlay
+                board={doc.name}
+                scene={doc.scenes[resolveAt(doc, time).index]?.name ?? ""}
+                playing={playing}
+                onPlay={() => setPlayback(true)}
+              />
+            )}
+            <Toaster toasts={toasts} onDismiss={dismissToast} />
             <BoardCanvas
               doc={doc}
               t={time}
@@ -1028,6 +1335,7 @@ export function Editor({ initialDoc }: Props = {}) {
               onToolChange={setTool}
               drawColor={drawColor}
               drawDash={drawDash}
+              drawFilled={drawFilled}
               sticky={sticky}
               annotationSelection={annotation}
               onAnnotationSelect={selectAnnotation}
@@ -1057,37 +1365,37 @@ export function Editor({ initialDoc }: Props = {}) {
               onPlayingChange={setPlayback}
               loop={loop}
               onLoopChange={setLoop}
+              onDeleteScene={removeScene}
             />
           )}
         </main>
 
-        {/* Everything drawn, and where it appears. Collapsed by default — an empty
-            rail is 256px of pitch given away for nothing. */}
+        {/* The coach's drawing: the tools, and everything drawn. Collapsed until a
+            tool is armed or a shape picked — an empty rail is 256px of pitch given
+            away for nothing — and closed again once neither is left. */}
         {!present && (
         <aside
           className={cn(
             "flex shrink-0 flex-col overflow-y-auto border-l border-ink-700 bg-ink-800 transition-[width]",
-            drawingsOpen ? "w-64" : "w-9",
+            railOpen ? "w-64" : "w-9",
           )}
         >
           <button
             type="button"
-            onClick={() => setDrawingsOpen(!drawingsOpen)}
-            aria-expanded={drawingsOpen}
-            title={drawingsOpen ? t("section.drawn.hide") : t("section.drawn.show")}
+            onClick={() => setRailOpen(!railOpen)}
+            aria-expanded={railOpen}
+            title={railOpen ? t("section.rail.hide") : t("section.rail.show")}
+            aria-label={t("section.draw")}
             className={cn(
               "flex shrink-0 items-center gap-1.5 py-2.5 text-ink-300 transition hover:bg-ink-700/40 hover:text-white",
-              drawingsOpen ? "px-3" : "flex-col px-2",
+              railOpen ? "px-3" : "flex-col px-2",
             )}
           >
-            {drawingsOpen ? <PanelRightClose size={14} /> : <PanelRightOpen size={14} />}
-            {drawingsOpen ? (
-              <>
-                <span className="flex-1 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-200">
-                  {t("section.drawn")}
-                </span>
-                <span className="font-mono text-[11px] text-ink-400">{annotationsOf(doc).length}</span>
-              </>
+            {railOpen ? <PanelRightClose size={14} /> : <PanelRightOpen size={14} />}
+            {railOpen ? (
+              <span className="flex-1 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-200">
+                {t("section.draw")}
+              </span>
             ) : (
               annotationsOf(doc).length > 0 && (
                 <span className="font-mono text-[11px] text-ink-400">
@@ -1097,22 +1405,93 @@ export function Editor({ initialDoc }: Props = {}) {
             )}
           </button>
 
-          {drawingsOpen && (
+          {railOpen && (
             <div className="border-t border-ink-700">
-              <DrawingsPanel
-                doc={doc}
-                onDocChange={setDoc}
-                sceneIndex={activeScene}
-                selected={annotation}
-                onSelect={revealAnnotation}
-                onDuplicate={onDuplicateAnnotation}
-              />
+              <div className="border-b border-ink-700 p-4">
+                <DrawPanel
+                  doc={doc}
+                  onDocChange={setDoc}
+                  tool={tool}
+                  onToolChange={setTool}
+                  sticky={sticky}
+                  onStickyChange={setSticky}
+                  color={drawColor}
+                  onColorChange={setDrawColor}
+                  dash={drawDash}
+                  onDashChange={setDrawDash}
+                  filled={drawFilled}
+                  onFilledChange={setDrawFilled}
+                  selected={annotation}
+                  onDuplicate={onDuplicateAnnotation}
+                  onDelete={deleteShape}
+                  focusText={focusText}
+                />
+              </div>
+              <Section
+                title={t("section.drawn")}
+                badge={String(annotationsOf(doc).length)}
+                flush
+              >
+                <DrawingsPanel
+                  doc={doc}
+                  onDocChange={setDoc}
+                  sceneIndex={activeScene}
+                  selected={annotation}
+                  onSelect={revealAnnotation}
+                  onDuplicate={onDuplicateAnnotation}
+                  onDelete={deleteShape}
+                />
+              </Section>
             </div>
           )}
         </aside>
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * What sits over the board while presenting: the board's name and the scene being
+ * played, large enough to read from the back of a room, and a big play button
+ * whenever it is paused. Nothing here is interactive except that button — the
+ * board is being shown, not edited.
+ */
+function PresentOverlay({
+  board,
+  scene,
+  playing,
+  onPlay,
+}: {
+  board: string;
+  scene: string;
+  playing: boolean;
+  onPlay: () => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <>
+      {(board.trim() || scene.trim()) && (
+        <div className="pointer-events-none absolute left-5 top-5 z-10 flex max-w-[60%] flex-col gap-1 rounded-lg bg-black/55 px-4 py-3 backdrop-blur-sm">
+          {board.trim() && (
+            <span className="truncate text-xl font-bold tracking-tight text-white">{board}</span>
+          )}
+          {scene.trim() && <span className="truncate text-sm text-white/80">{scene}</span>}
+        </div>
+      )}
+      {!playing && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+          <button
+            type="button"
+            onClick={onPlay}
+            aria-label={t("viewer.play")}
+            className="pointer-events-auto flex size-20 items-center justify-center rounded-full bg-accent/90 text-ink-900 shadow-2xl transition hover:scale-105 hover:bg-accent"
+          >
+            <Play size={34} fill="currentColor" className="ml-1" />
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 

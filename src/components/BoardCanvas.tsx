@@ -6,7 +6,7 @@
  * export worker, where none of this exists.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Annotation, BoardDoc, PitchView, Tool, TurfCache, Vec2 } from "@/board/types";
 import type { Change } from "@/lib/history";
 import { BALL_ID, DEFAULT_PITCH_VIEW } from "@/board/types";
@@ -66,6 +66,8 @@ type Props = {
   /** Colour and dash a newly drawn shape takes. */
   drawColor?: string;
   drawDash?: "solid" | "dashed" | "wavy";
+  /** Whether a newly drawn box or oval is filled, or an outline alone. */
+  drawFilled?: boolean;
   /** Keep the tool armed after a shape is drawn, for drawing several in a row. */
   sticky?: boolean;
   annotationSelection?: string | null;
@@ -105,6 +107,7 @@ export function BoardCanvas({
   onToolChange,
   drawColor = "#fbbf24",
   drawDash = "solid",
+  drawFilled = true,
   sticky = false,
   annotationSelection = null,
   onAnnotationSelect,
@@ -143,6 +146,37 @@ export function BoardCanvas({
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fadeRef = useRef<HTMLCanvasElement>(null);
+  const wasTilted = useRef(tilted);
+
+  /**
+   * Cross-fade between the flat board and the angled one.
+   *
+   * A layout effect, so it runs after the toggle has committed but before the draw
+   * effect below repaints the canvas: the last frame of the old view is copied onto
+   * a canvas over the top, which then fades out over the new one. Presentation
+   * only — nothing here reaches `drawBoard`, and an export never sees it.
+   */
+  useLayoutEffect(() => {
+    if (wasTilted.current === tilted) return;
+    wasTilted.current = tilted;
+    const from = canvasRef.current;
+    const fade = fadeRef.current;
+    const ctx = fade?.getContext("2d");
+    if (!from || !fade || !ctx || from.width === 0 || from.height === 0) return;
+
+    fade.width = from.width;
+    fade.height = from.height;
+    ctx.drawImage(from, 0, 0);
+    fade.style.transition = "none";
+    fade.style.opacity = "1";
+    // Reading layout commits the full-strength copy before the fade starts. Not a
+    // requestAnimationFrame: those do not fire in a background tab, and the old view
+    // would sit over the new one until the tab came back.
+    void fade.offsetWidth;
+    fade.style.transition = `opacity ${TILT_FADE_MS}ms ease-out`;
+    fade.style.opacity = "0";
+  }, [tilted]);
   const turf = useRef<TurfCache>(new Map());
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [hover, setHover] = useState<string | null>(null);
@@ -440,6 +474,23 @@ export function BoardCanvas({
     setDrag({ kind: "marquee", a: p, b: p, additive: e.shiftKey });
   };
 
+  /**
+   * Whether a drawn shape is under the pointer, for the cursor alone.
+   *
+   * Tested in the space each is drawn in, as a click is: under the camera a label
+   * or a drawn ball stands up off the grass and everything else lies in it. Which
+   * one is on top does not matter here — any of them is grabbed the same way.
+   */
+  const shapeUnder = (e: React.MouseEvent<HTMLCanvasElement>, p: Vec2): boolean => {
+    const scene = annotationScene();
+    if (tilted) {
+      if (hitTestTiltedText(doc, scene, screenFrom(e), cameraFrom(e))) return true;
+      if (!onGrass(p)) return false;
+      return LAYERS.some((layer) => hitTestGroundAnnotation(doc, scene, p, layer));
+    }
+    return LAYERS.some((layer) => hitTestAnnotation(doc, scene, p, layer, rotated));
+  };
+
   /** Selecting a shape drops the entity selection: separate things, separate panels. */
   const selectAnnotation = (id: string) => {
     onAnnotationSelect?.(id);
@@ -450,7 +501,8 @@ export function BoardCanvas({
    * Begin a shape.
    *
    * Text is a click rather than a drag — there is nothing to size — so it commits
-   * immediately and hands the panel the cursor for its content.
+   * immediately and hands the panel the cursor for its content. So is a ball, and
+   * it stays armed when the tool is pinned: a drill is usually several of them.
    */
   const startDrawing = (p: Vec2) => {
     if (tool === "select" || !onGrass(p)) return;
@@ -458,6 +510,7 @@ export function BoardCanvas({
     const ann = draftAnnotation(doc, tool, sceneId, p, p, {
       color: drawColor,
       dash: drawDash,
+      filled: drawFilled,
       points: [p],
     });
 
@@ -465,6 +518,12 @@ export function BoardCanvas({
       onDocChange(addAnnotation(doc, ann));
       onAnnotationSelect?.(ann.id);
       onToolChange?.("select");
+      return;
+    }
+    if (tool === "ball") {
+      onDocChange(addAnnotation(doc, ann));
+      onAnnotationSelect?.(ann.id);
+      if (!sticky) onToolChange?.("select");
       return;
     }
     setDrag({ kind: "draw", start: p, points: [p], ann });
@@ -494,7 +553,13 @@ export function BoardCanvas({
         (editScene === undefined || !onGrass(p)
           ? null
           : hitTestHandle(doc, editScene, selection, p));
-      setGrip(annHandle?.hit.which === "w" ? "resize" : onHandle ? "grab" : null);
+      setGrip(
+        annHandle?.hit.which === "w"
+          ? "resize"
+          : onHandle || shapeUnder(e, p)
+            ? "grab"
+            : null,
+      );
       setHover(
         (tilted
           ? hitTestTilted(doc, frameAt(doc, t), screenFrom(e), cameraFrom(e))
@@ -571,8 +636,8 @@ export function BoardCanvas({
       const points = [...drag.points, p];
       return { ...drag, points, ann: { ...drag.ann, points } };
     }
-    // Text commits on the click that creates it, so it never reaches a draft.
-    if (drag.ann.kind === "text") return drag;
+    // Text and balls commit on the click that creates them, so never reach a draft.
+    if (drag.ann.kind === "text" || drag.ann.kind === "ball") return drag;
     return { ...drag, ann: { ...drag.ann, a: drag.start, b: p } };
   };
 
@@ -630,7 +695,7 @@ export function BoardCanvas({
         ? { ...grown.ann, points: simplify([...grown.points, end]) }
         : grown.ann;
 
-    if (ann.kind === "text") return;
+    if (ann.kind === "text" || ann.kind === "ball") return;
 
     const drawn =
       ann.kind === "pen"
@@ -667,7 +732,13 @@ export function BoardCanvas({
   };
 
   return (
-    <div ref={wrapRef} className="h-full w-full">
+    <div ref={wrapRef} className="relative h-full w-full">
+      <canvas
+        ref={fadeRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 h-full w-full"
+        style={{ opacity: 0 }}
+      />
       <canvas
         ref={canvasRef}
         className="block touch-none select-none"
@@ -684,6 +755,12 @@ export function BoardCanvas({
     </div>
   );
 }
+
+/** Both layers a drawn shape can lie in. */
+const LAYERS = ["mark", "zone"] as const;
+
+/** How long the flat and 3D views take to cross-fade, in milliseconds. */
+const TILT_FADE_MS = 320;
 
 /** Longest reach of a freehand stroke from where it started. */
 function spread(points: Vec2[]): number {

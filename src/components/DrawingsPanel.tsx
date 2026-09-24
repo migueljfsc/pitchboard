@@ -3,7 +3,6 @@ import { ChevronDown, Copy, Eye, EyeOff, GripVertical, Trash2 } from "lucide-rea
 import type { Annotation, BoardDoc, Scene } from "@/board/types";
 import {
   annotationsOf,
-  deleteAnnotation,
   reorderAnnotation,
   sceneRange,
   updateAnnotation,
@@ -24,6 +23,8 @@ type Props = {
   onSelect: (id: string | null) => void;
   /** Copies the shape and selects the copy — the same call the Draw panel makes. */
   onDuplicate: (id: string) => void;
+  /** Deletes the shape. Owned by the editor, which offers to undo it. */
+  onDelete: (id: string) => void;
 };
 
 /** One shape, with where it sits in the document and which scenes it spans. */
@@ -51,6 +52,7 @@ export function DrawingsPanel({
   selected,
   onSelect,
   onDuplicate,
+  onDelete,
 }: Props) {
   const i18n = useI18n();
   const { t, tn } = i18n;
@@ -168,6 +170,7 @@ export function DrawingsPanel({
           }}
           onSelect={onSelect}
           onDuplicate={onDuplicate}
+          onDelete={onDelete}
           onDocChange={onDocChange}
           i18n={i18n}
         />
@@ -199,6 +202,7 @@ function SceneGroup({
   onDragEnd,
   onSelect,
   onDuplicate,
+  onDelete,
   onDocChange,
   i18n,
 }: {
@@ -218,6 +222,7 @@ function SceneGroup({
   onDragEnd: () => void;
   onSelect: (id: string | null) => void;
   onDuplicate: (id: string) => void;
+  onDelete: (id: string) => void;
   onDocChange: Change<BoardDoc>;
   i18n: I18n;
 }) {
@@ -266,10 +271,7 @@ function SceneGroup({
             onPatch={(fields, merge) =>
               onDocChange(updateAnnotation(doc, entry.ann.id, fields), merge)
             }
-            onDelete={() => {
-              onDocChange(deleteAnnotation(doc, entry.ann.id));
-              if (selected === entry.ann.id) onSelect(null);
-            }}
+            onDelete={() => onDelete(entry.ann.id)}
             onDuplicate={() => onDuplicate(entry.ann.id)}
             onReorder={(to) => onDocChange(reorderAnnotation(doc, entry.docIndex, rows[to].docIndex))}
             onDragStart={() => onLift(pos, entry.docIndex)}

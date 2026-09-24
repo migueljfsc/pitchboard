@@ -22,6 +22,14 @@ import type {
 } from "./types";
 import { clamp, cubicAt, distanceToSegment, type Bezier } from "./geometry";
 import { isVisibleIn, repairRange, sceneSpan } from "./range";
+import { BALL_RADIUS, DEFAULT_TOKEN_SCALE } from "./pitch";
+
+/**
+ * A drawn ball's radius on a board of default player size. Drawn balls follow the
+ * board's size setting like the match ball; callers holding the document pass
+ * `ballRadius(doc)` instead, and this is the fallback for those that do not.
+ */
+export const DRAWN_BALL_RADIUS = BALL_RADIUS * DEFAULT_TOKEN_SCALE;
 
 /** Stroke width in metres, so it scales with the pitch at any export size. */
 export const MARK_WIDTH = 0.42;
@@ -106,6 +114,14 @@ export function visibleAt(doc: BoardDoc, sceneIndex: number): Annotation[] {
 }
 
 // -------------------------------------------------------------------- geometry
+
+/**
+ * Whether a shape stands up off the grass under the 3D camera rather than lying in
+ * it: a text label, and a drawn ball. Both are billboards there, drawn and hit in
+ * the billboard pass — see `hitTestTiltedText`.
+ */
+export const isStanding = (ann: Annotation): boolean =>
+  ann.kind === "text" || ann.kind === "ball";
 
 const isSegment = (
   ann: Annotation,
@@ -303,7 +319,11 @@ export function textExtent(ann: TextAnnotation): { w: number; h: number } {
 export function boundsOf(
   ann: Annotation,
   rotated = false,
+  ballR = DRAWN_BALL_RADIUS,
 ): { x: number; y: number; w: number; h: number } {
+  if (ann.kind === "ball") {
+    return { x: ann.at.x - ballR, y: ann.at.y - ballR, w: ballR * 2, h: ballR * 2 };
+  }
   if (ann.kind === "text") {
     // Drawn centred on `at`, so the box straddles it.
     const e = textExtent(ann);
@@ -367,6 +387,8 @@ function freshId(doc: BoardDoc): string {
 type DraftOptions = {
   color: string;
   dash?: AnnotationDash;
+  /** Zones only. Stored only when false, so a filled zone serialises as it always did. */
+  filled?: boolean;
   text?: string;
   points?: Vec2[];
 };
@@ -394,13 +416,27 @@ export function draftAnnotation(
     case "line":
       return { ...base, kind: "line", a, b, curve: null, dash };
     case "rect":
-      return { ...base, kind: "rect", a, b };
+      return {
+        ...base,
+        kind: "rect",
+        a,
+        b,
+        ...(options.filled === false ? { filled: false } : {}),
+      };
     case "ellipse":
-      return { ...base, kind: "ellipse", a, b };
+      return {
+        ...base,
+        kind: "ellipse",
+        a,
+        b,
+        ...(options.filled === false ? { filled: false } : {}),
+      };
     case "pen":
       return { ...base, kind: "pen", points: options.points ?? [a, b] };
     case "text":
       return { ...base, kind: "text", at: a, text: options.text ?? "" };
+    case "ball":
+      return { ...base, kind: "ball", at: a };
   }
 }
 
@@ -481,7 +517,7 @@ export function moveAnnotation(doc: BoardDoc, id: string, delta: Vec2): BoardDoc
   if (ann.kind === "pen") {
     return updateAnnotation(doc, id, { points: ann.points.map(shift) });
   }
-  if (ann.kind === "text") {
+  if (ann.kind === "text" || ann.kind === "ball") {
     return updateAnnotation(doc, id, { at: shift(ann.at) });
   }
   const curve =
@@ -502,10 +538,11 @@ export type AnnotationHandle = { which: "a" | "b" | "c1" | "c2" | "at" | "w"; at
  * Grab points for the selected shape.
  *
  * A pen stroke has none: reshaping a scribble vertex by vertex is worse than
- * redrawing it.
+ * redrawing it. Neither does a drawn ball.
  */
 export function annotationHandles(ann: Annotation, rotated = false): AnnotationHandle[] {
-  if (ann.kind === "pen") return [];
+  // A drawn ball has nothing to reshape; it is moved by grabbing it.
+  if (ann.kind === "pen" || ann.kind === "ball") return [];
   if (ann.kind === "text") {
     // Two: one to move it, one on the far end of the line to set the box width. The width
     // handle is what makes a second line possible at all, so it is offered as soon as a
@@ -552,7 +589,7 @@ export function dragAnnotationHandle(
     }
     return { at: to };
   }
-  if (ann.kind === "pen") return {};
+  if (ann.kind === "pen" || ann.kind === "ball") return {};
 
   if (which === "a" || which === "b") return { [which]: to } as Partial<Annotation>;
   if (ann.kind !== "arrow" && ann.kind !== "line") return {};

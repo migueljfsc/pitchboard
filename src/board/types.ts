@@ -216,10 +216,22 @@ type Segment = { a: Vec2; b: Vec2 };
 export type Annotation =
   | (AnnotationBase & Segment & { kind: "arrow"; curve?: PathCurve | null; dash: AnnotationDash })
   | (AnnotationBase & Segment & { kind: "line"; curve?: PathCurve | null; dash: AnnotationDash })
-  | (AnnotationBase & Segment & { kind: "rect" })
+  /**
+   * `filled: false` is an outline alone. Absent is filled, which is what every zone
+   * was before the choice existed — so old documents keep their look and no
+   * migration is owed.
+   */
+  | (AnnotationBase & Segment & { kind: "rect"; filled?: boolean })
   /** `a` and `b` are the bounding box, not centre and radii. */
-  | (AnnotationBase & Segment & { kind: "ellipse" })
+  | (AnnotationBase & Segment & { kind: "ellipse"; filled?: boolean })
   | (AnnotationBase & { kind: "pen"; points: Vec2[] })
+  /**
+   * A ball drawn onto the board: a prop for a drill or a set piece, not the match
+   * ball. It never moves on its own and nothing passes it. Drawn at the size of the
+   * real one, so it follows `tokenScale`; `color` is carried like every shape's but
+   * a ball is always drawn as a ball.
+   */
+  | (AnnotationBase & { kind: "ball"; at: Vec2 })
   /** `size` multiplies TEXT_SIZE; absent is 1, so a label sized before the
    *  control existed keeps the size it was drawn at. */
   | (AnnotationBase & {
@@ -357,8 +369,7 @@ export type PitchView = {
    *
    * Implies `rotated`: the angle exists to put you behind the home goal looking
    * at the away one, and teams[0] defends x=0, which is the bottom of a vertical
-   * board. Editing stays flat, so this is a presentation mode with no pointer
-   * handling behind it.
+   * board. Everything the flat board edits is edited here too (D91).
    */
   tilt?: boolean;
 };
@@ -437,6 +448,17 @@ export type RenderView = Viewport & {
   annotationSelection?: string | null;
   /** Editor only: the shape currently being dragged out, not yet committed. */
   draft?: Annotation | null;
+  /**
+   * Export only: leave the surround unpainted, so a PNG has the pitch on a
+   * transparent background. The frame is no longer complete in one call, which
+   * is exactly what was asked for.
+   */
+  transparent?: boolean;
+  /**
+   * Export only: a caption in the corner of the frame — a title, and optionally
+   * the name of the scene being played into, which changes as the clip runs.
+   */
+  caption?: { title: string; scene: boolean } | null;
 };
 
 /** The ball is addressed by this id wherever an entity id is expected. */

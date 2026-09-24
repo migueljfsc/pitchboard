@@ -39,6 +39,15 @@ export const TILT = 43;
  */
 export const CAMERA_DISTANCE = 8.6;
 
+/**
+ * Room left above the far end, as a share of the projected board's height.
+ *
+ * The far goal stands up off its line and the far team's name sits behind it, so a
+ * board fitted edge to edge put both against the top of the frame and cut the name
+ * in half. The near end needs none: nothing there rises toward the top.
+ */
+export const HEADROOM = 0.035;
+
 const RAD = (TILT * Math.PI) / 180;
 const SIN = Math.sin(RAD);
 
@@ -127,7 +136,7 @@ export function tiltedAspect(contentAcross: number, contentAlong: number): numbe
   // The near edge is the widest, so it is what has to fit.
   const rawW = contentAcross * near;
   const rawH = (contentAlong / 2) * GROUND_SQUASH * (near + far);
-  return rawW / rawH;
+  return rawW / (rawH * (1 + HEADROOM));
 }
 
 /**
@@ -156,8 +165,8 @@ export function projectionFor(
   const rawH = rawYOf(1) - y0;
   const rawW = contentAcross * kOf(1);
 
-  const fit = Math.min(width / rawW, height / rawH);
-  const top = (height - rawH * fit) / 2;
+  const fit = Math.min(width / rawW, height / (rawH * (1 + HEADROOM)));
+  const top = (height - rawH * fit * (1 + HEADROOM)) / 2 + rawH * fit * HEADROOM;
 
   const rowY = (v: number) => top + (rawYOf(v) - y0) * fit;
   const depthScale = (v: number) => kOf(v) * fit;

@@ -9,16 +9,18 @@
 
 import type { BoardDoc, PitchView } from "@/board/types";
 import { drawBoard } from "@/board/render";
-import { exportSize, exportView } from "./frame";
+import { exportSize, exportView, type ExportLook, type ExportShape } from "./frame";
 
 export async function renderPng(
   doc: BoardDoc,
   t: number,
   pitchView: PitchView,
   longEdge: number,
+  shape: ExportShape = "board",
+  look: ExportLook = {},
 ): Promise<Blob> {
-  const size = exportSize(longEdge, doc, pitchView);
-  const view = exportView(doc, size, pitchView);
+  const size = exportSize(longEdge, doc, pitchView, shape);
+  const view = exportView(doc, size, pitchView, look);
 
   if (typeof OffscreenCanvas !== "undefined") {
     const canvas = new OffscreenCanvas(size.width, size.height);

@@ -8,6 +8,7 @@ import {
   projectPitch,
   projectionFor,
   tiltedAspect,
+  HEADROOM,
   unbillboard,
   unprojectPitch,
 } from "./projection";
@@ -33,7 +34,7 @@ describe("projectionFor", () => {
   it("touches at least one edge, so nothing is left unused", () => {
     const p = build(1000, 700);
     const filledW = p.contentAcross * p.depthScale(1);
-    const filledH = p.bottom - p.top;
+    const filledH = (p.bottom - p.top) * (1 + HEADROOM);
     const slack = Math.min(1000 - filledW, 700 - filledH);
     expect(slack).toBeLessThan(1e-6);
   });
@@ -175,7 +176,7 @@ describe("projectionFor", () => {
 describe("tiltedAspect", () => {
   it("agrees with the fitted projection", () => {
     const p = projectionFor(ACROSS, ALONG, 4000, 4000, 1);
-    const fitted = (p.contentAcross * p.depthScale(1)) / (p.bottom - p.top);
+    const fitted = (p.contentAcross * p.depthScale(1)) / ((p.bottom - p.top) * (1 + HEADROOM));
     expect(tiltedAspect(ACROSS, ALONG)).toBeCloseTo(fitted, 6);
   });
 

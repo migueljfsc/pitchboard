@@ -84,7 +84,10 @@ export function encodeGif(
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) throw new Error("The browser would not give the export worker a 2D canvas.");
 
-  const view = { ...exportView(doc, size, pitchView), turf: new Map() };
+  // A clip carries the caption but never a transparent background: neither
+  // container keeps an alpha channel.
+  const look = { caption: request.look?.caption };
+  const view = { ...exportView(doc, size, pitchView, look), turf: new Map() };
   const frames = frameCount(totalSeconds(doc), fps);
   const delays = gifDelays(frames, fps);
   const draw = (index: number) => drawBoard(ctx, doc, frameTime(index, fps), view);

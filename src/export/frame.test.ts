@@ -85,6 +85,53 @@ describe("exportView", () => {
   });
 });
 
+describe("export shapes", () => {
+  it("is square when asked, whatever the board", () => {
+    expect(exportSize(1080, doc, { half: "full", rotated: true }, "square")).toEqual({
+      width: 1080,
+      height: 1080,
+    });
+  });
+
+  it("is 16:9 when asked, with both edges even", () => {
+    const size = exportSize(1920, doc, { half: "left", rotated: true }, "wide");
+    expect(size).toEqual({ width: 1920, height: 1080 });
+    const odd = exportSize(1000, doc, undefined, "wide");
+    expect(odd.width % 2).toBe(0);
+    expect(odd.height % 2).toBe(0);
+  });
+
+  it("letterboxes the board inside a shape that is not its own", () => {
+    // A vertical board in a wide frame fits the height and leaves surround beside it.
+    const size = exportSize(1920, doc, { half: "full", rotated: true }, "wide");
+    const view = exportView(doc, size, { half: "full", rotated: true });
+    const along = (doc.pitch.length + PITCH_PADDING * 2) * view.scale;
+    expect(along).toBeCloseTo(size.height, 0);
+  });
+
+  it("is tight to the board by default, as before", () => {
+    expect(exportSize(1920, doc, undefined, "board")).toEqual(exportSize(1920, doc));
+  });
+});
+
+describe("export look", () => {
+  it("carries a caption and a transparent background into the view", () => {
+    const size = exportSize(1280, doc);
+    const view = exportView(doc, size, undefined, {
+      caption: { title: "Press", scene: true },
+      transparent: true,
+    });
+    expect(view.caption).toEqual({ title: "Press", scene: true });
+    expect(view.transparent).toBe(true);
+  });
+
+  it("adds nothing when there is no look", () => {
+    const view = exportView(doc, exportSize(1280, doc));
+    expect("caption" in view).toBe(false);
+    expect("transparent" in view).toBe(false);
+  });
+});
+
 describe("frameCount", () => {
   it("covers [0, duration) and never duration itself", () => {
     expect(frameCount(2, 30)).toBe(60);

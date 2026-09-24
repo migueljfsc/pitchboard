@@ -679,3 +679,80 @@ describe("text boxes", () => {
     expect(hitTestAnnotation(doc, 0, along, "mark")).toBeNull();
   });
 });
+
+describe("a drawn ball", () => {
+  const doc = board();
+  const ball = draftAnnotation(doc, "ball", doc.scenes[0].id, at(30, 20), at(30, 20), {
+    color: "#ffffff",
+  });
+  const withBall = addAnnotation(doc, ball);
+
+  it("is placed where it was clicked, from this scene to the end", () => {
+    expect(ball).toMatchObject({ kind: "ball", at: at(30, 20), from: doc.scenes[0].id, to: null });
+  });
+
+  it("is a document the schema accepts", () => {
+    expect(boardDocSchema.safeParse(withBall).success).toBe(true);
+  });
+
+  it("moves bodily, and a copy lands beside it", () => {
+    const moved = moveAnnotation(withBall, ball.id, at(5, -2));
+    expect(annotationsOfKind(moved)[0]).toMatchObject({ at: at(35, 18) });
+
+    const copied = duplicateAnnotation(withBall, ball.id);
+    expect(annotationsOfKind(copied)[1]).toMatchObject({
+      at: at(30 + DUPLICATE_OFFSET, 20 + DUPLICATE_OFFSET),
+    });
+  });
+
+  it("has nothing to reshape", () => {
+    expect(annotationHandles(ball)).toEqual([]);
+    expect(dragAnnotationHandle(ball, "a", at(0, 0))).toEqual({});
+  });
+
+  it("is a box as big as the ball it is drawn as", () => {
+    expect(boundsOf(ball, false, 0.5)).toEqual({ x: 29.5, y: 19.5, w: 1, h: 1 });
+  });
+
+  it("is grabbed where it is drawn, as a mark above the players", () => {
+    expect(layerOf(ball)).toBe("mark");
+    expect(hitTestAnnotation(withBall, 0, at(30.3, 20), "mark")?.id).toBe(ball.id);
+    expect(hitTestAnnotation(withBall, 0, at(33, 20), "mark")).toBeNull();
+  });
+});
+
+const annotationsOfKind = (doc: BoardDoc) => (doc.annotations ?? []).filter((a) => a.kind === "ball");
+
+describe("an outline zone", () => {
+  const doc = board();
+  const draft = (filled: boolean) =>
+    draftAnnotation(doc, "rect", doc.scenes[0].id, at(20, 20), at(40, 30), {
+      color: "#fbbf24",
+      filled,
+    });
+
+  it("stores the choice only when it is an outline, so a filled zone serialises as before", () => {
+    expect("filled" in draft(true)).toBe(false);
+    expect(draft(false)).toMatchObject({ filled: false });
+    expect(boardDocSchema.safeParse(addAnnotation(doc, draft(false))).success).toBe(true);
+  });
+
+  it("is grabbed by its edge, and a click inside reaches the pitch", () => {
+    const outline = addAnnotation(doc, draft(false));
+    expect(hitTestAnnotation(outline, 0, at(20, 25), "zone")).not.toBeNull();
+    expect(hitTestAnnotation(outline, 0, at(30, 25), "zone")).toBeNull();
+
+    const filled = addAnnotation(doc, draft(true));
+    expect(hitTestAnnotation(filled, 0, at(30, 25), "zone")).not.toBeNull();
+  });
+
+  it("works the same for an oval", () => {
+    const oval = draftAnnotation(doc, "ellipse", doc.scenes[0].id, at(20, 20), at(40, 30), {
+      color: "#fbbf24",
+      filled: false,
+    });
+    const placed = addAnnotation(doc, oval);
+    expect(hitTestAnnotation(placed, 0, at(20, 25), "zone")).not.toBeNull();
+    expect(hitTestAnnotation(placed, 0, at(30, 25), "zone")).toBeNull();
+  });
+});
