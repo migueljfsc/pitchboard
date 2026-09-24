@@ -111,7 +111,11 @@ export function DrawPanel({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-5 gap-1">
+      {/* Three across, which the nine buttons fill exactly. At five a 10px label had
+          about 37px and at four about 43, and "Selecionar" and "Retângulo" need 51.
+          A label that still does not fit is cut short rather than spilling; the
+          button's hint has the full name. */}
+      <div className="grid grid-cols-3 gap-1">
         {TOOLS.map((item) => (
           <button
             key={item.value}
@@ -121,14 +125,16 @@ export function DrawPanel({
             aria-pressed={tool === item.value}
             onClick={() => onToolChange(item.value)}
             className={cn(
-              "flex flex-col items-center gap-0.5 rounded-md border px-1 py-1.5 text-[10px] transition",
+              "flex min-w-0 flex-col items-center gap-0.5 rounded-md border px-1 py-1.5 text-[10px] transition",
               tool === item.value
                 ? "border-accent bg-ink-700 text-accent"
                 : "border-ink-600 text-ink-300 hover:border-ink-400 hover:text-white",
             )}
           >
             <item.icon size={14} />
-            {t(`draw.tool.${item.key}` as MessageKey)}
+            <span className="w-full truncate text-center">
+              {t(`draw.tool.${item.key}` as MessageKey)}
+            </span>
           </button>
         ))}
         <button
@@ -138,14 +144,14 @@ export function DrawPanel({
           aria-pressed={sticky}
           onClick={() => onStickyChange(!sticky)}
           className={cn(
-            "flex flex-col items-center gap-0.5 rounded-md border px-1 py-1.5 text-[10px] transition",
+            "flex min-w-0 flex-col items-center gap-0.5 rounded-md border px-1 py-1.5 text-[10px] transition",
             sticky
               ? "border-accent bg-ink-700 text-accent"
               : "border-ink-600 text-ink-300 hover:border-ink-400 hover:text-white",
           )}
         >
           <Pin size={14} />
-          {t("draw.keep")}
+          <span className="w-full truncate text-center">{t("draw.keep")}</span>
         </button>
       </div>
 
