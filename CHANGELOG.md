@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.61.0 (2026-09-24)
+
+### Feat
+
+- **editor**: reset a player's move into a scene, or all his movement
+
 ## v0.60.0 (2026-09-24)
 
 ### Feat
