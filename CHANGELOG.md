@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.65.0 (2026-09-25)
+
+### Feat
+
+- **board**: highlight drawings and links, snap and align labels, fit text exactly
+
 ## v0.64.0 (2026-09-25)
 
 ### Feat
