@@ -3,6 +3,7 @@ import {
   DUPLICATE_OFFSET,
   MARK_WIDTH,
   TEXT_BG_ALPHA,
+  TEXT_BG_PAD,
   TEXT_SCALE_MAX,
   TEXT_SCALE_MIN,
   TEXT_SIZE,
@@ -37,6 +38,7 @@ import {
   visibleAt,
   wavy,
 } from "./annotations";
+import { textAdvance } from "./glyphs";
 import { hitTestAnnotation, hitTestAnnotationHandle, layerOf } from "./interaction";
 import { addSceneAfter, deleteScene, moveScene } from "./scenes";
 import { boardDocSchema } from "./schema";
@@ -628,21 +630,35 @@ describe("text boxes", () => {
     expect(lines).toEqual(["Wolverhampton"]);
   });
 
-  it("grows in height as it wraps, and keeps the width it was given", () => {
+  // The box is the words, not the width they were given: that is what the panel is drawn from,
+  // and the selection box with it.
+  it("grows in height as it wraps, and hugs the widest line", () => {
     const narrow = label({ text: "press high and force it wide", width: 12 });
     const wide = label({ text: "press high and force it wide", width: 60 });
     expect(textExtent(narrow).h).toBeGreaterThan(textExtent(wide).h);
-    expect(textExtent(narrow).w).toBe(12);
+    expect(textExtent(narrow).w).toBeLessThanOrEqual(12);
+    const widest = Math.max(...textLines(narrow).map((l) => textAdvance(l)));
+    expect(textExtent(narrow).w).toBeCloseTo(widest * textSize(narrow), 9);
   });
 
-  it("offers a width handle on the right edge, and dragging it resizes the box", () => {
+  // Why hugging is safe for the handle drawn on that edge: grabbing it without moving
+  // rewraps to the same lines.
+  it("wraps to the same lines at the width it hugs", () => {
+    const ann = label({ text: "Não havendo grande perigo na movimentação de Gabri Veiga", width: 58 });
+    const hugged = { ...ann, width: textExtent(ann).w };
+    expect(textLines(hugged)).toEqual(textLines(ann));
+  });
+
+  it("offers a width handle on the box's outline, and dragging it resizes the box", () => {
     const ann = label({ width: 20 });
+    const pad = textSize(ann) * TEXT_BG_PAD;
+    const reach = textExtent(ann).w / 2 + pad;
     const handles = annotationHandles(ann);
     expect(handles.map((h) => h.which).sort()).toEqual(["at", "w"]);
-    expect(handles.find((h) => h.which === "w")?.at).toEqual({ x: 60, y: 30 });
+    expect(handles.find((h) => h.which === "w")?.at).toEqual({ x: 50 + reach, y: 30 });
 
-    // Doubled, because the box is centred on `at`.
-    expect(dragAnnotationHandle(ann, "w", { x: 65, y: 30 })).toEqual({ width: 30 });
+    // Doubled, because the box is centred on `at`; the padding outside the words comes off.
+    expect(dragAnnotationHandle(ann, "w", { x: 65 + pad, y: 30 })).toEqual({ width: 30 });
   });
 
   it("clamps a dragged width rather than letting it invert or swallow the pitch", () => {
@@ -665,21 +681,25 @@ describe("text boxes", () => {
     expect(vertical.w).toBeCloseTo(flat.h, 6);
     expect(vertical.h).toBeCloseTo(flat.w, 6);
 
+    const reach = textExtent(ann).w / 2 + textSize(ann) * TEXT_BG_PAD;
     expect(annotationHandles(ann, true).find((h) => h.which === "w")?.at).toEqual({
       x: 50,
-      y: 40,
+      y: 30 + reach,
     });
   });
 
   it("reads a rotated resize drag along pitch y, and ignores the other axis", () => {
     const ann = label({ width: 20 });
-    expect(dragAnnotationHandle(ann, "w", { x: 50, y: 45 }, true)).toEqual({ width: 30 });
-    expect(dragAnnotationHandle(ann, "w", { x: 999, y: 45 }, true)).toEqual({ width: 30 });
+    const pad = textSize(ann) * TEXT_BG_PAD;
+    expect(dragAnnotationHandle(ann, "w", { x: 50, y: 45 + pad }, true)).toEqual({ width: 30 });
+    expect(dragAnnotationHandle(ann, "w", { x: 999, y: 45 + pad }, true)).toEqual({ width: 30 });
   });
 
   it("takes a click where the words are, not where they would be unrotated", () => {
     let doc = board();
-    doc = addAnnotation(doc, { ...label({ width: 20 }), from: doc.scenes[0].id });
+    const long = label({ text: "hello hello hello", width: 30 });
+    expect(textExtent(long).w / 2).toBeGreaterThan(9);
+    doc = addAnnotation(doc, { ...long, from: doc.scenes[0].id });
     // Eight metres up the pitch: inside a vertical label, well outside a flat one.
     const along = at(50, 38);
     expect(hitTestAnnotation(doc, 0, along, "mark", true)?.id).toBe("t1");

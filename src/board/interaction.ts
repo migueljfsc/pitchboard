@@ -26,10 +26,12 @@ import { linkGeometry } from "./links";
 import { ballCurve } from "./scenes";
 import {
   MARK_WIDTH,
+  TEXT_BG_PAD,
   annotationHandles,
   boundsOf,
   isStanding,
   strokePoints,
+  textSize,
   visibleAt,
   type AnnotationHandle,
 } from "./annotations";
@@ -834,6 +836,87 @@ export function snapPoint(
   if (bestX !== null) guides.push({ x: bestX });
   if (bestY !== null) guides.push({ y: bestY });
   return { point: { x: bestX ?? p.x, y: bestY ?? p.y }, guides };
+}
+
+type TextAnnotation = Extract<Annotation, { kind: "text" }>;
+
+/**
+ * A label's box as it is drawn: the words plus the panel's padding, which is where its
+ * outline and its selection box sit. Pitch axes, turned with the board.
+ */
+function labelBox(ann: TextAnnotation, rotated: boolean): { x0: number; x1: number; y0: number; y1: number } {
+  const { x, y, w, h } = boundsOf(ann, rotated);
+  const m = textSize(ann) * TEXT_BG_PAD;
+  return { x0: x - m, x1: x + w + m, y0: y - m, y1: y + h + m };
+}
+
+/**
+ * The lines a dragged label is drawn onto: the pitch's own markings, and the centres and
+ * edges of every other label on the scene.
+ *
+ * Markings along x are the goal lines, the halfway line, both boxes' edges and the penalty
+ * spots; along y the touchlines, the middle, and both boxes' sides.
+ */
+export function labelSnapLines(
+  doc: BoardDoc,
+  sceneIndex: number,
+  except: string,
+  rotated: boolean,
+): { xs: number[]; ys: number[] } {
+  const L = doc.pitch.length;
+  const W = doc.pitch.width;
+  const inset = [PITCH.sixYardDepth, PITCH.penaltySpot, PITCH.penaltyDepth];
+  const xs = [0, L / 2, L, ...inset, ...inset.map((d) => L - d)];
+  const ys = [
+    0,
+    W / 2,
+    W,
+    ...[PITCH.sixYardWidth, PITCH.penaltyWidth].flatMap((w) => [W / 2 - w / 2, W / 2 + w / 2]),
+  ];
+  for (const ann of visibleAt(doc, sceneIndex)) {
+    if (ann.kind !== "text" || ann.id === except || !ann.text.trim()) continue;
+    const b = labelBox(ann, rotated);
+    xs.push(b.x0, ann.at.x, b.x1);
+    ys.push(b.y0, ann.at.y, b.y1);
+  }
+  return { xs, ys };
+}
+
+/**
+ * Where a dragged label lands once its centre or an edge is drawn onto a line.
+ *
+ * Each axis on its own, like `snapPoint`: of the label's left edge, centre and right edge,
+ * whichever is nearest a line within `tolerance` takes it, and the whole box moves with it.
+ * The guide is the line taken, so the editor can draw it across the pitch while it holds.
+ */
+export function snapLabel(
+  doc: BoardDoc,
+  sceneIndex: number,
+  ann: TextAnnotation,
+  at: Vec2,
+  rotated: boolean,
+  tolerance = SNAP_M,
+): { at: Vec2; guides: Guide[] } {
+  const { xs, ys } = labelSnapLines(doc, sceneIndex, ann.id, rotated);
+  const b = labelBox({ ...ann, at }, rotated);
+  const best = (features: number[], lines: number[]) => {
+    let hit: { shift: number; line: number } | null = null;
+    for (const f of features) {
+      for (const line of lines) {
+        const shift = line - f;
+        if (Math.abs(shift) <= tolerance && (hit === null || Math.abs(shift) < Math.abs(hit.shift))) {
+          hit = { shift, line };
+        }
+      }
+    }
+    return hit;
+  };
+  const x = best([b.x0, at.x, b.x1], xs);
+  const y = best([b.y0, at.y, b.y1], ys);
+  const guides: Guide[] = [];
+  if (x) guides.push({ x: x.line });
+  if (y) guides.push({ y: y.line });
+  return { at: { x: at.x + (x?.shift ?? 0), y: at.y + (y?.shift ?? 0) }, guides };
 }
 
 // ------------------------------------------------------------------- swapping

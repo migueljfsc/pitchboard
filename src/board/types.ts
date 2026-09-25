@@ -311,7 +311,15 @@ export type Annotation =
       bg?: string;
       /** Opacity of that panel, 0..1. Absent is the default; meaningless without `bg`. */
       bgOpacity?: number;
+      /**
+       * How the lines sit inside the box. Absent is centred, which is what every label was
+       * before the choice existed — so no migration is owed. The box itself stays centred on
+       * `at` whichever way the lines are aligned.
+       */
+      align?: TextAlign;
     });
+
+export type TextAlign = "left" | "right";
 
 export type AnnotationKind = Annotation["kind"];
 
@@ -521,6 +529,11 @@ export type RenderView = Viewport & {
   draft?: Annotation | null;
   /** Editor only: the lines a dragged player has snapped to — constant x or y. */
   guides?: readonly ({ x: number } | { y: number })[];
+  /**
+   * Editor only: where a dragged label's centre is. Draws a ruler along two edges of the
+   * pitch with this point marked on both, for placing a label by the metre. Flat board only.
+   */
+  ruler?: Vec2 | null;
   /** Editor only: players whose whole path through every scene is drawn faintly. */
   trail?: readonly string[];
   /**

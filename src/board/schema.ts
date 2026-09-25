@@ -149,6 +149,8 @@ const annotation = z.discriminatedUnion("kind", [
     // Absent is no panel, so there is nothing to migrate for a label drawn before one existed.
     bg: z.string().min(1).optional(),
     bgOpacity: z.number().min(0).max(1).optional(),
+    // Absent is centred, so a label drawn before alignment existed needs no migration.
+    align: z.enum(["left", "right"]).optional(),
   }),
 ]);
 

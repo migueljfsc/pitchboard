@@ -1726,8 +1726,8 @@ cut out of it (`destination-out`), soft-edged, because two pools that overlap mu
 darkness-with-holes as one path darkens the overlap under either winding rule. Without an
 OffscreenCanvas the holes fall back to hard-edged even-odd. Its depth follows the strongest
 highlight's strength, so it arrives and lifts with the transition exactly as the glow does, and
-it never pulses (D29). It covers the coach's marks too — arrows, zones, freehand — because a spotlight
-that leaves half the board lit is not one. Text labels are the exception and are drawn above it:
+it never pulses (D29) — both now switch rather than fade, see D102. It covers the coach's marks
+too — arrows, zones, freehand — because a spotlight that leaves half the board lit is not one. Text labels are the exception and are drawn above it:
 words are read rather than looked past, and a note in the dark is a note nobody can make out.
 
 **Its depth is the scene's.** `Scene.spotlight` (absent is `DEFAULT_SPOTLIGHT`, 55%) sets how dark
@@ -1768,3 +1768,78 @@ selection, scene, playhead, which panels are open — is held when the tour open
 it closes, including the trackers that fold Formations when a selection appears; restoring the
 selection without them would read as a change and fold it again. Undo is refused while the tour
 is up, because the history behind it is not the board on screen.
+
+## D102 — A highlight switches at the start of the move, and the darkness with it
+A coach, on a scene whose runners are lit over a three-second run: the highlight and the dimming
+should be instant, and in step with each other. Both used to rise on the positions' easing
+across the whole transition, which had two faults. A long run lit its runners only as it ended —
+the coach's workaround was to shorten the travel and lengthen the wait. And the pool and the
+darkness crossed on the same curve in opposite senses: darkness deepening by `e` with a pool
+opening by `e` leaves `dim·e·(1−e)` on the lit player, so he went a quarter-dark halfway
+through and came back.
+
+**Scene k's highlight and depth hold from the first frame of the move into k.** `highlightAt`
+and `spotlightDim` both read `Resolved.to` and nothing else, so they cannot disagree about the
+instant. The start rather than the arrival because a highlight usually marks who is about to
+run, and lighting him only once he stops misses the run. Leaving a lit scene, the darkness lifts
+as the next move begins. The old objection — keyed off the destination, a glow "snaps on as the
+transition starts and reads as a rendering fault" — was about a glow with no darkness around it;
+a cut in the whole frame reads as a cut. A fixed short crossfade was offered and declined.
+
+## D103 — Labels are set in a face we ship, and measured from its own table
+A label's panel ran past its words, then — once the words were drawn at their true width —
+left metres of margin, and the dotted selection box never agreed with either. The cause under
+all three was that nothing knew which font drew the label: `Inter` was named in the stack and
+loaded nowhere, so every OS drew its own fallback, and the width estimate (0.55 em a letter)
+could only be generous.
+
+**The face is Inter Bold, self-hosted, under its own family name.** Latin and Latin-extended
+subsets (~56 KB, OFL, from fontsource), imported through Vite so the path survives the Pages
+base, and registered with `FontFace` by `src/fonts.ts` — in the page before React mounts, and in
+the export worker, which has no stylesheet. `PitchboardText` rather than `Inter`, because a
+bold-only `Inter` face would turn the whole UI bold. Loading is capped at two seconds and never
+throws: a label in the fallback face is slightly misfitted, which beats a board that does not
+open.
+
+**Widths come from `glyphs.ts`, the face's own advances.** Measured in Chrome from the shipped
+files, in thousandths of an em, with kerning off — and the renderer draws with
+`fontKerning = "none"`, so a line's width is exactly the sum of its letters. Wrapping, the box,
+the panel, the width handle and the hit test all read that one number, and the engine stays
+pure. A character outside the table falls back to a generous 0.62 em.
+
+**The box hugs the words.** Its width is the widest line, not the width that was dragged, and
+the handle sits on its outline (words plus the panel's padding). That is safe: a greedy wrap at
+the widest line's width reproduces the same lines, so grabbing the handle where it is drawn
+changes nothing until it moves. The font is drawn at 100 px and scaled to metres, because at a
+few pixels Chrome hints the advances and draws a line ~18% wide. Existing labels re-wrap
+slightly, since the real face is not the estimate.
+
+## D104 — Drawings and links can be highlighted, as players are
+A coach wanted a zone or an arrow to be what the spotlight is on. `Scene.highlight` is keyed by
+id, so a drawing's or a link's id goes in it exactly as a player's does: per scene, never carried
+forward (D41), switched at the start of the move (D102). The value is the drawing's colour at the
+time; the glow is drawn in its current one.
+
+**A lit drawing keeps its place in the stack.** Redrawing it above the darkness would put a lit
+zone over the players standing in it and a lit link across the shirt numbers. Instead it does
+what a player does: a glow in its own colour drawn just under it, and a hole in the darkness cut
+to its shape — a zone's whole area, a band along a line or a link. Text was above the darkness
+already, and only gains the glow. The glow is soft bands, not a canvas shadow, whose blur is in
+device pixels and would glow differently in an export.
+
+**A key must not outlive what it names.** A scene with any key goes dark, so a stale one would
+darken it around nothing. Deleting a drawing or a link drops its key (`withAnnotations`,
+`withLinks`), and because links also leave by formation changes, imports and presets, the
+spotlight counts only keys that name something still on the board (`lightsAnything`). A scene
+that lights only a drawing now goes dark too — the old guard returned early with no player pool.
+
+## D105 — Placing a label: snapping, alignment, and a ruler
+Asked for by a coach placing notes by eye. **Snapping** follows the player drag's own rules
+(`snapPoint`): each axis on its own, ⌘/Ctrl to place freely, the line taken drawn across the
+pitch. A label's left edge, centre or right edge snaps to the pitch's markings (goal lines,
+halfway, both boxes, penalty spots, touchlines, the middle) and to other labels' centres and
+edges. Measured from where it was grabbed, so a snap is exact. Not under the camera: there a
+label is a billboard, and its box is nowhere on the grass. **Alignment** is `align`, left or
+right, absent meaning centred — so no migration — and the box stays centred on `at` whichever
+way its lines sit. **The ruler** shows only while a label is dragged: metre ticks outside the far
+touchline and the left goal line, the label's centre marked on both in metres.

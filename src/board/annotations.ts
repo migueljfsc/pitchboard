@@ -23,6 +23,8 @@ import type {
 import { clamp, cubicAt, distanceToSegment, type Bezier } from "./geometry";
 import { isVisibleIn, repairRange, sceneSpan } from "./range";
 import { BALL_RADIUS, DEFAULT_TOKEN_SCALE } from "./pitch";
+import { textAdvance } from "./glyphs";
+import { droppedIds, forgetHighlights } from "./highlights";
 
 /**
  * A drawn ball's radius on a board of default player size. Drawn balls follow the
@@ -42,14 +44,10 @@ export const ZONE_ALPHA = 0.22;
 export const TEXT_SIZE = 3.2;
 /** Bounds on a label's own size multiplier. */
 /**
- * A character's width and a line's height, both as multiples of the type size.
- *
- * Estimates, and deliberately the ONLY estimates: the renderer wraps with these numbers too,
- * so the box, the hit test and the drawn text always agree with each other even where they
- * all disagree slightly with the real glyphs. Measuring in the renderer and estimating here
- * would put the selection box in a different place from the words inside it.
+ * A line's height, as a multiple of the type size. A line's WIDTH is not estimated: it is
+ * summed from the face's own advances (`glyphs.ts`), so wrapping, the box, the panel and the
+ * hit test all use the width the words are actually drawn at.
  */
-export const TEXT_CHAR_W = 0.55;
 export const TEXT_LINE_H = 1.25;
 
 /** Narrow enough to be a column, wide enough that the pitch is the real limit. */
@@ -93,10 +91,9 @@ export const DUPLICATE_OFFSET = 2.5;
 
 export const annotationsOf = (doc: BoardDoc): Annotation[] => doc.annotations ?? [];
 
-const withAnnotations = (doc: BoardDoc, annotations: Annotation[]): BoardDoc => ({
-  ...doc,
-  annotations,
-});
+/** Every change to the list goes through here, so a drawing that leaves takes its highlight. */
+const withAnnotations = (doc: BoardDoc, annotations: Annotation[]): BoardDoc =>
+  forgetHighlights({ ...doc, annotations }, droppedIds(annotationsOf(doc), annotations));
 
 // ------------------------------------------------------------------ visibility
 
@@ -296,8 +293,8 @@ export function textLines(ann: TextAnnotation): string[] {
   const paragraphs = ann.text.split("\n");
   if (ann.width === undefined) return paragraphs;
 
-  const perChar = textSize(ann) * TEXT_CHAR_W;
-  const columns = Math.max(1, Math.floor(textWidth(ann) / perChar));
+  // In ems, so the wrap is independent of the size the label is drawn at.
+  const room = textWidth(ann) / textSize(ann);
 
   const out: string[] = [];
   for (const paragraph of paragraphs) {
@@ -312,7 +309,7 @@ export function textLines(ann: TextAnnotation): string[] {
       const candidate = line ? `${line} ${word}` : word;
       // `!line` keeps the first word even when it alone is too long: something has to go on
       // the line, and pushing an empty one would loop forever.
-      if (candidate.length <= columns || !line) {
+      if (textAdvance(candidate) <= room || !line) {
         line = candidate;
         continue;
       }
@@ -341,21 +338,18 @@ export function textWidth(ann: TextAnnotation): number {
 }
 
 /**
- * Rough extent of a label, without measuring it.
+ * Extent of a label: the widest line as drawn, and every line's height.
  *
- * The renderer is pure and gets no ctx here, so width is estimated from the character count —
- * and the renderer wraps with the same estimate, so the two never disagree. Only the selection
- * box and the hit-test use this, and both are forgiving.
+ * It hugs the words even when the label was given a wider `width`. That is safe for the width
+ * handle, which sits on this edge: a greedy wrap at the widest line's width reproduces the same
+ * lines, so grabbing the handle where it is drawn changes nothing until it is moved.
  */
 export function textExtent(ann: TextAnnotation): { w: number; h: number } {
   const size = textSize(ann);
   const lines = textLines(ann);
-  const longest = lines.reduce((n, line) => Math.max(n, line.length), 0);
-  // A box that was given a width keeps it even when the words do not fill it: that is the
-  // shape the author dragged, and it is what the next line will wrap into.
-  const w = ann.width === undefined ? longest * size * TEXT_CHAR_W : textWidth(ann);
+  const widest = lines.reduce((n, line) => Math.max(n, textAdvance(line)), 0);
   return {
-    w: Math.max(size * 0.7, w),
+    w: Math.max(size * 0.7, widest * size),
     h: Math.max(1, lines.length) * size * TEXT_LINE_H,
   };
 }
@@ -671,10 +665,11 @@ export function annotationHandles(ann: Annotation, rotated = false): AnnotationH
     //
     // "Far end of the line", not "right", because the words turn with the board and the
     // handle has to sit where the last character does.
-    const { w } = textExtent(ann);
+    // On the box's outline, which is the panel's: half the words plus the panel's padding.
+    const reach = textExtent(ann).w / 2 + textSize(ann) * TEXT_BG_PAD;
     const edge = rotated
-      ? { x: ann.at.x, y: ann.at.y + w / 2 }
-      : { x: ann.at.x + w / 2, y: ann.at.y };
+      ? { x: ann.at.x, y: ann.at.y + reach }
+      : { x: ann.at.x + reach, y: ann.at.y };
     return [
       { which: "at", at: ann.at },
       { which: "w", at: edge },
@@ -717,8 +712,9 @@ export function dragAnnotationHandle(
   if (ann.kind === "text") {
     // Along the line of the text, which is pitch y on a vertical board. Doubled, because
     // the box is centred on `at` — the edge moves half as far as the width.
+    // The handle sits a panel's padding outside the words, so that comes off first.
     if (which === "w") {
-      const reach = rotated ? to.y - ann.at.y : to.x - ann.at.x;
+      const reach = (rotated ? to.y - ann.at.y : to.x - ann.at.x) - textSize(ann) * TEXT_BG_PAD;
       return { width: clamp(reach * 2, TEXT_WIDTH_MIN, TEXT_WIDTH_MAX) };
     }
     return { at: to };

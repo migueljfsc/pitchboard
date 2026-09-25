@@ -67,6 +67,8 @@ src/board/                the engine — zero React, zero DOM
   links.ts                connector geometry + distances, and when a link shows
   range.ts                scene ranges — shared by links and annotations, owned by neither
   annotations.ts          the coach's drawing — shapes, scene ranges, hit geometry
+  glyphs.ts               the label face's advance widths — what every label is measured by
+  highlights.ts           what a scene's highlight names, and pruning it when that leaves
   projection.ts           the 3D view — one fixed camera, and the ground warp
   render.ts               drawBoard() — the one renderer
   interaction.ts          hit-testing, drag, selection
@@ -84,6 +86,7 @@ src/share/                localStorage, URL-hash codec, API client
   local.ts                autosave of the board in progress
 src/i18n/                 EN and PT; en.ts is the source of truth for the keys
   core.ts                 pure runtime — the engine imports only `Message` from here
+src/fonts.ts              registers the label face, for the page and the export worker
 src/App.tsx               picks Viewer or Editor from the hash; no router
 src/pages/Viewer.tsx      read-only playback of a shared board, with fork
 src/board/migrate.ts      version dispatch, run before validation on every load
@@ -169,6 +172,14 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
   the scenes nobody meant anything by because a position stands until something changes it.
   Attention is about one moment; `setHighlight` touches the one scene it is given, and making it
   behave like a nudge would put a glow on scenes the coach never looked at.
+- **A highlight can name a drawing or a link, so a key can outlive what it names** (D104). A
+  scene with any key goes dark; `lightsAnything` is what the spotlight asks, not the key count,
+  and deletes prune through `withAnnotations`/`withLinks`. A lit drawing is NOT redrawn above
+  the darkness — it gets a glow under it and a hole cut to its shape, or a lit zone covers the
+  players in it.
+- **A highlight and its darkness switch together, at the START of the move into their scene**
+  (D102). Fading either one on the positions' easing puts them out of step: a pool opening by
+  `e` inside darkness deepening by `e` dims the lit player mid-move. Both read `Resolved.to`.
 - **The halo is a billboard, drawn in a pass of its own.** In 3D it goes through `billboard()`
   like everything else upright, or it lands as an ellipse squashed into the grass. And it is
   drawn for every entity BEFORE any token rather than beside its own — tokens overlap, so a halo
@@ -178,6 +189,16 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
   which is why `boundsOf`, `annotationHandles`, `dragAnnotationHandle` and `hitTestAnnotation`
   all take `rotated`. It defaults to the flat case, so forgetting it fails quietly and only on
   a rotated board: the box, the width handle and the grab area sit ninety degrees off the words.
+- **A label's width is looked up, never estimated and never measured** (D103). `glyphs.ts`
+  holds the shipped face's advances and the renderer draws that face (`TEXT_FONT_FAMILY`) with
+  `fontKerning = "none"`, so wrap, box, panel, handle and hit test agree exactly. Changing the
+  font files without re-measuring the table, or turning kerning back on, puts the words
+  somewhere the box is not. The face is loaded before React mounts AND in the export worker —
+  miss the worker and exports wrap in a fallback font. It is set at `TEXT_RENDER_PX` and
+  scaled down: at a few pixels Chrome hints advances and a line draws ~18% wide.
+- **A label's box hugs its words, and its width handle sits on the panel's outline.** A
+  greedy wrap at the widest line's width reproduces the same lines — that is what makes
+  grabbing the handle a no-op. The drag subtracts the panel padding before doubling.
 - **Formation slots pair by ORDER, not by id.** `buildTeam` mints `<team>-<number>` ids, but
   renumbering a player keeps their id — so after a renumber those ids no longer match the squad.
   Anything mapping a fresh build onto an existing team walks both lists by index.

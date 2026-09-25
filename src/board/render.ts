@@ -17,12 +17,13 @@ import type {
   LinkArrows,
   PitchHalf,
   RenderView,
-  Scene,
   Team,
   TeamPattern,
   Vec2,
 } from "./types";
 import { BALL_ID } from "./types";
+import { TEXT_FONT_FAMILY } from "./glyphs";
+import { lightsAnything } from "./highlights";
 import { keeperOf } from "./players";
 import {
   BALL_RADIUS,
@@ -83,7 +84,6 @@ import {
   halfRange,
   cubicAt,
   cubicTangent,
-  easeInOutCubic,
   reparameterise,
   viewMatrix,
   type Bezier,
@@ -172,9 +172,16 @@ export function drawBoard(
   // under the play, or it drowns it. Arrows, freehand and text are the coach
   // talking over the top, and go above everything.
   const marks = annotationsFor(doc, frame, view);
-  for (const ann of marks) if (isZone(ann)) drawZone(ctx, ann);
+  const lit = litShapes(doc, frame, marks);
+  const glowOf = litGlow(ctx, doc, frame, marks);
+  for (const ann of marks) {
+    if (!isZone(ann)) continue;
+    glowOf(ann.id);
+    drawZone(ctx, ann);
+  }
 
   // Links sit under the tokens so a connector never covers a shirt number.
+  for (const shape of litLinkShapes(doc, frame)) drawGlow(ctx, shape);
   drawLinks(ctx, doc, frame, view.rotated, t);
   drawTrail(ctx, doc, view, view.rotated);
   drawPaths(ctx, doc, frame, view);
@@ -219,7 +226,9 @@ export function drawBoard(
   }
 
   for (const ann of marks) {
-    if (!isZone(ann) && ann.kind !== "text") drawMark(ctx, ann, view.rotated, ballRadius(doc));
+    if (isZone(ann) || ann.kind === "text") continue;
+    glowOf(ann.id);
+    drawMark(ctx, ann, view.rotated, ballRadius(doc));
   }
 
   // Over everything the board shows, under the editor's own chrome — and under the
@@ -228,9 +237,16 @@ export function drawBoard(
   drawSpotlight(
     ctx,
     halos.map((h) => ({ at: h.at, r: poolRadius(h, scale), strength: h.strength })),
-    spotlightDim(frame.resolved),
+    spotlightDim(doc, frame.resolved),
+    lit,
   );
-  for (const ann of marks) if (ann.kind === "text") drawMark(ctx, ann, view.rotated, ballRadius(doc));
+  for (const ann of marks) {
+    if (ann.kind !== "text") continue;
+    if (highlightAt(ann.id, frame.resolved)) {
+      upright(ctx, ann.at, view.rotated, () => drawGlow(ctx, textGlowShape(ann)));
+    }
+    drawMark(ctx, ann, view.rotated, ballRadius(doc));
+  }
 
   if (view.interactive && view.annotationSelection) {
     const selected = marks.find((a) => a.id === view.annotationSelection);
@@ -241,6 +257,7 @@ export function drawBoard(
     drawMarquee(ctx, view.marquee.a, view.marquee.b);
   }
   if (view.interactive && view.guides?.length) drawGuides(ctx, doc, view.guides);
+  if (view.interactive && view.ruler) drawRuler(ctx, doc, view.ruler, view.rotated);
 
   ctx.restore();
   drawCaption(ctx, doc, frame, view);
@@ -393,7 +410,14 @@ function drawTilted(
 
   drawPitch(gctx, doc.pitch, theme, false, view.turf);
   drawTeamNames(gctx, doc, true, TEAM_NAME_OFFSET_3D);
-  for (const ann of marks) if (isZone(ann)) drawZone(gctx, ann);
+  const lit = litShapes(doc, frame, marks);
+  const glowOf = litGlow(gctx, doc, frame, marks);
+  for (const ann of marks) {
+    if (!isZone(ann)) continue;
+    glowOf(ann.id);
+    drawZone(gctx, ann);
+  }
+  for (const shape of litLinkShapes(doc, frame)) drawGlow(gctx, shape);
   drawLinks(gctx, doc, frame, true, t);
   drawTrail(gctx, doc, view, true);
   drawPaths(gctx, doc, frame, view);
@@ -403,7 +427,9 @@ function drawTilted(
   // sticker on the lens. Text is the exception, below — squashed type is simply
   // unreadable, and a label is the one annotation nobody imagines painted on turf.
   for (const ann of marks) {
-    if (!isZone(ann) && !isStanding(ann)) drawMark(gctx, ann, true, ballRadius(doc));
+    if (isZone(ann) || isStanding(ann)) continue;
+    glowOf(ann.id);
+    drawMark(gctx, ann, true, ballRadius(doc));
   }
 
   if (view.interactive) {
@@ -445,8 +471,9 @@ function drawTilted(
     if (!Number.isFinite(at.scale) || at.scale <= 0) return [];
     return [{ at: { x: at.x, y: at.y }, r: poolRadius(h, scale) * at.scale, strength: h.strength }];
   });
-  drawSpotlight(ctx, holes, spotlightDim(frame.resolved));
-  drawTiltedText(ctx, view, cam, marks);
+  const shapes = lit.flatMap((shape) => projectShape(shape, cam) ?? []);
+  drawSpotlight(ctx, holes, spotlightDim(doc, frame.resolved), shapes);
+  drawTiltedText(ctx, view, cam, marks, frame);
   ctx.restore();
 }
 
@@ -787,11 +814,18 @@ function drawBillboards(
  * Text over the top of everything, as it is on the flat board: the players, the
  * goals, and the spotlight's darkness, which leaves the coach's words readable.
  */
-function drawTiltedText(ctx: Ctx, view: RenderView, cam: Camera, marks: Annotation[]): void {
+function drawTiltedText(
+  ctx: Ctx,
+  view: RenderView,
+  cam: Camera,
+  marks: Annotation[],
+  frame: Frame,
+): void {
   for (const ann of marks) {
     if (ann.kind !== "text") continue;
     const at = projectPitch(ann.at, cam);
     billboard(ctx, ann.at, at, () => {
+      if (highlightAt(ann.id, frame.resolved)) drawGlow(ctx, textGlowShape(ann));
       drawAnnotationText(ctx, ann, false);
       // Inside the billboard, so the outline and handles sit where the words
       // really are — and unrotated, because a billboard's axes are the screen's.
@@ -1046,19 +1080,16 @@ const poolRadius = (halo: Halo, scale: number): number =>
   (halo.ball ? BALL_POOL_RADIUS : POOL_RADIUS) * scale;
 
 /**
- * How dark to make the board: each end of the transition's own setting, where that
- * scene has a highlight at all, crossed on the same easing as the highlights — so it
- * darkens as a highlighted scene arrives, lifts as it leaves, and moves from one
- * scene's depth to the next without a step. During a hold it is that scene's.
+ * How dark to make the board: the setting of the scene being travelled into, where that
+ * scene has a highlight at all. Switched at the start of the move, on the same instant
+ * `highlightAt` switches the pools — the two crossing on one curve is what dimmed a lit
+ * player mid-transition, since a pool opening by `e` in darkness deepening by `e` leaves
+ * `e·(1−e)` of it on him.
  */
-function spotlightDim(r: Resolved): number {
-  const depth = (s: Scene): number =>
-    s.highlight && Object.keys(s.highlight).length > 0 ? (s.spotlight ?? DEFAULT_SPOTLIGHT) : 0;
-  const e = easeInOutCubic(r.u);
-  return depth(r.from) * (1 - e) + depth(r.to) * e;
+function spotlightDim(doc: BoardDoc, r: Resolved): number {
+  return lightsAnything(doc, r.to) ? (r.to.spotlight ?? DEFAULT_SPOTLIGHT) : 0;
 }
 
-/** The light itself: a faint white wash on the grass under a highlighted player. */
 function drawPool(ctx: Ctx, p: Vec2, radius: number, strength: number): void {
   const light = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius);
   light.addColorStop(0, `rgba(255,255,255,${POOL_LIGHT * strength})`);
@@ -1072,6 +1103,186 @@ function drawPool(ctx: Ctx, p: Vec2, radius: number, strength: number): void {
 
 /** A cut in the darkness: where it is, how wide, and how far through it goes. */
 type Hole = { at: Vec2; r: number; strength: number };
+
+/**
+ * A lit drawing or link, as a path: an open or closed polyline, stroked at `width` and
+ * filled when it is an area. In whatever units the context it is traced into is in —
+ * metres on the flat board and in the ground layer, pixels once projected (`projectShape`).
+ */
+type LitShape = { points: Vec2[]; closed: boolean; fill: boolean; width: number; color: string };
+
+/** How wide a lit drawing's cut in the darkness is, as multiples of its width, and how deep. */
+const LIT_CUT: ReadonlyArray<readonly [number, number]> = [
+  [1.8, 0.5],
+  [1, 1],
+];
+/** A lit shape's own width, in metres: enough band around a line to read as light on it. */
+const LIT_WIDTH = 2.2;
+/** Samples round a lit ellipse or drawn ball, which a polyline has to stand in for. */
+const LIT_ROUND = 24;
+
+function tracePath(ctx: Ctx, shape: LitShape): void {
+  ctx.beginPath();
+  const [first, ...rest] = shape.points;
+  if (!first) return;
+  ctx.moveTo(first.x, first.y);
+  for (const p of rest) ctx.lineTo(p.x, p.y);
+  if (shape.closed) ctx.closePath();
+}
+
+const around = (cx: number, cy: number, rx: number, ry: number): Vec2[] =>
+  Array.from({ length: LIT_ROUND }, (_, i) => {
+    const a = (i / LIT_ROUND) * Math.PI * 2;
+    return { x: cx + Math.cos(a) * rx, y: cy + Math.sin(a) * ry };
+  });
+
+/**
+ * The shape a highlighted drawing lights, in pitch metres, or null.
+ *
+ * A zone lights its whole area, so the players standing in it come out of the dark with it.
+ * A line lights a band along itself. A text label is not here: it is drawn above the
+ * darkness already, and only needs its glow.
+ */
+function litShapeOf(ann: Annotation, ballR: number): LitShape | null {
+  const base = { width: LIT_WIDTH, color: ann.color };
+  switch (ann.kind) {
+    case "rect":
+    case "ellipse": {
+      const { x, y, w, h } = boundsOf(ann);
+      const points =
+        ann.kind === "ellipse"
+          ? around(x + w / 2, y + h / 2, w / 2, h / 2)
+          : [
+              { x, y },
+              { x: x + w, y },
+              { x: x + w, y: y + h },
+              { x, y: y + h },
+            ];
+      return { ...base, points, closed: true, fill: true };
+    }
+    case "polygon":
+      return { ...base, points: ann.points, closed: true, fill: true };
+    case "pen":
+      return { ...base, points: ann.points, closed: false, fill: false };
+    case "arrow":
+    case "line":
+      return { ...base, points: strokePoints(ann), closed: false, fill: false };
+    case "ball":
+      return { ...base, points: around(ann.at.x, ann.at.y, ballR, ballR), closed: true, fill: true };
+    default:
+      return null;
+  }
+}
+
+/** The shape a highlighted link lights: its connector, as drawn at this instant. */
+function litLinkShapes(doc: BoardDoc, frame: Frame): LitShape[] {
+  const concealed = concealedPlayers(doc);
+  const out: LitShape[] = [];
+  for (const link of linksOn(doc, frame.resolved.index)) {
+    if (!highlightAt(link.id, frame.resolved)) continue;
+    if (link.members.every((m) => concealed.has(m))) continue;
+    const g = linkGeometry(link, frame.resolved, doc);
+    if (!g) continue;
+    out.push({
+      points: g.points,
+      closed: g.closed,
+      fill: link.style === "filled",
+      width: LIT_WIDTH,
+      color: linkColor(doc, link),
+    });
+  }
+  return out;
+}
+
+/** Every highlighted drawing's and link's shape on this frame, in pitch metres. */
+function litShapes(doc: BoardDoc, frame: Frame, marks: Annotation[]): LitShape[] {
+  const ballR = ballRadius(doc);
+  const shapes: LitShape[] = [];
+  for (const ann of marks) {
+    if (!highlightAt(ann.id, frame.resolved)) continue;
+    const shape = litShapeOf(ann, ballR);
+    if (shape) shapes.push(shape);
+  }
+  return [...shapes, ...litLinkShapes(doc, frame)];
+}
+
+/** A lit shape through the camera, in screen pixels, its width taken at its own depth. */
+function projectShape(shape: LitShape, cam: Camera): LitShape | null {
+  const points: Vec2[] = [];
+  let scale = 0;
+  for (const p of shape.points) {
+    const at = projectPitch(p, cam);
+    if (!Number.isFinite(at.scale) || at.scale <= 0) return null;
+    points.push({ x: at.x, y: at.y });
+    scale += at.scale;
+  }
+  return { ...shape, points, width: shape.width * (scale / Math.max(1, points.length)) };
+}
+
+/**
+ * The glow under a highlighted drawing, in its own colour.
+ *
+ * Drawn just BEFORE the drawing, in its own place in the stack, so a lit zone still sits
+ * under the players and a lit link under the shirt numbers. Soft bands rather than a canvas
+ * shadow, whose blur is in device pixels and would glow differently in an export.
+ */
+function drawGlow(ctx: Ctx, shape: LitShape): void {
+  ctx.save();
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  for (const [width, alpha] of GLOW_BANDS) {
+    tracePath(ctx, shape);
+    ctx.strokeStyle = withAlpha(shape.color, alpha);
+    ctx.lineWidth = width;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/**
+ * Draws a drawing's glow when it is lit, by id. A closure over the frame's lit shapes, so
+ * each pass that draws a drawing can put its glow right under it without re-deriving them.
+ */
+function litGlow(ctx: Ctx, doc: BoardDoc, frame: Frame, marks: Annotation[]): (id: string) => void {
+  const byId = new Map<string, LitShape>();
+  const ballR = ballRadius(doc);
+  for (const ann of marks) {
+    if (!highlightAt(ann.id, frame.resolved)) continue;
+    const shape = litShapeOf(ann, ballR);
+    if (shape) byId.set(ann.id, shape);
+  }
+  return (id) => {
+    const shape = byId.get(id);
+    if (shape) drawGlow(ctx, shape);
+  };
+}
+
+/** The glow's bands, widest and faintest first, in metres. */
+const GLOW_BANDS: ReadonlyArray<readonly [number, number]> = [
+  [2.4, 0.12],
+  [1.5, 0.2],
+  [0.9, 0.3],
+];
+
+/** A label's glow runs round its box, in the label's own upright axes. */
+function textGlowShape(ann: Extract<Annotation, { kind: "text" }>): LitShape {
+  const { w, h } = textExtent(ann);
+  const m = textSize(ann) * TEXT_BG_PAD;
+  const x = w / 2 + m;
+  const y = h / 2 + m;
+  return {
+    points: [
+      { x: -x, y: -y },
+      { x, y: -y },
+      { x, y },
+      { x: -x, y },
+    ],
+    closed: true,
+    fill: false,
+    width: LIT_WIDTH,
+    color: ann.color,
+  };
+}
 
 /** Far enough out to cover any frame, in metres or in pixels alike. */
 const COVER = 1e5;
@@ -1088,8 +1299,11 @@ const COVER = 1e5;
  * Without an OffscreenCanvas (the tests, or an old browser) the holes are hard-edged
  * and even-odd — the same composition, cruder at the edges.
  */
-function drawSpotlight(ctx: Ctx, holes: Hole[], dim: number): void {
-  if (dim <= 0.001 || holes.length === 0) return;
+function drawSpotlight(ctx: Ctx, holes: Hole[], dim: number, shapes: LitShape[] = []): void {
+  // Dark whenever the scene highlights anything, even with no player to cut a pool for: a
+  // scene that lights only a drawing still goes dark around it. `spotlightDim` is 0 on a
+  // scene with no highlight at all, so that stays untouched.
+  if (dim <= 0.001) return;
   const fill = `rgba(0,0,0,${dim})`;
 
   const size = (ctx as { canvas?: { width?: unknown; height?: unknown } }).canvas;
@@ -1126,6 +1340,22 @@ function drawSpotlight(ctx: Ctx, holes: Hole[], dim: number): void {
     layer.arc(x, y, hole.r, 0, Math.PI * 2);
     layer.fillStyle = cut;
     layer.fill();
+  }
+
+  // A lit drawing is cut out along its own shape: a soft band, then a solid core.
+  for (const shape of shapes) {
+    for (const [widen, alpha] of LIT_CUT) {
+      layer.save();
+      tracePath(layer, shape);
+      layer.strokeStyle = `rgba(0,0,0,${alpha})`;
+      layer.fillStyle = `rgba(0,0,0,${alpha})`;
+      layer.lineWidth = shape.width * widen;
+      layer.lineJoin = "round";
+      layer.lineCap = "round";
+      if (shape.fill) layer.fill("evenodd");
+      layer.stroke();
+      layer.restore();
+    }
   }
 
   ctx.save();
@@ -1519,6 +1749,9 @@ function drawTriangleHead(
   ctx.stroke();
 }
 
+/** The font size a label is actually set at, before scaling to metres. Large enough that hinting no longer widens it. */
+const TEXT_RENDER_PX = 100;
+
 function drawAnnotationText(
   ctx: Ctx,
   ann: Extract<Annotation, { kind: "text" }>,
@@ -1528,9 +1761,8 @@ function drawAnnotationText(
   // Every measurement scales with the label, so a bigger one is the same drawing
   // at a larger size rather than big type in a thin outline.
   const size = textSize(ann);
-  // Wrapped by the same function the box and the hit test use, never by ctx.measureText:
-  // measuring here and estimating there would put the selection box somewhere other than
-  // the words inside it.
+  // Wrapped by the same function the box and the hit test use, so the line breaks are the
+  // same wherever the label is drawn or grabbed.
   const lines = textLines(ann);
   const lineHeight = size * TEXT_LINE_H;
   // Centred on `at` as a block, so adding a second line grows the label evenly in both
@@ -1544,7 +1776,8 @@ function drawAnnotationText(
 
   upright(ctx, ann.at, rotated, () => {
     // Inside `upright` the axes are the text's own, which is what `textExtent` measures
-    // in — so the panel needs no separate rotated case the way `boundsOf` does.
+    // in — so the panel needs no separate rotated case the way `boundsOf` does. It is the
+    // same rectangle the selection box is drawn from, so the two always coincide.
     if (ann.bg !== undefined) {
       const { w, h } = textExtent(ann);
       const pad = size * TEXT_BG_PAD;
@@ -1556,20 +1789,30 @@ function drawAnnotationText(
       ctx.restore();
     }
 
-    ctx.font = `700 ${size}px Inter, system-ui, -apple-system, sans-serif`;
-    ctx.textAlign = "center";
+    // Set at a real pixel size and scaled down to metres. A font of a few px has its
+    // advances hinted at that size, which draws a line ~18% wider than the glyphs are.
+    // Kerning off, because `glyphs.ts` sums bare advances and a kerned line is narrower.
+    const k = size / TEXT_RENDER_PX;
+    ctx.font = `700 ${TEXT_RENDER_PX}px ${TEXT_FONT_FAMILY}, Inter, system-ui, -apple-system, sans-serif`;
+    ctx.fontKerning = "none";
+    ctx.scale(k, k);
+    // Aligned inside the box, which stays centred on `at`: a left-aligned label starts every
+    // line at the box's left edge, its widest line still spanning the whole of it.
+    const edge = textExtent(ann).w / 2 / k;
+    const x = ann.align === "left" ? -edge : ann.align === "right" ? edge : 0;
+    ctx.textAlign = ann.align ?? "center";
     ctx.textBaseline = "middle";
     ctx.lineJoin = "round";
     lines.forEach((line, i) => {
       if (!line) return;
-      const y = top + i * lineHeight;
+      const y = (top + i * lineHeight) / k;
       if (halo) {
         ctx.strokeStyle = "rgba(0,0,0,0.75)";
-        ctx.lineWidth = size * 0.2;
-        ctx.strokeText(line, 0, y);
+        ctx.lineWidth = TEXT_RENDER_PX * 0.2;
+        ctx.strokeText(line, x, y);
       }
       ctx.fillStyle = ann.color;
-      ctx.fillText(line, 0, y);
+      ctx.fillText(line, x, y);
     });
   });
 }
@@ -1588,12 +1831,14 @@ function drawAnnotationChrome(
   ballR?: number,
 ): void {
   const { x, y, w, h } = boundsOf(ann, rotated, ballR);
+  // A label's box is its panel's outline, so the two coincide rather than nest.
+  const m = ann.kind === "text" ? textSize(ann) * TEXT_BG_PAD : 0.7;
 
   ctx.save();
   ctx.setLineDash([0.7, 0.7]);
   ctx.strokeStyle = "rgba(251,191,36,0.7)";
   ctx.lineWidth = 0.14;
-  ctx.strokeRect(x - 0.7, y - 0.7, w + 1.4, h + 1.4);
+  ctx.strokeRect(x - m, y - m, w + m * 2, h + m * 2);
   ctx.restore();
 
   for (const handle of annotationHandles(ann, rotated)) drawAnnotationHandle(ctx, handle);
@@ -2218,6 +2463,65 @@ function drawGuides(
     }
     ctx.stroke();
   }
+  ctx.restore();
+}
+
+/** How far outside the lines the ruler's ticks start, and how long they run, in metres. */
+const RULER_GAP = 0.5;
+const RULER_TICK = [0.45, 0.9, 1.3] as const;
+
+/**
+ * A ruler along the far touchline and the left goal line, with a dragged label's centre
+ * marked on both — so a note can be placed at a round number of metres, not by eye.
+ *
+ * Outside the lines, in the surround, where nothing of the play is drawn; inside the team
+ * name's offset on the goal line side, so the two never overlap. Numbers are upright however
+ * the board is turned.
+ */
+function drawRuler(ctx: Ctx, doc: BoardDoc, at: Vec2, rotated: boolean): void {
+  const L = doc.pitch.length;
+  const W = doc.pitch.width;
+  const tick = (m: number) => (m % 10 === 0 ? RULER_TICK[2] : m % 5 === 0 ? RULER_TICK[1] : RULER_TICK[0]);
+  const label = (text: string, p: Vec2, color: string) =>
+    upright(ctx, p, rotated, () => {
+      ctx.fillStyle = color;
+      ctx.fillText(text, 0, 0);
+    });
+
+  ctx.save();
+  ctx.strokeStyle = "rgba(255,255,255,0.45)";
+  ctx.lineWidth = 0.08;
+  ctx.beginPath();
+  for (let m = 0; m <= Math.floor(L); m++) {
+    ctx.moveTo(m, -RULER_GAP);
+    ctx.lineTo(m, -RULER_GAP - tick(m));
+  }
+  for (let m = 0; m <= Math.floor(W); m++) {
+    ctx.moveTo(-RULER_GAP, m);
+    ctx.lineTo(-RULER_GAP - tick(m), m);
+  }
+  ctx.stroke();
+
+  ctx.font = "600 0.95px Inter, system-ui, -apple-system, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const out = RULER_GAP + RULER_TICK[2] + 0.9;
+  for (let m = 0; m <= L; m += 10) label(String(m), { x: m, y: -out }, "rgba(255,255,255,0.6)");
+  for (let m = 0; m <= W; m += 10) label(String(m), { x: -out, y: m }, "rgba(255,255,255,0.6)");
+
+  // The label's centre on each ruler: a tick in the accent, and its distance in metres.
+  ctx.strokeStyle = "rgba(251,191,36,0.95)";
+  ctx.lineWidth = 0.16;
+  ctx.beginPath();
+  ctx.moveTo(at.x, -RULER_GAP);
+  ctx.lineTo(at.x, -RULER_GAP - RULER_TICK[2] - 0.3);
+  ctx.moveTo(-RULER_GAP, at.y);
+  ctx.lineTo(-RULER_GAP - RULER_TICK[2] - 0.3, at.y);
+  ctx.stroke();
+  ctx.font = "700 1.05px Inter, system-ui, -apple-system, sans-serif";
+  const accent = "rgba(251,191,36,1)";
+  label(`${at.x.toFixed(1)} m`, { x: at.x, y: -out - 1.3 }, accent);
+  label(`${at.y.toFixed(1)} m`, { x: -out - 2.2, y: at.y }, accent);
   ctx.restore();
 }
 

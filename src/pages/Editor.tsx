@@ -1824,6 +1824,7 @@ export function Editor({ initialDoc }: Props = {}) {
               onClearAll={() => setPending({ kind: "links" })}
               expanded={expandedLink}
               onExpandedChange={setExpandedLink}
+              sceneIndex={activeScene}
             />
           </Section>
 
@@ -2138,6 +2139,7 @@ export function Editor({ initialDoc }: Props = {}) {
                   onDuplicate={onDuplicateAnnotation}
                   onDelete={deleteShape}
                   focusText={focusText}
+                  sceneIndex={activeScene}
                 />
               </div>
               <Section

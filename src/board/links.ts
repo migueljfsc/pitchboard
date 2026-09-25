@@ -10,6 +10,7 @@
 import type { BoardDoc, Link, LinkStyle, Vec2 } from "./types";
 import { positionAt, type Resolved } from "./timeline";
 import { isVisibleIn, repairRange } from "./range";
+import { droppedIds, forgetHighlights } from "./highlights";
 
 /** `from` and `to` are the member ids at `a` and `b`. */
 export type LinkEdge = { a: Vec2; b: Vec2; from: string; to: string; mid: Vec2; metres: number };
@@ -104,7 +105,9 @@ export const NEUTRAL_LINK_COLOR = "#ffffff";
 
 // ---------------------------------------------------------------- editing
 
-const withLinks = (doc: BoardDoc, links: Link[]): BoardDoc => ({ ...doc, links });
+/** Every change to the list goes through here, so a link that leaves takes its highlight. */
+const withLinks = (doc: BoardDoc, links: Link[]): BoardDoc =>
+  forgetHighlights({ ...doc, links }, droppedIds(doc.links, links));
 
 function freshId(doc: BoardDoc): string {
   let n = doc.links.length + 1;

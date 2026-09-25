@@ -14,7 +14,7 @@ import {
 } from "./interaction";
 import { cameraFor, projectPitch } from "./projection";
 import { PITCH, tokenRadius } from "./pitch";
-import { addAnnotation, dragAnnotationHandle, textExtent } from "./annotations";
+import { TEXT_BG_PAD, addAnnotation, dragAnnotationHandle, textExtent, textSize } from "./annotations";
 import { addSceneAfter } from "./scenes";
 import { TOKEN_RADIUS } from "./render";
 import { frameAt } from "./timeline";
@@ -512,8 +512,9 @@ describe("a label's width handle under the camera (D91)", () => {
   const labelled = addAnnotation(doc, label);
   const at = projectPitch(label.at, cam);
   const { w } = textExtent(label);
-  // The far end of the line, in the billboard's own axes: screen x, a metre to `at.scale`.
-  const edge = { x: at.x + (w / 2) * at.scale, y: at.y };
+  // The box's outline, in the billboard's own axes: screen x, a metre to `at.scale`.
+  const reach = w / 2 + textSize(label) * TEXT_BG_PAD;
+  const edge = { x: at.x + reach * at.scale, y: at.y };
 
   it("is found beside the words, along the screen, however the board is turned", () => {
     expect(hitTestTiltedTextHandle(labelled, 0, "ann-1", edge, cam)).toEqual({

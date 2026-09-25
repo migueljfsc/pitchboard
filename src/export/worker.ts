@@ -7,6 +7,7 @@
  * it when the export ends, cancelled or not.
  */
 
+import { loadBoardFonts } from "@/fonts";
 import { encodeGif } from "./gif";
 import { encodeVideo } from "./video";
 import type { ExportPhase, ExportRequest, WorkerMessage } from "./types";
@@ -21,6 +22,7 @@ import type { ExportPhase, ExportRequest, WorkerMessage } from "./types";
 const scope = self as unknown as {
   postMessage: (message: WorkerMessage, transfer?: Transferable[]) => void;
   onmessage: ((event: MessageEvent<ExportRequest>) => void) | null;
+  fonts: FontFaceSet;
 };
 
 const post = (message: WorkerMessage) => scope.postMessage(message);
@@ -31,6 +33,8 @@ scope.onmessage = (event) => {
 
 async function run(request: ExportRequest): Promise<void> {
   try {
+    // The worker has no stylesheet, so the label face has to be registered here as well.
+    await loadBoardFonts(scope.fonts);
     const report = (phase: ExportPhase, done: number, total: number) =>
       post({ kind: "progress", phase, done, total });
 

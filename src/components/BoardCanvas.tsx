@@ -28,6 +28,7 @@ import {
   hitTestTiltedText,
   hitTestTiltedTextHandle,
   moveEntities,
+  snapLabel,
   snapPoint,
   swapPlayers,
   swapTarget,
@@ -151,7 +152,8 @@ type Drag =
   | { kind: "marquee"; a: Vec2; b: Vec2; additive: boolean }
   /** Dragging a new shape out. `start` is the anchor; `ann` is the live preview. */
   | { kind: "draw"; start: Vec2; points: Vec2[]; ann: Annotation }
-  | { kind: "ann-move"; id: string; last: Vec2 }
+  /** `startAt` is a label's anchor when grabbed: its drag is measured from there, so a snap is exact. */
+  | { kind: "ann-move"; id: string; last: Vec2; origin: Vec2; startAt: Vec2 | null }
   /** `billboard` when the handle belongs to a label under the camera (D91). */
   | { kind: "ann-handle"; hit: AnnotationHandleHit; billboard: boolean }
   | null;
@@ -254,6 +256,8 @@ export function BoardCanvas({
   const [hover, setHover] = useState<string | null>(null);
   /** The lines a drag has snapped to, while it lasts. */
   const [guides, setGuides] = useState<Guide[]>([]);
+  /** Where a dragged label's centre is, for the ruler along the pitch's edges. */
+  const [ruler, setRuler] = useState<Vec2 | null>(null);
   /** The player a dragged one would swap with if dropped now. */
   const [swapWith, setSwapWith] = useState<string | null>(null);
   const i18n = useI18n();
@@ -351,6 +355,7 @@ export function BoardCanvas({
       editScene,
       ghosts,
       guides,
+      ruler,
       trail,
       sceneCamera: throughCamera,
       marquee: drag?.kind === "marquee" ? { a: drag.a, b: drag.b } : null,
@@ -371,6 +376,7 @@ export function BoardCanvas({
     live,
     viewZoom,
     guides,
+    ruler,
     swapWith,
     trail,
     throughCamera,
@@ -437,6 +443,12 @@ export function BoardCanvas({
 
   /** Scene the annotations are keyed to — the one being played into. */
   const annotationScene = () => frameAt(doc, t).resolved.index;
+
+  /** Taking hold of a drawing to move it. A label remembers where it started, to snap from. */
+  const annMove = (id: string, p: Vec2): Drag => {
+    const ann = (doc.annotations ?? []).find((a) => a.id === id);
+    return { kind: "ann-move", id, last: p, origin: p, startAt: ann?.kind === "text" ? ann.at : null };
+  };
 
   /** What a move drag holds on to, for snapping: a player and where he and the pointer began. */
   const grabOf = (id: string, p: Vec2) => {
@@ -677,7 +689,7 @@ export function BoardCanvas({
         // grass moves by, so the words track the pointer. What it cannot do is keep
         // the grab point pinned exactly: the offset is held in metres, and a metre
         // is worth more pixels as the label comes toward the camera (D50).
-        if (onGrass(p)) setDrag({ kind: "ann-move", id: label.id, last: p });
+        if (onGrass(p)) setDrag(annMove(label.id, p));
         return;
       }
 
@@ -706,7 +718,7 @@ export function BoardCanvas({
         const ann = hitTestGroundAnnotation(doc, scene, p, layer);
         if (ann) {
           selectAnnotation(ann.id);
-          if (onGrass(p)) setDrag({ kind: "ann-move", id: ann.id, last: p });
+          if (onGrass(p)) setDrag(annMove(ann.id, p));
           return;
         }
       }
@@ -733,7 +745,7 @@ export function BoardCanvas({
     const mark = hitTestAnnotation(doc, scene, p, "mark", rotated);
     if (mark) {
       selectAnnotation(mark.id);
-      setDrag({ kind: "ann-move", id: mark.id, last: p });
+      setDrag(annMove(mark.id, p));
       return;
     }
 
@@ -755,7 +767,7 @@ export function BoardCanvas({
     const zone = hitTestAnnotation(doc, scene, p, "zone", rotated);
     if (zone) {
       selectAnnotation(zone.id);
-      setDrag({ kind: "ann-move", id: zone.id, last: p });
+      setDrag(annMove(zone.id, p));
       return;
     }
 
@@ -944,10 +956,30 @@ export function BoardCanvas({
     }
 
     if (drag.kind === "ann-move") {
+      // A label is drawn onto the pitch's lines and the other labels, measured from where it
+      // was grabbed, unless ⌘/Ctrl is held — as a player is onto the others. Not under the
+      // camera: there a label is a billboard, and its box is nowhere on the grass.
+      const label = (doc.annotations ?? []).find((a) => a.id === drag.id);
+      if (label?.kind === "text" && drag.startAt && !tilted) {
+        const wanted = {
+          x: drag.startAt.x + p.x - drag.origin.x,
+          y: drag.startAt.y + p.y - drag.origin.y,
+        };
+        const snapped =
+          e.metaKey || e.ctrlKey
+            ? { at: wanted, guides: [] }
+            : snapLabel(doc, annotationScene(), label, wanted, rotated);
+        setGuides(snapped.guides);
+        setRuler(snapped.at);
+        if (snapped.at.x !== label.at.x || snapped.at.y !== label.at.y) {
+          onDocChange(updateAnnotation(doc, label.id, { at: snapped.at }), dragKey());
+        }
+        return;
+      }
       const delta = { x: p.x - drag.last.x, y: p.y - drag.last.y };
       if (delta.x !== 0 || delta.y !== 0) {
         onDocChange(moveAnnotation(doc, drag.id, delta), dragKey());
-        setDrag({ kind: "ann-move", id: drag.id, last: p });
+        setDrag({ ...drag, last: p });
       }
       return;
     }
@@ -1055,6 +1087,7 @@ export function BoardCanvas({
     }
 
     setGuides([]);
+    setRuler(null);
     setSwapWith(null);
     setDrag(null);
     e.currentTarget.releasePointerCapture(e.pointerId);

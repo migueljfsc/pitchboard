@@ -810,14 +810,40 @@ describe("the spotlight", () => {
     expect(setSpotlight(setSpotlight(doc, 0, 0.3), 0, DEFAULT_SPOTLIGHT).scenes[0].spotlight).toBeUndefined();
   });
 
-  it("crosses from one scene's depth to the next through a transition", () => {
+  it("goes dark around a lit drawing even with no player lit", () => {
+    const base = createBoardDoc();
+    const ann = draftAnnotation(base, "rect", base.scenes[0].id, { x: 10, y: 10 }, { x: 30, y: 20 }, { color: "#ffffff" });
+    const doc = setHighlight(addAnnotation(base, ann), 0, [ann.id], "#fff");
+    expect(darkness(render(doc))?.fill).toBe(`fillStyle="rgba(0,0,0,${DEFAULT_SPOTLIGHT})"`);
+  });
+
+  it("stays light where the only highlight names something no longer on the board", () => {
+    const base = createBoardDoc();
+    const doc = { ...base, scenes: [{ ...base.scenes[0], highlight: { "ann-gone": "#fff" } }] };
+    expect(darkness(render(doc))).toBeNull();
+  });
+
+  it("takes the next scene's depth from the first frame of the move into it", () => {
     let doc = addSceneAfter(lit(["home-2"]), 0);
     doc = setHighlight(doc, 1, ["home-2"], "#f59e0b");
     doc = setSpotlight(setSpotlight(doc, 0, 0.2), 1, 0.8);
+    const hold = doc.scenes[0].holdMs / 1000;
+    const at = (t: number) => {
+      const r = createRecordingCtx();
+      drawBoard(r.ctx, doc, t, view());
+      return darkness(r.log)?.fill;
+    };
+    expect(at(hold - 0.05)).toBe('fillStyle="rgba(0,0,0,0.2)"');
+    expect(at(hold + 0.05)).toBe('fillStyle="rgba(0,0,0,0.8)"');
+    expect(at(hold + doc.scenes[1].transitionMs / 2000)).toBe('fillStyle="rgba(0,0,0,0.8)"');
+  });
+
+  // The pool and the darkness switch on one instant, so a lit player is never dimmed mid-move.
+  it("lifts as the move out of a lit scene begins", () => {
+    const doc = addSceneAfter(lit(["home-2"]), 0);
     const r = createRecordingCtx();
-    // Halfway through the travel into scene 2, where the easing is at one half too.
-    drawBoard(r.ctx, doc, doc.scenes[0].holdMs / 1000 + doc.scenes[1].transitionMs / 2000, view());
-    expect(darkness(r.log)?.fill).toBe('fillStyle="rgba(0,0,0,0.5)"');
+    drawBoard(r.ctx, doc, doc.scenes[0].holdMs / 1000 + 0.05, view());
+    expect(darkness(r.log)).toBeNull();
   });
 });
 

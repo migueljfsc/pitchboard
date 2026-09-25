@@ -10,6 +10,7 @@ import {
   Link2,
   Play,
   Ruler,
+  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
@@ -26,6 +27,7 @@ import {
   updateLink,
 } from "@/board/links";
 import { sceneSpan } from "@/board/range";
+import { isHighlighted, setHighlight } from "@/board/scenes";
 import { PALETTE } from "@/components/ui/palette";
 import { SceneSelect } from "@/components/ui/SceneSelect";
 import type { Change } from "@/lib/history";
@@ -44,6 +46,8 @@ type Props = {
   onClearAll: () => void;
   expanded: string | null;
   onExpandedChange: (id: string | null) => void;
+  /** The scene a highlight is set on — highlights are per scene and never carried (D41). */
+  sceneIndex: number;
 };
 
 const STYLES: { value: LinkStyle }[] = [
@@ -87,6 +91,7 @@ export function LinkPanel({
   onClearAll,
   expanded,
   onExpandedChange,
+  sceneIndex,
 }: Props) {
   // Which row is in the air, and which GAP it would drop into — 0 is above the
   // first row, n below the last. A gap says where the row lands; highlighting a
@@ -157,6 +162,17 @@ export function LinkPanel({
             onAdd={(ids) => onDocChange(addMembers(doc, link.id, ids))}
             onRemoveMember={(id) => onDocChange(removeMember(doc, link.id, id))}
             onDelete={() => onDocChange(deleteLink(doc, link.id))}
+            lit={isHighlighted(doc.scenes[sceneIndex], link.id)}
+            onToggleLit={() =>
+              onDocChange(
+                setHighlight(
+                  doc,
+                  sceneIndex,
+                  [link.id],
+                  isHighlighted(doc.scenes[sceneIndex], link.id) ? null : linkColor(doc, link),
+                ),
+              )
+            }
             onReorder={(to) => onDocChange(moveLink(doc, i, to))}
             onDragStart={() => setDragging(i)}
             onDragOver={setDropAt}
@@ -199,6 +215,8 @@ function LinkRow({
   onAdd,
   onRemoveMember,
   onDelete,
+  lit,
+  onToggleLit,
   onReorder,
   onDragStart,
   onDragOver,
@@ -224,6 +242,8 @@ function LinkRow({
   onAdd: (ids: string[]) => void;
   onRemoveMember: (id: string) => void;
   onDelete: () => void;
+  lit: boolean;
+  onToggleLit: () => void;
   onReorder: (to: number) => void;
   onDragStart: () => void;
   onDragOver: (gap: number) => void;
@@ -331,6 +351,13 @@ function LinkRow({
         >
           {link.name}
         </button>
+        <Tiny
+          label={t(lit ? "links.unhighlight" : "links.highlight")}
+          active={lit}
+          onClick={onToggleLit}
+        >
+          <Sparkles size={12} />
+        </Tiny>
         <Tiny
           label={t(link.showDistances ? "links.hideDistances" : "links.showDistances")}
           active={link.showDistances}

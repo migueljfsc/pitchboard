@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
   ArrowUpRight,
   Ban,
   Circle,
@@ -13,11 +16,12 @@ import {
   Pencil,
   Pentagon,
   Pin,
+  Sparkles,
   Square,
   Trash2,
   Type,
 } from "lucide-react";
-import type { Annotation, AnnotationDash, BoardDoc, Tool } from "@/board/types";
+import type { Annotation, AnnotationDash, BoardDoc, TextAlign, Tool } from "@/board/types";
 import { isDrawTool } from "@/board/types";
 import {
   POLYGON_SIDES_MAX,
@@ -28,6 +32,7 @@ import {
   toPolygon,
   updateAnnotation,
 } from "@/board/annotations";
+import { isHighlighted, setHighlight } from "@/board/scenes";
 import { KIND_KEY } from "@/components/ui/kinds";
 import { NumberField } from "@/components/ui/NumberField";
 import { Stepper } from "@/components/ui/Stepper";
@@ -62,6 +67,8 @@ type Props = {
   onDelete: (id: string) => void;
   /** Bumped to put the cursor in the selected shape's text field. */
   focusText?: number;
+  /** The scene a highlight is set on — highlights are per scene and never carried (D41). */
+  sceneIndex: number;
 };
 
 const TOOLS: { value: Tool; icon: typeof Minus; key: string }[] = [
@@ -103,6 +110,7 @@ export function DrawPanel({
   onDuplicate,
   onDelete,
   focusText,
+  sceneIndex,
 }: Props) {
   const { t } = useI18n();
   const annotations = doc.annotations ?? [];
@@ -271,6 +279,17 @@ export function DrawPanel({
           onDelete={() => onDelete(active.id)}
           onDuplicate={() => onDuplicate(active.id)}
           focusText={focusText}
+          lit={isHighlighted(doc.scenes[sceneIndex], active.id)}
+          onToggleLit={() =>
+            onDocChange(
+              setHighlight(
+                doc,
+                sceneIndex,
+                [active.id],
+                isHighlighted(doc.scenes[sceneIndex], active.id) ? null : active.color,
+              ),
+            )
+          }
         />
       ) : (
         <p className="text-[11px] leading-relaxed text-ink-300">
@@ -292,6 +311,8 @@ function Selected({
   onDelete,
   onDuplicate,
   focusText,
+  lit,
+  onToggleLit,
 }: {
   doc: BoardDoc;
   ann: Annotation;
@@ -300,6 +321,8 @@ function Selected({
   onDelete: () => void;
   onDuplicate: () => void;
   focusText?: number;
+  lit: boolean;
+  onToggleLit: () => void;
 }) {
   const { t } = useI18n();
   const textRef = useRef<HTMLTextAreaElement>(null);
@@ -326,6 +349,20 @@ function Selected({
           {t("draw.selected", { kind: t(KIND_KEY[ann.kind]) })}
         </span>
         <div className="flex items-center gap-0.5">
+          {/* Lit on this scene only, glowing in its own colour and out of the dark. */}
+          <button
+            type="button"
+            aria-label={t(lit ? "draw.unhighlight" : "draw.highlight")}
+            title={t(lit ? "draw.unhighlight" : "draw.highlight")}
+            aria-pressed={lit}
+            onClick={onToggleLit}
+            className={cn(
+              "flex size-5 items-center justify-center rounded transition",
+              lit ? "text-accent" : "text-ink-400 hover:text-white",
+            )}
+          >
+            <Sparkles size={12} />
+          </button>
           <button
             type="button"
             aria-label={t("draw.duplicate")}
@@ -375,6 +412,8 @@ function Selected({
         </div>
       )}
 
+      {ann.kind === "text" && <TextAlignRow ann={ann} onPatch={onPatch} />}
+
       {ann.kind === "text" && <TextBackground ann={ann} onPatch={onPatch} />}
 
       {ann.kind === "rect" && (
@@ -416,6 +455,45 @@ function Selected({
       >
         <Trash2 size={11} /> {t("draw.delete")}
       </button>
+    </div>
+  );
+}
+
+const ALIGNS: { value: TextAlign | undefined; key: MessageKey; Icon: typeof AlignLeft }[] = [
+  { value: "left", key: "draw.align.left", Icon: AlignLeft },
+  { value: undefined, key: "draw.align.center", Icon: AlignCenter },
+  { value: "right", key: "draw.align.right", Icon: AlignRight },
+];
+
+/** Where a label's lines sit inside its box. Centred is stored as absence. */
+function TextAlignRow({
+  ann,
+  onPatch,
+}: {
+  ann: Extract<Annotation, { kind: "text" }>;
+  onPatch: (fields: Partial<Annotation>, merge?: string) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="flex items-center gap-1" role="group" aria-label={t("draw.align")}>
+      {ALIGNS.map(({ value, key, Icon }) => (
+        <button
+          key={key}
+          type="button"
+          title={t(key)}
+          aria-label={t(key)}
+          aria-pressed={ann.align === value}
+          onClick={() => onPatch({ align: value })}
+          className={cn(
+            "flex size-6 items-center justify-center rounded border transition",
+            ann.align === value
+              ? "border-accent text-white"
+              : "border-ink-600 text-ink-400 hover:border-ink-400 hover:text-ink-200",
+          )}
+        >
+          <Icon size={12} />
+        </button>
+      ))}
     </div>
   );
 }
