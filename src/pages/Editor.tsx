@@ -12,6 +12,7 @@ import {
   History,
   LayoutTemplate,
   Download,
+  GraduationCap,
   Keyboard,
   Pause,
   Play,
@@ -36,7 +37,9 @@ import { DrawPanel } from "@/components/DrawPanel";
 import { SpeedButton, Timeline } from "@/components/Timeline";
 import { CommandPalette, type Command } from "@/components/CommandPalette";
 import { Toaster } from "@/components/Toaster";
-import { BoardTip } from "@/components/BoardTip";
+import { Tour } from "@/components/Tour";
+import { tourSeen } from "@/share/tour";
+import { TOUR_STEPS, buildTourBoard, type TourStage } from "@/formations/tour";
 import { ContextMenu, type MenuItem } from "@/components/ContextMenu";
 import type { ContextTarget } from "@/components/BoardCanvas";
 import { describeChange } from "@/board/describe";
@@ -122,6 +125,28 @@ type Pending =
   /** `source` is what the file turned out to be, so the confirmation can say. */
   | { kind: "import"; doc: BoardDoc; source: ImportKind };
 
+/** Names are irrelevant where only the tour board's timing is read. */
+const TOUR_LABELS = { board: "", scene: () => "", link: "" };
+
+/** The editor's view of the board as it was when the tour opened, put back when it closes. */
+type TourRestore = {
+  selection: ReadonlySet<string>;
+  chosenScene: number;
+  time: number;
+  playing: boolean;
+  viewOpen: boolean;
+  formationsOpen: boolean;
+  formationsFolded: boolean;
+  selectionOpen: boolean;
+  linksOpen: boolean;
+  railOpen: boolean;
+  expandedLink: string | null;
+  annotation: string | null;
+  hadSelection: boolean;
+  wasDrawing: boolean;
+  wasPlaying: boolean;
+};
+
 /** One step of `,` and `.` — a frame at 30 fps. */
 const FRAME_S = 1 / 30;
 
@@ -149,7 +174,7 @@ export function Editor({ initialDoc }: Props = {}) {
   // the framing, the selection, which panel is open — is not an edit, and
   // rewinding it would be its own kind of surprise.
   const {
-    state: doc,
+    state: savedDoc,
     set: commitDoc,
     undo: undoHistory,
     redo: redoHistory,
@@ -164,6 +189,30 @@ export function Editor({ initialDoc }: Props = {}) {
   } = useHistory<BoardDoc>(
     () => initialDoc ?? loadBoard() ?? createBoardDoc(homeSpec(), awaySpec(), undefined, seedLabels()),
   );
+  // While the tour is up the editor draws the tour's board instead, and hands the
+  // saved one back untouched when it closes. Only what is drawn swaps: history,
+  // the autosave and the cloud sync all hold `savedDoc`, so the tour's board is
+  // never written anywhere (D101).
+  const [tour, setTour] = useState<{ step: number; restore: TourRestore } | null>(null);
+  // Built from the active locale rather than stored, so switching language from the
+  // tour's own card renames the board it is showing along with the card.
+  const touring = tour !== null;
+  const tourBoard = useMemo(
+    () =>
+      touring
+        ? buildTourBoard(
+            {
+              board: t("tour.board"),
+              scene: (n) => t("doc.scene", { n }),
+              link: t("tour.board.link"),
+            },
+            { ...HOME, name: t("doc.home") },
+            { ...AWAY, name: t("doc.away") },
+          )
+        : null,
+    [touring, t],
+  );
+  const doc = tourBoard ?? savedDoc;
   const [selection, setSelection] = useState<ReadonlySet<string>>(() => new Set());
   const [chosenScene, setActiveScene] = useState(0);
   const [time, setTime] = useState(0);
@@ -192,6 +241,7 @@ export function Editor({ initialDoc }: Props = {}) {
   // never reaches the document — the same rule the framing follows (D12).
   const [present, setPresent] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [viewOpen, setViewOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   // A floating menu: the board's right-click, the template picker, or the history.
   const [menu, setMenu] = useState<
@@ -305,7 +355,7 @@ export function Editor({ initialDoc }: Props = {}) {
   const savedTimer = useRef(0);
   useEffect(() => () => window.clearTimeout(savedTimer.current), []);
   useAutosave(
-    doc,
+    savedDoc,
     (next) => {
       if (!saveBoard(next)) return;
       setJustSaved(true);
@@ -320,7 +370,7 @@ export function Editor({ initialDoc }: Props = {}) {
   // is owned here rather than inside the menu because the sync needs it too, and two
   // useAccount() calls would be two /api/me requests that can disagree.
   const accountState = useAccount();
-  const cloud = useCloudBoard(doc, setDoc, accountState.account !== null);
+  const cloud = useCloudBoard(savedDoc, setDoc, accountState.account !== null);
   const library = usePresets(accountState.account !== null, accountState.loading);
 
   // Applying a preset fails here; saving, renaming and deleting one fail inside the library.
@@ -452,6 +502,84 @@ export function Editor({ initialDoc }: Props = {}) {
     },
     [doc],
   );
+
+  /**
+   * Set the editor up for one card of the tour: its panel open and every other one
+   * folded, its scene, its selection, and playing if it plays.
+   */
+  const stageTour = (step: number) => {
+    const stage: TourStage = TOUR_STEPS[step].stage;
+    setViewOpen(stage.panel === "view");
+    setFormationsOpen(stage.panel === "formations");
+    setFormationsFolded(false);
+    setSelectionOpen(stage.panel === "selection");
+    setLinksOpen(stage.panel === "links");
+    setRailOpen(stage.panel === "draw");
+    setSelection(new Set(stage.select ?? []));
+    setExpandedLink(stage.link ?? null);
+    setAnnotation(stage.annotation ?? null);
+    setMenu(null);
+    const scene = stage.play ? 0 : (stage.scene ?? 0);
+    setActiveScene(scene);
+    // The tour's board, which may not be built yet on the render that opens it. Its
+    // timing does not depend on the language it is named in.
+    setTime(sceneStartSeconds(tourBoard ?? buildTourBoard(TOUR_LABELS), scene));
+    setPlaying(stage.play === true);
+  };
+
+  const openTour = () => {
+    setTour({
+      step: 0,
+      // Held as they were, trackers included, so putting them back does not read
+      // as a change: the selection returning must not fold Formations again.
+      restore: tour?.restore ?? {
+        selection,
+        chosenScene,
+        time,
+        playing,
+        viewOpen,
+        formationsOpen,
+        formationsFolded,
+        selectionOpen,
+        linksOpen,
+        railOpen,
+        expandedLink,
+        annotation,
+        hadSelection,
+        wasDrawing,
+        wasPlaying,
+      },
+    });
+    stageTour(0);
+  };
+
+  const closeTour = () => {
+    if (!tour) return;
+    const r = tour.restore;
+    setTour(null);
+    setSelection(r.selection);
+    setActiveScene(r.chosenScene);
+    setTime(r.time);
+    setPlaying(r.playing);
+    setViewOpen(r.viewOpen);
+    setFormationsOpen(r.formationsOpen);
+    setFormationsFolded(r.formationsFolded);
+    setSelectionOpen(r.selectionOpen);
+    setLinksOpen(r.linksOpen);
+    setRailOpen(r.railOpen);
+    setExpandedLink(r.expandedLink);
+    setAnnotation(r.annotation);
+    setHadSelection(r.hadSelection);
+    setWasDrawing(r.wasDrawing);
+    setWasPlaying(r.wasPlaying);
+  };
+
+  // Up on the first visit to the editor, and on request after that.
+  const [tourDue, setTourDue] = useState(() => !tourSeen());
+  if (tourDue) {
+    setTourDue(false);
+    openTour();
+  }
 
   const onSavePreset = (teamIndex: 0 | 1, label: string) => {
     const preset = presetFrom(doc, teamIndex, library.presets, label);
@@ -1168,6 +1296,7 @@ export function Editor({ initialDoc }: Props = {}) {
         hint: "?",
         run: () => setShortcutsOpen(true),
       },
+      { id: "tour", group: group.board, label: t("tour.palette"), run: openTour },
       ...(signedIn
         ? [{ id: "template-save", group: group.board, label: t("template.save"), run: saveAsTemplate }]
         : []),
@@ -1196,6 +1325,9 @@ export function Editor({ initialDoc }: Props = {}) {
   // Arrow keys nudge the selection: 1 m, or 5 m with shift. Space toggles playback.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // The tour's board is not the one in the history, so nothing behind the tour
+      // may be undone while it shows.
+      if (tour) return;
       // Ahead of the text-field guard: in a field on this page the text IS the
       // document, so undo should mean the board's history, not the input's.
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
@@ -1309,6 +1441,7 @@ export function Editor({ initialDoc }: Props = {}) {
     present,
     shortcutsOpen,
     paletteOpen,
+    tour,
     doc,
     setDoc,
     undo,
@@ -1469,6 +1602,18 @@ export function Editor({ initialDoc }: Props = {}) {
 
           <button
             type="button"
+            data-tour="tour"
+            onClick={openTour}
+            title={t("tour.open.title")}
+            className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
+          >
+            <GraduationCap size={14} />
+            {t("tour.open")}
+          </button>
+
+          <button
+            type="button"
+            data-tour="present"
             onClick={() => setPresent(true)}
             title={t("present.enter.title")}
             className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
@@ -1488,6 +1633,7 @@ export function Editor({ initialDoc }: Props = {}) {
           </button>
           <button
             type="button"
+            data-tour="export"
             onClick={() => setExportOpen(true)}
             title={t("bar.export.title")}
             className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
@@ -1497,6 +1643,7 @@ export function Editor({ initialDoc }: Props = {}) {
           </button>
           <button
             type="button"
+            data-tour="share"
             onClick={() => setShareOpen(true)}
             title={t("share.dialog.title")}
             className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
@@ -1544,7 +1691,7 @@ export function Editor({ initialDoc }: Props = {}) {
           style={{ width: layout.left }}
           className="flex shrink-0 flex-col overflow-y-auto border-r border-ink-700 bg-ink-800"
         >
-          <Section title={t("section.view")} defaultOpen={false}>
+          <Section title={t("section.view")} open={viewOpen} onOpenChange={setViewOpen} tour="view">
             <ViewControls
               view={pitchView}
               onChange={setPitchView}
@@ -1561,6 +1708,7 @@ export function Editor({ initialDoc }: Props = {}) {
               two stacked. */}
           <Section
             title={t("section.formations")}
+            tour="formations"
             badge={`${formationOf(0)} v ${formationOf(1)}`}
             open={formationsOpen}
             onOpenChange={(open) => {
@@ -1622,6 +1770,7 @@ export function Editor({ initialDoc }: Props = {}) {
 
           <Section
             title={t("section.selection")}
+            tour="selection"
             badge={visible.size ? String(visible.size) : undefined}
             open={selectionOpen}
             onOpenChange={setSelectionOpen}
@@ -1661,6 +1810,7 @@ export function Editor({ initialDoc }: Props = {}) {
           </Section>
           <Section
             title={t("section.links")}
+            tour="links"
             badge={String(doc.links.length)}
             open={linksOpen}
             onOpenChange={setLinksOpen}
@@ -1789,7 +1939,26 @@ export function Editor({ initialDoc }: Props = {}) {
           />
         )}
 
-        {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
+        {shortcutsOpen && (
+          <ShortcutsDialog
+            onClose={() => setShortcutsOpen(false)}
+            onTour={() => {
+              setShortcutsOpen(false);
+              openTour();
+            }}
+          />
+        )}
+
+        {tour && !present && (
+          <Tour
+            step={tour.step}
+            onStep={(step) => {
+              setTour({ ...tour, step });
+              stageTour(step);
+            }}
+            onClose={closeTour}
+          />
+        )}
 
         {menu && (
           <ContextMenu
@@ -1829,8 +1998,7 @@ export function Editor({ initialDoc }: Props = {}) {
         )}
 
         <main className="flex min-w-0 flex-1 flex-col">
-          <div className="relative min-h-0 flex-1">
-            {!present && <BoardTip />}
+          <div data-tour="board" className="relative min-h-0 flex-1">
             {present && (
               <PresentOverlay
                 board={doc.name}
@@ -1919,6 +2087,7 @@ export function Editor({ initialDoc }: Props = {}) {
             away for nothing — and closed again once neither is left. */}
         {!present && (
         <aside
+          data-tour="draw"
           style={{ width: railOpen ? layout.right : 36 }}
           className="flex shrink-0 flex-col overflow-y-auto border-l border-ink-700 bg-ink-800 transition-[width]"
         >

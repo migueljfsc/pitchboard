@@ -16,6 +16,8 @@ type Props = {
   onOpenChange?: (open: boolean) => void;
   /** No padding around the body, for a panel that brings its own. */
   flush?: boolean;
+  /** Names the section for the editor's tour to point at. */
+  tour?: string;
   children: ReactNode;
 };
 
@@ -27,6 +29,7 @@ export function Section({
   open: controlled,
   onOpenChange,
   flush = false,
+  tour,
   children,
 }: Props) {
   const [uncontrolled, setUncontrolled] = useState(defaultOpen);
@@ -38,7 +41,7 @@ export function Section({
   };
 
   return (
-    <section className="border-b border-ink-700 last:border-b-0">
+    <section data-tour={tour} className="border-b border-ink-700 last:border-b-0">
       <button
         type="button"
         onClick={toggle}

@@ -837,9 +837,61 @@ export const pt: Dictionary = {
   "toast.moveReset": "Movimento para “{scene}” reposto",
   "toast.movementRemoved": "Todo o movimento removido",
   "bar.savedLocally": "Guardado neste navegador",
-  "tip.board":
-    "Arraste um jogador para o mover · duplo clique para mudar o nome · [ e ] percorrem as cenas · {palette} para qualquer ação",
-  "tip.dismiss": "Percebi",
+  // ------------------------------------------------------------------ tour
+  "tour.open": "Guia",
+  "tour.open.title": "Uma volta pelo editor, um cartão de cada vez",
+  "tour.palette": "Rever o guia",
+  "tour.fromShortcuts": "É a primeira vez? Veja o guia",
+  "tour.progress": "{n} de {total}",
+  "tour.close": "Fechar o guia",
+  "tour.skip": "Saltar",
+  "tour.back": "Anterior",
+  "tour.next": "Seguinte",
+  "tour.done": "Terminar",
+  "tour.board": "Guia do Pitchboard",
+  "tour.board.link": "Linha de quatro",
+  "tour.welcome.title": "Bem-vindo ao Pitchboard",
+  "tour.welcome.body":
+    "Disponha duas equipas, mova-as ao longo de algumas cenas, e o Pitchboard anima a jogada entre elas. Exporte-a em vídeo ou envie-a por link.\nIsto demora cerca de um minuto. Pode fechar quando quiser. O botão Guia, em cima, trá-lo de volta.",
+  "tour.formations.title": "Equipas e sistemas",
+  "tour.formations.body":
+    "Escolha um sistema para cada lado e defina nomes, números e equipamentos. Guarde o plantel para o usar noutro quadro.\nMudar de sistema mantém o plantel, mas apaga as ligações desse lado. A forma que descreviam já não existe.",
+  "tour.move.title": "Mover jogadores",
+  "tour.move.body":
+    "Arraste um jogador para o mover. Clique para selecionar, shift-clique para juntar mais, ou arraste na relva vazia para apanhar um grupo. As setas movem a seleção um metro (cinco com ⇧). Largue um jogador sobre outro e trocam de lugar.\nUm movimento passa para as cenas seguintes em que esse jogador estava parado, por isso não tem de o repetir. Mantenha Alt para mudar só esta cena. Mantenha {mod} para o colocar livremente, sem alinhar com a linha de um colega.",
+  "tour.scenes.title": "Cenas",
+  "tour.scenes.body":
+    "Uma cena é um retrato de onde todos estão. Adicione uma, mova alguns jogadores, e o intervalo entre as duas cenas torna-se a animação. Percorra-as com [ e ], e carregue em Espaço para reproduzir.\nCom o Movimento contínuo ligado, tudo corre como um só movimento, sem parar em cada cena.",
+  "tour.runs.title": "Corridas e tempos",
+  "tour.runs.body":
+    "Cada movimento desenha uma corrida. Arraste as pegas cor de âmbar para a curvar.\nSelecione um jogador e este painel define quando parte e quanto demora. Uma espera segura-o antes de arrancar. O estilo de corrida decide como começa e acaba, e pode pô-lo a correr direto pela cena seguinte.",
+  "tour.ball.title": "A bola e os passes",
+  "tour.ball.body":
+    "Não há bola até a dar a alguém. Clique com o botão direito num jogador e escolha Dar a bola. Fica nos pés dele enquanto conduz.\nPara passar, dê-a a outro jogador na cena seguinte. A bola viaja entre os dois e chega ao recetor em movimento. Na linha temporal pode transformar essa viagem num remate ou levantá-la do chão.",
+  "tour.links.title": "Ligações",
+  "tour.links.body":
+    "Selecione dois ou mais jogadores e ligue-os para mostrar uma linha de quatro ou um bloco de pressão. A ligação segue os jogadores a cada fotograma, por isso a forma estica à medida que se movem.\nCadeia desenha uma linha aberta pela ordem dos membros. Forma e Preenchida fecham-na. Também pode limitar uma ligação a um intervalo de cenas.",
+  "tour.draw.title": "Desenho",
+  "tour.draw.body":
+    "As ferramentas de desenho estão neste painel: setas, linhas, zonas, a caneta, texto e uma bola. O que desenhar fica onde o pôs, nas cenas que escolher. Os jogadores não o mexem.\nUma bola desenhada é só uma imagem. A bola do jogo é a que dá aos jogadores.",
+  "tour.highlight.title": "Destaques",
+  "tour.highlight.body":
+    "Clique com o botão direito num jogador (ou use este painel) para o destacar. O resto do quadro escurece à volta dele, e Escurecer, na linha temporal, define quanto.\nUm destaque pertence a uma só cena. Os movimentos passam para as cenas seguintes e os destaques não, por isso a atenção cai exatamente onde a pôs.",
+  "tour.view.title": "Vista",
+  "tour.view.body":
+    "Rode o campo, mostre só metade ou passe para 3D. Também pode mudar a relva e o tamanho dos jogadores. Os fantasmas mostram a cena anterior ou a seguinte, esbatidas por baixo.\nMantenha {mod} e use a roda do rato para fazer zoom. Cada cena guarda o seu zoom, e a reprodução e as exportações seguem-no.",
+  "tour.present.title": "Apresentar",
+  "tour.present.body":
+    "Enche a janela com o quadro e esconde os painéis, para explicar a jogada a uma equipa. Esc volta atrás.",
+  "tour.export.title": "Exportar",
+  "tour.export.body":
+    "Guarde a animação em MP4, WebM ou GIF, ou o fotograma no ecrã em PNG. Tudo corre no seu navegador, e pode continuar a trabalhar enquanto isso.",
+  "tour.share.title": "Partilhar",
+  "tour.share.body":
+    "Um link leva uma cópia do quadro tal como está agora. Quem o abrir pode reproduzi-lo e criar a sua própria cópia. As alterações que fizer depois não lhe chegam.\nSe entrar na sua conta, os quadros ficam guardados e organizados em projetos. Tem também um link curto que mostra sempre a versão mais recente.",
+  "tour.help.title": "Quando estiver perdido",
+  "tour.help.body":
+    "{undo} desfaz qualquer coisa. {palette} encontra qualquer ação pelo nome, e ? lista os atalhos. Clique com o botão direito num jogador ou numa forma para ver o que pode fazer.\nEste botão traz o guia de volta.",
   // ---------------------------------------------------------------- strip and kit
   "timeline.tick": "Cena {n} — {name}",
   "timeline.scrollEarlier": "Cenas anteriores",

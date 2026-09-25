@@ -9,7 +9,7 @@
  */
 
 import { useEffect } from "react";
-import { X } from "lucide-react";
+import { GraduationCap, X } from "lucide-react";
 import { MODIFIER } from "@/lib/platform";
 import { useI18n } from "@/i18n/context";
 import type { MessageKey } from "@/i18n/core";
@@ -50,7 +50,7 @@ const GROUPS: Group[] = [
   },
 ];
 
-export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
+export function ShortcutsDialog({ onClose, onTour }: { onClose: () => void; onTour: () => void }) {
   const { t } = useI18n();
 
   useEffect(() => {
@@ -91,6 +91,15 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="flex flex-col gap-4 px-4 py-4">
+          <button
+            type="button"
+            onClick={onTour}
+            className="flex items-center gap-1.5 self-start text-xs text-accent transition hover:brightness-110"
+          >
+            <GraduationCap size={13} />
+            {t("tour.fromShortcuts")}
+          </button>
+
           {GROUPS.map((group) => (
             <div key={group.title} className="flex flex-col gap-1.5">
               <span className="text-[11px] uppercase tracking-wide text-ink-400">

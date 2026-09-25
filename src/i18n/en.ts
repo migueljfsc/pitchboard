@@ -844,9 +844,61 @@ export const en = {
   "toast.moveReset": "Reset the move into “{scene}”",
   "toast.movementRemoved": "Removed all movement",
   "bar.savedLocally": "Saved in this browser",
-  "tip.board":
-    "Drag a player to move them · double-click to rename · [ and ] step through scenes · {palette} for every action",
-  "tip.dismiss": "Got it",
+  // ------------------------------------------------------------------ tour
+  "tour.open": "Tour",
+  "tour.open.title": "A walk through the editor, one card at a time",
+  "tour.palette": "Take the tour again",
+  "tour.fromShortcuts": "New here? Take the tour",
+  "tour.progress": "{n} of {total}",
+  "tour.close": "Close the tour",
+  "tour.skip": "Skip",
+  "tour.back": "Back",
+  "tour.next": "Next",
+  "tour.done": "Done",
+  "tour.board": "Pitchboard tour",
+  "tour.board.link": "Back four",
+  "tour.welcome.title": "Welcome to Pitchboard",
+  "tour.welcome.body":
+    "Set out two teams, move them through a few scenes, and Pitchboard animates the play in between. Export it as a video or send it as a link.\nThis takes about a minute. Close it whenever you like. The Tour button at the top brings it back.",
+  "tour.formations.title": "Teams and formations",
+  "tour.formations.body":
+    "Pick a shape for each side, then set names, numbers and kits. Save the squad and you can load it on another board.\nChanging formation keeps your squad but drops that side's links. The shape they described is gone.",
+  "tour.move.title": "Moving players",
+  "tour.move.body":
+    "Drag a player to move them. Click to select, shift-click to add more, or drag across empty grass to box in a group. Arrow keys nudge the selection a metre (five with ⇧). Drop one player on another and they swap places.\nA move carries into later scenes where that player was standing still, so you don't have to repeat it. Hold Alt to change this scene only. Hold {mod} to place a player freely without snapping to a teammate's line.",
+  "tour.scenes.title": "Scenes",
+  "tour.scenes.body":
+    "A scene is a snapshot of where everybody stands. Add one, move some players, and the gap between the two scenes becomes the animation. Step through them with [ and ], and press Space to play.\nTurn on Seamless flow and the whole thing plays as one movement, with no stop at each scene.",
+  "tour.runs.title": "Runs and timing",
+  "tour.runs.body":
+    "Every move draws a run. Drag its amber handles to bend it.\nSelect a player and this panel sets when they go and how long they take. A wait holds them before they set off. The run style decides how they start and finish, and can send them straight on through the next scene.",
+  "tour.ball.title": "The ball and passes",
+  "tour.ball.body":
+    "There's no ball until you give it to someone. Right-click a player and choose Give the ball. It stays at their feet while they dribble.\nTo pass, give it to a different player in the next scene. The ball travels between them and meets the receiver in stride. From the timeline you can make that travel a shot or lift it off the ground.",
+  "tour.links.title": "Links",
+  "tour.links.body":
+    "Select two or more players and link them to show a back four or a pressing unit. The link follows its players on every frame, so the shape stretches as they move.\nChain draws an open line in member order. Shape and Filled close it. You can also limit a link to a range of scenes.",
+  "tour.draw.title": "Drawing",
+  "tour.draw.body":
+    "The drawing tools live in this panel: arrows, lines, zones, the pen, text and a ball. Whatever you draw stays where you put it, on the scenes you choose. The players don't move it.\nA drawn ball is only a picture. The match ball is the one you give to players.",
+  "tour.highlight.title": "Highlights",
+  "tour.highlight.body":
+    "Right-click a player (or use this panel) to highlight them. The rest of the board goes dark around them, and Dim on the timeline sets how dark.\nA highlight belongs to a single scene. Moves carry forward and highlights don't, so the attention lands exactly where you put it.",
+  "tour.view.title": "View",
+  "tour.view.body":
+    "Turn the pitch, show only half of it, or switch to 3D. You can also change the grass and how big the players are. Ghosts show the previous or next scene faintly underneath.\nHold {mod} and scroll to zoom. Each scene keeps its own zoom, and playback and exports follow it.",
+  "tour.present.title": "Present",
+  "tour.present.body":
+    "Fills the window with the board and hides the panels, for walking a team through the play. Esc takes you back.",
+  "tour.export.title": "Export",
+  "tour.export.body":
+    "Save the animation as MP4, WebM or GIF, or grab the frame on screen as a PNG. Everything runs in your browser, and you can keep working while it does.",
+  "tour.share.title": "Share",
+  "tour.share.body":
+    "A link carries a copy of the board as it is right now. Whoever opens it can play it and fork their own copy. Changes you make later won't reach them.\nIf you sign in, boards are kept in your account and grouped into projects. You also get a short link that always shows the latest version.",
+  "tour.help.title": "When you're stuck",
+  "tour.help.body":
+    "{undo} undoes anything. {palette} finds any action by name, and ? lists the shortcuts. Right-click a player or a shape to see what you can do with it.\nThis button brings the tour back.",
   // ---------------------------------------------------------------- strip and kit
   "timeline.tick": "Scene {n} — {name}",
   "timeline.scrollEarlier": "Earlier scenes",

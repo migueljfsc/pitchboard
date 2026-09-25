@@ -1740,3 +1740,31 @@ about one moment and is not carried into a scene added after it.
 a player, so a shot ended on the goal line among the defenders — the reading D76 already refused
 on import. `clampBall` lets it in to the depth of the goal; once in, a sideways drag runs along
 the net rather than popping it back onto the line. Players are still clamped to the pitch.
+
+## D101 — The editor explains itself with a tour, once
+One line over the board (the old `BoardTip`) could name three gestures, and most of what trips a
+new coach is not a gesture: that a move carries forward and a highlight does not, that there is
+no ball until somebody is given it, that a drawn ball is not the match ball, that a share link
+is a copy. The tour is a run of cards, each optionally pointing at the part of the editor it is
+about through a `data-tour` attribute. A card whose anchor is not on screen is centred rather
+than dropped, so a narrow window or a hidden panel costs the pointer and never the explanation.
+
+**Seen is for good, and closing at any step is seeing it.** It opens on the first visit to the
+editor, never in the Viewer or while presenting, and after that only on request — the Tour
+button, the palette, or the shortcuts list. The backdrop does not close it: a stray click is not
+a decision that can never be taken back. What is stored is the version seen (`TOUR_VERSION`),
+not a flag, so a tour that grows can show itself once more. It is a new key rather than the old
+tip's, so everybody who closed the one-line tip sees the tour once.
+
+**It is told on a board of its own, and the coach's board is never touched.** A card about
+links over a board with no link, or about the Selection panel with nothing selected, explains an
+empty panel. So the tour shows `buildTourBoard` — the counter-attack template with a curved run,
+a wait, a link, a highlight and two drawings added — and each card sets the editor up for itself:
+its panel open and the rest folded, a scene, a selection, playing or not. What swaps is only
+what is DRAWN: the editor's `doc` is `tourBoard ?? savedDoc`, and history, the autosave and the
+cloud sync are all bound to `savedDoc`, so the tour's board is never written anywhere, a closed
+tab mid-tour loses nothing, and there is nothing to restore. The view state the cards change —
+selection, scene, playhead, which panels are open — is held when the tour opens and put back when
+it closes, including the trackers that fold Formations when a selection appears; restoring the
+selection without them would read as a change and fold it again. Undo is refused while the tour
+is up, because the history behind it is not the board on screen.

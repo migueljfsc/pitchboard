@@ -160,7 +160,7 @@ export function Timeline({
   };
 
   return (
-    <div className="flex flex-col gap-3 border-t border-ink-700 bg-ink-800 px-4 py-3">
+    <div data-tour="timeline" className="flex flex-col gap-3 border-t border-ink-700 bg-ink-800 px-4 py-3">
       {/* Transport. Bottom margin makes room for the timing track under the scrubber. */}
       <div className="mb-4 flex items-center gap-3">
         <button
