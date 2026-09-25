@@ -162,7 +162,17 @@ export type Scene = {
    * where every run is already continuous, exactly as `travel` and `delay` are.
    */
   run?: Record<string, RunStyle>;
+  /**
+   * Where the camera looks in this scene: a point on the pitch, in metres, and how far
+   * in. Absent is the whole board, which is what every scene was before the choice
+   * existed. Playback, Present, exports and shared links follow it, moving smoothly
+   * between scenes; the editor keeps its own working zoom and shows this on request.
+   */
+  camera?: SceneCamera;
 };
+
+/** A scene's camera: the point on the pitch it centres on, and its zoom (1 is the whole board). */
+export type SceneCamera = { at: Vec2; zoom: number };
 
 /** How a run sets off: easing up from a standstill, or at full pace from the first step. */
 export type RunStart = "gradual" | "sharp";
@@ -422,7 +432,19 @@ export type Viewport = {
  * is what keeps the renderer pure and usable from the export worker.
  */
 /** The tool a pointer drag is currently bound to. */
-export type Tool = "select" | AnnotationKind;
+/**
+ * What the pointer does on the board. `pan` is the default: players are still picked
+ * up and moved, and a drag on empty grass moves the view. `select` makes that drag
+ * sweep a selection box instead. Everything else draws a shape.
+ */
+export type Tool = "pan" | "select" | AnnotationKind;
+
+/** The tool the editor starts with and goes back to — after a shape, and on Esc. */
+export const DEFAULT_TOOL: Tool = "pan";
+
+/** Does this tool draw a shape, rather than pick things up or move the view? */
+export const isDrawTool = (tool: Tool): tool is AnnotationKind =>
+  tool !== "pan" && tool !== "select";
 
 /**
  * Turf textures kept between draws, by whoever draws a board many times: the live canvas, a
@@ -465,6 +487,15 @@ export type RenderView = Viewport & {
   annotationSelection?: string | null;
   /** Editor only: the shape currently being dragged out, not yet committed. */
   draft?: Annotation | null;
+  /** Editor only: the lines a dragged player has snapped to — constant x or y. */
+  guides?: readonly ({ x: number } | { y: number })[];
+  /** Editor only: players whose whole path through every scene is drawn faintly. */
+  trail?: readonly string[];
+  /**
+   * Look through the scenes' own cameras (`Scene.camera`). Always on for an export
+   * and for a shared board; in the editor, during playback or when previewing.
+   */
+  sceneCamera?: boolean;
   /**
    * Export only: leave the surround unpainted, so a PNG has the pitch on a
    * transparent background. The frame is no longer complete in one call, which

@@ -103,6 +103,8 @@ export function exportView(
     height: size.height,
     interactive: false,
     tilt: framing.tilt,
+    // An export shows the move as it was directed, scene cameras and all.
+    sceneCamera: true,
     ...(look.caption ? { caption: look.caption } : {}),
     ...(look.transparent ? { transparent: true } : {}),
   };

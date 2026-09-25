@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AnnotationDash, BoardDoc, PitchView, RunEnd, RunStart, Tool } from "@/board/types";
-import { BALL_ID, DEFAULT_PITCH_VIEW } from "@/board/types";
+import { BALL_ID, DEFAULT_PITCH_VIEW, DEFAULT_TOOL, isDrawTool } from "@/board/types";
 import { BoardCanvas } from "@/components/BoardCanvas";
 import { TeamControls } from "@/components/TeamControls";
 import { ViewControls, type Ghosts } from "@/components/ViewControls";
@@ -9,6 +9,8 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
   Check,
   Command as CommandIcon,
+  History,
+  LayoutTemplate,
   Download,
   Keyboard,
   Pause,
@@ -31,12 +33,20 @@ import { ShareDialog } from "@/components/ShareDialog";
 import { ImportDialog, type ImportKind } from "@/components/ImportDialog";
 import { LinkPanel } from "@/components/LinkPanel";
 import { DrawPanel } from "@/components/DrawPanel";
-import { Timeline } from "@/components/Timeline";
+import { SpeedButton, Timeline } from "@/components/Timeline";
 import { CommandPalette, type Command } from "@/components/CommandPalette";
 import { Toaster } from "@/components/Toaster";
 import { BoardTip } from "@/components/BoardTip";
+import { ContextMenu, type MenuItem } from "@/components/ContextMenu";
+import type { ContextTarget } from "@/components/BoardCanvas";
+import { describeChange } from "@/board/describe";
+import { TEMPLATE_IDS, buildTemplate, type TemplateId } from "@/formations/templates";
+import { clampSidebar, loadLayout, saveLayout, type Layout } from "@/share/layout";
+import { listTemplates, loadTemplate, saveTemplate } from "@/share/templates";
+import type { StoredBoardSummary } from "@/share/api";
 import { useToasts } from "@/lib/useToasts";
-import { nudgeEntities, type Carry } from "@/board/interaction";
+import { useExportJob } from "@/lib/useExportJob";
+import { lineUp, nudgeEntities, spaceEvenly, type Carry } from "@/board/interaction";
 import { useHistory, type Change } from "@/lib/history";
 import { useAutosave } from "@/lib/useAutosave";
 import { AUTOSAVE_MS, loadBoard, saveBoard } from "@/share/local";
@@ -61,7 +71,7 @@ import {
   sceneRange,
 } from "@/board/annotations";
 import { concealedPlayers } from "@/board/render";
-import { resolveAt } from "@/board/timeline";
+import { resolveAt, runEndOf } from "@/board/timeline";
 import {
   addSceneAfter,
   deleteScene,
@@ -81,6 +91,7 @@ import {
 } from "@/board/scenes";
 import {
   addPlayer,
+  displayName,
   removePlayer,
   setKeeper,
   setPlayerLabel,
@@ -109,6 +120,9 @@ type Pending =
   | { kind: "preset"; preset: SquadPreset; replacing: SquadPreset }
   /** `source` is what the file turned out to be, so the confirmation can say. */
   | { kind: "import"; doc: BoardDoc; source: ImportKind };
+
+/** One step of `,` and `.` — a frame at 30 fps. */
+const FRAME_S = 1 / 30;
 
 /** How long "Saved" stays beside the board's name after an autosave, in milliseconds. */
 const SAVED_MS = 1800;
@@ -140,6 +154,9 @@ export function Editor({ initialDoc }: Props = {}) {
     redo: redoHistory,
     canUndo,
     canRedo,
+    past: historyPast,
+    undoSteps,
+    undoLatest,
     // Reopen on whatever was last being worked on. A stored board that no
     // longer validates is discarded by loadBoard, so a bad autosave costs a
     // fresh board rather than a broken one.
@@ -151,6 +168,8 @@ export function Editor({ initialDoc }: Props = {}) {
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [loop, setLoop] = useState(true);
+  // How fast playback runs. Editor-only: an export always renders at 1×.
+  const [speed, setSpeed] = useState(1);
   const [expandedLink, setExpandedLink] = useState<string | null>(null);
   const [pitchView, setPitchView] = useState<PitchView>(DEFAULT_PITCH_VIEW);
   const [pending, setPending] = useState<Pending | null>(null);
@@ -158,6 +177,8 @@ export function Editor({ initialDoc }: Props = {}) {
   const [importOpen, setImportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [selectionOpen, setSelectionOpen] = useState(true);
+  // Which side the Formations section is showing.
+  const [teamTab, setTeamTab] = useState<0 | 1>(0);
   // Formations fold away while something is selected, so the Selection panel under
   // them is in reach without scrolling, and come back when the selection clears.
   const [formationsOpen, setFormationsOpen] = useState(true);
@@ -170,8 +191,28 @@ export function Editor({ initialDoc }: Props = {}) {
   const [present, setPresent] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // A floating menu: the board's right-click, the template picker, or the history.
+  const [menu, setMenu] = useState<
+    | { kind: "board"; target: ContextTarget; at: { x: number; y: number } }
+    | { kind: "templates" | "history"; at: { x: number; y: number }; above?: boolean }
+    | null
+  >(null);
+  // The account's own templates, fetched when the template menu opens.
+  const [userTemplates, setUserTemplates] = useState<
+    { status: "loading" } | { status: "ready"; items: StoredBoardSummary[] } | { status: "error" } | null
+  >(null);
+  // The selected players' whole path through every scene, drawn faintly.
+  const [trailOn, setTrailOn] = useState(false);
+  // Sidebar widths, as the reader left them in this browser.
+  const [layout, setLayoutState] = useState<Layout>(() => loadLayout());
+  const setLayout = useCallback((next: Layout) => {
+    setLayoutState(next);
+    saveLayout(next);
+  }, []);
   const [focusName, setFocusName] = useState(0);
   const { toasts, push: pushToast, dismiss: dismissToast } = useToasts();
+  // Held here rather than in the dialog, so an export carries on when it closes.
+  const exportJob = useExportJob();
 
   // Squad presets live outside the document: they are a library the board draws
   // from, not part of what the board IS. Nothing about them is undoable, and
@@ -182,7 +223,7 @@ export function Editor({ initialDoc }: Props = {}) {
 
   // Drawing. The tool owns what a drag on the grass does; colour and dash are
   // the style the next shape takes, and also restyle the selected one.
-  const [tool, setTool] = useState<Tool>("select");
+  const [tool, setTool] = useState<Tool>(DEFAULT_TOOL);
   const [sticky, setSticky] = useState(false);
   const [drawColor, setDrawColor] = useState("#f59e0b");
   // The colour the next halo takes, and the one a swatch restyles the lit ones to.
@@ -199,7 +240,7 @@ export function Editor({ initialDoc }: Props = {}) {
   // committing a shape selects it and drops back to select in one event, and the
   // rail must see both. Only the change opens or closes it, so it can still be
   // opened by hand to look at the list.
-  const drawing = tool !== "select" || annotation !== null;
+  const drawing = isDrawTool(tool) || annotation !== null;
   const [wasDrawing, setWasDrawing] = useState(drawing);
   if (wasDrawing !== drawing) {
     setWasDrawing(drawing);
@@ -213,6 +254,19 @@ export function Editor({ initialDoc }: Props = {}) {
   // and deleting a scene all do it. Clamped where it is read rather than synced
   // back into state, so there is no render where the index is out of range.
   const activeScene = Math.min(chosenScene, doc.scenes.length - 1);
+
+  // Pausing settles on the scene the playhead stopped in, however it stopped — the
+  // button, Space, the end of the clip. Stopped mid-run, it goes on to where that
+  // run ends: a board caught between two scenes shows nothing an edit could land on.
+  const [wasPlaying, setWasPlaying] = useState(playing);
+  if (wasPlaying !== playing) {
+    setWasPlaying(playing);
+    if (!playing) {
+      const shown = resolveAt(doc, time);
+      if (shown.index !== chosenScene) setActiveScene(shown.index);
+      if (shown.moving) setTime(sceneStartSeconds(doc, shown.index));
+    }
+  }
 
   /**
    * Keep the scrubber on the selected scene when the timing moves under it.
@@ -278,10 +332,15 @@ export function Editor({ initialDoc }: Props = {}) {
     pinScrubber(redoHistory(), chosenScene);
   }, [redoHistory, pinScrubber, chosenScene]);
 
-  /** Say what just happened to the board, and offer to take it back. */
+  /**
+   * Say what just happened to the board, and offer to take it back. The Undo acts
+   * on the history as it is when CLICKED: the `undo` of the render that raised the
+   * notice still holds the stack from before the change, and would go one step too
+   * far.
+   */
   const notify = useCallback(
-    (text: string) => pushToast(text, { label: t("toast.undo"), run: undo }),
-    [pushToast, t, undo],
+    (text: string) => pushToast(text, { label: t("toast.undo"), run: undoLatest }),
+    [pushToast, t, undoLatest],
   );
 
   // The chosen formation lives on the team, not in this component, so a board
@@ -352,7 +411,7 @@ export function Editor({ initialDoc }: Props = {}) {
       lastFrame.current = now;
 
       setTime((t) => {
-        const next = t + dt;
+        const next = t + dt * speed;
         if (next < total) return next;
         if (loop) return total > 0 ? next % total : 0;
         setPlaying(false);
@@ -363,7 +422,7 @@ export function Editor({ initialDoc }: Props = {}) {
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [playing, loop, total]);
+  }, [playing, loop, total, speed]);
 
   /**
    * Starting playback drops the selection back to scene 1.
@@ -515,7 +574,7 @@ export function Editor({ initialDoc }: Props = {}) {
   const clearEditorState = () => {
     setSelection(new Set());
     setAnnotation(null);
-    setTool("select");
+    setTool(DEFAULT_TOOL);
     setExpandedLink(null);
     setActiveScene(0);
     setTime(0);
@@ -691,6 +750,227 @@ export function Editor({ initialDoc }: Props = {}) {
   };
 
   /**
+   * Straighten the selected players into a line, or even the gaps along it — along
+   * the way they are already spread, carried as a drag is.
+   */
+  const onArrange = (how: "line" | "space") => {
+    const arrange = how === "line" ? lineUp : spaceEvenly;
+    setDoc(arrange(doc, activeScene, selectedPlayers, carry));
+  };
+
+  /** "Runs on" for every selected player, or back to a stop if they all run on already. */
+  const onToggleRunsOn = () => {
+    if (editScene === undefined) return;
+    const scene = doc.scenes[editScene];
+    const all = selectedPlayers.every((id) => runEndOf(scene, id) === "through");
+    onRunStyleChange({ end: all ? "gradual" : "through" });
+  };
+
+  /** Replace the board with a ready-made move. Undo brings the old one back. */
+  const applyTemplate = (id: TemplateId) => {
+    const name = t(`template.${id}`);
+    setDoc(
+      buildTemplate(
+        id,
+        { board: name, scene: (n) => t("doc.scene", { n }) },
+        homeSpec(),
+        awaySpec(),
+      ),
+    );
+    clearEditorState();
+    notify(t("toast.template", { name }));
+  };
+
+  const signedIn = accountState.account !== null;
+
+  /** Open the template picker, fetching the account's own templates as it opens. */
+  const openTemplates = (at: { x: number; y: number }, above = false) => {
+    setMenu({ kind: "templates", at, above });
+    if (!signedIn) return;
+    setUserTemplates({ status: "loading" });
+    listTemplates()
+      .then((items) => setUserTemplates({ status: "ready", items }))
+      .catch(() => setUserTemplates({ status: "error" }));
+  };
+
+  /** Start from one of the account's templates. Undo brings the old board back. */
+  const applyUserTemplate = (id: string, name: string) => {
+    void loadTemplate(id)
+      .then((template) => {
+        if (!template) {
+          pushToast(t("template.user.invalid", { name }));
+          return;
+        }
+        setDoc(template);
+        clearEditorState();
+        notify(t("toast.template", { name }));
+      })
+      .catch(() => pushToast(t("template.user.failed")));
+  };
+
+  /** Keep this board's setup — its first scene — as a template on the account. */
+  const saveAsTemplate = () => {
+    void saveTemplate(doc)
+      .then(() => pushToast(t("template.saved", { name: doc.name })))
+      .catch(() => pushToast(t("template.user.failed")));
+  };
+
+  /** The four built-in moves, then the account's own, then saving this one. */
+  const templateMenu = (): MenuItem[] => {
+    const items: MenuItem[] = TEMPLATE_IDS.map((id) => ({
+      label: t(`template.${id}`),
+      onSelect: () => applyTemplate(id),
+    }));
+    items.push("divider");
+    if (!signedIn) {
+      items.push({ label: t("template.user.signIn"), disabled: true, onSelect: () => {} });
+      return items;
+    }
+    if (!userTemplates || userTemplates.status === "loading") {
+      items.push({ label: t("template.user.loading"), disabled: true, onSelect: () => {} });
+    } else if (userTemplates.status === "error") {
+      items.push({ label: t("template.user.failed"), disabled: true, onSelect: () => {} });
+    } else if (userTemplates.items.length === 0) {
+      items.push({ label: t("template.user.none"), disabled: true, onSelect: () => {} });
+    } else {
+      for (const board of userTemplates.items) {
+        items.push({ label: board.name, onSelect: () => applyUserTemplate(board.id, board.name) });
+      }
+    }
+    items.push("divider", {
+      label: t("template.save"),
+      title: t("template.save.hint"),
+      onSelect: saveAsTemplate,
+    });
+    return items;
+  };
+
+  /**
+   * What a right-click on the board offers, for whatever it landed on. Built when
+   * the menu opens, from the selection the click has just made.
+   */
+  const boardMenu = (target: ContextTarget): MenuItem[] => {
+    if (target.kind === "shape") {
+      const ann = annotationsOf(doc).find((a) => a.id === target.id);
+      if (!ann) return [];
+      return [
+        { label: t("draw.duplicate"), onSelect: () => onDuplicateAnnotation(ann.id) },
+        {
+          label: t(ann.hidden ? "draw.showThis" : "draw.hideThis"),
+          onSelect: () =>
+            setDoc({
+              ...doc,
+              annotations: annotationsOf(doc).map((a) =>
+                a.id === ann.id ? { ...a, hidden: !a.hidden } : a,
+              ),
+            }),
+        },
+        "divider",
+        { label: t("draw.delete"), danger: true, onSelect: () => deleteShape(ann.id) },
+      ];
+    }
+
+    if (target.kind === "board") {
+      return [
+        { label: t("timeline.addScene"), onSelect: addScene },
+        { label: t("menu.present"), onSelect: () => setPresent(true) },
+        "divider",
+        { label: t("template.open"), onSelect: () => openTemplates(menu?.at ?? { x: 0, y: 0 }) },
+      ];
+    }
+
+    const players = selectedPlayers;
+    const only = players.length === 1 ? players[0] : null;
+    const scene = doc.scenes[activeScene];
+    const items: MenuItem[] = [];
+
+    if (only && scene) {
+      const has = scene.carrier === only;
+      items.push({
+        label: has ? t("inspect.ball.release") : t("menu.giveBall"),
+        onSelect: () => onCarrierChange(has ? null : only),
+      });
+    }
+    if (players.length > 0) {
+      items.push({
+        label: t(activeScene === 0 ? "inspect.resetMove.first" : "inspect.resetMove"),
+        disabled: !canResetMove(doc, activeScene, players),
+        onSelect: onResetMove,
+      });
+      if (editScene !== undefined && !doc.flow && editScene < doc.scenes.length - 1) {
+        const all = players.every((id) => runEndOf(doc.scenes[editScene], id) === "through");
+        items.push({ label: t(all ? "menu.stopHere" : "menu.runOn"), onSelect: onToggleRunsOn });
+      }
+    }
+    items.push({
+      label: t(highlighted ? "menu.unhighlight" : "menu.highlight"),
+      onSelect: () => onHighlightChange(highlighted ? null : highlightColor),
+    });
+    if (players.length > 0) {
+      items.push({
+        label: t(trailOn ? "menu.trail.hide" : "menu.trail.show"),
+        onSelect: () => setTrailOn(!trailOn),
+      });
+    }
+
+    if (players.length >= 2) {
+      items.push("divider", {
+        label: t("menu.lineUp"),
+        title: t("menu.lineUp.hint"),
+        onSelect: () => onArrange("line"),
+      });
+      if (players.length >= 3) {
+        items.push({
+          label: t("menu.spaceEvenly"),
+          title: t("menu.spaceEvenly.hint"),
+          onSelect: () => onArrange("space"),
+        });
+      }
+      items.push({ label: t("palette.link"), onSelect: onCreateLink });
+    }
+
+    if (only) {
+      items.push(
+        "divider",
+        { label: t("menu.rename"), onSelect: () => onEditName() },
+        {
+          label: t("inspect.removeMovement"),
+          disabled: !hasMovement(doc, [only]),
+          onSelect: onRemoveAllMovement,
+        },
+        {
+          label: t("inspect.remove", { who: displayName(doc, only) }),
+          danger: true,
+          onSelect: () => onRemovePlayer(only),
+        },
+      );
+    }
+    return items;
+  };
+
+  /** The last changes, newest first, each a step back to just after it. */
+  const historyMenu = (): MenuItem[] => {
+    const states = [...historyPast, doc];
+    const n = historyPast.length;
+    if (n === 0) return [{ label: t("history.empty"), disabled: true, onSelect: () => {} }];
+    const items: MenuItem[] = [];
+    for (let j = n - 1; j >= Math.max(0, n - 20); j--) {
+      const steps = n - 1 - j;
+      const label = tm(describeChange(states[j], states[j + 1]));
+      items.push({
+        label: steps === 0 ? `${label} — ${t("history.now")}` : label,
+        disabled: steps === 0,
+        onSelect: () => pinScrubber(undoSteps(steps), chosenScene),
+      });
+    }
+    items.push("divider", {
+      label: t("history.start"),
+      onSelect: () => pinScrubber(undoSteps(n), chosenScene),
+    });
+    return items;
+  };
+
+  /**
    * Everything the palette offers. Built when it opens rather than on every render:
    * a list with every formation for both sides is one nobody needs until they ask.
    */
@@ -826,6 +1106,30 @@ export function Editor({ initialDoc }: Props = {}) {
         run: onRemoveAllMovement,
       });
     }
+    if (players.length >= 2) {
+      list.push({
+        id: "line-up",
+        group: group.selection,
+        label: t("menu.lineUp"),
+        run: () => onArrange("line"),
+      });
+    }
+    if (players.length >= 3) {
+      list.push({
+        id: "space-evenly",
+        group: group.selection,
+        label: t("menu.spaceEvenly"),
+        run: () => onArrange("space"),
+      });
+    }
+    if (players.length > 0) {
+      list.push({
+        id: "trail",
+        group: group.selection,
+        label: t(trailOn ? "menu.trail.hide" : "menu.trail.show"),
+        run: () => setTrailOn(!trailOn),
+      });
+    }
     if (visible.size > 0) {
       list.push({
         id: "deselect",
@@ -857,6 +1161,15 @@ export function Editor({ initialDoc }: Props = {}) {
         hint: "?",
         run: () => setShortcutsOpen(true),
       },
+      ...(signedIn
+        ? [{ id: "template-save", group: group.board, label: t("template.save"), run: saveAsTemplate }]
+        : []),
+      ...TEMPLATE_IDS.map((id) => ({
+        id: `template-${id}`,
+        group: group.board,
+        label: t("palette.template", { name: t(`template.${id}`) }),
+        run: () => applyTemplate(id),
+      })),
       {
         id: "reset-positions",
         group: group.board,
@@ -912,7 +1225,7 @@ export function Editor({ initialDoc }: Props = {}) {
 
       // Escape disarms a drawing tool before anything else looks at the key.
       if (e.key === "Escape") {
-        setTool("select");
+        setTool(DEFAULT_TOOL);
         setAnnotation(null);
         return;
       }
@@ -944,6 +1257,17 @@ export function Editor({ initialDoc }: Props = {}) {
       if (e.code === "Space") {
         e.preventDefault();
         setPlayback(!playing);
+        return;
+      }
+
+      // One frame at a time, for checking exactly when a pass is met or a run sets
+      // off. Shift steps ten. Pauses first: stepping a running clip means nothing.
+      if (e.key === "," || e.key === "." || e.key === "<" || e.key === ">") {
+        e.preventDefault();
+        const back = e.key === "," || e.key === "<";
+        const frames = e.shiftKey ? 10 : 1;
+        setPlaying(false);
+        setTime((now) => Math.min(Math.max(now + (back ? -1 : 1) * frames * FRAME_S, 0), total));
         return;
       }
 
@@ -985,6 +1309,7 @@ export function Editor({ initialDoc }: Props = {}) {
     notify,
     t,
     deleteShape,
+    total,
   ]);
 
   return (
@@ -997,7 +1322,8 @@ export function Editor({ initialDoc }: Props = {}) {
           Gone while presenting, along with both rails: what is left is the board
           and the means to play it. */}
       {!present && (
-      <header className="flex shrink-0 items-center gap-2 border-b border-ink-700 bg-ink-800 px-4 py-2">
+      <header className="relative flex shrink-0 items-center gap-2 border-b border-ink-700 bg-ink-800 px-4 py-2">
+
         <h1 className="shrink-0 text-sm font-semibold tracking-tight text-white">{t("app.name")}</h1>
 
         <input
@@ -1019,6 +1345,68 @@ export function Editor({ initialDoc }: Props = {}) {
           {t("bar.savedLocally")}
         </span>
 
+        {/* An export carrying on behind the board: how far it has got, and the file
+            once it is done. Click to reopen the dialog. */}
+        {!exportOpen && (exportJob.running || exportJob.saved || exportJob.error) && (
+          <div
+            className={cn(
+              "flex shrink-0 items-center gap-2 rounded-md border px-2 py-1 text-[11px]",
+              exportJob.error ? "border-red-500/50 text-red-300" : "border-ink-600 text-ink-200",
+            )}
+          >
+            <button type="button" onClick={() => setExportOpen(true)} className="flex items-center gap-1.5">
+              {exportJob.running ? (
+                <>
+                  {t("export.status", {
+                    format: exportJob.running.format.toUpperCase(),
+                    percent: Math.round(exportJob.running.fraction * 100),
+                  })}
+                  {/* The bar beside the number it is showing. */}
+                  <span
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Math.round(exportJob.running.fraction * 100)}
+                    className="h-1.5 w-24 overflow-hidden rounded-full bg-ink-700"
+                  >
+                    <span
+                      className="block h-full rounded-full bg-accent"
+                      style={{ width: `${Math.max(2, exportJob.running.fraction * 100)}%` }}
+                    />
+                  </span>
+                  {exportJob.running.onPage && (
+                    <span className="text-amber-300" title={t("export.onPage.hint")}>
+                      {t("export.onPage")}
+                    </span>
+                  )}
+                </>
+              ) : exportJob.error ? (
+                t("export.status.failed", { message: exportJob.error })
+              ) : (
+                t("export.status.done", { file: exportJob.saved ?? "" })
+              )}
+            </button>
+            {exportJob.saved && !exportJob.running && (
+              <button
+                type="button"
+                onClick={exportJob.downloadAgain}
+                className="text-accent transition hover:brightness-110"
+              >
+                {t("export.status.again")}
+              </button>
+            )}
+            <button
+              type="button"
+              aria-label={t(exportJob.running ? "export.cancel" : "toast.dismiss")}
+              title={t(exportJob.running ? "export.cancel" : "toast.dismiss")}
+              onClick={exportJob.running ? exportJob.cancel : exportJob.forget}
+              className="text-ink-400 transition hover:text-white"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         <div className="ml-auto flex shrink-0 items-center gap-2">
           <HistoryButton
             label={t("history.undo")}
@@ -1035,6 +1423,17 @@ export function Editor({ initialDoc }: Props = {}) {
             onClick={redo}
           >
             <Redo2 size={14} />
+          </HistoryButton>
+          <HistoryButton
+            label={t("history.open")}
+            hint={t("history.open.title")}
+            disabled={!canUndo}
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              setMenu({ kind: "history", at: { x: r.left, y: r.bottom + 4 } });
+            }}
+          >
+            <History size={14} />
           </HistoryButton>
 
           <span className="mx-1 h-5 w-px bg-ink-600" />
@@ -1134,7 +1533,10 @@ export function Editor({ initialDoc }: Props = {}) {
 
       <div className="flex min-h-0 flex-1">
         {!present && (
-        <aside className="flex w-64 shrink-0 flex-col overflow-y-auto border-r border-ink-700 bg-ink-800">
+        <aside
+          style={{ width: layout.left }}
+          className="flex shrink-0 flex-col overflow-y-auto border-r border-ink-700 bg-ink-800"
+        >
           <Section title={t("section.view")} defaultOpen={false}>
             <ViewControls
               view={pitchView}
@@ -1147,9 +1549,9 @@ export function Editor({ initialDoc }: Props = {}) {
             />
           </Section>
 
-          {/* Both sides in one place: they are set up together and read against
-              each other, and two identical panels stacked was twice the chrome
-              for the same job. */}
+          {/* Both sides in one section, one at a time: a tab per side, like the
+              Selection panel's, so the section is half the height it was with the
+              two stacked. */}
           <Section
             title={t("section.formations")}
             badge={`${formationOf(0)} v ${formationOf(1)}`}
@@ -1159,12 +1561,30 @@ export function Editor({ initialDoc }: Props = {}) {
               setFormationsFolded(false);
             }}
           >
-            <div className="flex flex-col gap-4">
-              {([0, 1] as const).map((i) => (
-                <div
-                  key={doc.teams[i].id}
-                  className={cn(i === 1 && "border-t border-ink-700 pt-4")}
-                >
+            <div className="flex flex-col gap-3">
+              <div role="tablist" className="flex gap-1 rounded-md bg-ink-900 p-0.5">
+                {([0, 1] as const).map((i) => (
+                  <button
+                    key={doc.teams[i].id}
+                    type="button"
+                    role="tab"
+                    aria-selected={teamTab === i}
+                    onClick={() => setTeamTab(i)}
+                    className={cn(
+                      "flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded px-2 py-1 text-[11px] transition",
+                      teamTab === i ? "bg-ink-700 text-white" : "text-ink-400 hover:text-ink-200",
+                    )}
+                  >
+                    <span
+                      className="size-2 shrink-0 rounded-full ring-1 ring-white/20"
+                      style={{ background: doc.teams[i].color }}
+                    />
+                    <span className="truncate">{doc.teams[i].name || formationOf(i)}</span>
+                  </button>
+                ))}
+              </div>
+              {([teamTab] as const).map((i) => (
+                <div key={doc.teams[i].id}>
                   <TeamControls
                     doc={doc}
                     teamIndex={i}
@@ -1227,6 +1647,8 @@ export function Editor({ initialDoc }: Props = {}) {
               canResetMove={canResetMove(doc, activeScene, selectedPlayers)}
               onRemoveAllMovement={onRemoveAllMovement}
               hasMovement={hasMovement(doc, selectedPlayers)}
+              trailOn={trailOn}
+              onTrailChange={setTrailOn}
               focusName={focusName}
             />
           </Section>
@@ -1244,6 +1666,18 @@ export function Editor({ initialDoc }: Props = {}) {
           </Section>
 
           <div className="mt-auto flex flex-col gap-1.5 border-t border-ink-700 p-4">
+            <button
+              type="button"
+              title={t("template.open.title")}
+              onClick={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                openTemplates({ x: r.left, y: r.top - 4 }, true);
+              }}
+              className="flex w-full items-center justify-center gap-1.5 rounded-md border border-ink-600 px-2 py-1.5 text-xs text-ink-300 transition hover:border-accent hover:text-white"
+            >
+              <LayoutTemplate size={13} />
+              {t("template.open")}
+            </button>
             {/* Two resets, because they answer different questions: one puts the
                 shape back, the other starts again. */}
             <button
@@ -1345,6 +1779,21 @@ export function Editor({ initialDoc }: Props = {}) {
 
         {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
 
+        {menu && (
+          <ContextMenu
+            at={menu.at}
+            above={menu.kind !== "board" && menu.above}
+            onClose={() => setMenu(null)}
+            items={
+              menu.kind === "board"
+                ? boardMenu(menu.target)
+                : menu.kind === "history"
+                  ? historyMenu()
+                  : templateMenu()
+            }
+          />
+        )}
+
         {paletteOpen && (
           <CommandPalette commands={commands()} onClose={() => setPaletteOpen(false)} />
         )}
@@ -1355,6 +1804,15 @@ export function Editor({ initialDoc }: Props = {}) {
             t={time}
             pitchView={pitchView}
             onClose={() => setExportOpen(false)}
+            exportJob={exportJob}
+          />
+        )}
+
+        {!present && (
+          <SidebarHandle
+            side="left"
+            width={layout.left}
+            onChange={(left) => setLayout({ ...layout, left })}
           />
         )}
 
@@ -1391,11 +1849,18 @@ export function Editor({ initialDoc }: Props = {}) {
               sticky={sticky}
               annotationSelection={annotation}
               onAnnotationSelect={selectAnnotation}
+              trail={trailOn ? selectedPlayers : undefined}
+              sceneCamera={playing || present}
+              playing={playing}
+              onEditStart={(index) => selectScene(index)}
+              onContextMenu={(target, at) => setMenu({ kind: "board", target, at })}
             />
           </div>
 
           {present ? (
             <PresentBar
+              speed={speed}
+              onSpeedChange={setSpeed}
               scene={doc.scenes[activeScene]?.name ?? ""}
               time={time}
               total={total}
@@ -1417,20 +1882,28 @@ export function Editor({ initialDoc }: Props = {}) {
               onPlayingChange={setPlayback}
               loop={loop}
               onLoopChange={setLoop}
+              speed={speed}
+              onSpeedChange={setSpeed}
               onDeleteScene={removeScene}
             />
           )}
         </main>
+
+        {!present && railOpen && (
+          <SidebarHandle
+            side="right"
+            width={layout.right}
+            onChange={(right) => setLayout({ ...layout, right })}
+          />
+        )}
 
         {/* The coach's drawing: the tools, and everything drawn. Collapsed until a
             tool is armed or a shape picked — an empty rail is 256px of pitch given
             away for nothing — and closed again once neither is left. */}
         {!present && (
         <aside
-          className={cn(
-            "flex shrink-0 flex-col overflow-y-auto border-l border-ink-700 bg-ink-800 transition-[width]",
-            railOpen ? "w-64" : "w-9",
-          )}
+          style={{ width: railOpen ? layout.right : 36 }}
+          className="flex shrink-0 flex-col overflow-y-auto border-l border-ink-700 bg-ink-800 transition-[width]"
         >
           <button
             type="button"
@@ -1553,6 +2026,8 @@ function PresentOverlay({
  * a row of buttons that do nothing, and the point of the mode is the board.
  */
 function PresentBar({
+  speed,
+  onSpeedChange,
   scene,
   time,
   total,
@@ -1561,6 +2036,8 @@ function PresentBar({
   onTimeChange,
   onExit,
 }: {
+  speed: number;
+  onSpeedChange: (speed: number) => void;
   scene: string;
   time: number;
   total: number;
@@ -1581,6 +2058,8 @@ function PresentBar({
       >
         {playing ? <Pause size={15} /> : <Play size={15} />}
       </button>
+
+      <SpeedButton speed={speed} onChange={onSpeedChange} />
 
       <span className="w-32 shrink-0 truncate text-xs text-ink-200">{scene}</span>
 
@@ -1612,6 +2091,49 @@ function PresentBar({
 }
 
 
+/**
+ * The edge of a sidebar, dragged to resize it. The width is the reader's and is
+ * remembered in this browser; the board takes whatever is left.
+ */
+function SidebarHandle({
+  side,
+  width,
+  onChange,
+}: {
+  side: "left" | "right";
+  width: number;
+  onChange: (width: number) => void;
+}) {
+  const { t } = useI18n();
+  const start = useRef<{ x: number; width: number } | null>(null);
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={t("layout.resize")}
+      title={t("layout.resize")}
+      onPointerDown={(e) => {
+        e.currentTarget.setPointerCapture(e.pointerId);
+        start.current = { x: e.clientX, width };
+      }}
+      onPointerMove={(e) => {
+        if (!start.current) return;
+        const dx = e.clientX - start.current.x;
+        onChange(clampSidebar(start.current.width + (side === "left" ? dx : -dx)));
+      }}
+      onPointerUp={(e) => {
+        start.current = null;
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }}
+      onDoubleClick={() => onChange(clampSidebar(256))}
+      // A strip between the sidebar and the board, overlapping both by a few pixels
+      // so it is easy to catch without taking any width of its own.
+      className="relative z-20 -mx-1 w-2 shrink-0 cursor-col-resize transition hover:bg-accent/40"
+      data-side={side}
+    />
+  );
+}
+
 function HistoryButton({
   label,
   hint,
@@ -1622,7 +2144,7 @@ function HistoryButton({
   label: string;
   hint: string;
   disabled: boolean;
-  onClick: () => void;
+  onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
   children: React.ReactNode;
 }) {
   return (

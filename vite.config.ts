@@ -14,6 +14,13 @@ export default defineConfig(({ command }) => ({
   server: {
     port: 5173,
   },
+  // The export worker's own dependencies, pre-bundled when the dev server starts.
+  // Found late instead — on the first export — Vite re-optimises them mid-session,
+  // and a worker then asks for the bundle by its old hash, gets an error, and fails
+  // to start while the page carries on as if nothing happened.
+  optimizeDeps: {
+    include: ["mediabunny", "gifenc"],
+  },
   test: {
     // The engine is pure and framework-free, so the default node environment
     // is all it needs — no jsdom, no canvas polyfill. render.ts is tested via

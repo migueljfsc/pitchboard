@@ -40,6 +40,10 @@ export function loadBoard(store: Store | null = browserStore()): BoardDoc | null
 }
 
 export function saveBoard(doc: BoardDoc, store: Store | null = browserStore()): boolean {
+  // Never write what could not be read back. `loadBoard` discards a board that fails
+  // the schema, so an invalid one written here would cost the board on the next load
+  // — the last good copy is worth more than the newest bad one.
+  if (!boardDocSchema.safeParse(doc).success) return false;
   return write(store, BOARD_KEY, doc);
 }
 

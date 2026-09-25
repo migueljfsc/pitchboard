@@ -23,6 +23,7 @@ const GROUPS: Group[] = [
     rows: [
       { keys: ["Space"], label: "shortcuts.playPause" },
       { keys: ["[", "]"], label: "shortcuts.scene" },
+      { keys: [",", "."], label: "shortcuts.frame" },
     ],
   },
   {
@@ -31,6 +32,8 @@ const GROUPS: Group[] = [
       { keys: ["←", "↑", "→", "↓"], label: "shortcuts.nudge" },
       { keys: ["⇧"], label: "shortcuts.nudgeFar" },
       { keys: ["Alt"], label: "shortcuts.thisScene" },
+      { keys: [MODIFIER.replace("+", "")], label: "shortcuts.noSnap" },
+      { keys: ["Tab"], label: "shortcuts.tab" },
     ],
   },
   {
@@ -41,6 +44,7 @@ const GROUPS: Group[] = [
       { keys: ["Del"], label: "shortcuts.deleteShape" },
       { keys: ["Esc"], label: "shortcuts.escape" },
       { keys: ["?"], label: "shortcuts.help" },
+      { keys: [`${MODIFIER}Scroll`], label: "shortcuts.zoom" },
       { keys: [`${MODIFIER}K`], label: "shortcuts.palette" },
     ],
   },

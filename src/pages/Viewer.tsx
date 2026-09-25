@@ -109,6 +109,7 @@ export function Viewer({ doc, initialView, onFork }: Props) {
           sceneIndex={frame.resolved.index}
           pitchView={pitchView}
           interactive={false}
+          sceneCamera
           selection={EMPTY}
           onSelectionChange={noop}
           onDocChange={noop}

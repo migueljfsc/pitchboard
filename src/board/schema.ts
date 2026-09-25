@@ -10,6 +10,7 @@ import type { BoardDoc } from "./types";
 import { BALL_ID } from "./types";
 import { TEXT_SCALE_MAX, TEXT_SCALE_MIN, TEXT_WIDTH_MAX, TEXT_WIDTH_MIN } from "./annotations";
 import { MAX_FLOW_SPEED, MIN_FLOW_SPEED } from "./timeline";
+import { MAX_SCENE_ZOOM } from "./camera";
 
 const vec2 = z.object({ x: z.number().finite(), y: z.number().finite() });
 
@@ -53,6 +54,9 @@ const scene = z.object({
   shot: z.boolean().optional(),
   loft: z.boolean().optional(),
   highlight: z.record(z.string(), z.string().min(1)).optional(),
+  camera: z
+    .object({ at: vec2, zoom: z.number().min(1).max(MAX_SCENE_ZOOM) })
+    .optional(),
   run: z
     .record(
       z.string(),

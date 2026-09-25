@@ -9,11 +9,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Annotation, BoardDoc, PitchView, Tool, TurfCache, Vec2 } from "@/board/types";
 import type { Change } from "@/lib/history";
-import { BALL_ID, DEFAULT_PITCH_VIEW } from "@/board/types";
+import { BALL_ID, DEFAULT_PITCH_VIEW, DEFAULT_TOOL, isDrawTool } from "@/board/types";
 import { fitViewport, toPitch } from "@/board/geometry";
 import { cameraFor, framingOf, unprojectPitch } from "@/board/projection";
 import { drawBoard } from "@/board/render";
-import { frameAt } from "@/board/timeline";
+import { frameAt, runsThrough } from "@/board/timeline";
 import {
   applySelection,
   dragHandle,
@@ -28,6 +28,10 @@ import {
   hitTestTiltedText,
   hitTestTiltedTextHandle,
   moveEntities,
+  snapPoint,
+  swapPlayers,
+  swapTarget,
+  type Guide,
   tiltedTextPoint,
   type AnnotationHandleHit,
   type Carry,
@@ -42,7 +46,16 @@ import {
   simplify,
   updateAnnotation,
 } from "@/board/annotations";
-import { setPath } from "@/board/scenes";
+import { setPath, setSceneCamera } from "@/board/scenes";
+import {
+  NO_SCREEN_ZOOM,
+  cameraFromZoom,
+  cameraTransform,
+  screenMapping,
+  unzoomPoint,
+  type ScreenZoom,
+} from "@/board/camera";
+import { useI18n } from "@/i18n/context";
 
 type Props = {
   doc: BoardDoc;
@@ -78,10 +91,53 @@ type Props = {
    * exporter passes, so a shared board looks exactly like an exported frame.
    */
   interactive?: boolean;
+  /** Players whose whole path through every scene is drawn faintly. */
+  trail?: readonly string[];
+  /**
+   * Look through the scenes' own cameras. On for playback, Present and a shared
+   * board; while editing, the view is the working zoom, which a scene's locked zoom
+   * sets as it is selected.
+   */
+  sceneCamera?: boolean;
+  /** The board is playing: nothing on it can be pressed, dragged or right-clicked. */
+  playing?: boolean;
+  /**
+   * A press on a paused board that is between scenes, or on another scene than the
+   * selected one: the scene being shown, for the editor to settle on, so the edit
+   * lands on what the coach sees.
+   */
+  onEditStart?: (sceneIndex: number) => void;
+  /**
+   * A right-click: what was under the pointer, and where on the page, for the
+   * editor to open its menu at. The selection is already set to the target.
+   */
+  onContextMenu?: (target: ContextTarget, at: { x: number; y: number }) => void;
 };
 
+/** What a right-click landed on. */
+export type ContextTarget =
+  | { kind: "entity"; id: string }
+  | { kind: "shape"; id: string }
+  | { kind: "board" };
+
+/** How far the board is zoomed in, and panned, in CSS pixels. Presentation only. */
+type Zoom = { z: number; x: number; y: number };
+const NO_ZOOM: Zoom = { z: 1, x: 0, y: 0 };
+const MAX_ZOOM = 6;
+
 type Drag =
-  | { kind: "move"; last: Vec2; carry: Carry }
+  /**
+   * `grab` is the player the drag took hold of, with where the pointer and he
+   * started — the reference a snap is measured against. Absent for the ball.
+   */
+  | {
+      kind: "move";
+      last: Vec2;
+      carry: Carry;
+      grab?: { id: string; origin: Vec2; start: Vec2; moving?: boolean };
+    }
+  /** Panning a zoomed board: where the pointer started, and the pan it started from. */
+  | { kind: "pan"; origin: Vec2; from: ScreenZoom }
   | { kind: "handle"; hit: HandleHit }
   | { kind: "marquee"; a: Vec2; b: Vec2; additive: boolean }
   /** Dragging a new shape out. `start` is the anchor; `ann` is the live preview. */
@@ -103,7 +159,7 @@ export function BoardCanvas({
   onSelectionChange,
   onDocChange,
   onEditName,
-  tool = "select",
+  tool = DEFAULT_TOOL,
   onToolChange,
   drawColor = "#fbbf24",
   drawDash = "solid",
@@ -112,6 +168,11 @@ export function BoardCanvas({
   annotationSelection = null,
   onAnnotationSelect,
   interactive = true,
+  trail,
+  onContextMenu,
+  sceneCamera = false,
+  playing = false,
+  onEditStart,
 }: Props) {
   /**
    * One gate (D91). Everything the flat board can do, the angled view can too.
@@ -180,6 +241,51 @@ export function BoardCanvas({
   const turf = useRef<TurfCache>(new Map());
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [hover, setHover] = useState<string | null>(null);
+  /** The lines a drag has snapped to, while it lasts. */
+  const [guides, setGuides] = useState<Guide[]>([]);
+  /** The player a dragged one would swap with if dropped now. */
+  const [swapWith, setSwapWith] = useState<string | null>(null);
+  const i18n = useI18n();
+  // The view is ALWAYS the scenes' cameras: a zoom belongs to the scene it was set
+  // on, and changing it while a scene is selected changes that scene's. There is no
+  // working zoom beside it — one was how a zoom set on one scene leaked into every
+  // scene that had none. During playback and Present the cameras drive the view and
+  // the zoom cannot be changed.
+  const throughCamera = sceneCamera || live;
+  const cameraLocked = sceneCamera;
+  const scene = doc.scenes[sceneIndex];
+  const viewZoom = NO_ZOOM;
+
+  const mappingFor = (width: number, height: number) =>
+    screenMapping(doc, pitchView, width, height, window.devicePixelRatio || 1);
+
+  /**
+   * Set the view — which is to say, this scene's camera. At 100% the scene has none
+   * and shows the whole board. One undo step per scene however many wheel ticks,
+   * presses or drags it took.
+   */
+  const writeZoom = (next: ScreenZoom) => {
+    if (cameraLocked || !scene || size.w === 0 || size.h === 0) return;
+    const clamped = clampZoom(next, size);
+    const camera =
+      clamped.z <= 1.001 ? null : cameraFromZoom(clamped, size.w, size.h, mappingFor(size.w, size.h));
+    if (clamped.z > 1.001 && !camera) return;
+    onDocChange(setSceneCamera(doc, sceneIndex, camera), `camera:${scene.id}`);
+  };
+
+  /**
+   * The scene camera's screen transform at this instant, for turning the pointer
+   * back into a place on the pitch — the same function the renderer draws with.
+   */
+  const sceneZoom = (width: number, height: number): ScreenZoom => {
+    if (!throughCamera) return NO_SCREEN_ZOOM;
+    const mapping = screenMapping(doc, pitchView, width, height, window.devicePixelRatio || 1);
+    return cameraTransform(frameAt(doc, t).resolved, doc, width, height, mapping);
+  };
+  /** The view as drawn right now — the scene's camera, or its move between two. */
+  const shownView = sceneZoom(size.w, size.h);
+  /** Where the pointer is while hovering, in CSS pixels — where the hover card sits. */
+  const [hoverAt, setHoverAt] = useState<Vec2 | null>(null);
   /**
    * What the pointer is over, when it is over a control point.
    *
@@ -215,7 +321,10 @@ export function BoardCanvas({
     canvas.height = Math.round(size.h * dpr);
     canvas.style.width = `${size.w}px`;
     canvas.style.height = `${size.h}px`;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // The zoom is one more screen-space transform on top of the DPR, so the whole
+    // board — flat or under the camera — scales about the same origin and stays
+    // crisp: the canvas is redrawn at the new scale, never stretched.
+    ctx.setTransform(dpr * viewZoom.z, 0, 0, dpr * viewZoom.z, dpr * viewZoom.x, dpr * viewZoom.y);
 
     const framing = framingOf(pitchView);
     const view = fitViewport(size.w, size.h, doc.pitch.length, doc.pitch.width, framing);
@@ -227,9 +336,12 @@ export function BoardCanvas({
       turf: turf.current,
       tilt: framing.tilt,
       selection,
-      hover,
+      hover: swapWith ?? hover,
       editScene,
       ghosts,
+      guides,
+      trail,
+      sceneCamera: throughCamera,
       marquee: drag?.kind === "marquee" ? { a: drag.a, b: drag.b } : null,
       annotationSelection,
       draft: drag?.kind === "draw" ? drag.ann : null,
@@ -246,10 +358,22 @@ export function BoardCanvas({
     pitchView,
     annotationSelection,
     live,
+    viewZoom,
+    guides,
+    swapWith,
+    trail,
+    throughCamera,
   ]);
 
   /** Where the pointer is on the canvas, in CSS pixels. What a billboard is tested with. */
   const screenFrom = (e: React.MouseEvent<HTMLCanvasElement>): Vec2 => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const at = unzoom({ x: e.clientX - rect.left, y: e.clientY - rect.top }, viewZoom);
+    return unzoomPoint(at, sceneZoom(rect.width, rect.height));
+  };
+
+  /** Where the pointer is on the canvas element itself, zoom or no zoom. */
+  const rawFrom = (e: React.MouseEvent<HTMLCanvasElement>): Vec2 => {
     const rect = e.currentTarget.getBoundingClientRect();
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   };
@@ -279,7 +403,10 @@ export function BoardCanvas({
   const pointFrom = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>): Vec2 => {
       const rect = e.currentTarget.getBoundingClientRect();
-      const at = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      const at = unzoomPoint(
+        unzoom({ x: e.clientX - rect.left, y: e.clientY - rect.top }, viewZoom),
+        sceneZoom(rect.width, rect.height),
+      );
       if (framingOf(pitchView).tilt) {
         const cam = cameraFor(
           doc.pitch,
@@ -293,11 +420,118 @@ export function BoardCanvas({
       const view = fitViewport(rect.width, rect.height, doc.pitch.length, doc.pitch.width, pitchView);
       return toPitch(at, view);
     },
-    [doc.pitch, pitchView],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sceneZoom reads doc and t, listed
+    [doc, t, pitchView, viewZoom, throughCamera],
   );
 
   /** Scene the annotations are keyed to — the one being played into. */
   const annotationScene = () => frameAt(doc, t).resolved.index;
+
+  /** What a move drag holds on to, for snapping: a player and where he and the pointer began. */
+  const grabOf = (id: string, p: Vec2) => {
+    if (id === BALL_ID) return undefined;
+    const start = doc.scenes[annotationScene()]?.positions[id];
+    return start ? { id, origin: p, start: { ...start } } : undefined;
+  };
+
+  // The wheel: ⌘/Ctrl or a pinch zooms about the pointer; plain scrolling pans a
+  // zoomed board and is left to the page otherwise. A native listener, because
+  // React's wheel handler is passive and could not stop the page zooming too.
+  // The latest view and writer, for the wheel listener below, which is attached once
+  // rather than on every change of the board.
+  const zoomNow = useRef({ current: NO_SCREEN_ZOOM, write: writeZoom });
+  useEffect(() => {
+    zoomNow.current = { current: sceneZoom(size.w, size.h), write: writeZoom };
+  });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !live) return;
+    const onWheel = (e: WheelEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      const at = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      const { current, write } = zoomNow.current;
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        write(zoomAbout(current, at, Math.exp(-e.deltaY * 0.0025), size));
+        return;
+      }
+      if (current.z <= 1) return;
+      e.preventDefault();
+      write({ ...current, x: current.x - e.deltaX, y: current.y - e.deltaY });
+    };
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", onWheel);
+  }, [live, size]);
+
+  /**
+   * A right-click: select what is under the pointer as a click would, then hand
+   * the editor the target and the page position for its menu.
+   */
+  const onContext = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!onContextMenu) return;
+    e.preventDefault();
+    if (playing) return;
+    const p = pointFrom(e);
+    const frame = frameAt(doc, t);
+    const scene = frame.resolved.index;
+    const page = { x: e.clientX, y: e.clientY };
+
+    const shape = tilted
+      ? (hitTestTiltedText(doc, scene, screenFrom(e), cameraFrom(e)) ??
+        (onGrass(p) ? LAYERS.map((l) => hitTestGroundAnnotation(doc, scene, p, l)).find(Boolean) : null))
+      : (hitTestAnnotation(doc, scene, p, "mark", rotated) ?? null);
+    const entity = tilted
+      ? hitTestTilted(doc, frame, screenFrom(e), cameraFrom(e))
+      : hitTest(doc, frame, p);
+    const zone = !tilted ? hitTestAnnotation(doc, scene, p, "zone", rotated) : null;
+
+    // Same order as a click: marks over players, players over zones.
+    if (shape && (!entity || !tilted)) {
+      onAnnotationSelect?.(shape.id);
+      onSelectionChange(new Set());
+      onContextMenu({ kind: "shape", id: shape.id }, page);
+      return;
+    }
+    if (entity) {
+      onAnnotationSelect?.(null);
+      if (!selection.has(entity.id)) onSelectionChange(new Set([entity.id]));
+      onContextMenu({ kind: "entity", id: entity.id }, page);
+      return;
+    }
+    if (zone) {
+      onAnnotationSelect?.(zone.id);
+      onSelectionChange(new Set());
+      onContextMenu({ kind: "shape", id: zone.id }, page);
+      return;
+    }
+    onContextMenu({ kind: "board" }, page);
+  };
+
+  /**
+   * The board from the keyboard: Tab and Shift+Tab step through the players, Enter
+   * renames the one selected. Past the last player Tab lets focus go on, so the
+   * board is never a trap.
+   */
+  const onKey = (e: React.KeyboardEvent<HTMLCanvasElement>) => {
+    if (e.key === "Enter" && selection.size === 1) {
+      const [only] = selection;
+      if (only !== BALL_ID) {
+        e.preventDefault();
+        onEditName?.(only);
+      }
+      return;
+    }
+    if (e.key !== "Tab") return;
+    const order = doc.teams.filter((team) => !team.hidden).flatMap((team) => team.players.map((p) => p.id));
+    if (order.length === 0) return;
+    const current = selection.size === 1 ? order.indexOf([...selection][0]) : -1;
+    const next = current === -1 ? (e.shiftKey ? order.length - 1 : 0) : current + (e.shiftKey ? -1 : 1);
+    if (next < 0 || next >= order.length) return;
+    e.preventDefault();
+    onAnnotationSelect?.(null);
+    onSelectionChange(new Set([order[next]]));
+  };
 
   /**
    * The selected shape's grab point under the pointer, and which space it lives in.
@@ -341,12 +575,35 @@ export function BoardCanvas({
   const dragKey = () => `drag-${gesture.current}`;
 
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (playing) return;
     gesture.current += 1;
     const p = pointFrom(e);
     e.currentTarget.setPointerCapture(e.pointerId);
+    // The hover card is about what the pointer rests on; a press is the end of that.
+    setHoverAt(null);
+
+    // Between two scenes nothing drawn is anywhere an edit could land, and settling
+    // on the scene moves the whole board under the pointer: this press only settles,
+    // and the next one edits. A still frame of another scene settles and carries on.
+    const showing = frameAt(doc, t).resolved;
+    if (e.button !== 2 && (showing.moving || showing.index !== sceneIndex)) {
+      onEditStart?.(showing.index);
+      if (showing.moving) return;
+    }
+
+    // The middle button pans a zoomed board, and does nothing else. Not Space-drag,
+    // the usual convention: Space already plays and pauses.
+    const shown = sceneZoom(size.w, size.h);
+    if (e.button === 1 && shown.z > 1) {
+      e.preventDefault();
+      setDrag({ kind: "pan", origin: rawFrom(e), from: shown });
+      return;
+    }
+    // The right button belongs to the context menu.
+    if (e.button === 2) return;
 
     // A drawing tool takes the whole gesture: no selecting, no marquee.
-    if (tool !== "select") {
+    if (isDrawTool(tool)) {
       startDrawing(p);
       return;
     }
@@ -402,7 +659,14 @@ export function BoardCanvas({
         }
         // A token is drawn where it stands, so the delta between two unprojected
         // points moves it exactly under the cursor (D49).
-        if (onGrass(p)) setDrag({ kind: "move", last: p, carry: e.altKey ? "scene" : carry });
+        if (onGrass(p)) {
+          setDrag({
+            kind: "move",
+            last: p,
+            carry: e.altKey ? "scene" : carry,
+            grab: grabOf(standing.id, p),
+          });
+        }
         return;
       }
 
@@ -426,7 +690,8 @@ export function BoardCanvas({
       if (!e.shiftKey) onSelectionChange(new Set());
       // In pitch metres, like the flat one: the corners were turned back into
       // places on the grass, so the sweep is an area of pitch and warps with it.
-      if (onGrass(p)) setDrag({ kind: "marquee", a: p, b: p, additive: e.shiftKey });
+      if (pans) startPan(e);
+      else if (onGrass(p)) setDrag({ kind: "marquee", a: p, b: p, additive: e.shiftKey });
       return;
     }
 
@@ -450,7 +715,7 @@ export function BoardCanvas({
       // Decided once, at the grab. Reading the modifier per pointermove would
       // let the carry stop mid-gesture, stranding the scenes it had already
       // taken along at wherever the cursor happened to be.
-      setDrag({ kind: "move", last: p, carry: e.altKey ? "scene" : carry });
+      setDrag({ kind: "move", last: p, carry: e.altKey ? "scene" : carry, grab: grabOf(hit.id, p) });
       return;
     }
 
@@ -471,7 +736,19 @@ export function BoardCanvas({
 
     onAnnotationSelect?.(null);
     if (!e.shiftKey) onSelectionChange(new Set());
-    setDrag({ kind: "marquee", a: p, b: p, additive: e.shiftKey });
+    // Empty grass: the Pan tool moves a zoomed view, and otherwise sweeps a box.
+    if (pans) startPan(e);
+    else setDrag({ kind: "marquee", a: p, b: p, additive: e.shiftKey });
+  };
+
+  /**
+   * Whether a drag on empty grass moves the view. Only once zoomed in: at 100%
+   * there is nowhere to go, so the Pan tool sweeps a selection box as Select does.
+   */
+  const pans = tool === "pan" && shownView.z > 1 && !cameraLocked;
+
+  const startPan = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    setDrag({ kind: "pan", origin: rawFrom(e), from: shownView });
   };
 
   /**
@@ -505,7 +782,7 @@ export function BoardCanvas({
    * it stays armed when the tool is pinned: a drill is usually several of them.
    */
   const startDrawing = (p: Vec2) => {
-    if (tool === "select" || !onGrass(p)) return;
+    if (!isDrawTool(tool) || !onGrass(p)) return;
     const sceneId = doc.scenes[annotationScene()]?.id ?? doc.scenes[0].id;
     const ann = draftAnnotation(doc, tool, sceneId, p, p, {
       color: drawColor,
@@ -517,13 +794,13 @@ export function BoardCanvas({
     if (tool === "text") {
       onDocChange(addAnnotation(doc, ann));
       onAnnotationSelect?.(ann.id);
-      onToolChange?.("select");
+      onToolChange?.(DEFAULT_TOOL);
       return;
     }
     if (tool === "ball") {
       onDocChange(addAnnotation(doc, ann));
       onAnnotationSelect?.(ann.id);
-      if (!sticky) onToolChange?.("select");
+      if (!sticky) onToolChange?.(DEFAULT_TOOL);
       return;
     }
     setDrag({ kind: "draw", start: p, points: [p], ann });
@@ -536,11 +813,21 @@ export function BoardCanvas({
     // where it was rather than putting NaN into a position. Releasing up there is
     // handled the same way, in onPointerUp. A label's width is read off its
     // billboard, not the grass, and needs no ground.
+    if (drag?.kind === "pan") {
+      const now = rawFrom(e);
+      writeZoom({
+        ...drag.from,
+        x: drag.from.x + now.x - drag.origin.x,
+        y: drag.from.y + now.y - drag.origin.y,
+      });
+      return;
+    }
+
     const onBillboard = drag?.kind === "ann-handle" && drag.billboard;
     if (drag && !onBillboard && !onGrass(p)) return;
 
     if (!drag) {
-      if (tool !== "select") {
+      if (isDrawTool(tool)) {
         setHover(null);
         setGrip(null);
         return;
@@ -566,6 +853,7 @@ export function BoardCanvas({
           : hitTest(doc, frameAt(doc, t), p)
         )?.id ?? null,
       );
+      setHoverAt(rawFrom(e));
       return;
     }
 
@@ -577,10 +865,45 @@ export function BoardCanvas({
     }
 
     if (drag.kind === "move") {
+      // Measured from where the drag started rather than from the last move, so a
+      // snap is exact and letting go of one does not leave the player behind the
+      // pointer. The player taken hold of is drawn onto the lines of the others —
+      // level across the pitch, or in the same channel — unless ⌘/Ctrl is held.
+      if (drag.grab) {
+        const scene = doc.scenes[sceneIndex];
+        const now = scene?.positions[drag.grab.id];
+        if (!now) return;
+        // A click is not a drag. Until the pointer has actually travelled, nothing
+        // moves — otherwise the first stray pointermove of a click would snap the
+        // player onto a neighbour's line.
+        if (!drag.grab.moving) {
+          const travelled = Math.hypot(p.x - drag.grab.origin.x, p.y - drag.grab.origin.y);
+          if (travelled < DRAG_START_M) return;
+          setDrag({ ...drag, grab: { ...drag.grab, moving: true } });
+        }
+        const wanted = {
+          x: drag.grab.start.x + p.x - drag.grab.origin.x,
+          y: drag.grab.start.y + p.y - drag.grab.origin.y,
+        };
+        const others = Object.entries(scene.positions)
+          .filter(([id]) => !selection.has(id))
+          .map(([, at]) => at);
+        const snapped = e.metaKey || e.ctrlKey ? { point: wanted, guides: [] } : snapPoint(wanted, others);
+        const delta = { x: snapped.point.x - now.x, y: snapped.point.y - now.y };
+        setGuides(snapped.guides);
+        // Dropped squarely on another player, a single one swaps places with him.
+        setSwapWith(
+          selection.size === 1 ? swapTarget(doc, sceneIndex, drag.grab.id, snapped.point) : null,
+        );
+        if (delta.x !== 0 || delta.y !== 0) {
+          onDocChange(moveEntities(doc, sceneIndex, selection, delta, drag.carry), dragKey());
+        }
+        return;
+      }
       const delta = { x: p.x - drag.last.x, y: p.y - drag.last.y };
       if (delta.x !== 0 || delta.y !== 0) {
         onDocChange(moveEntities(doc, sceneIndex, selection, delta, drag.carry), dragKey());
-        setDrag({ kind: "move", last: p, carry: drag.carry });
+        setDrag({ ...drag, last: p });
       }
       return;
     }
@@ -647,7 +970,7 @@ export function BoardCanvas({
    * when exactly one is selected.
    */
   const onDoubleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!onEditName || tool !== "select") return;
+    if (!onEditName || isDrawTool(tool)) return;
     const frame = frameAt(doc, t);
     const hit = tilted
       ? hitTestTilted(doc, frame, screenFrom(e), cameraFrom(e))
@@ -676,6 +999,17 @@ export function BoardCanvas({
     // pointermove would otherwise commit a zero-size shape and be discarded.
     if (drag?.kind === "draw" && landed) commitDraft(drag, p);
 
+    // Dropped onto a team-mate — or anyone: a swap of places, as one undo step with
+    // the drag that led to it.
+    if (drag?.kind === "move" && drag.grab && swapWith) {
+      onDocChange(
+        swapPlayers(doc, sceneIndex, drag.grab.id, swapWith, drag.grab.start, drag.carry),
+        dragKey(),
+      );
+    }
+
+    setGuides([]);
+    setSwapWith(null);
     setDrag(null);
     e.currentTarget.releasePointerCapture(e.pointerId);
   };
@@ -708,7 +1042,7 @@ export function BoardCanvas({
     onAnnotationSelect?.(ann.id);
     // Back to select unless the tool is pinned: one accidental extra arrow is
     // more annoying than one extra click.
-    if (!sticky) onToolChange?.("select");
+    if (!sticky) onToolChange?.(DEFAULT_TOOL);
   };
 
   /**
@@ -720,15 +1054,17 @@ export function BoardCanvas({
    * Under the camera a label is a billboard and its width runs along the screen.
    */
   const cursor = (): string => {
-    if (!live) return "default";
-    if (tool !== "select") return "crosshair";
+    if (!live || playing) return "default";
+    if (isDrawTool(tool)) return "crosshair";
+    if (drag?.kind === "pan") return "grabbing";
     const resize = rotated && !tilted ? "ns-resize" : "ew-resize";
     if (drag?.kind === "ann-handle") return drag.hit.which === "w" ? resize : "grabbing";
     if (drag?.kind === "move" || drag?.kind === "handle" || drag?.kind === "ann-move") {
       return "grabbing";
     }
     if (grip === "resize") return resize;
-    return grip === "grab" || hover ? "grab" : "default";
+    // An open hand over empty grass too, where the Pan tool has somewhere to go.
+    return grip === "grab" || hover || pans ? "grab" : "default";
   };
 
   return (
@@ -741,8 +1077,12 @@ export function BoardCanvas({
       />
       <canvas
         ref={canvasRef}
-        className="block touch-none select-none"
-        style={{ cursor: cursor() }}
+        tabIndex={live ? 0 : undefined}
+        aria-label={i18n.t("board.aria")}
+        onKeyDown={live ? onKey : undefined}
+        onContextMenu={live ? onContext : undefined}
+        className="block touch-none select-none outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/70"
+        style={{ cursor: drag?.kind === "pan" ? "grabbing" : cursor() }}
         onPointerDown={live ? onPointerDown : undefined}
         onPointerMove={live ? onPointerMove : undefined}
         onPointerUp={live ? onPointerUp : undefined}
@@ -752,7 +1092,170 @@ export function BoardCanvas({
         }}
         onDoubleClick={live ? onDoubleClick : undefined}
       />
+      {/* − | zoom | +: this scene's zoom. It is saved as it changes, and is what
+          playback, Present and exports show for the scene; 100% is the whole board. */}
+      {live && (
+        <div
+          className="absolute bottom-3 right-3 z-10 flex items-center overflow-hidden rounded-md border border-ink-600 bg-ink-800/90 font-mono text-[11px] text-ink-200 shadow"
+          title={i18n.t("board.zoom.scene", { scene: scene?.name ?? "" })}
+        >
+          <button
+            type="button"
+            onClick={() => writeZoom(zoomAbout(shownView, { x: size.w / 2, y: size.h / 2 }, 1 / 1.25, size))}
+            disabled={shownView.z <= 1 || cameraLocked}
+            aria-label={i18n.t("board.zoom.out")}
+            title={i18n.t("board.zoom.out")}
+            className="px-2 py-1 transition enabled:hover:bg-ink-700 disabled:opacity-40"
+          >
+            −
+          </button>
+          <ZoomField
+            value={shownView.z}
+            disabled={cameraLocked || size.w === 0}
+            label={i18n.t("board.zoom.field")}
+            onCommit={(target) =>
+              writeZoom(zoomAbout(shownView, { x: size.w / 2, y: size.h / 2 }, target / shownView.z, size))
+            }
+          />
+          <button
+            type="button"
+            onClick={() => writeZoom(zoomAbout(shownView, { x: size.w / 2, y: size.h / 2 }, 1.25, size))}
+            disabled={shownView.z >= MAX_ZOOM || cameraLocked}
+            aria-label={i18n.t("board.zoom.in")}
+            title={i18n.t("board.zoom.in")}
+            className="px-2 py-1 transition enabled:hover:bg-ink-700 disabled:opacity-40"
+          >
+            +
+          </button>
+        </div>
+      )}
+      {live && !playing && !drag && hover && hoverAt && !isDrawTool(tool) && (
+        <HoverCard doc={doc} t={t} sceneIndex={sceneIndex} id={hover} at={hoverAt} />
+      )}
     </div>
+  );
+}
+
+/**
+ * What the player under the pointer is doing in this scene that the token does not
+ * already show — the ball, a wait, a run that carries on, a position nobody saw —
+ * so the board can be read without selecting anyone. Nothing of the kind, no card:
+ * the token already says who he is.
+ */
+function HoverCard({
+  doc,
+  t,
+  sceneIndex,
+  id,
+  at,
+}: {
+  doc: BoardDoc;
+  t: number;
+  sceneIndex: number;
+  id: string;
+  at: Vec2;
+}) {
+  const i18n = useI18n();
+  const frame = frameAt(doc, t);
+  const scene = frame.resolved.moving ? frame.resolved.to : doc.scenes[sceneIndex];
+  if (!scene) return null;
+
+  // The ball is always visible where it is, so it gets no card.
+  if (id === BALL_ID) return null;
+  const lines: string[] = [];
+  const index = doc.scenes.indexOf(scene);
+  const wait = scene.delay?.[id];
+  if (index > 0 && wait) lines.push(i18n.t("hover.waits", { seconds: (wait / 1000).toFixed(1) }));
+  if (runsThrough(doc, id, index)) lines.push(i18n.t("hover.runsOn"));
+  if (scene.unseen?.includes(id)) lines.push(i18n.t("hover.unseen"));
+  if (lines.length === 0) return null;
+
+  return (
+    <div
+      className="pointer-events-none absolute z-10 max-w-56 rounded-md border border-ink-600 bg-ink-800/95 px-2 py-1.5 text-[11px] leading-snug text-ink-200 shadow-lg backdrop-blur"
+      style={{ left: at.x + 14, top: at.y + 14 }}
+    >
+      {lines.map((line) => (
+        <div key={line} className="text-ink-300">
+          {line}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+
+/** A point on the canvas element back into the space the board was drawn in. */
+const unzoom = (at: Vec2, zoom: Zoom): Vec2 => ({
+  x: (at.x - zoom.x) / zoom.z,
+  y: (at.y - zoom.y) / zoom.z,
+});
+
+/**
+ * Keep a zoom sensible: never smaller than the whole board, never past `MAX_ZOOM`,
+ * and never panned so far that the board leaves its box.
+ */
+function clampZoom(zoom: Zoom, size: { w: number; h: number }): Zoom {
+  const z = Math.min(Math.max(zoom.z, 1), MAX_ZOOM);
+  if (z === 1) return NO_ZOOM;
+  const clamp = (v: number, span: number) => Math.min(0, Math.max(span - span * z, v));
+  return { z, x: clamp(zoom.x, size.w), y: clamp(zoom.y, size.h) };
+}
+
+/** Zoom by `factor` keeping the point under `at` where it is. */
+function zoomAbout(zoom: Zoom, at: Vec2, factor: number, size: { w: number; h: number }): Zoom {
+  const z = Math.min(Math.max(zoom.z * factor, 1), MAX_ZOOM);
+  const k = z / zoom.z;
+  return clampZoom({ z, x: at.x - (at.x - zoom.x) * k, y: at.y - (at.y - zoom.y) * k }, size);
+}
+
+/** How far, in metres, the pointer has to travel before a press on a player becomes a drag. */
+const DRAG_START_M = 0.3;
+
+/**
+ * The zoom as a number you can type: "250" or "250%", applied on Enter or when the
+ * field is left, kept between 100% and the most the board zooms. Holds its own text
+ * while typing, so a half-typed value is not snapped back mid-edit.
+ */
+function ZoomField({
+  value,
+  disabled,
+  label,
+  onCommit,
+}: {
+  value: number;
+  disabled: boolean;
+  label: string;
+  onCommit: (zoom: number) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = `${Math.round(value * 100)}%`;
+  const commit = () => {
+    if (draft === null) return;
+    const n = Number(draft.replace("%", "").replace(",", ".").trim());
+    setDraft(null);
+    if (Number.isFinite(n) && n > 0) onCommit(Math.min(Math.max(n / 100, 1), MAX_ZOOM));
+  };
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={draft ?? shown}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      onFocus={(e) => e.currentTarget.select()}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape") {
+          setDraft(null);
+          e.currentTarget.blur();
+        }
+      }}
+      className="w-12 border-x border-ink-600 bg-transparent px-1 py-1 text-center outline-none focus:bg-ink-900 disabled:opacity-60"
+    />
   );
 }
 

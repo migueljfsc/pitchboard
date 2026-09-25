@@ -56,3 +56,15 @@ describe("board autosave", () => {
     expect(saveBoard(createBoardDoc(), angry)).toBe(false);
   });
 });
+
+describe("autosave never writes what it could not read back", () => {
+  it("keeps the last good board when handed an invalid one", () => {
+    const store = memoryStore();
+    const good = createBoardDoc();
+    expect(saveBoard(good, store)).toBe(true);
+    const bad = structuredClone(good);
+    bad.scenes[0].camera = { at: { x: NaN, y: NaN }, zoom: 3 };
+    expect(saveBoard(bad, store)).toBe(false);
+    expect(loadBoard(store)).toEqual(good);
+  });
+});

@@ -10,7 +10,9 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  Gauge,
   Images,
+  Info,
   Repeat,
 } from "lucide-react";
 import type { BoardDoc, PitchView } from "@/board/types";
@@ -25,7 +27,6 @@ import {
   duplicateScene,
   moveScene,
   renameScene,
-  sceneStartSeconds,
   setDelay,
   setSceneTiming,
   setLoft,
@@ -43,6 +44,7 @@ import {
   entityTravelMs,
   passEnds,
   resolveAt,
+  runsThrough,
   transitionInto,
   sceneTimings,
   scenePace,
@@ -66,6 +68,9 @@ type Props = {
   onPlayingChange: (playing: boolean) => void;
   loop: boolean;
   onLoopChange: (loop: boolean) => void;
+  /** Playback speed, 1 for real time. Editor-only; an export always renders at 1×. */
+  speed: number;
+  onSpeedChange: (speed: number) => void;
   /** Deleting a scene goes through the editor, which can offer to undo it. */
   onDeleteScene: (index: number) => void;
 };
@@ -82,6 +87,8 @@ export function Timeline({
   onPlayingChange,
   loop,
   onLoopChange,
+  speed,
+  onSpeedChange,
   onDeleteScene,
 }: Props) {
   const { t } = useI18n();
@@ -151,8 +158,8 @@ export function Timeline({
 
   return (
     <div className="flex flex-col gap-3 border-t border-ink-700 bg-ink-800 px-4 py-3">
-      {/* Transport. Bottom margin makes room for the scene ticks under the scrubber. */}
-      <div className="mb-2 flex items-center gap-3">
+      {/* Transport. Bottom margin makes room for the timing track under the scrubber. */}
+      <div className="mb-4 flex items-center gap-3">
         <button
           type="button"
           onClick={() => onPlayingChange(!playing)}
@@ -174,6 +181,8 @@ export function Timeline({
         >
           <Repeat size={14} />
         </button>
+
+        <SpeedButton speed={speed} onChange={onSpeedChange} />
 
         {/* Flow sets the per-scene timings aside rather than overwriting them,
             so turning it off gives back whatever was tuned. */}
@@ -226,36 +235,27 @@ export function Timeline({
             aria-label={t("timeline.scrub")}
           />
           {total > 0 && (
-            <div className="absolute inset-x-0 top-full mt-1.5 h-2.5">
-              {doc.scenes.map((s, i) => {
-                const at = Math.min(1, sceneStartSeconds(doc, i) / total);
-                return (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => onActiveSceneChange(i)}
-                    title={t("timeline.tick", { n: i + 1, name: s.name })}
-                    aria-label={t("timeline.tick", { n: i + 1, name: s.name })}
-                    style={{ left: `calc(${SCRUB_THUMB / 2}px + (100% - ${SCRUB_THUMB}px) * ${at})` }}
-                    className="group absolute top-0 flex h-2.5 w-3 -translate-x-1/2 justify-center"
-                  >
-                    <span
-                      className={cn(
-                        "block h-full w-0.5 rounded-full transition",
-                        i === activeScene
-                          ? "bg-accent"
-                          : "bg-ink-400/60 group-hover:bg-ink-200",
-                      )}
-                    />
-                  </button>
-                );
-              })}
-            </div>
+            <TimingTrack
+              doc={doc}
+              activeScene={activeScene}
+              onActiveSceneChange={onActiveSceneChange}
+              onDocChange={onDocChange}
+            />
           )}
         </div>
 
         <span className="w-20 shrink-0 text-right font-mono text-[11px] tabular-nums text-ink-400">
           {time.toFixed(1)}s / {total.toFixed(1)}s
+        </span>
+        {/* The key to the timing track, on hover and in a space of its own: spelled out
+            under the clock it ran over the track in Portuguese, and over the last
+            blocks whenever there were many scenes. */}
+        <span
+          className="-ml-1 flex shrink-0 cursor-help text-ink-400 transition hover:text-ink-200"
+          title={t("timeline.track.legend.hint")}
+          aria-label={t("timeline.track.legend.hint")}
+        >
+          <Info size={13} />
         </span>
       </div>
 
@@ -352,6 +352,14 @@ export function Timeline({
                 {timing[i].holdMs > 0 && `${i > 0 ? " → " : ""}${(timing[i].holdMs / 1000).toFixed(1)}s`}
                 {s.shot && <span className="ml-1 text-accent">{t("timeline.shotMark")}</span>}
                 {s.loft && <span className="ml-1 text-accent">{t("timeline.loftMark")}</span>}
+                {i > 0 && !s.shot && ballTravelBetween(doc, doc.scenes[i - 1], s) === "pass" && (
+                  <span className="ml-1 text-sky-300">{t("timeline.passMark")}</span>
+                )}
+                {Object.keys(s.run ?? {}).some((id) => runsThrough(doc, id, i)) && (
+                  <span className="ml-1 text-emerald-300" title={t("timeline.throughMark.hint")}>
+                    {t("timeline.throughMark")}
+                  </span>
+                )}
               </span>
               <span className="mt-1 h-0.5 w-full overflow-hidden rounded-full bg-ink-600/70">
                 <span
@@ -554,6 +562,175 @@ function Duration({
       unit="s"
       onCommit={(v) => onChange(v * 1000)}
     />
+  );
+}
+
+/**
+ * The whole clip as blocks under the scrubber: each scene's travel, lighter, then
+ * its hold, numbered — widths in proportion to time, so the rhythm of the move is
+ * visible at once. Click a block to go to its scene. Outside flow mode the right
+ * edge of each part can be dragged to change that time; flow derives its own.
+ *
+ * Laid across the track the scrubber's thumb actually travels — the full width
+ * less the thumb — so a block's edge sits under the thumb at that moment.
+ */
+function TimingTrack({
+  doc,
+  activeScene,
+  onActiveSceneChange,
+  onDocChange,
+}: {
+  doc: BoardDoc;
+  activeScene: number;
+  onActiveSceneChange: (index: number, doc?: BoardDoc) => void;
+  onDocChange: Change<BoardDoc>;
+}) {
+  const { t } = useI18n();
+  const ref = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ index: number; field: "transitionMs" | "holdMs"; x: number; from: number; msPerPx: number } | null>(null);
+  const timing = sceneTimings(doc);
+  const total = timing.reduce((n, s) => n + s.travelMs + s.holdMs, 0);
+  if (total <= 0) return null;
+
+  const at = (ms: number) => `calc(${SCRUB_THUMB / 2}px + (100% - ${SCRUB_THUMB}px) * ${ms / total})`;
+  const span = (ms: number) => `calc((100% - ${SCRUB_THUMB}px) * ${ms / total})`;
+
+  const startDrag = (e: React.PointerEvent, index: number, field: "transitionMs" | "holdMs") => {
+    e.stopPropagation();
+    const width = (ref.current?.getBoundingClientRect().width ?? 1) - SCRUB_THUMB;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drag.current = { index, field, x: e.clientX, from: doc.scenes[index][field], msPerPx: total / Math.max(width, 1) };
+  };
+  const moveDrag = (e: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d) return;
+    const scene = doc.scenes[d.index];
+    const ms = Math.round(
+      Math.min(Math.max(d.from + (e.clientX - d.x) * d.msPerPx, d.field === "transitionMs" ? 100 : 0), 60_000) / 50,
+    ) * 50;
+    if (ms !== scene[d.field]) {
+      onDocChange(setSceneTiming(doc, d.index, { [d.field]: ms }), `track:${scene.id}:${d.field}`);
+    }
+  };
+  const endDrag = (e: React.PointerEvent) => {
+    drag.current = null;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+  };
+
+  // Where each scene's block starts: the sum of everything before it.
+  const starts = timing.map((_, i) =>
+    timing.slice(0, i).reduce((n, s, j) => n + (j === 0 ? 0 : s.travelMs) + s.holdMs, 0),
+  );
+  return (
+    <div ref={ref} className="absolute inset-x-0 top-full mt-1.5 h-3">
+      {doc.scenes.map((s, i) => {
+        const travel = i === 0 ? 0 : timing[i].travelMs;
+        const hold = timing[i].holdMs;
+        const left = starts[i];
+        const active = i === activeScene;
+        const label = t("timeline.tick", { n: i + 1, name: s.name });
+        return (
+          <div key={s.id} className="absolute inset-y-0" style={{ left: at(left), width: span(travel + hold) }}>
+            <button
+              type="button"
+              onClick={() => onActiveSceneChange(i)}
+              title={t("timeline.track.block", {
+                name: label,
+                travel: (travel / 1000).toFixed(1),
+                hold: (hold / 1000).toFixed(1),
+              })}
+              aria-label={label}
+              className="absolute inset-0 flex overflow-hidden rounded-sm"
+            >
+              {/* Moving: striped, so it reads as travel rather than as a paler hold. */}
+              {travel > 0 && (
+                <span
+                  className="h-full"
+                  style={{
+                    width: `${(travel / (travel + hold)) * 100}%`,
+                    background: active
+                      ? "repeating-linear-gradient(135deg, rgba(251,191,36,0.55) 0 3px, rgba(251,191,36,0.25) 3px 6px)"
+                      : "repeating-linear-gradient(135deg, rgba(143,163,157,0.45) 0 3px, rgba(143,163,157,0.15) 3px 6px)",
+                  }}
+                />
+              )}
+              <span
+                className={cn(
+                  "h-full flex-1",
+                  active ? "bg-accent" : "bg-ink-400/40 hover:bg-ink-400/60",
+                )}
+              />
+              {/* The number over the whole block, so a scene with no hold is still named. */}
+              {travel + hold >= total * 0.025 && (
+                <span
+                  className={cn(
+                    "pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-[9px] leading-none",
+                    active ? "text-ink-900" : "text-ink-200",
+                  )}
+                >
+                  {i + 1}
+                </span>
+              )}
+            </button>
+            {!doc.flow && i > 0 && (
+              <span
+                role="separator"
+                title={t("timeline.track.travel")}
+                onPointerDown={(e) => startDrag(e, i, "transitionMs")}
+                onPointerMove={moveDrag}
+                onPointerUp={endDrag}
+                className="absolute inset-y-0 z-10 w-1.5 -translate-x-1/2 cursor-ew-resize hover:bg-white/60"
+                style={{ left: `${(travel / Math.max(travel + hold, 1)) * 100}%` }}
+              />
+            )}
+            {!doc.flow && (
+              <span
+                role="separator"
+                title={t("timeline.track.hold")}
+                onPointerDown={(e) => startDrag(e, i, "holdMs")}
+                onPointerMove={moveDrag}
+                onPointerUp={endDrag}
+                className="absolute inset-y-0 right-0 z-10 w-1.5 translate-x-1/2 cursor-ew-resize hover:bg-white/60"
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** The speeds playback cycles through. */
+const SPEEDS = [1, 2, 0.5] as const;
+
+/**
+ * How fast playback runs, cycled by clicking: 1×, 2×, ½×. For walking a team
+ * through a move slowly. Editor-only — an export always renders in real time.
+ */
+export function SpeedButton({
+  speed,
+  onChange,
+}: {
+  speed: number;
+  onChange: (speed: number) => void;
+}) {
+  const { t } = useI18n();
+  const at = SPEEDS.indexOf(speed as (typeof SPEEDS)[number]);
+  const next = SPEEDS[(at + 1) % SPEEDS.length];
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(next)}
+      aria-label={t("timeline.speed", { speed: speed === 0.5 ? "½" : String(speed) })}
+      title={t("timeline.speed.hint")}
+      className={cn(
+        "flex h-8 shrink-0 items-center justify-center gap-1 rounded-md border px-2 font-mono text-[11px] transition",
+        speed === 1 ? "border-ink-600 text-ink-400 hover:text-ink-200" : "border-accent text-accent",
+      )}
+    >
+      <Gauge size={13} />
+      {speed === 0.5 ? "½×" : `${speed}×`}
+    </button>
   );
 }
 

@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Film, ImageIcon, Loader2, X } from "lucide-react";
 import type { BoardDoc, PitchView } from "@/board/types";
 import { JsonPane } from "@/components/JsonPane";
 import { totalSeconds } from "@/board/scenes";
-import { runExport, type ExportHandle } from "@/export/client";
+import type { ExportJob } from "@/lib/useExportJob";
 import { encodableFormats } from "@/export/capability";
 import { renderPng } from "@/export/image";
 import {
@@ -37,9 +37,9 @@ type Props = {
   /** The framing on screen. The export matches it rather than reframing. */
   pitchView: PitchView;
   onClose: () => void;
+  /** The export itself, held by the editor so it outlives this dialog. */
+  exportJob: ExportJob;
 };
-
-type Job = { phase: ExportPhase; fraction: number };
 
 const LABEL: Record<ExportFormat, string> = {
   mp4: "MP4",
@@ -62,6 +62,12 @@ const SHAPE: Record<ExportShape, MessageKey> = {
   wide: "export.shape.wide",
 };
 
+/**
+ * Whether this browser can ask where to save (the File System Access API). Where it
+ * cannot, the file goes to the browser's downloads folder, and the dialog says so.
+ */
+const CAN_PICK_FOLDER = typeof window !== "undefined" && "showSaveFilePicker" in window;
+
 const PHASE: Record<ExportPhase, MessageKey> = {
   palette: "export.phase.palette",
   render: "export.phase.render",
@@ -81,7 +87,7 @@ const PHASE: Record<ExportPhase, MessageKey> = {
  * answer for. So it is a flag beside the encoder's format rather than a member
  * of it, and every encoder control hangs off `!json`.
  */
-export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
+export function ExportDialog({ doc, t, pitchView, onClose, exportJob }: Props) {
   // `t` is already taken here — it is the frame a PNG exports — so the
   // translator keeps its full name rather than shadowing the time.
   const i18n = useI18n();
@@ -100,15 +106,13 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
   const [title, setTitle] = useState(doc.name);
   const [sceneCaption, setSceneCaption] = useState(true);
   const [transparent, setTransparent] = useState(false);
-  const [job, setJob] = useState<Job | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState<string | null>(null);
+  // Only this dialog's own format is shown as running here; another format's
+  // export, started earlier, is still reported in the header.
+  const job = exportJob.running;
+  const { error, saved } = exportJob;
   /** The last capability answer, tagged with what it was an answer about. */
   const [probe, setProbe] = useState<{ key: string; formats: VideoFormat[] } | null>(null);
 
-  const handle = useRef<ExportHandle | null>(null);
-  /** The last file produced, kept so "Download again" needs no re-encode. */
-  const file = useRef<{ data: Blob; name: string } | null>(null);
 
   const longEdge = format === "gif" ? gifEdge : videoEdge;
   const setLongEdge = format === "gif" ? setGifEdge : setVideoEdge;
@@ -132,15 +136,6 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
     () => RESOLUTIONS.filter((r) => format !== "gif" || r <= MAX_GIF_RESOLUTION),
     [format],
   );
-
-  const stop = useCallback(() => {
-    handle.current?.cancel();
-    handle.current = null;
-  }, []);
-
-  // Terminate on unmount as well as on cancel: closing the dialog mid-export
-  // must not leave a worker encoding into nothing.
-  useEffect(() => stop, [stop]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -183,11 +178,7 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
    * blob goes with it, since a stale one is a video's worth of memory held for
    * a button that is no longer offered.
    */
-  const forget = () => {
-    setSaved(null);
-    setError(null);
-    file.current = null;
-  };
+  const forget = exportJob.forget;
 
   const chooseFormat = (next: ExportFormat) => {
     forget();
@@ -195,53 +186,22 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
     if (next !== "png") setFps(DEFAULT_FPS[next]);
   };
 
-  const save = (data: Blob, extension: string) => {
-    file.current = { data, name: `${slug(doc.name)}.${extension}` };
-    download(file.current);
-    setSaved(`${file.current.name} — ${megabytes(data.size)}`);
-  };
-
   const start = () => {
-    setError(null);
-    setSaved(null);
-
+    const name = slug(doc.name);
+    // Each asks where to save before anything renders — the save dialog only opens
+    // in direct answer to this click.
     if (format === "png") {
-      setJob({ phase: "render", fraction: 0 });
-      void renderPng(doc, t, pitchView, longEdge, shape, look)
-        .then((png) => save(png, "png"))
-        .catch((err: unknown) => setError(message(err)))
-        .finally(() => setJob(null));
+      void exportJob.startPng(() => renderPng(doc, t, pitchView, longEdge, shape, look), name);
       return;
     }
-
-    setJob({ phase: "render", fraction: 0 });
-    handle.current = runExport(
-      { doc, pitchView, format, size, fps, bitrate, look },
-      {
-        onProgress: (phase, fraction) => setJob({ phase, fraction }),
-        onDone: (result) => {
-          handle.current = null;
-          setJob(null);
-          save(new Blob([result.buffer], { type: result.mime }), result.extension);
-        },
-        onError: (msg) => {
-          handle.current = null;
-          setJob(null);
-          setError(msg);
-        },
-      },
-    );
+    void exportJob.startClip({ doc, pitchView, format, size, fps, bitrate, look }, name);
   };
 
-  const cancel = () => {
-    stop();
-    setJob(null);
-  };
+  const cancel = exportJob.cancel;
 
-  const close = () => {
-    stop();
-    onClose();
-  };
+  // Closing never cancels: an export in progress carries on, reported in the
+  // header, and downloads itself when it is done.
+  const close = onClose;
 
   return (
     <div
@@ -472,7 +432,7 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
                 <span className="font-mono">{saved}</span>
                 <button
                   type="button"
-                  onClick={() => file.current && download(file.current)}
+                  onClick={exportJob.downloadAgain}
                   className="ml-auto text-accent transition hover:brightness-110"
                 >
                   {i18n.t("export.again")}
@@ -492,19 +452,29 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
                 {format !== "png" && (
                   <div className="h-1.5 overflow-hidden rounded-full bg-ink-700">
                     <div
-                      className="h-full rounded-full bg-accent transition-[width] duration-150"
+                      className="h-full rounded-full bg-accent"
                       style={{ width: `${Math.max(2, job.fraction * 100)}%` }}
                     />
                   </div>
                 )}
-                <button
-                  type="button"
-                  onClick={cancel}
-                  disabled={format === "png"}
-                  className="self-end rounded-md border border-ink-600 px-3 py-1.5 text-xs text-ink-200 transition enabled:hover:border-ink-400 enabled:hover:text-white disabled:opacity-45"
-                >
-                  {i18n.t("export.cancel")}
-                </button>
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={close}
+                    title={i18n.t("export.background.hint")}
+                    className="rounded-md border border-ink-600 px-3 py-1.5 text-xs text-ink-200 transition hover:border-ink-400 hover:text-white"
+                  >
+                    {i18n.t("export.background")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancel}
+                    disabled={job.format === "png"}
+                    className="rounded-md border border-ink-600 px-3 py-1.5 text-xs text-ink-200 transition enabled:hover:border-ink-400 enabled:hover:text-white disabled:opacity-45"
+                  >
+                    {i18n.t("export.cancel")}
+                  </button>
+                </div>
               </div>
             ) : (
               <button
@@ -517,6 +487,11 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
                 {i18n.t("export.run", { format: LABEL[format] })}
               </button>
             )}
+            {!job && (
+              <p className="-mt-2 text-center text-[11px] text-ink-400">
+                {i18n.t(CAN_PICK_FOLDER ? "export.where.pick" : "export.where.downloads")}
+              </p>
+            )}
             </>
           )}
         </div>
@@ -525,20 +500,6 @@ export function ExportDialog({ doc, t, pitchView, onClose }: Props) {
   );
 }
 
-function download({ data, name }: { data: Blob; name: string }) {
-  const url = URL.createObjectURL(data);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.click();
-  // Revoking immediately can beat the download in Safari; a tick is enough.
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-const megabytes = (bytes: number) =>
-  bytes < 1e6 ? `${Math.round(bytes / 1e3)} KB` : `${(bytes / 1e6).toFixed(1)} MB`;
-
-const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (

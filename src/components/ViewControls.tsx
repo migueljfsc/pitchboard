@@ -69,92 +69,76 @@ export function ViewControls({
   // through 3D and comes back as it was.
   const framing = framingOf(view);
   return (
+    // Compact rows, a label on the left and the control beside it: the tab is read
+    // at a glance and set once, and full-width buttons for three-letter words made
+    // it the tallest panel in the sidebar.
     <div className="flex flex-col gap-2">
       {showHalves && (
-        <div className="flex gap-1">
-          {HALVES.map((h) => (
-            <button
-              key={h.value}
-              type="button"
-              onClick={() => onChange({ ...view, half: h.value })}
-              className={cn(
-                "flex-1 rounded border px-1 py-1.5 text-[11px] transition",
-                view.half === h.value
-                  ? "border-accent text-accent"
-                  : "border-ink-600 text-ink-400 hover:text-ink-200",
-              )}
-            >
-              {t(framing.rotated ? h.upright : h.flat)}
-            </button>
-          ))}
-        </div>
+        <Row label={t("view.area")} title={view.half !== "full" && !framing.rotated ? t("view.halfHint") : undefined}>
+          <Segmented
+            options={HALVES.map((h) => ({ value: h.value, label: t(framing.rotated ? h.upright : h.flat) }))}
+            value={view.half}
+            onChange={(half) => onChange({ ...view, half })}
+          />
+        </Row>
       )}
-
-      <button
-        type="button"
-        onClick={() => onChange({ ...view, rotated: !view.rotated })}
-        aria-pressed={framing.rotated}
-        disabled={view.tilt}
-        className={cn(
-          "flex items-center justify-center gap-1.5 rounded border px-2 py-1.5 text-[11px] transition",
-          "disabled:cursor-not-allowed disabled:opacity-40",
-          framing.rotated
-            ? "border-accent text-accent"
-            : "border-ink-600 text-ink-400 hover:text-ink-200",
-        )}
-      >
-        <RotateCw size={12} />
-        {t(framing.rotated ? "view.vertical" : "view.horizontal")}
-      </button>
 
       {/* Tilt implies vertical, so it disables the rotation control rather than
           disagreeing with it — but it must not WRITE rotation, or the flat
           orientation is lost the moment you look at the board in 3D. */}
-      <button
-        type="button"
-        onClick={() => onChange({ ...view, tilt: !view.tilt })}
-        aria-pressed={!!view.tilt}
-        className={cn(
-          "flex items-center justify-center gap-1.5 rounded border px-2 py-1.5 text-[11px] transition",
-          view.tilt
-            ? "border-accent text-accent"
-            : "border-ink-600 text-ink-400 hover:text-ink-200",
-        )}
-      >
-        <Box size={12} />
-        {t(view.tilt ? "view.3d" : "view.flat")}
-      </button>
+      <Row label={t("view.board")}>
+        <div className="flex flex-1 gap-1">
+          <Segmented
+            options={[
+              { value: "flat", label: t("view.flat") },
+              { value: "3d", label: t("view.3d"), icon: <Box size={11} /> },
+            ]}
+            value={view.tilt ? "3d" : "flat"}
+            onChange={(v) => onChange({ ...view, tilt: v === "3d" })}
+          />
+          <button
+            type="button"
+            onClick={() => onChange({ ...view, rotated: !view.rotated })}
+            aria-pressed={framing.rotated}
+            aria-label={t(framing.rotated ? "view.vertical" : "view.horizontal")}
+            title={t(framing.rotated ? "view.vertical" : "view.horizontal")}
+            disabled={view.tilt}
+            className={cn(
+              "flex shrink-0 items-center justify-center rounded border px-1.5 transition",
+              "disabled:cursor-not-allowed disabled:opacity-40",
+              framing.rotated
+                ? "border-accent text-accent"
+                : "border-ink-600 text-ink-400 enabled:hover:text-ink-200",
+            )}
+          >
+            <RotateCw size={12} />
+          </button>
+        </div>
+      </Row>
 
       {doc && onTokenScaleChange && (
-        <label className="flex flex-col gap-1.5 pt-1">
-          <span className="flex items-baseline justify-between text-[11px] uppercase tracking-wide text-ink-400">
-            {t("view.playerSize")}
-            <span className="font-mono normal-case tracking-normal text-ink-300">
-              {scale.toFixed(2)}x
-            </span>
-          </span>
+        <Row label={t("view.players")}>
           <input
             type="range"
             min={MIN_TOKEN_SCALE}
             max={MAX_TOKEN_SCALE}
             step={0.05}
             value={scale}
+            aria-label={t("view.playerSize")}
             onChange={(e) => onTokenScaleChange(Number(e.target.value))}
-            className="h-1 w-full cursor-pointer appearance-none rounded-full bg-ink-600 accent-accent"
+            className="h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-ink-600 accent-accent"
           />
-        </label>
+          <span className="w-9 shrink-0 text-right font-mono text-[10px] text-ink-300">
+            {scale.toFixed(2)}×
+          </span>
+        </Row>
       )}
 
-      {doc && onGrassChange && (
-        <GrassControls grass={doc.grass} onChange={onGrassChange} />
-      )}
+      {doc && onGrassChange && <GrassControls grass={doc.grass} onChange={onGrassChange} />}
 
       {ghosts && onGhostsChange && (
-        <div className="flex flex-col gap-1.5 pt-1">
-          <span className="text-[11px] uppercase tracking-wide text-ink-400">
-            {t("view.ghosts")}
-          </span>
-          <div className="flex gap-1">
+        <Row label={t("view.ghostsShort")} title={t("view.ghosts.hint")}>
+          <div className="flex flex-1 gap-1">
             {(
               [
                 ["before", "view.ghosts.before"],
@@ -165,9 +149,10 @@ export function ViewControls({
                 key={which}
                 type="button"
                 aria-pressed={ghosts[which]}
+                title={t("view.ghosts.hint")}
                 onClick={() => onGhostsChange({ ...ghosts, [which]: !ghosts[which] })}
                 className={cn(
-                  "flex-1 rounded border px-1 py-1.5 text-[11px] transition",
+                  "flex-1 rounded border px-1 py-0.5 text-[10px] transition",
                   ghosts[which]
                     ? "border-accent text-accent"
                     : "border-ink-600 text-ink-400 hover:text-ink-200",
@@ -177,15 +162,62 @@ export function ViewControls({
               </button>
             ))}
           </div>
-          <p className="text-[11px] leading-relaxed text-ink-300">{t("view.ghosts.hint")}</p>
-        </div>
+        </Row>
       )}
+    </div>
+  );
+}
 
-      {showHalves && view.half !== "full" && !framing.rotated && (
-        <p className="text-[11px] leading-relaxed text-ink-300">
-          {t("view.halfHint")}
-        </p>
-      )}
+/** A label and its control on one line. `title` explains the whole row on hover. */
+function Row({
+  label,
+  title,
+  children,
+}: {
+  label: string;
+  title?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-2.5" title={title}>
+      {/* Wide enough for the longest label in either language — JOGADORES, FANTASMAS. */}
+      <span className="w-[4.5rem] shrink-0 truncate text-[10px] uppercase tracking-wide text-ink-400">
+        {label}
+      </span>
+      {children}
+    </div>
+  );
+}
+
+/** A small row of mutually exclusive choices. */
+function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { value: T; label: string; icon?: React.ReactNode }[];
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="flex min-w-0 flex-1 gap-1">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          aria-pressed={value === o.value}
+          onClick={() => onChange(o.value)}
+          className={cn(
+            "flex min-w-0 flex-1 items-center justify-center gap-1 truncate rounded border px-1 py-0.5 text-[10px] transition",
+            value === o.value
+              ? "border-accent text-accent"
+              : "border-ink-600 text-ink-400 hover:text-ink-200",
+          )}
+        >
+          {o.icon}
+          {o.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -212,14 +244,8 @@ function GrassControls({
     onChange(Object.keys(clean).length ? clean : undefined);
   };
   return (
-    <div className="flex flex-col gap-1.5 pt-1">
-      <label className="flex flex-col gap-1.5">
-        <span className="flex items-baseline justify-between text-[11px] uppercase tracking-wide text-ink-400">
-          {t("view.grass")}
-          <span className="font-mono normal-case tracking-normal text-ink-300">
-            {t(shade < 0 ? "view.grass.darker" : shade > 0 ? "view.grass.lighter" : "view.grass.default")}
-          </span>
-        </span>
+    <>
+      <Row label={t("view.grass")}>
         <input
           type="range"
           min={-1}
@@ -227,33 +253,21 @@ function GrassControls({
           step={0.1}
           value={shade}
           aria-label={t("view.grass.shadeAria")}
+          title={t(shade < 0 ? "view.grass.darker" : shade > 0 ? "view.grass.lighter" : "view.grass.default")}
           onChange={(e) => set({ texture, shade: Math.round(Number(e.target.value) * 10) / 10 })}
-          className="h-1 w-full cursor-pointer appearance-none rounded-full bg-ink-600 accent-accent"
+          className="h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-ink-600 accent-accent"
         />
-      </label>
-      <div className="flex gap-1">
-        {(
-          [
-            ["stripes", "view.grass.stripes"],
-            ["natural", "view.grass.natural"],
-          ] as const
-        ).map(([value, key]) => (
-          <button
-            key={value}
-            type="button"
-            aria-pressed={texture === value}
-            onClick={() => set({ shade, texture: value })}
-            className={cn(
-              "flex-1 rounded border px-1 py-1.5 text-[11px] transition",
-              texture === value
-                ? "border-accent text-accent"
-                : "border-ink-600 text-ink-400 hover:text-ink-200",
-            )}
-          >
-            {t(key)}
-          </button>
-        ))}
-      </div>
-    </div>
+      </Row>
+      <Row label="">
+        <Segmented
+          options={[
+            { value: "stripes" as const, label: t("view.grass.stripes") },
+            { value: "natural" as const, label: t("view.grass.natural") },
+          ]}
+          value={texture}
+          onChange={(value) => set({ shade, texture: value })}
+        />
+      </Row>
+    </>
   );
 }

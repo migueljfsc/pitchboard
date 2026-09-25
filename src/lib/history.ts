@@ -90,7 +90,24 @@ export type History<T> = {
   redo: () => T;
   canUndo: boolean;
   canRedo: boolean;
+  /** Every earlier value, oldest first — for naming the steps back. */
+  past: readonly T[];
+  /** Undo `steps` times at once, as one change of state. Returns the value now current. */
+  undoSteps: (steps: number) => T;
+  /**
+   * Undo the latest change, whenever it is called. Stable across renders, unlike
+   * `undo`: for a callback held on to — a notice's Undo button — that must act on
+   * the history as it is when clicked, not as it was when the notice was raised.
+   */
+  undoLatest: () => void;
 };
+
+/** Undo `steps` times, stopping at the oldest value. */
+export function undoMany<T>(s: Stack<T>, steps: number): Stack<T> {
+  let next = s;
+  for (let i = 0; i < steps; i++) next = undoStack(next);
+  return next;
+}
 
 export function useHistory<T>(initial: T | (() => T)): History<T> {
   const [stack, setStack] = useState<Stack<T>>(() =>
@@ -115,6 +132,17 @@ export function useHistory<T>(initial: T | (() => T)): History<T> {
     return next.present;
   }, [stack]);
 
+  const undoLatest = useCallback(() => setStack((s) => undoStack(s)), []);
+
+  const undoSteps = useCallback(
+    (steps: number) => {
+      const next = undoMany(stack, steps);
+      setStack(next);
+      return next.present;
+    },
+    [stack],
+  );
+
   return useMemo(
     () => ({
       state: stack.present,
@@ -123,7 +151,10 @@ export function useHistory<T>(initial: T | (() => T)): History<T> {
       redo,
       canUndo: stack.past.length > 0,
       canRedo: stack.future.length > 0,
+      past: stack.past,
+      undoSteps,
+      undoLatest,
     }),
-    [stack, set, undo, redo],
+    [stack, set, undo, redo, undoSteps, undoLatest],
   );
 }

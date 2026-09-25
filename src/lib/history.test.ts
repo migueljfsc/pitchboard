@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { HISTORY_LIMIT, initialStack, pushChange, redoStack, undoStack } from "./history";
+import {
+  HISTORY_LIMIT,
+  initialStack,
+  pushChange,
+  redoStack,
+  undoMany,
+  undoStack,
+} from "./history";
 
 const start = () => initialStack("a");
 
@@ -83,5 +90,16 @@ describe("undoStack / redoStack", () => {
   it("clears the merge key, so the next edit cannot join the one undone", () => {
     const s = undoStack(run([["b", "drag-1"]]));
     expect(pushChange(s, "c", "drag-1").past).toEqual(["a"]);
+  });
+});
+
+describe("undoMany", () => {
+  it("goes back several steps at once, and keeps them to redo", () => {
+    let s = initialStack(0);
+    for (const v of [1, 2, 3]) s = pushChange(s, v);
+    const back = undoMany(s, 2);
+    expect(back.present).toBe(1);
+    expect(back.future).toEqual([2, 3]);
+    expect(undoMany(s, 10).present).toBe(0);
   });
 });

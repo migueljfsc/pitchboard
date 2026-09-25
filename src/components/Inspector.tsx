@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeftRight, ChevronRight, RotateCcw, Shirt, Undo2, UserMinus } from "lucide-react";
+import {
+  ArrowLeftRight,
+  ChevronRight,
+  Info,
+  RotateCcw,
+  Route,
+  Shirt,
+  Undo2,
+  UserMinus,
+} from "lucide-react";
 import type { BoardDoc, Player, RunEnd, RunStart } from "@/board/types";
 import { BALL_ID } from "@/board/types";
 import { displayName, keeperOf, shirtClash } from "@/board/players";
@@ -75,6 +84,9 @@ type Props = {
   onRemoveAllMovement: () => void;
   /** False when none of them moves anywhere. */
   hasMovement: boolean;
+  /** Whether the selected players' whole path through every scene is drawn. */
+  trailOn: boolean;
+  onTrailChange: (on: boolean) => void;
   /**
    * Bumped to put the cursor in the name field — a double-click on the board.
    * A counter rather than a boolean so renaming the same player twice in a row
@@ -111,6 +123,8 @@ export function Inspector({
   canResetMove,
   onRemoveAllMovement,
   hasMovement,
+  trailOn,
+  onTrailChange,
   focusName,
 }: Props) {
   const { t, tn } = useI18n();
@@ -261,6 +275,13 @@ export function Inspector({
           />
           <p className="text-[11px] leading-relaxed text-ink-400">{t("inspect.tab.player.note")}</p>
           <div className="flex flex-col gap-1.5">
+            {/* His path through every scene: about the player, not about this scene. */}
+            <SmallButton
+              label={t(trailOn ? "menu.trail.hide" : "menu.trail.show")}
+              title={t("inspect.trail.hint")}
+              icon={<Route size={13} />}
+              onClick={() => onTrailChange(!trailOn)}
+            />
             <SmallButton
               label={t("inspect.removeMovement")}
               title={t(hasMovement ? "inspect.removeMovement.hint" : "inspect.removeMovement.none")}
@@ -303,8 +324,8 @@ export function Inspector({
               says why, and how to get to where it does. */}
           <Group label={t("inspect.group.movement")}>
             {!canEditPaths ? (
-              <Why>
-                {t("inspect.why.firstScene")}{" "}
+              <Why title={t("inspect.why.firstScene")}>
+                {t("inspect.why.firstScene.short")}{" "}
                 {doc.scenes.length > 1 && (
                   <button
                     type="button"
@@ -318,9 +339,9 @@ export function Inspector({
             ) : null}
             {!canEditPaths && resetButton}
             {!canEditPaths ? null : ballOnly ? (
-              <Why>{t("inspect.why.ball")}</Why>
+              <Why title={t("inspect.why.ball")}>{t("inspect.why.ball.short")}</Why>
             ) : doc.flow ? (
-              <Why>{t("inspect.why.flow")}</Why>
+              <Why title={t("inspect.why.flow")}>{t("inspect.why.flow.short")}</Why>
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-2">
@@ -414,10 +435,13 @@ export function Inspector({
                     </p>
                   )}
                 </Disclosure>
+
+                <TimingBars doc={doc} index={activeScene} players={players} />
               </>
             )}
 
             {canEditPaths && resetButton}
+
 
             {canEditPaths && (
               <div className="grid grid-cols-2 gap-1.5">
@@ -441,11 +465,10 @@ export function Inspector({
           {(only || ballOnly) && (
             <Group label={t("inspect.group.ball")}>
               {ballOnly ? (
-                <Why>
+                <Why title={t("inspect.ball.timingWhere")}>
                   {holder
                     ? t("inspect.ball.heldBy", { who: nameOf(holder) })
-                    : t("inspect.ball.loose")}{" "}
-                  {t("inspect.ball.timingWhere")}
+                    : t("inspect.ball.loose")}
                 </Why>
               ) : (
                 <SmallButton
@@ -514,6 +537,75 @@ export function Inspector({
 
 type Tab = "scene" | "player";
 
+/** How many players' timing bars are drawn before the rest are left out. */
+const TIMING_BARS_MAX = 6;
+
+/**
+ * Each selected player's run into this scene, against the scene's window: the wait,
+ * the run, and an arrow where he runs on. It shows at a glance why the scene lasts
+ * as long as it does — the longest bar is what it fits.
+ */
+function TimingBars({
+  doc,
+  index,
+  players,
+}: {
+  doc: BoardDoc;
+  index: number;
+  players: string[];
+}) {
+  const { t } = useI18n();
+  const scene = doc.scenes[index];
+  if (!scene || players.length === 0) return null;
+  const window = sceneTravelMs(scene);
+  if (window <= 0) return null;
+  const shown = players.slice(0, TIMING_BARS_MAX);
+
+  return (
+    <div className="flex flex-col gap-1" title={t("inspect.timing.hint")}>
+      <div className="flex justify-between text-[10px] text-ink-400">
+        <span>{t("inspect.timing")}</span>
+        <span className="font-mono">{(window / 1000).toFixed(1)} s</span>
+      </div>
+      {shown.map((id) => {
+        const wait = Math.min(entityDelayMs(scene, id), window);
+        const run = Math.min(entityTravelMs(scene, id), window - wait);
+        const through = runsThrough(doc, id, index);
+        const moves = (() => {
+          const a = doc.scenes[index - 1]?.positions[id];
+          const b = scene.positions[id];
+          return !!a && !!b && Math.hypot(a.x - b.x, a.y - b.y) > 0.05;
+        })();
+        return (
+          <div key={id} className="flex items-center gap-1.5">
+            <span className="w-7 shrink-0 truncate text-right font-mono text-[10px] text-ink-300">
+              {displayName(doc, id)}
+            </span>
+            <div className="relative h-2 flex-1 overflow-hidden rounded-sm bg-ink-900">
+              <div
+                className="absolute inset-y-0 border-r border-ink-600 bg-[repeating-linear-gradient(135deg,transparent_0_3px,rgba(143,163,157,0.35)_3px_5px)]"
+                style={{ left: 0, width: `${(wait / window) * 100}%` }}
+              />
+              {moves && (
+                <div
+                  className={cn("absolute inset-y-0 rounded-sm", through ? "bg-emerald-400/80" : "bg-accent/80")}
+                  style={{ left: `${(wait / window) * 100}%`, width: `${(run / window) * 100}%` }}
+                />
+              )}
+            </div>
+            <span className="w-3 shrink-0 text-[10px] text-emerald-300">{through ? "→" : ""}</span>
+          </div>
+        );
+      })}
+      {players.length > shown.length && (
+        <span className="text-[10px] text-ink-400">
+          {t("inspect.timing.more", { count: players.length - shown.length })}
+        </span>
+      )}
+    </div>
+  );
+}
+
 /** A titled block inside a tab. */
 function Group({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -524,11 +616,16 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-/** Why a group has nothing to offer here, in place of the controls. */
-function Why({ children }: { children: React.ReactNode }) {
+/**
+ * Why a group has nothing to offer here, in place of the controls: one short line,
+ * with the whole explanation on hover — a paragraph for every disabled group made
+ * the panel taller than the controls it was standing in for.
+ */
+function Why({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <p className="rounded border border-dashed border-ink-600 px-2 py-1.5 text-[11px] leading-relaxed text-ink-300">
-      {children}
+    <p className="flex items-center gap-1.5 text-[11px] text-ink-400" title={title}>
+      <Info size={12} className="shrink-0" />
+      <span className="min-w-0">{children}</span>
     </p>
   );
 }

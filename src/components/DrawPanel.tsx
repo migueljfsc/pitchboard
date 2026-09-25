@@ -4,6 +4,7 @@ import {
   Ban,
   Circle,
   CircleDot,
+  Hand,
   Copy,
   Eye,
   EyeOff,
@@ -16,6 +17,7 @@ import {
   Type,
 } from "lucide-react";
 import type { Annotation, AnnotationDash, BoardDoc, Tool } from "@/board/types";
+import { isDrawTool } from "@/board/types";
 import {
   TEXT_SCALE_MAX,
   TEXT_SCALE_MIN,
@@ -55,6 +57,7 @@ type Props = {
 };
 
 const TOOLS: { value: Tool; icon: typeof Minus; key: string }[] = [
+  { value: "pan", icon: Hand, key: "pan" },
   { value: "select", icon: MousePointer2, key: "select" },
   { value: "arrow", icon: ArrowUpRight, key: "arrow" },
   { value: "line", icon: Minus, key: "line" },
@@ -243,7 +246,7 @@ export function DrawPanel({
         />
       ) : (
         <p className="text-[11px] leading-relaxed text-ink-300">
-          {tool === "select"
+          {!isDrawTool(tool)
             ? t("draw.hint.select", { n: annotations.length })
             : t("draw.hint.drawing")}
         </p>

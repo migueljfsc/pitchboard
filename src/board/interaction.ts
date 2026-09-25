@@ -688,3 +688,188 @@ function clampToPitch(p: Vec2, bounds: { length: number; width: number }): Vec2 
     y: clamp(p.y, 0, bounds.width),
   };
 }
+
+// ------------------------------------------------------- arranging a selection
+
+/** An axis of the pitch: `x` along its length, `y` across its width. */
+export type PitchAxis = "x" | "y";
+
+/**
+ * Put every selected player on one line: the same `x` puts them level across the
+ * pitch (a back four), the same `y` puts them in one channel. The line is where
+ * they are on average, so nobody travels further than he has to. Carried forward
+ * as a drag is.
+ */
+export function alignEntities(
+  doc: BoardDoc,
+  sceneIndex: number,
+  ids: Iterable<string>,
+  axis: PitchAxis,
+  carry: Carry = "scene",
+): BoardDoc {
+  const scene = doc.scenes[sceneIndex];
+  if (!scene) return doc;
+  const list = [...ids].filter((id) => id !== BALL_ID && scene.positions[id]);
+  if (list.length < 2) return doc;
+  const line = list.reduce((sum, id) => sum + scene.positions[id][axis], 0) / list.length;
+  let next = doc;
+  for (const id of list) {
+    const d = line - scene.positions[id][axis];
+    const delta = axis === "x" ? { x: d, y: 0 } : { x: 0, y: d };
+    next = moveEntities(next, sceneIndex, [id], delta, carry);
+  }
+  return next;
+}
+
+/**
+ * Space the selected players evenly along one axis, between the two already
+ * furthest apart — who is where in the line does not change, only the gaps.
+ */
+export function distributeEntities(
+  doc: BoardDoc,
+  sceneIndex: number,
+  ids: Iterable<string>,
+  axis: PitchAxis,
+  carry: Carry = "scene",
+): BoardDoc {
+  const scene = doc.scenes[sceneIndex];
+  if (!scene) return doc;
+  const list = [...ids]
+    .filter((id) => id !== BALL_ID && scene.positions[id])
+    .sort((a, b) => scene.positions[a][axis] - scene.positions[b][axis]);
+  if (list.length < 3) return doc;
+  const first = scene.positions[list[0]][axis];
+  const step = (scene.positions[list[list.length - 1]][axis] - first) / (list.length - 1);
+  let next = doc;
+  list.forEach((id, i) => {
+    const d = first + i * step - scene.positions[id][axis];
+    const delta = axis === "x" ? { x: d, y: 0 } : { x: 0, y: d };
+    next = moveEntities(next, sceneIndex, [id], delta, carry);
+  });
+  return next;
+}
+
+// ------------------------------------------------------------------- snapping
+
+/** How close, in metres, a dragged player has to come to another's line to take it. */
+export const SNAP_M = 0.6;
+
+/** A line a drag snapped to: a constant `x` (across the pitch) or a constant `y`. */
+export type Guide = { x: number } | { y: number };
+
+/**
+ * Where a dragged player lands once he is drawn onto the lines of the others.
+ *
+ * Each axis on its own: level with a team-mate across the pitch, in the same
+ * channel as another, or both. The guides are those lines, for the editor to draw
+ * while the drag lasts. Nothing within `tolerance` leaves the point alone.
+ */
+export function snapPoint(
+  p: Vec2,
+  others: Iterable<Vec2>,
+  tolerance = SNAP_M,
+): { point: Vec2; guides: Guide[] } {
+  let bestX: number | null = null;
+  let bestY: number | null = null;
+  const nearer = (to: number, v: number, best: number | null) =>
+    Math.abs(v - to) <= tolerance && (best === null || Math.abs(v - to) < Math.abs(best - to));
+  for (const o of others) {
+    if (nearer(p.x, o.x, bestX)) bestX = o.x;
+    if (nearer(p.y, o.y, bestY)) bestY = o.y;
+  }
+  const guides: Guide[] = [];
+  if (bestX !== null) guides.push({ x: bestX });
+  if (bestY !== null) guides.push({ y: bestY });
+  return { point: { x: bestX ?? p.x, y: bestY ?? p.y }, guides };
+}
+
+// ------------------------------------------------------------------- swapping
+
+/**
+ * The other player a dragged one has been dropped onto, if any: another token
+ * whose centre is within half a token of where he landed.
+ */
+export function swapTarget(doc: BoardDoc, sceneIndex: number, id: string, at: Vec2): string | null {
+  const scene = doc.scenes[sceneIndex];
+  if (!scene) return null;
+  const reach = tokenRadius(doc) * 0.5;
+  let best: string | null = null;
+  let bestD = Infinity;
+  for (const team of doc.teams) {
+    if (team.hidden) continue;
+    for (const player of team.players) {
+      if (player.id === id) continue;
+      const p = scene.positions[player.id];
+      if (!p) continue;
+      const d = dist(p, at);
+      if (d <= reach && d < bestD) {
+        best = player.id;
+        bestD = d;
+      }
+    }
+  }
+  return best;
+}
+
+/**
+ * Swap two players' places in a scene: `a`, who was dragged and now stands on `b`,
+ * takes `b`'s place exactly, and `b` goes to where `a` started. Carried forward as
+ * a drag is.
+ */
+export function swapPlayers(
+  doc: BoardDoc,
+  sceneIndex: number,
+  a: string,
+  b: string,
+  aStarted: Vec2,
+  carry: Carry = "scene",
+): BoardDoc {
+  const scene = doc.scenes[sceneIndex];
+  const pa = scene?.positions[a];
+  const pb = scene?.positions[b];
+  if (!pa || !pb) return doc;
+  let next = moveEntities(doc, sceneIndex, [b], { x: aStarted.x - pb.x, y: aStarted.y - pb.y }, carry);
+  next = moveEntities(next, sceneIndex, [a], { x: pb.x - pa.x, y: pb.y - pa.y }, carry);
+  return next;
+}
+
+/**
+ * The axis a group of players is spread along — the one with the larger span.
+ * A back four across the pitch is spread along `y`; a striker and the runners
+ * behind him, along `x`.
+ */
+export function spreadAxis(doc: BoardDoc, sceneIndex: number, ids: Iterable<string>): PitchAxis {
+  const scene = doc.scenes[sceneIndex];
+  const points = [...ids].map((id) => scene?.positions[id]).filter((p): p is Vec2 => !!p);
+  const range = (axis: PitchAxis) =>
+    points.length ? Math.max(...points.map((p) => p[axis])) - Math.min(...points.map((p) => p[axis])) : 0;
+  return range("x") >= range("y") ? "x" : "y";
+}
+
+/**
+ * Straighten a group into a line along the way it is already spread: only the
+ * other coordinate is evened out, so nobody is pulled onto anybody else. Asking
+ * for a fixed direction instead stacked a line that ran the other way onto one
+ * spot.
+ */
+export function lineUp(
+  doc: BoardDoc,
+  sceneIndex: number,
+  ids: Iterable<string>,
+  carry: Carry = "scene",
+): BoardDoc {
+  const list = [...ids];
+  const along = spreadAxis(doc, sceneIndex, list);
+  return alignEntities(doc, sceneIndex, list, along === "x" ? "y" : "x", carry);
+}
+
+/** Even out the gaps along the way a group is already spread. */
+export function spaceEvenly(
+  doc: BoardDoc,
+  sceneIndex: number,
+  ids: Iterable<string>,
+  carry: Carry = "scene",
+): BoardDoc {
+  const list = [...ids];
+  return distributeEntities(doc, sceneIndex, list, spreadAxis(doc, sceneIndex, list), carry);
+}

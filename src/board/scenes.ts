@@ -5,7 +5,16 @@
  * paths with it and cannot orphan anything.
  */
 
-import type { BoardDoc, PathCurve, RunEnd, RunStart, RunStyle, Scene, Vec2 } from "./types";
+import type {
+  BoardDoc,
+  PathCurve,
+  RunEnd,
+  RunStart,
+  RunStyle,
+  Scene,
+  SceneCamera,
+  Vec2,
+} from "./types";
 import { BALL_ID } from "./types";
 import {
   MAX_FLOW_SPEED,
@@ -327,6 +336,24 @@ export function setDelay(
   if (Object.keys(delay).length === 0) delete next.delay;
   else next.delay = delay;
 
+  const scenes = doc.scenes.slice();
+  scenes[index] = next;
+  return replace(doc, scenes);
+}
+
+/**
+ * Set where scene `index` looks, or `null` for the whole board. Stored as absence
+ * when cleared, so a scene without one serialises as it always did.
+ */
+export function setSceneCamera(doc: BoardDoc, index: number, camera: SceneCamera | null): BoardDoc {
+  const scene = doc.scenes[index];
+  if (!scene) return doc;
+  // A camera that is not finite everywhere is refused rather than stored: one NaN
+  // makes the whole board invalid, and an invalid board is discarded on load.
+  if (camera && ![camera.at.x, camera.at.y, camera.zoom].every(Number.isFinite)) return doc;
+  const next: Scene = { ...scene };
+  if (camera && camera.zoom > 1.001) next.camera = { at: { ...camera.at }, zoom: camera.zoom };
+  else delete next.camera;
   const scenes = doc.scenes.slice();
   scenes[index] = next;
   return replace(doc, scenes);

@@ -83,6 +83,7 @@ import {
   viewMatrix,
   type Bezier,
 } from "./geometry";
+import { cameraTransform, screenMapping } from "./camera";
 import {
   GROUND_SQUASH,
   cameraFor,
@@ -127,6 +128,21 @@ export function drawBoard(
     drawVignette(ctx, view.width, view.height);
   }
 
+  // The scene's own camera, as one more screen transform on top of whatever the
+  // caller set — so the board is redrawn at the new scale, never stretched, and a
+  // 3D ground layer is allocated at the resolution it will be seen at.
+  if (view.sceneCamera) {
+    // Only the 3D ground layer's resolution depends on it; a context that cannot
+    // report its transform gets the plain one.
+    const m = ctx.getTransform?.();
+    const deviceScale = m ? Math.hypot(m.a, m.b) || 1 : 1;
+    const mapping = screenMapping(doc, view, view.width, view.height, deviceScale);
+    const zoom = cameraTransform(frame.resolved, doc, view.width, view.height, mapping);
+    if (zoom.z !== 1 || zoom.x !== 0 || zoom.y !== 0) {
+      ctx.transform(zoom.z, 0, 0, zoom.z, zoom.x, zoom.y);
+    }
+  }
+
   // The angled camera is a different composition of the same drawing, so it
   // branches here rather than threading a flag through every call below. It needs
   // an OffscreenCanvas for the ground layer; without one, fall back to the flat
@@ -155,6 +171,7 @@ export function drawBoard(
 
   // Links sit under the tokens so a connector never covers a shirt number.
   drawLinks(ctx, doc, frame, view.rotated);
+  drawTrail(ctx, doc, view, view.rotated);
   drawPaths(ctx, doc, frame, view);
 
   drawGhosts(ctx, doc, view, view.rotated);
@@ -204,6 +221,7 @@ export function drawBoard(
   if (view.interactive && view.marquee) {
     drawMarquee(ctx, view.marquee.a, view.marquee.b);
   }
+  if (view.interactive && view.guides?.length) drawGuides(ctx, doc, view.guides);
 
   ctx.restore();
   drawCaption(ctx, doc, frame, view);
@@ -357,6 +375,7 @@ function drawTilted(
   drawTeamNames(gctx, doc, true, TEAM_NAME_OFFSET_3D);
   for (const ann of marks) if (isZone(ann)) drawZone(gctx, ann);
   drawLinks(gctx, doc, frame, true);
+  drawTrail(gctx, doc, view, true);
   drawPaths(gctx, doc, frame, view);
 
   // Arrows and freehand ride the grass here, rather than floating over the players
@@ -381,6 +400,7 @@ function drawTilted(
     // lies on the grass and warps with it — and `entitiesInRect` needs no 3D of
     // its own, because the corners were already turned back into metres.
     if (view.marquee) drawMarquee(gctx, view.marquee.a, view.marquee.b);
+    if (view.guides?.length) drawGuides(gctx, doc, view.guides);
   }
 
   warpGround(ctx, ground, proj);
@@ -1843,6 +1863,108 @@ function drawBallPanels(ctx: Ctx, p: Vec2, radius: number, k: number): void {
 
 /** Near-black rather than black: the same ink the darkest kit uses. */
 const BALL_PANEL_COLOR = "#18181b";
+
+/**
+ * The lines a dragged player snapped to, across the whole pitch: a constant `x` is
+ * a line level across the pitch, a constant `y` a channel along it.
+ */
+function drawGuides(
+  ctx: Ctx,
+  doc: BoardDoc,
+  guides: readonly ({ x: number } | { y: number })[],
+): void {
+  ctx.save();
+  ctx.strokeStyle = "rgba(251,191,36,0.75)";
+  ctx.lineWidth = 0.1;
+  ctx.setLineDash([0.5, 0.35]);
+  for (const g of guides) {
+    ctx.beginPath();
+    if ("x" in g) {
+      ctx.moveTo(g.x, 0);
+      ctx.lineTo(g.x, doc.pitch.width);
+    } else {
+      ctx.moveTo(0, g.y);
+      ctx.lineTo(doc.pitch.length, g.y);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/**
+ * A player's whole path through every scene, faint, with each scene's stop
+ * numbered — so a run over several scenes can be read and checked at once.
+ * Drawn from the stored scenes, like a ghost, not from the frame being played.
+ */
+function drawTrail(ctx: Ctx, doc: BoardDoc, view: RenderView, rotated: boolean): void {
+  if (!view.interactive || !view.trail?.length) return;
+  const scale = tokenScaleOf(doc);
+
+  for (const id of view.trail) {
+    const team = doc.teams.find((t) => t.players.some((p) => p.id === id));
+    if (!team || team.hidden) continue;
+
+    const points: Vec2[] = [];
+    for (let k = 0; k < doc.scenes.length; k++) {
+      const at = doc.scenes[k].positions[id];
+      if (!at) continue;
+      const r = k > 0 ? transitionInto(doc, k) : null;
+      const b = r ? displayCurve(id, r) : null;
+      if (b) {
+        for (let i = 1; i <= PATH_STEPS; i++) points.push(cubicAt(b, i / PATH_STEPS));
+      } else {
+        points.push(at);
+      }
+    }
+    if (points.length < 2) continue;
+
+    ctx.save();
+    ctx.globalAlpha = TRAIL_ALPHA;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.setLineDash([0.6, 0.45]);
+    strokePolyline(ctx, points, team.color, 0.22);
+    ctx.setLineDash([]);
+
+    // Each scene's stop, numbered — where two scenes share a place, one mark.
+    const stops = new Map<string, { at: Vec2; scenes: number[] }>();
+    doc.scenes.forEach((scene, k) => {
+      const at = scene.positions[id];
+      if (!at) return;
+      const key = `${at.x.toFixed(2)},${at.y.toFixed(2)}`;
+      const stop = stops.get(key) ?? { at, scenes: [] };
+      stop.scenes.push(k + 1);
+      stops.set(key, stop);
+    });
+    for (const { at, scenes } of stops.values()) {
+      ctx.beginPath();
+      ctx.arc(at.x, at.y, 0.28 * scale, 0, Math.PI * 2);
+      ctx.fillStyle = team.color;
+      ctx.fill();
+      upright(ctx, at, rotated, () => {
+        ctx.font = `600 ${0.85 * scale}px Inter, system-ui, -apple-system, sans-serif`;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.lineJoin = "round";
+        ctx.strokeStyle = "rgba(0,0,0,0.7)";
+        ctx.lineWidth = 0.22;
+        // A run of consecutive scenes reads as a range; anything else, as a list.
+        const consecutive = scenes.every((n, i) => i === 0 || n === scenes[i - 1] + 1);
+        const label =
+          scenes.length > 2 && consecutive
+            ? `${scenes[0]}–${scenes[scenes.length - 1]}`
+            : scenes.join(",");
+        ctx.strokeText(label, 0.45 * scale, -0.5 * scale);
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(label, 0.45 * scale, -0.5 * scale);
+      });
+    }
+    ctx.restore();
+  }
+}
+
+/** How strongly the whole-match trail is drawn: present, and never mistaken for a run. */
+const TRAIL_ALPHA = 0.7;
 
 function drawMarquee(ctx: Ctx, a: Vec2, b: Vec2): void {
   const x = Math.min(a.x, b.x);
