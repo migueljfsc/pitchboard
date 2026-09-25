@@ -530,10 +530,11 @@ export type RenderView = Viewport & {
   /** Editor only: the lines a dragged player has snapped to — constant x or y. */
   guides?: readonly ({ x: number } | { y: number })[];
   /**
-   * Editor only: where a dragged label's centre is. Draws a ruler along two edges of the
-   * pitch with this point marked on both, for placing a label by the metre. Flat board only.
+   * Editor only: the box a dragged drawing covers, in pitch metres. Draws a ruler along two
+   * edges of the pitch with the box's span shaded and its centre marked on both, for placing
+   * a drawing by the metre. Flat board only.
    */
-  ruler?: Vec2 | null;
+  ruler?: { x: number; y: number; w: number; h: number } | null;
   /** Editor only: players whose whole path through every scene is drawn faintly. */
   trail?: readonly string[];
   /**

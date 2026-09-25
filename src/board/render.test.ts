@@ -980,3 +980,28 @@ describe("link heads and player names", () => {
     expect(pair("Rúben Dias", true)).toBeCloseTo(pair("", true));
   });
 });
+
+describe("the ruler", () => {
+  const band = 'fillStyle="rgba(251,191,36,0.22)"';
+  const draw = (ruler: RenderView["ruler"], interactive = true) => {
+    const r = createRecordingCtx();
+    drawBoard(r.ctx, createBoardDoc(), 0, view({ interactive, ruler }));
+    return r;
+  };
+
+  it("shades the span a dragged drawing covers on both edges", () => {
+    const r = draw({ x: 10, y: 20, w: 15, h: 8 });
+    expect(r.log).toContain(band);
+    expect(r.calls("fillRect")).toContain("fillRect(10,-1.8,15,1.3)");
+    expect(r.calls("fillRect")).toContain("fillRect(-1.8,20,1.3,8)");
+  });
+
+  it("marks a point without a span", () => {
+    const spans = draw({ x: 10, y: 20, w: 0, h: 0 }).calls("fillRect");
+    expect(spans.some((c) => c.startsWith("fillRect(10,-1.8") || c.startsWith("fillRect(-1.8,20"))).toBe(false);
+  });
+
+  it("never reaches an export", () => {
+    expect(draw({ x: 10, y: 20, w: 15, h: 8 }, false).log).not.toContain(band);
+  });
+});

@@ -2471,14 +2471,21 @@ const RULER_GAP = 0.5;
 const RULER_TICK = [0.45, 0.9, 1.3] as const;
 
 /**
- * A ruler along the far touchline and the left goal line, with a dragged label's centre
- * marked on both — so a note can be placed at a round number of metres, not by eye.
+ * A ruler along the far touchline and the left goal line, with the span a dragged drawing
+ * covers shaded on both and its centre marked — so it can be placed at a round number of
+ * metres, not by eye.
  *
  * Outside the lines, in the surround, where nothing of the play is drawn; inside the team
  * name's offset on the goal line side, so the two never overlap. Numbers are upright however
  * the board is turned.
  */
-function drawRuler(ctx: Ctx, doc: BoardDoc, at: Vec2, rotated: boolean): void {
+function drawRuler(
+  ctx: Ctx,
+  doc: BoardDoc,
+  box: { x: number; y: number; w: number; h: number },
+  rotated: boolean,
+): void {
+  const at = { x: box.x + box.w / 2, y: box.y + box.h / 2 };
   const L = doc.pitch.length;
   const W = doc.pitch.width;
   const tick = (m: number) => (m % 10 === 0 ? RULER_TICK[2] : m % 5 === 0 ? RULER_TICK[1] : RULER_TICK[0]);
@@ -2509,7 +2516,13 @@ function drawRuler(ctx: Ctx, doc: BoardDoc, at: Vec2, rotated: boolean): void {
   for (let m = 0; m <= L; m += 10) label(String(m), { x: m, y: -out }, "rgba(255,255,255,0.6)");
   for (let m = 0; m <= W; m += 10) label(String(m), { x: -out, y: m }, "rgba(255,255,255,0.6)");
 
-  // The label's centre on each ruler: a tick in the accent, and its distance in metres.
+  // The span it covers, shaded along each ruler's ticks. A point covers none.
+  ctx.fillStyle = "rgba(251,191,36,0.22)";
+  const band = RULER_TICK[2];
+  if (box.w > 0) ctx.fillRect(box.x, -RULER_GAP - band, box.w, band);
+  if (box.h > 0) ctx.fillRect(-RULER_GAP - band, box.y, band, box.h);
+
+  // Its centre on each ruler: a tick in the accent, and its distance in metres.
   ctx.strokeStyle = "rgba(251,191,36,0.95)";
   ctx.lineWidth = 0.16;
   ctx.beginPath();

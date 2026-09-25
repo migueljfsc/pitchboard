@@ -13,6 +13,7 @@ import { BALL_ID, DEFAULT_PITCH_VIEW, DEFAULT_TOOL, isDrawTool } from "@/board/t
 import { fitViewport, toPitch } from "@/board/geometry";
 import { cameraFor, framingOf, unprojectPitch } from "@/board/projection";
 import { drawBoard } from "@/board/render";
+import { ballRadius } from "@/board/pitch";
 import { frameAt, runsThrough } from "@/board/timeline";
 import {
   applySelection,
@@ -47,6 +48,7 @@ import {
   insertCorner,
   regularPolygon,
   removeCorner,
+  boundsOf,
   moveAnnotation,
   simplify,
   updateAnnotation,
@@ -256,8 +258,8 @@ export function BoardCanvas({
   const [hover, setHover] = useState<string | null>(null);
   /** The lines a drag has snapped to, while it lasts. */
   const [guides, setGuides] = useState<Guide[]>([]);
-  /** Where a dragged label's centre is, for the ruler along the pitch's edges. */
-  const [ruler, setRuler] = useState<Vec2 | null>(null);
+  /** The box a dragged drawing covers, for the ruler along the pitch's edges. */
+  const [ruler, setRuler] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   /** The player a dragged one would swap with if dropped now. */
   const [swapWith, setSwapWith] = useState<string | null>(null);
   const i18n = useI18n();
@@ -970,7 +972,7 @@ export function BoardCanvas({
             ? { at: wanted, guides: [] }
             : snapLabel(doc, annotationScene(), label, wanted, rotated);
         setGuides(snapped.guides);
-        setRuler(snapped.at);
+        setRuler(boundsOf({ ...label, at: snapped.at }, rotated));
         if (snapped.at.x !== label.at.x || snapped.at.y !== label.at.y) {
           onDocChange(updateAnnotation(doc, label.id, { at: snapped.at }), dragKey());
         }
@@ -978,8 +980,11 @@ export function BoardCanvas({
       }
       const delta = { x: p.x - drag.last.x, y: p.y - drag.last.y };
       if (delta.x !== 0 || delta.y !== 0) {
-        onDocChange(moveAnnotation(doc, drag.id, delta), dragKey());
+        const next = moveAnnotation(doc, drag.id, delta);
+        onDocChange(next, dragKey());
         setDrag({ ...drag, last: p });
+        const moved = (next.annotations ?? []).find((a) => a.id === drag.id);
+        if (moved && !tilted) setRuler(boundsOf(moved, rotated, ballRadius(doc)));
       }
       return;
     }

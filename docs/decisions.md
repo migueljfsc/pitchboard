@@ -1841,5 +1841,6 @@ halfway, both boxes, penalty spots, touchlines, the middle) and to other labels'
 edges. Measured from where it was grabbed, so a snap is exact. Not under the camera: there a
 label is a billboard, and its box is nowhere on the grass. **Alignment** is `align`, left or
 right, absent meaning centred — so no migration — and the box stays centred on `at` whichever
-way its lines sit. **The ruler** shows only while a label is dragged: metre ticks outside the far
-touchline and the left goal line, the label's centre marked on both in metres.
+way its lines sit. **The ruler** shows while any drawing is moved: metre ticks outside the far
+touchline and the left goal line, the span the drawing covers shaded on both and its centre
+marked in metres. Only on a move, not a handle drag, and only on the flat board.
