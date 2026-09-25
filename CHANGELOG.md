@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.62.0 (2026-09-25)
+
+### Feat
+
+- **editor**: per-scene zoom, templates, export in the background, and editing polish
+
 ## v0.61.1 (2026-09-24)
 
 ### Fix
