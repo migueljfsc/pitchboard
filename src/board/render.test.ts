@@ -790,6 +790,21 @@ describe("the spotlight", () => {
     expect(darkness(render(doc, { interactive: false }))?.fill).toBe('fillStyle="rgba(0,0,0,0.3)"');
   });
 
+  it("leaves the coach's text labels out of the dark", () => {
+    let doc = lit(["home-2"]);
+    doc = addAnnotation(doc, {
+      ...draftAnnotation(doc, "text", doc.scenes[0].id, { x: 30, y: 30 }, { x: 30, y: 30 }, {
+        color: "#ffffff",
+        text: "Press here",
+      }),
+    });
+    const log = render(doc);
+    const dark = log.indexOf('fill("evenodd")');
+    const words = log.findIndex((e) => e.startsWith("fillText(") && e.includes("Press here"));
+    expect(dark).toBeGreaterThanOrEqual(0);
+    expect(words).toBeGreaterThan(dark);
+  });
+
   it("stores the default as absence", () => {
     const doc = lit(["home-2"]);
     expect(setSpotlight(setSpotlight(doc, 0, 0.3), 0, DEFAULT_SPOTLIGHT).scenes[0].spotlight).toBeUndefined();

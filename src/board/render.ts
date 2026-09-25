@@ -218,14 +218,19 @@ export function drawBoard(
     });
   }
 
-  for (const ann of marks) if (!isZone(ann)) drawMark(ctx, ann, view.rotated, ballRadius(doc));
+  for (const ann of marks) {
+    if (!isZone(ann) && ann.kind !== "text") drawMark(ctx, ann, view.rotated, ballRadius(doc));
+  }
 
-  // Over everything the board says, under the editor's own chrome.
+  // Over everything the board shows, under the editor's own chrome — and under the
+  // coach's words, which are read rather than looked past: a label in the dark is a
+  // note nobody can make out.
   drawSpotlight(
     ctx,
     halos.map((h) => ({ at: h.at, r: poolRadius(h, scale), strength: h.strength })),
     spotlightDim(frame.resolved),
   );
+  for (const ann of marks) if (ann.kind === "text") drawMark(ctx, ann, view.rotated, ballRadius(doc));
 
   if (view.interactive && view.annotationSelection) {
     const selected = marks.find((a) => a.id === view.annotationSelection);
@@ -441,6 +446,7 @@ function drawTilted(
     return [{ at: { x: at.x, y: at.y }, r: poolRadius(h, scale) * at.scale, strength: h.strength }];
   });
   drawSpotlight(ctx, holes, spotlightDim(frame.resolved));
+  drawTiltedText(ctx, view, cam, marks);
   ctx.restore();
 }
 
@@ -775,7 +781,13 @@ function drawBillboards(
   standing.sort((a, b) => a.at.y - b.at.y);
   for (const item of standing) item.draw();
 
-  // Text over the top of the players, as it is on the flat board.
+}
+
+/**
+ * Text over the top of everything, as it is on the flat board: the players, the
+ * goals, and the spotlight's darkness, which leaves the coach's words readable.
+ */
+function drawTiltedText(ctx: Ctx, view: RenderView, cam: Camera, marks: Annotation[]): void {
   for (const ann of marks) {
     if (ann.kind !== "text") continue;
     const at = projectPitch(ann.at, cam);

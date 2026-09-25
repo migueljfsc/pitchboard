@@ -1726,8 +1726,9 @@ cut out of it (`destination-out`), soft-edged, because two pools that overlap mu
 darkness-with-holes as one path darkens the overlap under either winding rule. Without an
 OffscreenCanvas the holes fall back to hard-edged even-odd. Its depth follows the strongest
 highlight's strength, so it arrives and lifts with the transition exactly as the glow does, and
-it never pulses (D29). It covers the coach's marks too: a spotlight that leaves half the board lit
-is not one.
+it never pulses (D29). It covers the coach's marks too — arrows, zones, freehand — because a spotlight
+that leaves half the board lit is not one. Text labels are the exception and are drawn above it:
+words are read rather than looked past, and a note in the dark is a note nobody can make out.
 
 **Its depth is the scene's.** `Scene.spotlight` (absent is `DEFAULT_SPOTLIGHT`, 55%) sets how dark
 a scene goes, and a transition crosses from one scene's depth to the next on the highlights' own
