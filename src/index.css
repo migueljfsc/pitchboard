@@ -6,6 +6,9 @@
   --color-ink-700: #1c2a25;
   /* Borders and dividers — the old value was almost invisible on ink-800. */
   --color-ink-600: #35473f;
+  /* Quieter than muted: counts, separators, placeholders. About 4.2:1 on ink-800, so for
+     text that is secondary to something beside it, never for text that stands alone. */
+  --color-ink-500: #6b807a;
   /* Muted text. Roughly 6:1 on ink-800; the previous #6b807a fell under 4.5:1. */
   --color-ink-400: #8fa39d;
   --color-ink-300: #b6c4bf;

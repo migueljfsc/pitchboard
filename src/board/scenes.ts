@@ -433,6 +433,28 @@ export function isRunHidden(scene: Scene | undefined, entityId: string): boolean
   return scene?.hiddenRuns?.includes(entityId) ?? false;
 }
 
+/** How dark the board goes around a highlight, where a scene does not say. */
+export const DEFAULT_SPOTLIGHT = 0.55;
+/** Past this the unlit players are lost altogether, and a board is a picture of one man. */
+export const MAX_SPOTLIGHT = 0.9;
+
+/**
+ * Set how dark scene `index` goes around its highlights. The default is stored as
+ * absence, so a scene left at it serialises as every scene before the choice did.
+ */
+export function setSpotlight(doc: BoardDoc, index: number, dim: number): BoardDoc {
+  const scene = doc.scenes[index];
+  if (!scene) return doc;
+  const value = Math.min(MAX_SPOTLIGHT, Math.max(0, dim));
+  const next: Scene = { ...scene };
+  if (value === DEFAULT_SPOTLIGHT) delete next.spotlight;
+  else next.spotlight = value;
+  if (next.spotlight === scene.spotlight) return doc;
+  const scenes = doc.scenes.slice();
+  scenes[index] = next;
+  return { ...doc, scenes };
+}
+
 /**
  * Glow a group of entities in scene `index`, or stop glowing them.
  *

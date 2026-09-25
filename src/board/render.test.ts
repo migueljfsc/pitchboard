@@ -1,15 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { HALO_REACH, SHAFT_INTO_HEAD, SHOT_OFFSET, drawBoard } from "./render";
-import { HEAD_LENGTH } from "./annotations";
+import { HEAD_LENGTH, addAnnotation, draftAnnotation } from "./annotations";
 import { ballRadius, tokenRadius } from "./pitch";
 import { PITCH, PITCH_PADDING, TEAM_NAME_OFFSET } from "./pitch";
 import { frameAt } from "./timeline";
 import { createRecordingCtx } from "./recording-ctx";
 import { createBoardDoc } from "@/formations";
 import { updateLink } from "./links";
-import { addSceneAfter, setCarrier, setHighlight, setRunHidden, setShot } from "./scenes";
+import {
+  DEFAULT_SPOTLIGHT,
+  addSceneAfter,
+  setCarrier,
+  setHighlight,
+  setRunHidden,
+  setShot,
+  setSpotlight,
+} from "./scenes";
 import { fitViewport, viewMatrix } from "./geometry";
-import { BALL_ID, type RenderView } from "./types";
+import { BALL_ID, type BoardDoc, type RenderView } from "./types";
 
 const W = 1200;
 const H = 800;
@@ -686,9 +694,11 @@ describe("highlight halos", () => {
   const halos = (log: string[]) =>
     log.filter((e) => {
       if (!e.startsWith("createRadialGradient(")) return false;
-      const [x0, y0, , x1, y1] = e.slice(21, -1).split(",");
+      const [x0, y0, r0, x1, y1] = e.slice(21, -1).split(",");
       if (Number(x0) === W / 2 && Number(y0) === H / 2) return false;
-      return x0 === x1 && y0 === y1;
+      // The pool of light under a spotlit player grows from his centre; a glow
+      // starts inside his token.
+      return x0 === x1 && y0 === y1 && Number(r0) > 0;
     }).length;
 
   it("draws nothing when nobody is highlighted", () => {
@@ -746,6 +756,56 @@ describe("highlight halos", () => {
   });
 });
 
+describe("the spotlight", () => {
+  const lit = (ids: string[]) => setHighlight(createBoardDoc(), 0, ids, "#f59e0b");
+  /** The darkness is one even-odd fill: the frame, with a hole per highlight. */
+  const darkness = (log: string[]) => {
+    const at = log.findIndex((e) => e === 'fill("evenodd")');
+    if (at < 0) return null;
+    const fill = log.slice(0, at).reverse().find((e) => e.startsWith("fillStyle="));
+    const start = log.lastIndexOf("rect(-100000,-100000,200000,200000)", at);
+    const holes = log.slice(start, at).filter((e) => e.startsWith("arc(")).length;
+    return { fill, holes };
+  };
+  const render = (doc: BoardDoc, overrides: Partial<RenderView> = {}) => {
+    const r = createRecordingCtx();
+    drawBoard(r.ctx, doc, 0, view(overrides));
+    return r.log;
+  };
+
+  it("leaves the board alone when nobody is highlighted", () => {
+    expect(darkness(render(createBoardDoc()))).toBeNull();
+  });
+
+  it("darkens the board with a hole round each highlighted player", () => {
+    expect(darkness(render(lit(["home-2", "home-5"])))).toEqual({
+      fill: `fillStyle="rgba(0,0,0,${DEFAULT_SPOTLIGHT})"`,
+      holes: 2,
+    });
+  });
+
+  it("darkens as much as the scene asks, and the same in the editor as in an export", () => {
+    const doc = setSpotlight(lit(["home-2"]), 0, 0.3);
+    expect(darkness(render(doc))?.fill).toBe('fillStyle="rgba(0,0,0,0.3)"');
+    expect(darkness(render(doc, { interactive: false }))?.fill).toBe('fillStyle="rgba(0,0,0,0.3)"');
+  });
+
+  it("stores the default as absence", () => {
+    const doc = lit(["home-2"]);
+    expect(setSpotlight(setSpotlight(doc, 0, 0.3), 0, DEFAULT_SPOTLIGHT).scenes[0].spotlight).toBeUndefined();
+  });
+
+  it("crosses from one scene's depth to the next through a transition", () => {
+    let doc = addSceneAfter(lit(["home-2"]), 0);
+    doc = setHighlight(doc, 1, ["home-2"], "#f59e0b");
+    doc = setSpotlight(setSpotlight(doc, 0, 0.2), 1, 0.8);
+    const r = createRecordingCtx();
+    // Halfway through the travel into scene 2, where the easing is at one half too.
+    drawBoard(r.ctx, doc, doc.scenes[0].holdMs / 1000 + doc.scenes[1].transitionMs / 2000, view());
+    expect(darkness(r.log)?.fill).toBe('fillStyle="rgba(0,0,0,0.5)"');
+  });
+});
+
 describe("links per scene", () => {
   /** A link's dark under-stroke — one per link drawn, and nothing else uses it. */
   const links = (log: string[]) => log.filter((e) => e === 'strokeStyle="rgba(0,0,0,0.35)"').length;
@@ -779,5 +839,103 @@ describe("links per scene", () => {
     // Well into the closing hold on scene 2.
     drawBoard(r.ctx, doc, 99, view());
     expect(links(r.log)).toBe(doc.links.length);
+  });
+});
+
+describe("drawn arrows", () => {
+  it("stops the shaft inside the head, and the head still reaches the end", () => {
+    let doc: BoardDoc = { ...createBoardDoc(), links: [] };
+    doc = addAnnotation(
+      doc,
+      draftAnnotation(doc, "arrow", doc.scenes[0].id, { x: 20, y: 20 }, { x: 40, y: 20 }, {
+        color: "#abcdef",
+      }),
+    );
+    const r = createRecordingCtx();
+    drawBoard(r.ctx, doc, 0, view());
+
+    const xs = r.log
+      .filter((e) => e.startsWith("moveTo(") || e.startsWith("lineTo("))
+      .map((e) => e.slice(e.indexOf("(") + 1, -1).split(",").map(Number))
+      .filter(([, y]) => Math.abs(y - 20) < 1e-6)
+      .map(([x]) => x);
+    const shaftEnd = Math.max(...xs.filter((x) => x < 40 - 1e-6));
+    expect(Math.max(...xs)).toBeCloseTo(40);
+    expect(40 - shaftEnd).toBeCloseTo(HEAD_LENGTH - SHAFT_INTO_HEAD);
+  });
+});
+
+describe("link line and heads", () => {
+  /** The first seeded link alone, restyled. */
+  const one = (patch: Parameters<typeof updateLink>[2]) => {
+    const doc = createBoardDoc();
+    const [link] = doc.links;
+    return updateLink({ ...doc, links: [link] }, link.id, patch);
+  };
+  const render = (doc: ReturnType<typeof createBoardDoc>, t = 0) => {
+    const r = createRecordingCtx();
+    drawBoard(r.ctx, doc, t, view());
+    return r;
+  };
+
+  it("adds a head per edge one way and two per edge both ways", () => {
+    const base = render(one({})).count("closePath");
+    const edges = one({}).links[0].members.length - 1;
+    expect(render(one({ arrows: "forward" })).count("closePath")).toBe(base + edges);
+    expect(render(one({ arrows: "both" })).count("closePath")).toBe(base + edges * 2);
+  });
+
+  it("dots a dotted link, and marches the dots only when animated", () => {
+    const offsets = (doc: ReturnType<typeof createBoardDoc>, t: number) =>
+      render(doc, t).log.filter((e) => e.startsWith("lineDashOffset="));
+
+    expect(render(one({ line: "dotted" })).calls("setLineDash")).toContain("setLineDash([0.01,0.75])");
+    expect(offsets(one({ line: "dotted" }), 0.3)).toEqual([]);
+    const animated = one({ line: "dotted", animate: true });
+    expect(offsets(animated, 0.1)).not.toEqual(offsets(animated, 0.3));
+  });
+});
+
+describe("link heads and player names", () => {
+  /** Two players one above the other, linked both ways; the upper one maybe named. */
+  const pair = (label: string, rotated = false) => {
+    const base = createBoardDoc();
+    const [upper, lower] = base.teams[0].players;
+    const doc: BoardDoc = {
+      ...base,
+      teams: [
+        {
+          ...base.teams[0],
+          players: base.teams[0].players.map((p) => (p.id === upper.id ? { ...p, label } : p)),
+        },
+        base.teams[1],
+      ],
+      scenes: base.scenes.map((s) => ({
+        ...s,
+        positions: { ...s.positions, [upper.id]: { x: 50, y: 20 }, [lower.id]: { x: 50, y: 40 } },
+      })),
+      links: [{ ...base.links[0], members: [upper.id, lower.id], arrows: "both" }],
+      annotations: [],
+    };
+    const r = createRecordingCtx();
+    drawBoard(r.ctx, doc, 0, view({ rotated }));
+    // The head arriving at the upper player: the first point struck below him.
+    const ys = r.log
+      .filter((e) => e.startsWith("moveTo("))
+      .map((e) => e.slice(7, -1).split(",").map(Number))
+      .filter(([x, y]) => Math.abs(x - 50) < 1e-6 && y > 20.5 && y < 30)
+      .map(([, y]) => y);
+    return Math.min(...ys) - 20;
+  };
+
+  it("stops a head arriving from below clear of the name hanging there", () => {
+    const bare = pair("");
+    const named = pair("Rúben Dias");
+    expect(bare).toBeCloseTo(tokenRadius(createBoardDoc()) + 0.15);
+    expect(named).toBeGreaterThan(bare + 1);
+  });
+
+  it("does not move it on a vertical board, where the name hangs to the side", () => {
+    expect(pair("Rúben Dias", true)).toBeCloseTo(pair("", true));
   });
 });

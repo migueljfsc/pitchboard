@@ -1687,3 +1687,55 @@ Two rules a future change is most likely to break. Both belong in `AGENTS.md`.
    symptom appears far from the cause.
 2. **No pixels in the document.** All coordinates are pitch metres. Breaking this shows up as
    players drifting on window resize or on a retina display.
+
+## D99 — Links get a line and heads; shapes get corners
+Three asks at once: a drawn arrow's shaft poked out past its head, a link could only be a solid
+line, and no zone could take a shape a box or an oval does not describe.
+
+**The drawn arrow had the shot's bug.** Its shaft was stroked to the tip with a round cap, so it
+emerged beside the point where the head narrows past the line's width. It now stops inside the
+head exactly as the ball's line does (`SHAFT_INTO_HEAD`); the head is still aimed and placed from
+the whole line.
+
+**A link's style stayed one field, and the line is two more.** `line` (solid, dotted) and `arrows`
+(none, forward, both) are orthogonal to chain/shape/filled, so they are fields beside it rather
+than more values of it — five named combinations would have been five more buttons. Absent is a
+solid line with no heads, which is what every link already was, so no migration is owed. A head
+goes on EVERY edge, pointing in member order, and stops short of the token it points at; an edge
+too short for its heads is drawn bare. `animate` marches the dots along the same order, read off
+the render time, so it moves in playback and in an export and holds still on a paused board —
+`drawBoard` stays a function of `(doc, t, view)`.
+
+**Corners are a new zone and a new field, not a new model.** `polygon` stores its corners; it
+is dragged out as a regular polygon of a chosen count and then reshaped corner by corner.
+Arrows and lines gain `via`, the corners between their ends. Both edit the same way: a hollow dot
+in the middle of every edge becomes a corner when taken hold of, and Alt-click removes one. A
+line with corners is straight between them and drops its bend — a bezier spanning several
+corners would be a second, competing way of shaping the same line. A box converts to a polygon
+on request only; a box that silently became four free corners the first time one was dragged
+would be a surprise, and a box is still the quicker thing to draw.
+
+## D100 — A highlight is a spotlight, and a ball can be put in the net
+The halo alone (D41's glow under the token) read as one more colour on a busy board. Now the
+rest of the board goes dark and each highlighted entity stands in a pool of light that follows
+him, on every board, published ones included — a presentation change, not a document one, so no
+migration and nothing to opt into.
+
+**The darkness is cut, not painted around.** It is drawn on a layer of its own and the pools are
+cut out of it (`destination-out`), soft-edged, because two pools that overlap must both stay lit;
+darkness-with-holes as one path darkens the overlap under either winding rule. Without an
+OffscreenCanvas the holes fall back to hard-edged even-odd. Its depth follows the strongest
+highlight's strength, so it arrives and lifts with the transition exactly as the glow does, and
+it never pulses (D29). It covers the coach's marks too: a spotlight that leaves half the board lit
+is not one.
+
+**Its depth is the scene's.** `Scene.spotlight` (absent is `DEFAULT_SPOTLIGHT`, 55%) sets how dark
+a scene goes, and a transition crosses from one scene's depth to the next on the highlights' own
+easing. The editor draws it exactly as an export does: a lighter editor-only dim was tried and
+dropped, because what the coach adjusts has to be what the viewer sees. Like a highlight it is
+about one moment and is not carried into a scene added after it.
+
+**The ball may go behind the line, between the posts.** A drag used to clamp it to the pitch like
+a player, so a shot ended on the goal line among the defenders — the reading D76 already refused
+on import. `clampBall` lets it in to the depth of the goal; once in, a sideways drag runs along
+the net rather than popping it back onto the line. Players are still clamped to the pitch.

@@ -15,6 +15,7 @@
 import { useState, type ReactNode } from "react";
 import { useI18n } from "@/i18n/context";
 import { cn } from "@/lib/utils";
+import { Stepper } from "@/components/ui/Stepper";
 
 type Props = {
   label: string;
@@ -54,7 +55,7 @@ export function NumberField({
   mixed = false,
   mixedLabel,
 }: Props) {
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   /** null while the field is showing the committed value rather than a draft. */
   const [draft, setDraft] = useState<string | null>(null);
 
@@ -84,25 +85,37 @@ export function NumberField({
         {action}
       </span>
       <div className="flex items-center gap-1">
-        <input
-          type="text"
-          inputMode="decimal"
-          value={text}
-          disabled={disabled}
-          placeholder={mixed ? mixedLabel : undefined}
-          onChange={(e) => {
-            setDraft(e.target.value);
-            const n = parse(e.target.value);
-            if (inRange(n)) onCommit(n);
-          }}
-          onKeyDown={(e) => {
-            if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-            e.preventDefault();
-            stepBy(e.key === "ArrowUp" ? 1 : -1);
-          }}
-          onBlur={() => setDraft(null)}
-          className="w-16 rounded-md border border-ink-600 bg-ink-900 px-2 py-1 font-mono text-xs text-ink-200 outline-none placeholder:text-ink-400 focus:border-accent disabled:cursor-not-allowed"
-        />
+        {/* Up and down beside the value, each a `step` — the spinner a text field lacks. */}
+        <span className="flex items-stretch overflow-hidden rounded-md border border-ink-600 bg-ink-900 focus-within:border-accent">
+          <input
+            type="text"
+            inputMode="decimal"
+            value={text}
+            disabled={disabled}
+            placeholder={mixed ? mixedLabel : undefined}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              const n = parse(e.target.value);
+              if (inRange(n)) onCommit(n);
+            }}
+            onKeyDown={(e) => {
+              if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+              e.preventDefault();
+              stepBy(e.key === "ArrowUp" ? 1 : -1);
+            }}
+            onBlur={() => setDraft(null)}
+            className="w-12 bg-ink-900 px-2 py-1 font-mono text-xs text-ink-200 outline-none placeholder:text-ink-400 disabled:cursor-not-allowed"
+          />
+          <Stepper
+            className="border-l border-ink-600"
+            upLabel={t("field.increase", { label })}
+            downLabel={t("field.decrease", { label })}
+            upDisabled={disabled || value >= max}
+            downDisabled={disabled || value <= min}
+            onUp={() => stepBy(1)}
+            onDown={() => stepBy(-1)}
+          />
+        </span>
         <span className="text-[11px] text-ink-400">{unit}</span>
       </div>
     </label>

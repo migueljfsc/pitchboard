@@ -8,9 +8,18 @@
 import { z } from "zod";
 import type { BoardDoc } from "./types";
 import { BALL_ID } from "./types";
-import { TEXT_SCALE_MAX, TEXT_SCALE_MIN, TEXT_WIDTH_MAX, TEXT_WIDTH_MIN } from "./annotations";
+import {
+  MAX_POLYGON,
+  MAX_VIA,
+  MIN_POLYGON,
+  TEXT_SCALE_MAX,
+  TEXT_SCALE_MIN,
+  TEXT_WIDTH_MAX,
+  TEXT_WIDTH_MIN,
+} from "./annotations";
 import { MAX_FLOW_SPEED, MIN_FLOW_SPEED } from "./timeline";
 import { MAX_SCENE_ZOOM } from "./camera";
+import { MAX_SPOTLIGHT } from "./scenes";
 
 const vec2 = z.object({ x: z.number().finite(), y: z.number().finite() });
 
@@ -54,6 +63,7 @@ const scene = z.object({
   shot: z.boolean().optional(),
   loft: z.boolean().optional(),
   highlight: z.record(z.string(), z.string().min(1)).optional(),
+  spotlight: z.number().min(0).max(MAX_SPOTLIGHT).optional(),
   camera: z
     .object({ at: vec2, zoom: z.number().min(1).max(MAX_SCENE_ZOOM) })
     .optional(),
@@ -75,6 +85,9 @@ const link = z.object({
   style: z.enum(["chain", "polygon", "filled"]),
   color: z.string().min(1).optional(),
   showDistances: z.boolean(),
+  line: z.enum(["solid", "dotted"]).optional(),
+  arrows: z.enum(["none", "forward", "both"]).optional(),
+  animate: z.boolean().optional(),
   hidden: z.boolean().optional(),
   /** Scene ids, checked against the real scene list by the refinement below.
    *  Both optional — absent is the open end, which is what every link predating
@@ -95,10 +108,11 @@ const annotationBase = {
 
 const dash = z.enum(["solid", "dashed", "wavy"]);
 const curve = pathCurve.nullable().optional();
+const via = z.array(vec2).max(MAX_VIA).optional();
 
 const annotation = z.discriminatedUnion("kind", [
-  z.object({ ...annotationBase, kind: z.literal("arrow"), a: vec2, b: vec2, curve, dash }),
-  z.object({ ...annotationBase, kind: z.literal("line"), a: vec2, b: vec2, curve, dash }),
+  z.object({ ...annotationBase, kind: z.literal("arrow"), a: vec2, b: vec2, curve, dash, via }),
+  z.object({ ...annotationBase, kind: z.literal("line"), a: vec2, b: vec2, curve, dash, via }),
   z.object({
     ...annotationBase,
     kind: z.literal("rect"),
@@ -116,6 +130,12 @@ const annotation = z.discriminatedUnion("kind", [
   // Capped: a freehand stroke is simplified on commit, and every point of it
   // ends up in the share URL.
   z.object({ ...annotationBase, kind: z.literal("pen"), points: z.array(vec2).min(2).max(400) }),
+  z.object({
+    ...annotationBase,
+    kind: z.literal("polygon"),
+    points: z.array(vec2).min(MIN_POLYGON).max(MAX_POLYGON),
+    filled: z.boolean().optional(),
+  }),
   z.object({ ...annotationBase, kind: z.literal("ball"), at: vec2 }),
   z.object({
     ...annotationBase,

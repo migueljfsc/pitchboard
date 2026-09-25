@@ -11,7 +11,8 @@ import type { BoardDoc, Link, LinkStyle, Vec2 } from "./types";
 import { positionAt, type Resolved } from "./timeline";
 import { isVisibleIn, repairRange } from "./range";
 
-export type LinkEdge = { a: Vec2; b: Vec2; mid: Vec2; metres: number };
+/** `from` and `to` are the member ids at `a` and `b`. */
+export type LinkEdge = { a: Vec2; b: Vec2; from: string; to: string; mid: Vec2; metres: number };
 
 export type LinkGeometry = {
   /** Member positions, in member order. */
@@ -29,8 +30,12 @@ export type LinkGeometry = {
  */
 export function linkGeometry(link: Link, r: Resolved, doc: BoardDoc): LinkGeometry | null {
   const points: Vec2[] = [];
+  const ids: string[] = [];
   for (const id of link.members) {
-    if (r.to.positions[id] || r.from.positions[id]) points.push(positionAt(id, r, doc));
+    if (r.to.positions[id] || r.from.positions[id]) {
+      points.push(positionAt(id, r, doc));
+      ids.push(id);
+    }
   }
   if (points.length < 2) return null;
 
@@ -44,6 +49,8 @@ export function linkGeometry(link: Link, r: Resolved, doc: BoardDoc): LinkGeomet
     edges.push({
       a,
       b,
+      from: ids[i],
+      to: ids[(i + 1) % ids.length],
       mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
       metres: Math.hypot(b.x - a.x, b.y - a.y),
     });

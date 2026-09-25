@@ -153,6 +153,12 @@ export type Scene = {
    */
   highlight?: Record<string, string>;
   /**
+   * How dark the rest of the board goes around this scene's highlights, 0..1. Absent is
+   * `DEFAULT_SPOTLIGHT`, which is every scene written before the choice existed. Means
+   * nothing on a scene with no highlight, and like one it is never carried forward.
+   */
+  spotlight?: number;
+  /**
    * How each entity's run into this scene starts and finishes, where it is not the default.
    *
    * Absent is a gradual start and a gradual stop — the ease every run had before the choice
@@ -182,6 +188,10 @@ export type RunEnd = "gradual" | "sharp" | "through";
 export type RunStyle = { start?: Exclude<RunStart, "gradual">; end?: Exclude<RunEnd, "gradual"> };
 
 export type LinkStyle = "chain" | "polygon" | "filled";
+/** How a link's edges are stroked. Absent is solid. */
+export type LinkLine = "solid" | "dotted";
+/** Heads on a link's edges, pointing in member order. Absent is none. */
+export type LinkArrows = "none" | "forward" | "both";
 
 export type Link = {
   id: string;
@@ -196,6 +206,18 @@ export type Link = {
    */
   color?: string;
   showDistances: boolean;
+  /**
+   * Line and heads. Absent is a solid line with no heads, which is what every link
+   * was before either existed — so no migration is owed.
+   */
+  line?: LinkLine;
+  arrows?: LinkArrows;
+  /**
+   * Dashes march along the edges, in member order, as the clock runs. Read off the
+   * render time, so it moves in playback and in an export and holds still on a paused
+   * board. Meaningless on a solid line.
+   */
+  animate?: boolean;
   /** Hidden links stay in the document but are not drawn. */
   hidden?: boolean;
   /**
@@ -240,9 +262,17 @@ type AnnotationBase = {
 /** Two-point shapes share `a`/`b`, which keeps drag-to-create uniform. */
 type Segment = { a: Vec2; b: Vec2 };
 
+/**
+ * `via` are corners between `a` and `b`, in order. A path with corners is straight
+ * from one to the next and ignores `curve`: bending and cornering are two ways of
+ * shaping the same line, and adding the first corner drops the bend. Absent or empty
+ * is the single segment every arrow was before corners existed.
+ */
+type Path = { curve?: PathCurve | null; dash: AnnotationDash; via?: Vec2[] };
+
 export type Annotation =
-  | (AnnotationBase & Segment & { kind: "arrow"; curve?: PathCurve | null; dash: AnnotationDash })
-  | (AnnotationBase & Segment & { kind: "line"; curve?: PathCurve | null; dash: AnnotationDash })
+  | (AnnotationBase & Segment & Path & { kind: "arrow" })
+  | (AnnotationBase & Segment & Path & { kind: "line" })
   /**
    * `filled: false` is an outline alone. Absent is filled, which is what every zone
    * was before the choice existed — so old documents keep their look and no
@@ -252,6 +282,8 @@ export type Annotation =
   /** `a` and `b` are the bounding box, not centre and radii. */
   | (AnnotationBase & Segment & { kind: "ellipse"; filled?: boolean })
   | (AnnotationBase & { kind: "pen"; points: Vec2[] })
+  /** A closed zone of any number of corners, in perimeter order. `filled` as for a box. */
+  | (AnnotationBase & { kind: "polygon"; points: Vec2[]; filled?: boolean })
   /**
    * A ball drawn onto the board: a prop for a drill or a set piece, not the match
    * ball. It never moves on its own and nothing passes it. Drawn at the size of the
@@ -290,7 +322,7 @@ export const SEGMENT_KINDS = ["arrow", "line", "rect", "ellipse"] as const;
 export const DASHED_KINDS = ["arrow", "line"] as const;
 
 /** Zones sit under everything; the rest sit above the tokens. */
-export const ZONE_KINDS = ["rect", "ellipse"] as const;
+export const ZONE_KINDS = ["rect", "ellipse", "polygon"] as const;
 
 /**
  * The grass: a lighter or darker shade of the one green, and how real it looks.
@@ -496,6 +528,7 @@ export type RenderView = Viewport & {
    * and for a shared board; in the editor, during playback or when previewing.
    */
   sceneCamera?: boolean;
+
   /**
    * Export only: leave the surround unpainted, so a PNG has the pitch on a
    * transparent background. The frame is no longer complete in one call, which

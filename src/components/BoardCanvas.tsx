@@ -39,9 +39,13 @@ import {
 } from "@/board/interaction";
 import {
   MIN_DRAG,
+  POLYGON_SIDES,
   addAnnotation,
   draftAnnotation,
   dragAnnotationHandle,
+  insertCorner,
+  regularPolygon,
+  removeCorner,
   moveAnnotation,
   simplify,
   updateAnnotation,
@@ -56,6 +60,7 @@ import {
   type ScreenZoom,
 } from "@/board/camera";
 import { useI18n } from "@/i18n/context";
+import { Stepper } from "@/components/ui/Stepper";
 
 type Props = {
   doc: BoardDoc;
@@ -81,10 +86,14 @@ type Props = {
   drawDash?: "solid" | "dashed" | "wavy";
   /** Whether a newly drawn box or oval is filled, or an outline alone. */
   drawFilled?: boolean;
+  /** Corners of a newly drawn polygon. */
+  drawSides?: number;
   /** Keep the tool armed after a shape is drawn, for drawing several in a row. */
   sticky?: boolean;
   annotationSelection?: string | null;
   onAnnotationSelect?: (id: string | null) => void;
+  /** A connector was clicked on the board, selecting its members — the link, to edit. */
+  onLinkPick?: (id: string) => void;
   /**
    * False for read-only playback: no pointer handling and no editor chrome.
    * The renderer already draws that distinction — this is the same flag the
@@ -164,9 +173,11 @@ export function BoardCanvas({
   drawColor = "#fbbf24",
   drawDash = "solid",
   drawFilled = true,
+  drawSides = POLYGON_SIDES,
   sticky = false,
   annotationSelection = null,
   onAnnotationSelect,
+  onLinkPick,
   interactive = true,
   trail,
   onContextMenu,
@@ -612,6 +623,27 @@ export function BoardCanvas({
     // drawn on top of everything and are the most deliberate target there is.
     const annHandle = shapeHandleAt(e, p);
     if (annHandle) {
+      const { hit } = annHandle;
+      const ann = (doc.annotations ?? []).find((a) => a.id === hit.id);
+      // Alt on a corner takes it out; the shape refuses where it would have too few.
+      if (ann && hit.which === "v" && e.altKey) {
+        const patch = removeCorner(ann, hit.index ?? 0);
+        if (patch) onDocChange(updateAnnotation(doc, ann.id, patch));
+        return;
+      }
+      // Taking hold of an edge's middle puts a corner there and drags it, as one
+      // undo step with the drag.
+      if (ann && hit.which === "m") {
+        const made = insertCorner(ann, hit.index ?? 0, p);
+        if (!made) return;
+        onDocChange(updateAnnotation(doc, ann.id, made.patch), dragKey());
+        setDrag({
+          kind: "ann-handle",
+          hit: { id: ann.id, which: "v", index: made.index },
+          billboard: false,
+        });
+        return;
+      }
       setDrag({ kind: "ann-handle", ...annHandle });
       return;
     }
@@ -683,6 +715,7 @@ export function BoardCanvas({
       if (unit) {
         onAnnotationSelect?.(null);
         onSelectionChange(new Set(e.shiftKey ? [...selection, ...unit.members] : unit.members));
+        onLinkPick?.(unit.id);
         return;
       }
 
@@ -731,6 +764,7 @@ export function BoardCanvas({
     if (link) {
       onAnnotationSelect?.(null);
       onSelectionChange(new Set(e.shiftKey ? [...selection, ...link.members] : link.members));
+      onLinkPick?.(link.id);
       return;
     }
 
@@ -788,6 +822,7 @@ export function BoardCanvas({
       color: drawColor,
       dash: drawDash,
       filled: drawFilled,
+      sides: drawSides,
       points: [p],
     });
 
@@ -930,7 +965,13 @@ export function BoardCanvas({
         updateAnnotation(
           doc,
           ann.id,
-          dragAnnotationHandle(ann, drag.hit.which, to, rotated && !drag.billboard),
+          dragAnnotationHandle(
+            ann,
+            drag.hit.which,
+            to,
+            rotated && !drag.billboard,
+            drag.hit.index,
+          ),
         ),
         dragKey(),
       );
@@ -961,6 +1002,11 @@ export function BoardCanvas({
     }
     // Text and balls commit on the click that creates them, so never reach a draft.
     if (drag.ann.kind === "text" || drag.ann.kind === "ball") return drag;
+    // Laid out afresh in the box dragged so far, with the corner count it started with.
+    if (drag.ann.kind === "polygon") {
+      const points = regularPolygon(drag.start, p, drag.ann.points.length);
+      return { ...drag, ann: { ...drag.ann, points } };
+    }
     return { ...drag, ann: { ...drag.ann, a: drag.start, b: p } };
   };
 
@@ -1032,7 +1078,7 @@ export function BoardCanvas({
     if (ann.kind === "text" || ann.kind === "ball") return;
 
     const drawn =
-      ann.kind === "pen"
+      ann.kind === "pen" || ann.kind === "polygon"
         ? ann.points.length >= 2 && spread(ann.points) >= MIN_DRAG
         : Math.hypot(ann.b.x - ann.a.x, ann.b.y - ann.a.y) >= MIN_DRAG;
 
@@ -1092,23 +1138,13 @@ export function BoardCanvas({
         }}
         onDoubleClick={live ? onDoubleClick : undefined}
       />
-      {/* − | zoom | +: this scene's zoom. It is saved as it changes, and is what
+      {/* This scene's zoom, with its arrows. It is saved as it changes, and is what
           playback, Present and exports show for the scene; 100% is the whole board. */}
       {live && (
         <div
           className="absolute bottom-3 right-3 z-10 flex items-center overflow-hidden rounded-md border border-ink-600 bg-ink-800/90 font-mono text-[11px] text-ink-200 shadow"
           title={i18n.t("board.zoom.scene", { scene: scene?.name ?? "" })}
         >
-          <button
-            type="button"
-            onClick={() => writeZoom(zoomAbout(shownView, { x: size.w / 2, y: size.h / 2 }, 1 / 1.25, size))}
-            disabled={shownView.z <= 1 || cameraLocked}
-            aria-label={i18n.t("board.zoom.out")}
-            title={i18n.t("board.zoom.out")}
-            className="px-2 py-1 transition enabled:hover:bg-ink-700 disabled:opacity-40"
-          >
-            −
-          </button>
           <ZoomField
             value={shownView.z}
             disabled={cameraLocked || size.w === 0}
@@ -1117,16 +1153,15 @@ export function BoardCanvas({
               writeZoom(zoomAbout(shownView, { x: size.w / 2, y: size.h / 2 }, target / shownView.z, size))
             }
           />
-          <button
-            type="button"
-            onClick={() => writeZoom(zoomAbout(shownView, { x: size.w / 2, y: size.h / 2 }, 1.25, size))}
-            disabled={shownView.z >= MAX_ZOOM || cameraLocked}
-            aria-label={i18n.t("board.zoom.in")}
-            title={i18n.t("board.zoom.in")}
-            className="px-2 py-1 transition enabled:hover:bg-ink-700 disabled:opacity-40"
-          >
-            +
-          </button>
+          <Stepper
+            className="border-l border-ink-600"
+            upLabel={i18n.t("board.zoom.in")}
+            downLabel={i18n.t("board.zoom.out")}
+            upDisabled={shownView.z >= MAX_ZOOM || cameraLocked}
+            downDisabled={shownView.z <= 1 || cameraLocked}
+            onUp={() => writeZoom(zoomAbout(shownView, { x: size.w / 2, y: size.h / 2 }, 1.25, size))}
+            onDown={() => writeZoom(zoomAbout(shownView, { x: size.w / 2, y: size.h / 2 }, 1 / 1.25, size))}
+          />
         </div>
       )}
       {live && !playing && !drag && hover && hoverAt && !isDrawTool(tool) && (
@@ -1254,7 +1289,7 @@ function ZoomField({
           e.currentTarget.blur();
         }
       }}
-      className="w-12 border-x border-ink-600 bg-transparent px-1 py-1 text-center outline-none focus:bg-ink-900 disabled:opacity-60"
+      className="w-12 bg-transparent px-1 py-1 text-center outline-none focus:bg-ink-900 disabled:opacity-60"
     />
   );
 }

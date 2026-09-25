@@ -7,6 +7,7 @@ import {
   hitTestTilted,
   hitTestTiltedText,
   hitTestTiltedTextHandle,
+  clampBall,
   moveEntities,
   nudgeEntities,
   tiltedTextPoint,
@@ -545,5 +546,29 @@ describe("moveEntities and unseen players (D87)", () => {
     const a = doc.teams[0].players[1].id;
     const marked: BoardDoc = { ...doc, scenes: [{ ...doc.scenes[0], unseen: [a] }] };
     expect(moveEntities(marked, 0, [a], { x: 2, y: 0 }).scenes[0].unseen).toBeUndefined();
+  });
+});
+
+describe("the ball and the net", () => {
+  const pitch = { length: 105, width: 68 };
+
+  it("goes into the net between the posts, no deeper than the goal", () => {
+    expect(clampBall({ x: -1.2, y: 34 }, pitch)).toEqual({ x: -1.2, y: 34 });
+    expect(clampBall({ x: 110, y: 35 }, pitch)).toEqual({ x: 107, y: 35 });
+  });
+
+  it("stays on the pitch wide of the posts", () => {
+    expect(clampBall({ x: -1, y: 20 }, pitch)).toEqual({ x: -1, y: 34 - 3.66 });
+    expect(clampBall({ x: 50, y: -4 }, pitch)).toEqual({ x: 50, y: 0 });
+  });
+
+  it("is carried into the net by a drag, where a player is not", () => {
+    const doc = createBoardDoc();
+    const loose = {
+      ...doc,
+      scenes: doc.scenes.map((s) => ({ ...s, carrier: null, ballPos: { x: 100, y: 34 } })),
+    };
+    const next = moveEntities(loose, 0, [BALL_ID], { x: 6, y: 0 });
+    expect(next.scenes[0].ballPos).toEqual({ x: 106, y: 34 });
   });
 });

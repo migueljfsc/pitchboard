@@ -65,6 +65,7 @@ import { useI18n } from "@/i18n/context";
 import type { Message } from "@/i18n/core";
 import { clearLinks, createLink } from "@/board/links";
 import {
+  POLYGON_SIDES,
   annotationsOf,
   deleteAnnotation,
   duplicateAnnotation,
@@ -177,6 +178,7 @@ export function Editor({ initialDoc }: Props = {}) {
   const [importOpen, setImportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [selectionOpen, setSelectionOpen] = useState(true);
+  const [linksOpen, setLinksOpen] = useState(false);
   // Which side the Formations section is showing.
   const [teamTab, setTeamTab] = useState<0 | 1>(0);
   // Formations fold away while something is selected, so the Selection panel under
@@ -232,6 +234,7 @@ export function Editor({ initialDoc }: Props = {}) {
   const [highlightColor, setHighlightColor] = useState("#f59e0b");
   const [drawDash, setDrawDash] = useState<AnnotationDash>("solid");
   const [drawFilled, setDrawFilled] = useState(true);
+  const [drawSides, setDrawSides] = useState(POLYGON_SIDES);
   const [annotation, setAnnotation] = useState<string | null>(null);
   const [focusText, setFocusText] = useState(0);
 
@@ -743,6 +746,10 @@ export function Editor({ initialDoc }: Props = {}) {
   // reason the run toggle asks for every one — half-lit would read as "off".
   const highlighted =
     visible.size > 0 && [...visible].every((id) => isHighlighted(doc.scenes[activeScene], id));
+  // The colour the selection actually wears here — not the last one picked, which is only
+  // what the NEXT highlight takes. Null when they wear different colours: no swatch is true.
+  const litColors = new Set([...visible].map((id) => doc.scenes[activeScene]?.highlight?.[id]));
+  const litColor = highlighted && litColors.size === 1 ? ([...litColors][0] ?? null) : null;
 
   const onHighlightChange = (color: string | null) => {
     if (color) setHighlightColor(color);
@@ -1139,7 +1146,7 @@ export function Editor({ initialDoc }: Props = {}) {
       });
     }
 
-    for (const kind of ["arrow", "line", "rect", "ellipse", "pen", "text", "ball"] as const) {
+    for (const kind of ["arrow", "line", "rect", "ellipse", "polygon", "pen", "text", "ball"] as const) {
       list.push({
         id: `tool-${kind}`,
         group: group.draw,
@@ -1640,7 +1647,7 @@ export function Editor({ initialDoc }: Props = {}) {
               runsHidden={runsHidden}
               onRunsHiddenChange={onRunsHiddenChange}
               highlighted={highlighted}
-              highlightColor={highlightColor}
+              highlightColor={litColor}
               onHighlightChange={onHighlightChange}
               onGoToScene={(index) => selectScene(index)}
               onResetMove={onResetMove}
@@ -1652,7 +1659,12 @@ export function Editor({ initialDoc }: Props = {}) {
               focusName={focusName}
             />
           </Section>
-          <Section title={t("section.links")} badge={String(doc.links.length)} defaultOpen={false}>
+          <Section
+            title={t("section.links")}
+            badge={String(doc.links.length)}
+            open={linksOpen}
+            onOpenChange={setLinksOpen}
+          >
             <LinkPanel
               doc={doc}
               onDocChange={setDoc}
@@ -1846,9 +1858,14 @@ export function Editor({ initialDoc }: Props = {}) {
               drawColor={drawColor}
               drawDash={drawDash}
               drawFilled={drawFilled}
+              drawSides={drawSides}
               sticky={sticky}
               annotationSelection={annotation}
               onAnnotationSelect={selectAnnotation}
+              onLinkPick={(id) => {
+                setLinksOpen(true);
+                setExpandedLink(id);
+              }}
               trail={trailOn ? selectedPlayers : undefined}
               sceneCamera={playing || present}
               playing={playing}
@@ -1946,6 +1963,8 @@ export function Editor({ initialDoc }: Props = {}) {
                   onDashChange={setDrawDash}
                   filled={drawFilled}
                   onFilledChange={setDrawFilled}
+                  sides={drawSides}
+                  onSidesChange={setDrawSides}
                   selected={annotation}
                   onDuplicate={onDuplicateAnnotation}
                   onDelete={deleteShape}

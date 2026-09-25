@@ -16,8 +16,13 @@ import {
   dragAnnotationHandle,
   duplicateAnnotation,
   isVisibleAt,
+  insertCorner,
   moveAnnotation,
   polylineLength,
+  regularPolygon,
+  removeCorner,
+  toPolygon,
+  trimEnd,
   pruneAnnotations,
   reorderAnnotation,
   sceneRange,
@@ -271,9 +276,11 @@ describe("editing", () => {
 });
 
 describe("handles", () => {
-  it("offers both ends and two control points on an arrow", () => {
+  it("offers both ends, two control points and the middle on an arrow", () => {
     const doc = board();
-    expect(annotationHandles(arrow(doc)).map((h) => h.which)).toEqual(["a", "b", "c1", "c2"]);
+    const handles = annotationHandles(arrow(doc));
+    expect(handles.map((h) => h.which)).toEqual(["a", "b", "c1", "c2", "m"]);
+    expect(handles[4].at).toEqual(at(30, 20));
   });
 
   it("offers only the corners on a zone", () => {
@@ -754,5 +761,109 @@ describe("an outline zone", () => {
     const placed = addAnnotation(doc, oval);
     expect(hitTestAnnotation(placed, 0, at(20, 25), "zone")).not.toBeNull();
     expect(hitTestAnnotation(placed, 0, at(30, 25), "zone")).toBeNull();
+  });
+});
+
+describe("corners", () => {
+  type Arrow = Extract<Annotation, { kind: "arrow" }>;
+  type Polygon = Extract<Annotation, { kind: "polygon" }>;
+
+  const polygon = (doc: BoardDoc, sides = 5): Polygon =>
+    draftAnnotation(doc, "polygon", doc.scenes[0].id, at(10, 10), at(30, 30), {
+      color: "#fff",
+      sides,
+    }) as Polygon;
+
+  it("lays a regular polygon out in the box dragged, first corner at the top", () => {
+    const pts = regularPolygon(at(10, 10), at(30, 30), 4);
+    expect(pts).toHaveLength(4);
+    expect(pts[0].x).toBeCloseTo(20);
+    expect(pts[0].y).toBeCloseTo(10);
+    expect(pts[2].y).toBeCloseTo(30);
+  });
+
+  it("draws a polygon with the corners asked for", () => {
+    expect(polygon(board(), 6).points).toHaveLength(6);
+  });
+
+  it("gives a polygon a handle per corner and per edge", () => {
+    const handles = annotationHandles(polygon(board(), 5));
+    expect(handles.filter((h) => h.which === "v")).toHaveLength(5);
+    expect(handles.filter((h) => h.which === "m")).toHaveLength(5);
+  });
+
+  it("moves one corner and no other", () => {
+    const poly = polygon(board(), 3);
+    const patch = dragAnnotationHandle(poly, "v", at(0, 0), false, 1) as Partial<Polygon>;
+    expect(patch.points![1]).toEqual(at(0, 0));
+    expect(patch.points![0]).toEqual(poly.points[0]);
+    expect(patch.points![2]).toEqual(poly.points[2]);
+  });
+
+  it("inserts a corner after the edge's first and keeps at least three", () => {
+    const poly = polygon(board(), 3);
+    const made = insertCorner(poly, 2, at(1, 1))!;
+    expect(made.index).toBe(3);
+    expect((made.patch as Partial<Polygon>).points).toHaveLength(4);
+    expect(removeCorner(poly, 0)).toBeNull();
+  });
+
+  it("corners a straight arrow, and drops its bend when it had one", () => {
+    const doc = board();
+    const bent: Arrow = { ...(arrow(doc) as Arrow), curve: straightCurve(at(20, 20), at(40, 20)) };
+    const made = insertCorner(bent, 0, at(30, 10))!;
+    expect(made.patch).toEqual({ via: [at(30, 10)], curve: null });
+
+    const cornered = { ...bent, ...made.patch } as Arrow;
+    expect(strokePoints(cornered)).toEqual([at(20, 20), at(30, 10), at(40, 20)]);
+    const handles = annotationHandles(cornered).map((h) => h.which);
+    expect(handles).toEqual(["a", "b", "v", "m", "m"]);
+  });
+
+  it("goes back to one segment when its last corner is removed", () => {
+    const doc = board();
+    const cornered = { ...(arrow(doc) as Arrow), via: [at(30, 10)] };
+    expect(removeCorner(cornered, 0)).toEqual({ via: undefined });
+  });
+
+  it("carries corners with a move", () => {
+    let doc = board();
+    const ann = { ...(arrow(doc) as Arrow), via: [at(30, 10)] };
+    doc = moveAnnotation(addAnnotation(doc, ann), ann.id, at(1, 2));
+    expect((doc.annotations![0] as Arrow).via).toEqual([at(31, 12)]);
+  });
+
+  it("turns a box into the polygon of its corners, keeping what it was", () => {
+    let doc = board();
+    const rect = {
+      ...draftAnnotation(doc, "rect", doc.scenes[0].id, at(20, 10), at(10, 30), {
+        color: "#f00",
+        filled: false,
+      }),
+      name: "Press",
+    };
+    doc = toPolygon(addAnnotation(doc, rect), rect.id);
+    const poly = doc.annotations![0] as Polygon;
+    expect(poly).toMatchObject({ id: rect.id, kind: "polygon", color: "#f00", name: "Press" });
+    expect(poly.filled).toBe(false);
+    expect(poly.points).toEqual([at(10, 10), at(20, 10), at(20, 30), at(10, 30)]);
+    expect(boardDocSchema.safeParse(doc).success).toBe(true);
+  });
+
+  it("hit-tests a filled polygon inside and an outline only on its edge", () => {
+    let doc = board();
+    const poly = polygon(doc, 4);
+    doc = addAnnotation(doc, poly);
+    expect(hitTestAnnotation(doc, 0, at(20, 20), "zone")?.id).toBe(poly.id);
+    doc = updateAnnotation(doc, poly.id, { filled: false });
+    expect(hitTestAnnotation(doc, 0, at(20, 20), "zone")).toBeNull();
+    expect(hitTestAnnotation(doc, 0, poly.points[0], "zone")?.id).toBe(poly.id);
+  });
+
+  it("trims a polyline along its length, across a corner", () => {
+    const pts = [at(0, 0), at(10, 0), at(10, 10)];
+    expect(trimEnd(pts, 4)).toEqual([at(0, 0), at(10, 0), at(10, 6)]);
+    expect(trimEnd(pts, 15)).toEqual([at(0, 0), at(5, 0)]);
+    expect(trimEnd(pts, 99)).toEqual([at(0, 0)]);
   });
 });

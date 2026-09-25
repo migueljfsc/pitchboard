@@ -14,8 +14,10 @@
 import type {
   Annotation,
   BoardDoc,
+  LinkArrows,
   PitchHalf,
   RenderView,
+  Scene,
   Team,
   TeamPattern,
   Vec2,
@@ -51,8 +53,8 @@ import {
   type Frame,
   type Resolved,
 } from "./timeline";
-import { ballCurve, ballTravelBetween, isRunHidden } from "./scenes";
-import { linkColor, linkGeometry, linksOn, type LinkGeometry } from "./links";
+import { DEFAULT_SPOTLIGHT, ballCurve, ballTravelBetween, isRunHidden } from "./scenes";
+import { linkColor, linkGeometry, linksOn, type LinkEdge, type LinkGeometry } from "./links";
 import {
   DASH_PATTERN,
   HEAD_LENGTH,
@@ -63,7 +65,9 @@ import {
   annotationHandles,
   boundsOf,
   isStanding,
+  polylineLength,
   strokePoints,
+  trimEnd,
   TEXT_LINE_H,
   textBgAlpha,
   textExtent,
@@ -79,6 +83,7 @@ import {
   halfRange,
   cubicAt,
   cubicTangent,
+  easeInOutCubic,
   reparameterise,
   viewMatrix,
   type Bezier,
@@ -148,7 +153,7 @@ export function drawBoard(
   // an OffscreenCanvas for the ground layer; without one, fall back to the flat
   // board rather than failing to draw a frame at all.
   if (view.tilt && typeof OffscreenCanvas !== "undefined") {
-    drawTilted(ctx, doc, frame, view, theme);
+    drawTilted(ctx, doc, frame, view, theme, t);
     ctx.restore();
     drawCaption(ctx, doc, frame, view);
     return;
@@ -170,7 +175,7 @@ export function drawBoard(
   for (const ann of marks) if (isZone(ann)) drawZone(ctx, ann);
 
   // Links sit under the tokens so a connector never covers a shirt number.
-  drawLinks(ctx, doc, frame, view.rotated);
+  drawLinks(ctx, doc, frame, view.rotated, t);
   drawTrail(ctx, doc, view, view.rotated);
   drawPaths(ctx, doc, frame, view);
 
@@ -179,7 +184,9 @@ export function drawBoard(
   const scale = tokenScaleOf(doc);
 
   // Under the tokens, in one pass — see halosOn.
-  for (const halo of halosOn(doc, frame)) {
+  const halos = halosOn(doc, frame);
+  for (const halo of halos) {
+    drawPool(ctx, halo.at, poolRadius(halo, scale), halo.strength);
     drawHighlight(ctx, halo.at, TOKEN_RADIUS * scale, halo.color, halo.strength);
   }
 
@@ -212,6 +219,13 @@ export function drawBoard(
   }
 
   for (const ann of marks) if (!isZone(ann)) drawMark(ctx, ann, view.rotated, ballRadius(doc));
+
+  // Over everything the board says, under the editor's own chrome.
+  drawSpotlight(
+    ctx,
+    halos.map((h) => ({ at: h.at, r: poolRadius(h, scale), strength: h.strength })),
+    spotlightDim(frame.resolved),
+  );
 
   if (view.interactive && view.annotationSelection) {
     const selected = marks.find((a) => a.id === view.annotationSelection);
@@ -349,6 +363,7 @@ function drawTilted(
   frame: Frame,
   view: RenderView,
   theme: PitchTheme,
+  t: number,
 ): void {
   // The caller's transform carries the device pixel ratio, and the ground layer is
   // a real canvas that has to be allocated in device pixels. Reading it back here
@@ -374,7 +389,7 @@ function drawTilted(
   drawPitch(gctx, doc.pitch, theme, false, view.turf);
   drawTeamNames(gctx, doc, true, TEAM_NAME_OFFSET_3D);
   for (const ann of marks) if (isZone(ann)) drawZone(gctx, ann);
-  drawLinks(gctx, doc, frame, true);
+  drawLinks(gctx, doc, frame, true, t);
   drawTrail(gctx, doc, view, true);
   drawPaths(gctx, doc, frame, view);
 
@@ -415,6 +430,17 @@ function drawTilted(
   drawGoal(ctx, doc, cam, -1, theme);
   drawBillboards(ctx, doc, frame, view, cam, marks);
   drawGoal(ctx, doc, cam, 1, theme);
+
+  // In screen space, over the goals and everything standing: the pools are cut
+  // around each highlighted player where he is drawn, sized by his depth.
+  const scale = tokenScaleOf(doc);
+  const halos = halosOn(doc, frame);
+  const holes = halos.flatMap((h) => {
+    const at = projectPitch(h.at, cam);
+    if (!Number.isFinite(at.scale) || at.scale <= 0) return [];
+    return [{ at: { x: at.x, y: at.y }, r: poolRadius(h, scale) * at.scale, strength: h.strength }];
+  });
+  drawSpotlight(ctx, holes, spotlightDim(frame.resolved));
   ctx.restore();
 }
 
@@ -669,9 +695,10 @@ function drawBillboards(
   // ground layer would land as an ellipse squashed into the grass. Under the
   // standing tokens, and unsorted, for the same reason the ghosts are.
   for (const halo of halosOn(doc, frame)) {
-    billboard(ctx, halo.at, projectPitch(halo.at, cam), () =>
-      drawHighlight(ctx, halo.at, TOKEN_RADIUS * scale, halo.color, halo.strength),
-    );
+    billboard(ctx, halo.at, projectPitch(halo.at, cam), () => {
+      drawPool(ctx, halo.at, poolRadius(halo, scale), halo.strength);
+      drawHighlight(ctx, halo.at, TOKEN_RADIUS * scale, halo.color, halo.strength);
+    });
   }
 
   const standing: { at: Projected; draw: () => void }[] = [];
@@ -934,7 +961,7 @@ export const HALO_REACH = 2.6;
 const HALO_ALPHA = 0.7;
 
 /** A halo resolved for one entity: where it sits, what colour, how bright. */
-type Halo = { at: Vec2; color: string; strength: number };
+type Halo = { at: Vec2; color: string; strength: number; ball?: boolean };
 
 /**
  * Every glow on this frame, players first and the ball last.
@@ -961,7 +988,7 @@ function halosOn(doc: BoardDoc, frame: Frame): Halo[] {
   const ball = frame.ball;
   if (ball) {
     const glow = highlightAt(BALL_ID, frame.resolved);
-    if (glow) out.push({ at: ball, color: glow.color, strength: glow.strength });
+    if (glow) out.push({ at: ball, color: glow.color, strength: glow.strength, ball: true });
   }
 
   return out;
@@ -991,6 +1018,110 @@ function drawHighlight(ctx: Ctx, p: Vec2, radius: number, color: string, strengt
   ctx.fill();
 }
 
+// ------------------------------------------------------------- the spotlight
+//
+// A highlight used to be a glow under the token and nothing else, and on a busy
+// board it read as one more colour among many. Now the rest of the board goes dark
+// and each highlighted player stands in a pool of light that follows him.
+
+/** A pool's radius, in token-scale metres. The ball's is smaller, as the ball is. */
+const POOL_RADIUS = 3.2;
+const BALL_POOL_RADIUS = 2;
+/** How bright the pool is at its centre. Faint: the darkness around it does the work. */
+const POOL_LIGHT = 0.1;
+
+const poolRadius = (halo: Halo, scale: number): number =>
+  (halo.ball ? BALL_POOL_RADIUS : POOL_RADIUS) * scale;
+
+/**
+ * How dark to make the board: each end of the transition's own setting, where that
+ * scene has a highlight at all, crossed on the same easing as the highlights — so it
+ * darkens as a highlighted scene arrives, lifts as it leaves, and moves from one
+ * scene's depth to the next without a step. During a hold it is that scene's.
+ */
+function spotlightDim(r: Resolved): number {
+  const depth = (s: Scene): number =>
+    s.highlight && Object.keys(s.highlight).length > 0 ? (s.spotlight ?? DEFAULT_SPOTLIGHT) : 0;
+  const e = easeInOutCubic(r.u);
+  return depth(r.from) * (1 - e) + depth(r.to) * e;
+}
+
+/** The light itself: a faint white wash on the grass under a highlighted player. */
+function drawPool(ctx: Ctx, p: Vec2, radius: number, strength: number): void {
+  const light = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius);
+  light.addColorStop(0, `rgba(255,255,255,${POOL_LIGHT * strength})`);
+  light.addColorStop(0.6, `rgba(255,255,255,${POOL_LIGHT * 0.6 * strength})`);
+  light.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+  ctx.fillStyle = light;
+  ctx.fill();
+}
+
+/** A cut in the darkness: where it is, how wide, and how far through it goes. */
+type Hole = { at: Vec2; r: number; strength: number };
+
+/** Far enough out to cover any frame, in metres or in pixels alike. */
+const COVER = 1e5;
+
+/**
+ * Darken everything drawn so far, except around each hole.
+ *
+ * On a layer of its own, because holes have to be cut OUT of the darkness —
+ * soft-edged, and where two overlap the overlap stays lit. Painting darkness with
+ * holes in a single path cannot do both: nonzero and even-odd winding each darken
+ * the place two pools meet. The layer is drawn in the context's own coordinates, so
+ * this works in metres on the flat board and in pixels under the camera.
+ *
+ * Without an OffscreenCanvas (the tests, or an old browser) the holes are hard-edged
+ * and even-odd — the same composition, cruder at the edges.
+ */
+function drawSpotlight(ctx: Ctx, holes: Hole[], dim: number): void {
+  if (dim <= 0.001 || holes.length === 0) return;
+  const fill = `rgba(0,0,0,${dim})`;
+
+  const size = (ctx as { canvas?: { width?: unknown; height?: unknown } }).canvas;
+  const w = size?.width;
+  const h = size?.height;
+  const layered =
+    typeof OffscreenCanvas !== "undefined" && typeof w === "number" && typeof h === "number" && w > 0 && h > 0;
+  const layer = layered ? new OffscreenCanvas(w, h).getContext("2d") : null;
+
+  if (!layer) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(-COVER, -COVER, COVER * 2, COVER * 2);
+    for (const hole of holes) {
+      ctx.moveTo(hole.at.x + hole.r, hole.at.y);
+      ctx.arc(hole.at.x, hole.at.y, hole.r, 0, Math.PI * 2);
+    }
+    ctx.fillStyle = fill;
+    ctx.fill("evenodd");
+    ctx.restore();
+    return;
+  }
+
+  layer.setTransform(ctx.getTransform());
+  layer.fillStyle = fill;
+  layer.fillRect(-COVER, -COVER, COVER * 2, COVER * 2);
+  layer.globalCompositeOperation = "destination-out";
+  for (const hole of holes) {
+    const { x, y } = hole.at;
+    const cut = layer.createRadialGradient(x, y, hole.r * 0.45, x, y, hole.r);
+    cut.addColorStop(0, `rgba(0,0,0,${hole.strength})`);
+    cut.addColorStop(1, "rgba(0,0,0,0)");
+    layer.beginPath();
+    layer.arc(x, y, hole.r, 0, Math.PI * 2);
+    layer.fillStyle = cut;
+    layer.fill();
+  }
+
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(layer.canvas, 0, 0);
+  ctx.restore();
+}
+
 // ---------------------------------------------------------------- links
 
 /** Ids of players on hidden teams. Shared by rendering and hit-testing. */
@@ -1010,8 +1141,119 @@ export function concealedPlayers(doc: BoardDoc): Set<string> {
  * into, which is the same instant annotations switch on, so a link and a zone
  * ranged to the same scene arrive together (D47).
  */
-function drawLinks(ctx: Ctx, doc: BoardDoc, frame: Frame, rotated: boolean): void {
+/** A link's line, under-stroke included, in metres. */
+const LINK_WIDTH = 0.36;
+const LINK_UNDER = 0.52;
+/** A link's heads: smaller than a drawn arrow's, as its line is thinner. */
+const LINK_HEAD_LENGTH = 1.5;
+const LINK_HEAD_WIDTH = 1.1;
+/** Room between a head's point and the token it points at. */
+const LINK_HEAD_GAP = 0.15;
+/** Dots rather than dashes: a near-zero dash with a round cap is a dot the line's width. */
+const LINK_DASH: [number, number] = [0.01, 0.75];
+/** How fast marching dashes travel, in metres per second of board time. */
+const LINK_MARCH = 1.6;
+
+/** One edge of a link as stroked: the shaft, and where its heads point. */
+type LinkStroke = { shaft: [Vec2, Vec2]; heads: { tip: Vec2; back: Vec2 }[] };
+
+/**
+ * An edge with its heads.
+ *
+ * The heads stop short of what is drawn at either end — the token, and the name
+ * under it — and the shaft stops inside each head, as a drawn arrow's does. `clearA`
+ * and `clearB` are how far out from each centre that is, along this edge. An edge
+ * too short for its heads is drawn bare rather than as heads overlapping.
+ */
+function linkStroke(
+  a: Vec2,
+  b: Vec2,
+  arrows: LinkArrows,
+  clearA: number,
+  clearB: number,
+): LinkStroke {
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  const heads = arrows === "both" ? 2 : arrows === "forward" ? 1 : 0;
+  const room = clearB + (heads === 2 ? clearA : 0) + LINK_HEAD_LENGTH * heads;
+  if (heads === 0 || len <= room) return { shaft: [a, b], heads: [] };
+
+  const dx = (b.x - a.x) / len;
+  const dy = (b.y - a.y) / len;
+  const along = (from: Vec2, d: number): Vec2 => ({ x: from.x + dx * d, y: from.y + dy * d });
+  const into = LINK_HEAD_LENGTH - SHAFT_INTO_HEAD;
+
+  const out: LinkStroke = {
+    shaft: [heads === 2 ? along(a, clearA + into) : a, along(b, -(clearB + into))],
+    heads: [{ tip: along(b, -clearB), back: a }],
+  };
+  if (heads === 2) out.heads.push({ tip: along(a, clearA), back: b });
+  return out;
+}
+
+/** Estimates for a player's name, as multiples of the token scale — see `drawToken`. */
+const NAME_CHAR_W = 0.58;
+const NAME_TOP = 0.3;
+const NAME_HEIGHT = 0.95;
+const NAME_PAD = 0.05;
+
+/**
+ * How far from a player's centre a head pointing at him along `dir` has to stop:
+ * clear of the token, and clear of his name if the edge arrives through it.
+ *
+ * The name hangs below the token in SCREEN space, whatever the board's orientation
+ * (`upright`), so `dir` is turned into that frame before the box is tested. Arriving
+ * from below and stopping at the token puts the head under the name, which is drawn
+ * over it — and a two-way link reads as a one-way one.
+ */
+function headClearance(
+  dir: Vec2,
+  label: string,
+  radius: number,
+  k: number,
+  rotated: boolean,
+): number {
+  const clear = radius + LINK_HEAD_GAP;
+  if (!label) return clear;
+
+  // `upright` turns +90° on a rotated board, so pitch (x, y) is screen (y, -x).
+  const ux = rotated ? dir.y : dir.x;
+  const uy = rotated ? -dir.x : dir.y;
+  const half = (label.length * NAME_CHAR_W * k) / 2 + NAME_PAD;
+  const top = radius + NAME_TOP * k - NAME_PAD;
+  const bottom = radius + (NAME_TOP + NAME_HEIGHT) * k + NAME_PAD;
+
+  // Where the ray out of the centre leaves the name's box, by slabs.
+  const slab = (u: number, lo: number, hi: number): [number, number] => {
+    if (Math.abs(u) < 1e-9) return lo <= 0 && 0 <= hi ? [-Infinity, Infinity] : [Infinity, -Infinity];
+    const t1 = lo / u;
+    const t2 = hi / u;
+    return [Math.min(t1, t2), Math.max(t1, t2)];
+  };
+  const [x0, x1] = slab(ux, -half, half);
+  const [y0, y1] = slab(uy, top, bottom);
+  const enter = Math.max(x0, y0);
+  const exit = Math.min(x1, y1);
+  if (enter > exit || exit <= 0) return clear;
+  return Math.max(clear, exit);
+}
+
+function drawLinks(ctx: Ctx, doc: BoardDoc, frame: Frame, rotated: boolean, t: number): void {
   const concealed = concealedPlayers(doc);
+  const radius = tokenRadius(doc);
+  const k = tokenScaleOf(doc);
+  const labels = new Map<string, string>();
+  for (const team of doc.teams) for (const p of team.players) labels.set(p.id, p.label);
+
+  const stroke = (e: LinkEdge, arrows: LinkArrows): LinkStroke => {
+    const len = e.metres || 1;
+    const dir = { x: (e.b.x - e.a.x) / len, y: (e.b.y - e.a.y) / len };
+    const back = { x: -dir.x, y: -dir.y };
+    // Each end is approached from the other: the head at b points along dir, so the
+    // ray out of b's centre that it has to clear runs back towards a.
+    const clearA = headClearance(dir, labels.get(e.from) ?? "", radius, k, rotated);
+    const clearB = headClearance(back, labels.get(e.to) ?? "", radius, k, rotated);
+    return linkStroke(e.a, e.b, arrows, clearA, clearB);
+  };
 
   for (const link of linksOn(doc, frame.resolved.index)) {
     // A link whose players are all on a hidden team goes with them.
@@ -1019,7 +1261,9 @@ function drawLinks(ctx: Ctx, doc: BoardDoc, frame: Frame, rotated: boolean): voi
     const g = linkGeometry(link, frame.resolved, doc);
     if (!g) continue;
     const color = linkColor(doc, link);
+    const arrows = link.arrows ?? "none";
 
+    ctx.save();
     ctx.beginPath();
     ctx.moveTo(g.points[0].x, g.points[0].y);
     for (let i = 1; i < g.points.length; i++) ctx.lineTo(g.points[i].x, g.points[i].y);
@@ -1030,17 +1274,44 @@ function drawLinks(ctx: Ctx, doc: BoardDoc, frame: Frame, rotated: boolean): voi
       ctx.fill();
     }
 
-    // A dark under-stroke first: a blue or black kit colour is nearly invisible
-    // against the grass on its own.
+    // Headed edges are stroked one by one, each trimmed to its heads. Unheaded, the
+    // outline stays one path, so its corners join rather than overlap.
+    const strokes = arrows === "none" ? [] : g.edges.map((e) => stroke(e, arrows));
+    if (strokes.length > 0) {
+      ctx.beginPath();
+      for (const { shaft } of strokes) {
+        ctx.moveTo(shaft[0].x, shaft[0].y);
+        ctx.lineTo(shaft[1].x, shaft[1].y);
+      }
+    }
+
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
+    if (link.line === "dotted") {
+      ctx.setLineDash(LINK_DASH);
+      // Negative, so the dashes travel from the first member towards the last.
+      const period = LINK_DASH[0] + LINK_DASH[1];
+      if (link.animate) ctx.lineDashOffset = -((t * LINK_MARCH) % period);
+    }
+
+    // A dark under-stroke first: a blue or black kit colour is nearly invisible
+    // against the grass on its own.
     ctx.strokeStyle = "rgba(0,0,0,0.35)";
-    ctx.lineWidth = 0.52;
+    ctx.lineWidth = LINK_UNDER;
     ctx.stroke();
 
     ctx.strokeStyle = color;
-    ctx.lineWidth = 0.36;
+    ctx.lineWidth = LINK_WIDTH;
     ctx.stroke();
+
+    // Solid whatever the line is: a dashed rim reads as a broken head.
+    if (link.line === "dotted") ctx.setLineDash([]);
+    for (const { heads } of strokes) {
+      for (const h of heads) {
+        drawTriangleHead(ctx, h.tip, h.back, color, LINK_HEAD_LENGTH, LINK_HEAD_WIDTH, 0.14);
+      }
+    }
+    ctx.restore();
 
     if (link.showDistances) drawDistances(ctx, g, rotated);
   }
@@ -1083,7 +1354,8 @@ function withAlpha(color: string, alpha: number): string {
 
 // ---------------------------------------------------------- annotations
 
-const isZone = (ann: Annotation): boolean => ann.kind === "rect" || ann.kind === "ellipse";
+const isZone = (ann: Annotation): boolean =>
+  ann.kind === "rect" || ann.kind === "ellipse" || ann.kind === "polygon";
 
 /**
  * The drawing to paint this frame.
@@ -1109,7 +1381,12 @@ function drawZone(ctx: Ctx, ann: Annotation): void {
   if (w <= 0 || h <= 0) return;
 
   ctx.beginPath();
-  if (ann.kind === "ellipse") {
+  if (ann.kind === "polygon") {
+    ctx.lineJoin = "round";
+    ctx.moveTo(ann.points[0].x, ann.points[0].y);
+    for (let i = 1; i < ann.points.length; i++) ctx.lineTo(ann.points[i].x, ann.points[i].y);
+    ctx.closePath();
+  } else if (ann.kind === "ellipse") {
     ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
   } else {
     ctx.rect(x, y, w, h);
@@ -1117,7 +1394,9 @@ function drawZone(ctx: Ctx, ann: Annotation): void {
 
   if (!("filled" in ann) || ann.filled !== false) {
     ctx.fillStyle = withAlpha(ann.color, ZONE_ALPHA);
-    ctx.fill();
+    // Even-odd, as the hit test is: a polygon crossing itself is shaded where it is inside.
+    if (ann.kind === "polygon") ctx.fill("evenodd");
+    else ctx.fill();
   }
   ctx.lineWidth = MARK_WIDTH * 0.7;
   ctx.strokeStyle = ann.color;
@@ -1143,6 +1422,9 @@ function drawMark(ctx: Ctx, ann: Annotation, rotated: boolean, ballR: number): v
 
   const dash = ann.kind === "arrow" || ann.kind === "line" ? ann.dash : "solid";
   const points = dash === "wavy" ? wavy(raw) : raw;
+  // An arrow's shaft stops inside its head, for the reason `SHAFT_INTO_HEAD` gives.
+  // The head is still aimed and placed from the whole line.
+  const shaft = ann.kind === "arrow" ? trimShaft(points, HEAD_LENGTH) : points;
 
   ctx.save();
   ctx.lineJoin = "round";
@@ -1151,11 +1433,22 @@ function drawMark(ctx: Ctx, ann: Annotation, rotated: boolean, ballR: number): v
 
   // Dark under-stroke first, for the same reason links have one: a dark colour
   // is nearly invisible against the grass on its own.
-  strokePolyline(ctx, points, "rgba(0,0,0,0.35)", MARK_WIDTH + 0.16);
-  strokePolyline(ctx, points, ann.color, MARK_WIDTH);
+  strokePolyline(ctx, shaft, "rgba(0,0,0,0.35)", MARK_WIDTH + 0.16);
+  strokePolyline(ctx, shaft, ann.color, MARK_WIDTH);
   ctx.restore();
 
   if (ann.kind === "arrow") drawHead(ctx, points, ann.color);
+}
+
+/**
+ * A shaft that ends inside a head of length `head` rather than at its tip. Floored
+ * at a fraction of the line, so a short arrow keeps a visible shaft instead of
+ * collapsing to a bare head.
+ */
+function trimShaft(points: Vec2[], head: number): Vec2[] {
+  const total = polylineLength(points);
+  const cut = Math.min(head - SHAFT_INTO_HEAD, total * 0.8);
+  return trimEnd(points, cut);
 }
 
 function strokePolyline(ctx: Ctx, points: Vec2[], color: string, width: number): void {
@@ -1178,16 +1471,28 @@ function drawHead(ctx: Ctx, points: Vec2[], color: string): void {
   const tip = points[points.length - 1];
   let i = points.length - 2;
   while (i > 0 && Math.hypot(tip.x - points[i].x, tip.y - points[i].y) < HEAD_LENGTH / 2) i--;
+  drawTriangleHead(ctx, tip, points[i], color, HEAD_LENGTH, HEAD_WIDTH, 0.16);
+}
 
-  const back = points[i];
+/** A filled triangle with its point at `tip`, aimed away from `back`, dark-rimmed. */
+function drawTriangleHead(
+  ctx: Ctx,
+  tip: Vec2,
+  back: Vec2,
+  color: string,
+  length: number,
+  width: number,
+  rim: number,
+): void {
+
   const len = Math.hypot(tip.x - back.x, tip.y - back.y);
   if (len === 0) return;
 
   const dx = (tip.x - back.x) / len;
   const dy = (tip.y - back.y) / len;
-  const bx = tip.x - dx * HEAD_LENGTH;
-  const by = tip.y - dy * HEAD_LENGTH;
-  const half = HEAD_WIDTH / 2;
+  const bx = tip.x - dx * length;
+  const by = tip.y - dy * length;
+  const half = width / 2;
 
   ctx.beginPath();
   ctx.moveTo(tip.x, tip.y);
@@ -1197,7 +1502,7 @@ function drawHead(ctx: Ctx, points: Vec2[], color: string): void {
   ctx.fillStyle = color;
   ctx.fill();
   ctx.lineJoin = "round";
-  ctx.lineWidth = 0.16;
+  ctx.lineWidth = rim;
   ctx.strokeStyle = "rgba(0,0,0,0.35)";
   ctx.stroke();
 }
@@ -1293,6 +1598,19 @@ function drawAnnotationChrome(
  */
 function drawAnnotationHandle(ctx: Ctx, handle: AnnotationHandle): void {
   const { x, y } = handle.at;
+
+  // The middle of an edge is not a point of the shape but an offer of one: smaller
+  // and hollow, so it never reads as a corner that is already there.
+  if (handle.which === "m") {
+    ctx.beginPath();
+    ctx.arc(x, y, HANDLE_RADIUS * 0.6, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(0,0,0,0.45)";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(251,191,36,0.95)";
+    ctx.lineWidth = 0.14;
+    ctx.stroke();
+    return;
+  }
 
   ctx.beginPath();
   if (handle.which === "w") {

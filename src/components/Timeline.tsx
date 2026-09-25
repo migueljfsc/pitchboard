@@ -34,6 +34,9 @@ import {
   setShot,
   totalSeconds,
   setScenePace,
+  setSpotlight,
+  DEFAULT_SPOTLIGHT,
+  MAX_SPOTLIGHT,
 } from "@/board/scenes";
 import {
   DEFAULT_END_HOLD_MS,
@@ -390,7 +393,7 @@ export function Timeline({
 
       {/* Active scene controls */}
       {scene && (
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
           <label className="flex flex-col gap-1">
             <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("timeline.scene")}</span>
             <input
@@ -402,95 +405,118 @@ export function Timeline({
             />
           </label>
 
-          {flow ? (
-            <>
-              {activeScene > 0 && (
-                <NumberField
-                  key={scene.id}
-                  label={t("timeline.pace")}
-                  title={t("timeline.pace.title")}
-                  value={scenePace(doc, activeScene)}
-                  min={MIN_FLOW_SPEED}
-                  max={MAX_FLOW_SPEED}
-                  step={0.5}
-                  unit="m/s"
-                  onCommit={(v) =>
-                    onDocChange(setScenePace(doc, activeScene, v), `pace:${scene.id}`)
-                  }
-                />
-              )}
-              <Duration
-                label={t("timeline.endHold")}
-                value={flow.endHoldMs}
-                onChange={(v) => setFlow({ ...flow, endHoldMs: Math.round(v) }, "flow-hold")}
-              />
-            </>
-          ) : (
-            <>
-              {activeScene > 0 && (
+          <div className={GROUP}>
+            {flow ? (
+              <>
+                {activeScene > 0 && (
+                  <NumberField
+                    key={scene.id}
+                    label={t("timeline.pace")}
+                    title={t("timeline.pace.title")}
+                    value={scenePace(doc, activeScene)}
+                    min={MIN_FLOW_SPEED}
+                    max={MAX_FLOW_SPEED}
+                    step={0.5}
+                    unit="m/s"
+                    onCommit={(v) =>
+                      onDocChange(setScenePace(doc, activeScene, v), `pace:${scene.id}`)
+                    }
+                  />
+                )}
                 <Duration
-                  label={t("timeline.travel")}
-                  value={scene.transitionMs}
-                  onChange={(v) => onDocChange(setSceneTiming(doc, activeScene, { transitionMs: v }))}
+                  label={t("timeline.endHold")}
+                  value={flow.endHoldMs}
+                  onChange={(v) => setFlow({ ...flow, endHoldMs: Math.round(v) }, "flow-hold")}
                 />
-              )}
-              <Duration
-                label={t("timeline.hold")}
-                value={scene.holdMs}
-                onChange={(v) => onDocChange(setSceneTiming(doc, activeScene, { holdMs: v }))}
-              />
-            </>
-          )}
+              </>
+            ) : (
+              <>
+                {activeScene > 0 && (
+                  <Duration
+                    label={t("timeline.travel")}
+                    value={scene.transitionMs}
+                    onChange={(v) => onDocChange(setSceneTiming(doc, activeScene, { transitionMs: v }))}
+                  />
+                )}
+                <Duration
+                  label={t("timeline.hold")}
+                  value={scene.holdMs}
+                  onChange={(v) => onDocChange(setSceneTiming(doc, activeScene, { holdMs: v }))}
+                />
+              </>
+            )}
+          </div>
 
-          {activeScene > 0 && (
-            <label className="flex flex-col gap-1">
-              <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("timeline.ball")}</span>
-              <button
-                type="button"
-                disabled={!canShoot}
-                aria-pressed={scene.shot ?? false}
-                onClick={() => onDocChange(setShot(doc, activeScene, !scene.shot))}
-                title={
-                  canShoot ? t("timeline.shot.can") : t("timeline.shot.cannot")
+          {/* Only where there is something to spotlight: the darkness is drawn around
+              this scene's highlights and nowhere else. */}
+          {Object.keys(scene.highlight ?? {}).length > 0 && (
+            <div className={GROUP}>
+              <NumberField
+                key={`spotlight:${scene.id}`}
+                label={t("timeline.spotlight")}
+                title={t("timeline.spotlight.title")}
+                value={Math.round((scene.spotlight ?? DEFAULT_SPOTLIGHT) * 100)}
+                min={0}
+                max={MAX_SPOTLIGHT * 100}
+                step={5}
+                unit="%"
+                onCommit={(v) =>
+                  onDocChange(setSpotlight(doc, activeScene, v / 100), `spotlight:${scene.id}`)
                 }
-                className={cn(
-                  "flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition disabled:opacity-45",
-                  scene.shot
-                    ? "border-accent text-accent"
-                    : "border-ink-600 text-ink-300 enabled:hover:border-ink-400 enabled:hover:text-white",
-                )}
-              >
-                <Crosshair size={13} />
-                {t("timeline.shot")}
-              </button>
-            </label>
+              />
+            </div>
           )}
 
+          {/* The ball's own part of the travel into this scene. */}
           {activeScene > 0 && (
-            <label className="flex flex-col gap-1">
-              <span className="text-[11px] uppercase tracking-wide text-ink-400">
-                {t("timeline.loft")}
-              </span>
-              <button
-                type="button"
-                disabled={!canLoft}
-                aria-pressed={scene.loft ?? false}
-                onClick={() => onDocChange(setLoft(doc, activeScene, !scene.loft))}
-                title={canLoft ? t("timeline.loft.can") : t("timeline.loft.cannot")}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition disabled:opacity-45",
-                  scene.loft
-                    ? "border-accent text-accent"
-                    : "border-ink-600 text-ink-300 enabled:hover:border-ink-400 enabled:hover:text-white",
-                )}
-              >
-                <Spline size={13} />
-                {t("timeline.loft.label")}
-              </button>
-            </label>
-          )}
+            <div className={GROUP}>
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("timeline.ball")}</span>
+                <button
+                  type="button"
+                  disabled={!canShoot}
+                  aria-pressed={scene.shot ?? false}
+                  onClick={() => onDocChange(setShot(doc, activeScene, !scene.shot))}
+                  title={
+                    canShoot ? t("timeline.shot.can") : t("timeline.shot.cannot")
+                  }
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition disabled:opacity-45",
+                    scene.shot
+                      ? "border-accent text-accent"
+                      : "border-ink-600 text-ink-300 enabled:hover:border-ink-400 enabled:hover:text-white",
+                  )}
+                >
+                  <Crosshair size={13} />
+                  {t("timeline.shot")}
+                </button>
+              </label>
 
-          {activeScene > 0 && <PassTiming doc={doc} index={activeScene} onDocChange={onDocChange} />}
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] uppercase tracking-wide text-ink-400">
+                  {t("timeline.loft")}
+                </span>
+                <button
+                  type="button"
+                  disabled={!canLoft}
+                  aria-pressed={scene.loft ?? false}
+                  onClick={() => onDocChange(setLoft(doc, activeScene, !scene.loft))}
+                  title={canLoft ? t("timeline.loft.can") : t("timeline.loft.cannot")}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition disabled:opacity-45",
+                    scene.loft
+                      ? "border-accent text-accent"
+                      : "border-ink-600 text-ink-300 enabled:hover:border-ink-400 enabled:hover:text-white",
+                  )}
+                >
+                  <Spline size={13} />
+                  {t("timeline.loft.label")}
+                </button>
+              </label>
+
+              <PassTiming doc={doc} index={activeScene} onDocChange={onDocChange} />
+            </div>
+          )}
 
           <div className="ml-auto flex items-center gap-1.5">
             <IconButton
@@ -529,6 +555,12 @@ export function Timeline({
     </div>
   );
 }
+
+/**
+ * One logical group of the scene bar — its timing, its spotlight, its ball — set off
+ * from the one before by a rule, so a row of a dozen fields reads as four things.
+ */
+const GROUP = "flex items-end gap-3 border-l-2 border-ink-600 pl-3";
 
 /** Dropped rather than set undefined, so the board serialises as it did before. */
 function withoutFlow(doc: BoardDoc): BoardDoc {

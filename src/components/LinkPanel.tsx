@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronLeft,
@@ -8,11 +8,12 @@ import {
   EyeOff,
   GripVertical,
   Link2,
+  Play,
   Ruler,
   Trash2,
   X,
 } from "lucide-react";
-import type { BoardDoc, Link, LinkStyle } from "@/board/types";
+import type { BoardDoc, Link, LinkArrows, LinkLine, LinkStyle } from "@/board/types";
 import {
   MAX_MEMBERS,
   MIN_MEMBERS,
@@ -50,6 +51,32 @@ const STYLES: { value: LinkStyle }[] = [
   { value: "polygon" },
   { value: "filled" },
 ];
+
+const LINES: LinkLine[] = ["solid", "dotted"];
+const ARROWS: LinkArrows[] = ["none", "forward", "both"];
+
+/**
+ * A short sample of the line itself, so the choice needs no words: solid or
+ * dotted, and where its heads are.
+ */
+function LineGlyph({ line, arrows }: { line: LinkLine; arrows: LinkArrows }) {
+  return (
+    <svg width="22" height="10" viewBox="0 0 22 10" aria-hidden className="shrink-0">
+      <line
+        x1={arrows === "both" ? 5 : 2}
+        y1="5"
+        x2={arrows === "none" ? 20 : 17}
+        y2="5"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeDasharray={line === "dotted" ? "0.1 2.6" : undefined}
+      />
+      {arrows !== "none" && <path d="M16 1.5 L21 5 L16 8.5 Z" fill="currentColor" />}
+      {arrows === "both" && <path d="M6 1.5 L1 5 L6 8.5 Z" fill="currentColor" />}
+    </svg>
+  );
+}
 
 export function LinkPanel({
   doc,
@@ -221,8 +248,16 @@ function LinkRow({
     setGap(null);
   };
 
+  // Opened from the board — a click on the connector itself — the row may be far down
+  // a long list, so it is brought into view. Nearest, so a row already showing stays put.
+  const rowRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (expanded) rowRef.current?.scrollIntoView({ block: "nearest" });
+  }, [expanded]);
+
   return (
     <div
+      ref={rowRef}
       onDragOver={(e) => {
         e.preventDefault();
         // Above the midpoint drops before this row, below it drops after.
@@ -348,6 +383,34 @@ function LinkRow({
                 {t(`links.style.${s.value}` as MessageKey)}
               </button>
             ))}
+          </div>
+
+          {/* One row for the line: its dash, its heads, and whether the dots march.
+              Drawn rather than named, so five choices cost one line of panel. */}
+          <div className="flex items-center gap-1">
+            <Segmented
+              options={LINES}
+              value={link.line ?? "solid"}
+              label={(v) => t(`links.line.${v}` as MessageKey)}
+              glyph={(v) => <LineGlyph line={v} arrows="none" />}
+              onPick={(v) => onChange({ line: v === "solid" ? undefined : v })}
+            />
+            <Segmented
+              options={ARROWS}
+              value={link.arrows ?? "none"}
+              label={(v) => t(`links.arrows.${v}` as MessageKey)}
+              glyph={(v) => <LineGlyph line="solid" arrows={v} />}
+              onPick={(v) => onChange({ arrows: v === "none" ? undefined : v })}
+            />
+            {link.line === "dotted" && (
+              <Tiny
+                label={t("links.animate.title")}
+                active={link.animate === true}
+                onClick={() => onChange({ animate: link.animate ? undefined : true })}
+              >
+                <Play size={12} />
+              </Tiny>
+            )}
           </div>
 
           <div>
@@ -580,5 +643,41 @@ function Tiny({
     >
       {children}
     </button>
+  );
+}
+
+/** Adjoining buttons, one of which is on. */
+function Segmented<T extends string>({
+  options,
+  value,
+  label,
+  glyph,
+  onPick,
+}: {
+  options: readonly T[];
+  value: T;
+  label: (v: T) => string;
+  glyph: (v: T) => React.ReactNode;
+  onPick: (v: T) => void;
+}) {
+  return (
+    <div className="flex overflow-hidden rounded border border-ink-600">
+      {options.map((v) => (
+        <button
+          key={v}
+          type="button"
+          aria-label={label(v)}
+          aria-pressed={value === v}
+          title={label(v)}
+          onClick={() => onPick(v)}
+          className={cn(
+            "flex items-center px-1 py-1 transition",
+            value === v ? "bg-ink-700 text-accent" : "text-ink-400 hover:text-ink-200",
+          )}
+        >
+          {glyph(v)}
+        </button>
+      ))}
+    </div>
   );
 }

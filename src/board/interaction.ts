@@ -13,7 +13,7 @@
 
 import type { Annotation, BoardDoc, Link, PathCurve, Scene, Vec2 } from "./types";
 import { BALL_ID } from "./types";
-import { ballRadius, tokenRadius } from "./pitch";
+import { PITCH, ballRadius, tokenRadius } from "./pitch";
 import {
   LOFT_APEX,
   ballLift,
@@ -146,9 +146,14 @@ export function hitTestLink(
 export type AnnotationLayer = "mark" | "zone";
 
 export const layerOf = (ann: Annotation): AnnotationLayer =>
-  ann.kind === "rect" || ann.kind === "ellipse" ? "zone" : "mark";
+  ann.kind === "rect" || ann.kind === "ellipse" || ann.kind === "polygon" ? "zone" : "mark";
 
-export type AnnotationHandleHit = { id: string; which: AnnotationHandle["which"] };
+/** `index` names the corner or the edge, for the handles that have one. */
+export type AnnotationHandleHit = {
+  id: string;
+  which: AnnotationHandle["which"];
+  index?: number;
+};
 
 /**
  * Grab point of the selected annotation under `p`, or null.
@@ -169,7 +174,13 @@ export function hitTestAnnotationHandle(
   if (!ann) return null;
 
   for (const handle of annotationHandles(ann, rotated)) {
-    if (dist(p, handle.at) <= HANDLE_RADIUS + margin) return { id: ann.id, which: handle.which };
+    if (dist(p, handle.at) <= HANDLE_RADIUS + margin) {
+      return {
+        id: ann.id,
+        which: handle.which,
+        ...(handle.index !== undefined ? { index: handle.index } : {}),
+      };
+    }
   }
   return null;
 }
@@ -262,6 +273,18 @@ function annotationCovers(
     return within(margin);
   }
 
+  if (ann.kind === "polygon") {
+    const pts = ann.points;
+    const edge = MARK_WIDTH / 2 + margin;
+    let onEdge = false;
+    for (let i = 0; i < pts.length; i++) {
+      if (distanceToSegment(p, pts[i], pts[(i + 1) % pts.length]) <= edge) onEdge = true;
+    }
+    // An outline is grabbed by its line, as a box's is (D95).
+    if (ann.filled === false) return onEdge;
+    return onEdge || insidePolygon(p, pts);
+  }
+
   if (ann.kind === "text") {
     // The box the words are actually in, turned with the board. It used to be a
     // radius over the whole string, which grabbed empty grass under a short label
@@ -277,6 +300,19 @@ function annotationCovers(
     if (distanceToSegment(p, points[i - 1], points[i]) <= reach) return true;
   }
   return false;
+}
+
+/** Even-odd ray cast, so a polygon that crosses itself is inside where it is shaded. */
+function insidePolygon(p: Vec2, pts: Vec2[]): boolean {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const a = pts[i];
+    const b = pts[j];
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) {
+      inside = !inside;
+    }
+  }
+  return inside;
 }
 
 // --------------------------------------------------------------- the 3D view
@@ -502,7 +538,7 @@ export function moveEntities(
   const shifts = new Map<number, Map<string, Vec2>>();
 
   const shift = (index: number, id: string, from: Vec2): void => {
-    const to = clampToPitch(add(from, delta), bounds);
+    const to = id === BALL_ID ? clampBall(add(from, delta), bounds) : clampToPitch(add(from, delta), bounds);
     let row = shifts.get(index);
     if (!row) shifts.set(index, (row = new Map()));
     row.set(id, { x: to.x - from.x, y: to.y - from.y });
@@ -686,6 +722,23 @@ function clampToPitch(p: Vec2, bounds: { length: number; width: number }): Vec2 
   return {
     x: clamp(p.x, 0, bounds.length),
     y: clamp(p.y, 0, bounds.width),
+  };
+}
+
+/**
+ * Where the ball may be put: anywhere on the pitch, and into either net — behind the
+ * goal line only between the posts, and no deeper than the goal. Once it is in, it
+ * stays in: dragged sideways it runs along the net rather than jumping back onto the
+ * line, which is where a shot finishing on the line used to leave it.
+ */
+export function clampBall(p: Vec2, bounds: { length: number; width: number }): Vec2 {
+  const x = clamp(p.x, -PITCH.goalDepth, bounds.length + PITCH.goalDepth);
+  const inNet = x < 0 || x > bounds.length;
+  const half = PITCH.goalWidth / 2;
+  const mid = bounds.width / 2;
+  return {
+    x,
+    y: inNet ? clamp(p.y, mid - half, mid + half) : clamp(p.y, 0, bounds.width),
   };
 }
 

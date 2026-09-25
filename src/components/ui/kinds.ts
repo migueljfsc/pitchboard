@@ -1,4 +1,4 @@
-import { ArrowUpRight, Circle, CircleDot, Minus, Pencil, Square, Type } from "lucide-react";
+import { ArrowUpRight, Circle, CircleDot, Minus, Pencil, Pentagon, Square, Type } from "lucide-react";
 import type { Annotation, AnnotationKind } from "@/board/types";
 import type { MessageKey } from "@/i18n/core";
 
@@ -13,6 +13,7 @@ export const KIND_KEY: Record<AnnotationKind, MessageKey> = {
   line: "kind.line",
   rect: "kind.rect",
   ellipse: "kind.ellipse",
+  polygon: "kind.polygon",
   pen: "kind.pen",
   text: "kind.text",
   ball: "kind.ball",
@@ -23,6 +24,7 @@ export const KIND_ICON: Record<AnnotationKind, typeof Minus> = {
   line: Minus,
   rect: Square,
   ellipse: Circle,
+  polygon: Pentagon,
   pen: Pencil,
   text: Type,
   ball: CircleDot,

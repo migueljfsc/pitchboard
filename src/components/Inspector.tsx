@@ -23,6 +23,7 @@ import {
 } from "@/board/timeline";
 import { cn } from "@/lib/utils";
 import { NumberField } from "@/components/ui/NumberField";
+import { Stepper } from "@/components/ui/Stepper";
 import { PALETTE } from "@/components/ui/palette";
 import { useI18n } from "@/i18n/context";
 import type { Message } from "@/i18n/core";
@@ -70,8 +71,8 @@ type Props = {
   onRunsHiddenChange: (hidden: boolean) => void;
   /** True when every selected entity is lit in this scene. */
   highlighted: boolean;
-  /** The colour the next halo takes — editor state, like the drawing colour. */
-  highlightColor: string;
+  /** The colour the selection is lit in here; null when it is not, or in several. */
+  highlightColor: string | null;
   /** A colour lights the selection in this colour; null puts the halos out. */
   onHighlightChange: (color: string | null) => void;
   /** Jump to a scene — where a group that cannot apply here points instead. */
@@ -711,6 +712,20 @@ function IdentityFields({
   const valid = text.trim() !== "" && Number.isInteger(wanted) && wanted >= 0 && wanted <= 99;
   const clash = valid ? shirtClash(doc, player.id, wanted) : null;
 
+  /** The next shirt along that nobody else on the team wears, or null at the end. */
+  const nextFree = (direction: 1 | -1): number | null => {
+    for (let n = player.number + direction; n >= 0 && n <= 99; n += direction) {
+      if (!shirtClash(doc, player.id, n)) return n;
+    }
+    return null;
+  };
+  const step = (direction: 1 | -1) => {
+    const n = nextFree(direction);
+    if (n === null) return;
+    setDraft(null);
+    onRenumber(player.id, n);
+  };
+
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex gap-1.5">
@@ -724,35 +739,55 @@ function IdentityFields({
             className="w-full rounded border border-ink-600 bg-ink-900 px-2 py-1 text-xs text-ink-200 outline-none transition placeholder:text-ink-400 hover:border-ink-400 focus:border-accent"
           />
         </label>
-        <label className="flex w-14 shrink-0 flex-col gap-1">
+        <label className="flex w-16 shrink-0 flex-col gap-1">
           <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("inspect.number")}</span>
-          <input
-            type="number"
-            min={0}
-            max={99}
-            value={text}
-            aria-invalid={clash !== null}
-            onChange={(e) => {
-              setDraft(e.target.value);
-              const n = Number(e.target.value);
-              if (
-                e.target.value.trim() !== "" &&
-                Number.isInteger(n) &&
-                n >= 0 &&
-                n <= 99 &&
-                !shirtClash(doc, player.id, n)
-              ) {
-                onRenumber(player.id, n);
-              }
-            }}
-            onBlur={() => setDraft(null)}
+          <span
             className={cn(
-              "w-full rounded border bg-ink-900 px-2 py-1 font-mono text-xs outline-none transition",
+              "flex items-stretch overflow-hidden rounded border bg-ink-900 transition",
               clash
-                ? "border-red-500/70 text-red-300 focus:border-red-400"
-                : "border-ink-600 text-ink-200 hover:border-ink-400 focus:border-accent",
+                ? "border-red-500/70 focus-within:border-red-400"
+                : "border-ink-600 hover:border-ink-400 focus-within:border-accent",
             )}
-          />
+          >
+            <input
+              type="text"
+              inputMode="numeric"
+              value={text}
+              aria-invalid={clash !== null}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                const n = Number(e.target.value);
+                if (
+                  e.target.value.trim() !== "" &&
+                  Number.isInteger(n) &&
+                  n >= 0 &&
+                  n <= 99 &&
+                  !shirtClash(doc, player.id, n)
+                ) {
+                  onRenumber(player.id, n);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+                e.preventDefault();
+                step(e.key === "ArrowUp" ? 1 : -1);
+              }}
+              onBlur={() => setDraft(null)}
+              className={cn(
+                "w-full min-w-0 bg-ink-900 px-2 py-1 font-mono text-xs outline-none",
+                clash ? "text-red-300" : "text-ink-200",
+              )}
+            />
+            <Stepper
+              className="border-l border-ink-600"
+              upLabel={t("field.increase", { label: t("inspect.number") })}
+              downLabel={t("field.decrease", { label: t("inspect.number") })}
+              upDisabled={nextFree(1) === null}
+              downDisabled={nextFree(-1) === null}
+              onUp={() => step(1)}
+              onDown={() => step(-1)}
+            />
+          </span>
         </label>
       </div>
 

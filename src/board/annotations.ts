@@ -77,6 +77,15 @@ export const WAVE_LENGTH = 2.6;
 export const DASH_PATTERN: [number, number] = [1.4, 1.0];
 /** Freehand simplification tolerance, in metres. */
 export const PEN_EPSILON = 0.18;
+/** Corners a polygon may have. Every one of them ends up in the share URL. */
+export const MIN_POLYGON = 3;
+export const MAX_POLYGON = 24;
+/** Corners an arrow or a line may have between its ends. */
+export const MAX_VIA = 16;
+/** Sides of a freshly dragged polygon, and the range the tool offers. */
+export const POLYGON_SIDES = 5;
+export const POLYGON_SIDES_MIN = 3;
+export const POLYGON_SIDES_MAX = 12;
 /** Smallest drag that commits a shape. Below this it was a click, not a draw. */
 export const MIN_DRAG = 1.2;
 /** How far a duplicate sits from its original, in metres — clear of it, still beside it. */
@@ -142,6 +151,7 @@ export function straightCurve(a: Vec2, b: Vec2): PathCurve {
 export function strokePoints(ann: Annotation, samples = CURVE_SAMPLES): Vec2[] {
   if (ann.kind === "pen") return ann.points;
   if (ann.kind !== "arrow" && ann.kind !== "line") return [];
+  if (ann.via?.length) return [ann.a, ...ann.via, ann.b];
   // An unbent arrow is two points. Sampling 32 along a straight line would buy
   // nothing but a slower dash pattern.
   if (!ann.curve) return [ann.a, ann.b];
@@ -216,6 +226,49 @@ export function polylineLength(points: Vec2[]): number {
   let total = 0;
   for (let i = 1; i < points.length; i++) total += dist(points[i - 1], points[i]);
   return total;
+}
+
+/**
+ * The polyline with `cut` metres taken off its far end, measured along it. Never
+ * shorter than a single point; a cut past the start leaves just the start.
+ */
+export function trimEnd(points: Vec2[], cut: number): Vec2[] {
+  if (points.length < 2 || cut <= 0) return points;
+  let keep = polylineLength(points) - cut;
+  if (keep <= 0) return [points[0]];
+  const out: Vec2[] = [points[0]];
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    const len = dist(a, b);
+    if (len >= keep) {
+      const f = len === 0 ? 0 : keep / len;
+      out.push({ x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f });
+      return out;
+    }
+    out.push(b);
+    keep -= len;
+  }
+  return out;
+}
+
+/**
+ * A regular polygon of `sides` corners inscribed in the box `a`–`b`, first corner
+ * at the top. Inscribed in the box rather than a circle, so the drag sizes it the
+ * way it sizes a box or an oval, stretch and all.
+ */
+export function regularPolygon(a: Vec2, b: Vec2, sides: number): Vec2[] {
+  const n = Math.round(clamp(sides, POLYGON_SIDES_MIN, POLYGON_SIDES_MAX));
+  const cx = (a.x + b.x) / 2;
+  const cy = (a.y + b.y) / 2;
+  const rx = Math.abs(b.x - a.x) / 2;
+  const ry = Math.abs(b.y - a.y) / 2;
+  const out: Vec2[] = [];
+  for (let k = 0; k < n; k++) {
+    const angle = -Math.PI / 2 + (2 * Math.PI * k) / n;
+    out.push({ x: cx + rx * Math.cos(angle), y: cy + ry * Math.sin(angle) });
+  }
+  return out;
 }
 
 type TextAnnotation = Extract<Annotation, { kind: "text" }>;
@@ -331,8 +384,8 @@ export function boundsOf(
     const h = rotated ? e.w : e.h;
     return { x: ann.at.x - w / 2, y: ann.at.y - h / 2, w, h };
   }
-  if (!isSegment(ann)) {
-    const points = ann.points;
+  if (!isSegment(ann) || ((ann.kind === "arrow" || ann.kind === "line") && ann.via?.length)) {
+    const points = isSegment(ann) ? strokePoints(ann) : ann.points;
     const xs = points.map((p) => p.x);
     const ys = points.map((p) => p.y);
     const x = Math.min(...xs);
@@ -391,6 +444,8 @@ type DraftOptions = {
   filled?: boolean;
   text?: string;
   points?: Vec2[];
+  /** Polygons only: how many corners the drag lays out. */
+  sides?: number;
 };
 
 /**
@@ -433,6 +488,13 @@ export function draftAnnotation(
       };
     case "pen":
       return { ...base, kind: "pen", points: options.points ?? [a, b] };
+    case "polygon":
+      return {
+        ...base,
+        kind: "polygon",
+        points: regularPolygon(a, b, options.sides ?? POLYGON_SIDES),
+        ...(options.filled === false ? { filled: false } : {}),
+      };
     case "text":
       return { ...base, kind: "text", at: a, text: options.text ?? "" };
     case "ball":
@@ -514,7 +576,7 @@ export function moveAnnotation(doc: BoardDoc, id: string, delta: Vec2): BoardDoc
   if (!ann) return doc;
   const shift = (p: Vec2): Vec2 => ({ x: p.x + delta.x, y: p.y + delta.y });
 
-  if (ann.kind === "pen") {
+  if (ann.kind === "pen" || ann.kind === "polygon") {
     return updateAnnotation(doc, id, { points: ann.points.map(shift) });
   }
   if (ann.kind === "text" || ann.kind === "ball") {
@@ -522,17 +584,71 @@ export function moveAnnotation(doc: BoardDoc, id: string, delta: Vec2): BoardDoc
   }
   const curve =
     "curve" in ann && ann.curve ? { c1: shift(ann.curve.c1), c2: shift(ann.curve.c2) } : undefined;
+  const via = "via" in ann && ann.via?.length ? ann.via.map(shift) : undefined;
   return updateAnnotation(doc, id, {
     a: shift(ann.a),
     b: shift(ann.b),
     ...(curve ? { curve } : {}),
+    ...(via ? { via } : {}),
   });
+}
+
+/**
+ * A box, as a polygon of its four corners — so each can be moved on its own.
+ *
+ * Keeps the id, range, colour, name and fill: it is the same zone, reshaped, and
+ * anything pointing at it still finds it. Anything but a box is left alone.
+ */
+export function toPolygon(doc: BoardDoc, id: string): BoardDoc {
+  const list = annotationsOf(doc);
+  const i = list.findIndex((a) => a.id === id);
+  const ann = list[i];
+  if (!ann || ann.kind !== "rect") return doc;
+
+  const { x, y, w, h } = boundsOf(ann);
+  const next = list.slice();
+  next[i] = {
+    id: ann.id,
+    from: ann.from,
+    to: ann.to,
+    color: ann.color,
+    ...(ann.name !== undefined ? { name: ann.name } : {}),
+    ...(ann.hidden !== undefined ? { hidden: ann.hidden } : {}),
+    ...(ann.filled !== undefined ? { filled: ann.filled } : {}),
+    kind: "polygon",
+    points: [
+      { x, y },
+      { x: x + w, y },
+      { x: x + w, y: y + h },
+      { x, y: y + h },
+    ],
+  };
+  return withAnnotations(doc, next);
 }
 
 // --------------------------------------------------------------------- handles
 
-/** Handle names are shape-specific; `c1`/`c2` bend a curve, the rest reshape. */
-export type AnnotationHandle = { which: "a" | "b" | "c1" | "c2" | "at" | "w"; at: Vec2 };
+/**
+ * Handle names are shape-specific; `c1`/`c2` bend a curve, the rest reshape.
+ *
+ * `v` is a corner and `m` the middle of an edge, both addressed by `index`: a
+ * corner by its place in `via` or `points`, an edge by the corner it starts from.
+ * Taking hold of an `m` puts a new corner there — see `insertCorner`.
+ */
+export type AnnotationHandleName = "a" | "b" | "c1" | "c2" | "at" | "w" | "v" | "m";
+export type AnnotationHandle = { which: AnnotationHandleName; at: Vec2; index?: number };
+
+const midpoint = (a: Vec2, b: Vec2): Vec2 => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+
+/** The middle of each edge, closing the loop when `closed`. */
+function edgeMidpoints(points: Vec2[], closed: boolean): AnnotationHandle[] {
+  const out: AnnotationHandle[] = [];
+  const count = closed ? points.length : points.length - 1;
+  for (let i = 0; i < count; i++) {
+    out.push({ which: "m", index: i, at: midpoint(points[i], points[(i + 1) % points.length]) });
+  }
+  return out;
+}
 
 /**
  * Grab points for the selected shape.
@@ -543,6 +659,11 @@ export type AnnotationHandle = { which: "a" | "b" | "c1" | "c2" | "at" | "w"; at
 export function annotationHandles(ann: Annotation, rotated = false): AnnotationHandle[] {
   // A drawn ball has nothing to reshape; it is moved by grabbing it.
   if (ann.kind === "pen" || ann.kind === "ball") return [];
+  if (ann.kind === "polygon") {
+    // Corners before edge middles, so a corner wins where the two are close.
+    const corners = ann.points.map((at, index): AnnotationHandle => ({ which: "v", at, index }));
+    return [...corners, ...edgeMidpoints(ann.points, true)];
+  }
   if (ann.kind === "text") {
     // Two: one to move it, one on the far end of the line to set the box width. The width
     // handle is what makes a second line possible at all, so it is offered as soon as a
@@ -566,8 +687,20 @@ export function annotationHandles(ann: Annotation, rotated = false): AnnotationH
   ];
   if (ann.kind !== "arrow" && ann.kind !== "line") return ends;
 
+  if (ann.via?.length) {
+    const corners = ann.via.map((at, index): AnnotationHandle => ({ which: "v", at, index }));
+    return [...ends, ...corners, ...edgeMidpoints(strokePoints(ann), false)];
+  }
+  // A single segment offers its bend and one edge middle. The middle sits on the
+  // curve as drawn, so it is on the line whether or not the line is bent.
   const curve = ann.curve ?? straightCurve(ann.a, ann.b);
-  return [...ends, { which: "c1", at: curve.c1 }, { which: "c2", at: curve.c2 }];
+  const middle = cubicAt({ p0: ann.a, c1: curve.c1, c2: curve.c2, p1: ann.b }, 0.5);
+  return [
+    ...ends,
+    { which: "c1", at: curve.c1 },
+    { which: "c2", at: curve.c2 },
+    { which: "m", index: 0, at: middle },
+  ];
 }
 
 /**
@@ -576,9 +709,10 @@ export function annotationHandles(ann: Annotation, rotated = false): AnnotationH
  */
 export function dragAnnotationHandle(
   ann: Annotation,
-  which: AnnotationHandle["which"],
+  which: AnnotationHandleName,
   to: Vec2,
   rotated = false,
+  index = 0,
 ): Partial<Annotation> {
   if (ann.kind === "text") {
     // Along the line of the text, which is pitch y on a vertical board. Doubled, because
@@ -590,12 +724,64 @@ export function dragAnnotationHandle(
     return { at: to };
   }
   if (ann.kind === "pen" || ann.kind === "ball") return {};
+  if (ann.kind === "polygon") {
+    if (which !== "v" || !ann.points[index]) return {};
+    return { points: ann.points.map((p, i) => (i === index ? to : p)) };
+  }
 
   if (which === "a" || which === "b") return { [which]: to } as Partial<Annotation>;
   if (ann.kind !== "arrow" && ann.kind !== "line") return {};
+  if (which === "v") {
+    if (!ann.via?.[index]) return {};
+    return { via: ann.via.map((p, i) => (i === index ? to : p)) };
+  }
+  if (which !== "c1" && which !== "c2") return {};
 
   const curve = ann.curve ?? straightCurve(ann.a, ann.b);
   return { curve: which === "c1" ? { c1: to, c2: curve.c2 } : { c1: curve.c1, c2: to } };
+}
+
+/**
+ * A new corner in the middle of edge `index`, at `at`. Returns the patch and the
+ * corner's own index, so the gesture that made it can go on to drag it; null where
+ * the shape takes no more.
+ *
+ * The first corner of a bent line drops the bend: a line with corners is straight
+ * from one to the next, and it would be a stranger thing to keep a curve that now
+ * applies to nothing.
+ */
+export function insertCorner(
+  ann: Annotation,
+  index: number,
+  at: Vec2,
+): { patch: Partial<Annotation>; index: number } | null {
+  if (ann.kind === "polygon") {
+    if (ann.points.length >= MAX_POLYGON) return null;
+    const points = ann.points.slice();
+    points.splice(index + 1, 0, at);
+    return { patch: { points }, index: index + 1 };
+  }
+  if (ann.kind !== "arrow" && ann.kind !== "line") return null;
+  const via = (ann.via ?? []).slice();
+  if (via.length >= MAX_VIA) return null;
+  via.splice(index, 0, at);
+  return { patch: { via, curve: null }, index };
+}
+
+/**
+ * Take corner `index` out. A polygon keeps at least three; an arrow or a line can
+ * lose every corner it has and go back to being one segment. Null where nothing
+ * can go.
+ */
+export function removeCorner(ann: Annotation, index: number): Partial<Annotation> | null {
+  if (ann.kind === "polygon") {
+    if (ann.points.length <= MIN_POLYGON || !ann.points[index]) return null;
+    return { points: ann.points.filter((_, i) => i !== index) };
+  }
+  if (ann.kind !== "arrow" && ann.kind !== "line") return null;
+  if (!ann.via?.[index]) return null;
+  const via = ann.via.filter((_, i) => i !== index);
+  return { via: via.length ? via : undefined };
 }
 
 // --------------------------------------------------------------------- pruning

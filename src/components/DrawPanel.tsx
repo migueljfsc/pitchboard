@@ -11,6 +11,7 @@ import {
   Minus,
   MousePointer2,
   Pencil,
+  Pentagon,
   Pin,
   Square,
   Trash2,
@@ -19,13 +20,17 @@ import {
 import type { Annotation, AnnotationDash, BoardDoc, Tool } from "@/board/types";
 import { isDrawTool } from "@/board/types";
 import {
+  POLYGON_SIDES_MAX,
+  POLYGON_SIDES_MIN,
   TEXT_SCALE_MAX,
   TEXT_SCALE_MIN,
   textBgAlpha,
+  toPolygon,
   updateAnnotation,
 } from "@/board/annotations";
 import { KIND_KEY } from "@/components/ui/kinds";
 import { NumberField } from "@/components/ui/NumberField";
+import { Stepper } from "@/components/ui/Stepper";
 import { PALETTE } from "@/components/ui/palette";
 import type { Change } from "@/lib/history";
 import { cn } from "@/lib/utils";
@@ -46,6 +51,9 @@ type Props = {
   /** Whether the next box or oval is filled. */
   filled: boolean;
   onFilledChange: (filled: boolean) => void;
+  /** Corners the next polygon starts with. */
+  sides: number;
+  onSidesChange: (sides: number) => void;
   selected: string | null;
   /** Copies the shape and selects the copy. Owned by the editor, so the Drawings
    *  list on the other side duplicates through exactly the same call. */
@@ -63,6 +71,7 @@ const TOOLS: { value: Tool; icon: typeof Minus; key: string }[] = [
   { value: "line", icon: Minus, key: "line" },
   { value: "rect", icon: Square, key: "rect" },
   { value: "ellipse", icon: Circle, key: "ellipse" },
+  { value: "polygon", icon: Pentagon, key: "polygon" },
   { value: "pen", icon: Pencil, key: "pen" },
   { value: "text", icon: Type, key: "text" },
   { value: "ball", icon: CircleDot, key: "ball" },
@@ -88,6 +97,8 @@ export function DrawPanel({
   onDashChange,
   filled,
   onFilledChange,
+  sides,
+  onSidesChange,
   selected,
   onDuplicate,
   onDelete,
@@ -103,12 +114,10 @@ export function DrawPanel({
   // The style row follows what is being worked on: the selected shape if there is
   // one, the armed tool otherwise. A zone has a fill and no line style; everything
   // else the other way round.
-  const zone =
-    active !== null
-      ? active.kind === "rect" || active.kind === "ellipse"
-      : tool === "rect" || tool === "ellipse";
+  const isZone = (kind: string) => kind === "rect" || kind === "ellipse" || kind === "polygon";
+  const zone = active !== null ? isZone(active.kind) : isZone(tool);
   const activeFilled =
-    active && (active.kind === "rect" || active.kind === "ellipse")
+    active && (active.kind === "rect" || active.kind === "ellipse" || active.kind === "polygon")
       ? active.filled !== false
       : filled;
 
@@ -191,7 +200,10 @@ export function DrawPanel({
               title={t(value ? "draw.fill.filled.hint" : "draw.fill.outline.hint")}
               onClick={() => {
                 onFilledChange(value);
-                if (active && (active.kind === "rect" || active.kind === "ellipse")) {
+                if (
+                  active &&
+                  (active.kind === "rect" || active.kind === "ellipse" || active.kind === "polygon")
+                ) {
                   // Undefined rather than true, so a filled zone serialises as it always did.
                   patch(active.id, { filled: value ? undefined : false });
                 }
@@ -235,11 +247,27 @@ export function DrawPanel({
       </div>
       )}
 
+      {/* The count a drag starts from. Once drawn, corners are added and taken out
+          on the shape itself, so a selected polygon has no count to set. */}
+      {tool === "polygon" && active?.kind !== "polygon" && (
+        <NumberField
+          label={t("draw.sides")}
+          title={t("draw.sides.title")}
+          value={sides}
+          min={POLYGON_SIDES_MIN}
+          max={POLYGON_SIDES_MAX}
+          step={1}
+          unit=""
+          onCommit={(n) => onSidesChange(Math.round(n))}
+        />
+      )}
+
       {active ? (
         <Selected
           doc={doc}
           ann={active}
           onPatch={(fields, merge) => patch(active.id, fields, merge)}
+          onToPolygon={() => onDocChange(toPolygon(doc, active.id))}
           onDelete={() => onDelete(active.id)}
           onDuplicate={() => onDuplicate(active.id)}
           focusText={focusText}
@@ -260,6 +288,7 @@ function Selected({
   doc,
   ann,
   onPatch,
+  onToPolygon,
   onDelete,
   onDuplicate,
   focusText,
@@ -267,6 +296,7 @@ function Selected({
   doc: BoardDoc;
   ann: Annotation;
   onPatch: (fields: Partial<Annotation>, merge?: string) => void;
+  onToPolygon: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
   focusText?: number;
@@ -346,6 +376,21 @@ function Selected({
       )}
 
       {ann.kind === "text" && <TextBackground ann={ann} onPatch={onPatch} />}
+
+      {ann.kind === "rect" && (
+        <button
+          type="button"
+          title={t("draw.toPolygon.title")}
+          onClick={onToPolygon}
+          className="flex items-center justify-center gap-1 rounded border border-ink-600 px-1.5 py-1 text-[11px] text-ink-300 transition hover:border-accent hover:text-white"
+        >
+          <Pentagon size={11} /> {t("draw.toPolygon")}
+        </button>
+      )}
+
+      {(ann.kind === "polygon" || ann.kind === "arrow" || ann.kind === "line") && (
+        <p className="text-[11px] leading-snug text-ink-400">{t("draw.corners.hint")}</p>
+      )}
 
       {/* Which scenes it appears on. Ids, not indices, so reordering carries it. */}
       <div className="flex items-center gap-1">
@@ -460,25 +505,45 @@ function SizeField({ value, onChange }: { value: number; onChange: (size: number
   const { t } = useI18n();
   const asText = (n: number) => String(Math.round(n * 100));
   const [text, setText] = useState(() => asText(value));
+  /** Ten points of the percentage, from what is committed, kept inside the range. */
+  const step = (direction: 1 | -1) => {
+    const n = Math.min(TEXT_SCALE_MAX, Math.max(TEXT_SCALE_MIN, (Math.round(value * 10) + direction) / 10));
+    setText(asText(n));
+    if (n !== value) onChange(n);
+  };
 
   return (
-    <label className="flex w-[4.5rem] shrink-0 items-center gap-0.5">
-      <input
-        type="number"
-        min={TEXT_SCALE_MIN * 100}
-        max={TEXT_SCALE_MAX * 100}
-        step={10}
-        value={text}
-        onChange={(e) => {
-          setText(e.target.value);
-          const n = Number(e.target.value) / 100;
-          if (n >= TEXT_SCALE_MIN && n <= TEXT_SCALE_MAX) onChange(n);
-        }}
-        onBlur={() => setText(asText(value))}
-        aria-label={t("draw.size.aria")}
-        title={t("draw.size.title")}
-        className="w-full min-w-0 rounded border border-ink-600 bg-ink-900 px-1 py-1 font-mono text-[11px] text-ink-200 outline-none transition hover:border-ink-400 focus:border-accent"
-      />
+    <label className="flex w-[5.25rem] shrink-0 items-center gap-0.5">
+      <span className="flex min-w-0 flex-1 items-stretch overflow-hidden rounded border border-ink-600 bg-ink-900 transition hover:border-ink-400 focus-within:border-accent">
+        <input
+          type="text"
+          inputMode="numeric"
+          value={text}
+          onChange={(e) => {
+            setText(e.target.value);
+            const n = Number(e.target.value) / 100;
+            if (n >= TEXT_SCALE_MIN && n <= TEXT_SCALE_MAX) onChange(n);
+          }}
+          onKeyDown={(e) => {
+            if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+            e.preventDefault();
+            step(e.key === "ArrowUp" ? 1 : -1);
+          }}
+          onBlur={() => setText(asText(value))}
+          aria-label={t("draw.size.aria")}
+          title={t("draw.size.title")}
+          className="w-full min-w-0 bg-ink-900 px-1 py-1 font-mono text-[11px] text-ink-200 outline-none"
+        />
+        <Stepper
+          className="border-l border-ink-600"
+          upLabel={t("field.increase", { label: t("draw.size.aria") })}
+          downLabel={t("field.decrease", { label: t("draw.size.aria") })}
+          upDisabled={value >= TEXT_SCALE_MAX}
+          downDisabled={value <= TEXT_SCALE_MIN}
+          onUp={() => step(1)}
+          onDown={() => step(-1)}
+        />
+      </span>
       <span className="text-[11px] text-ink-400">%</span>
     </label>
   );
