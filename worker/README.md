@@ -17,6 +17,7 @@ lib/
   password.ts      the server's half of password hashing — one salted SHA-256
   mail.ts          the verification and reset emails, through Resend
   turnstile.ts     the bot check on the two routes that send mail
+  account.ts       deleting an account and everything it owns (D110)
   boards.ts        projects and boards; ownership is a WHERE clause, never a check
   shares.ts        publishing to /share/<slug>, and the one public read
   admin.ts         the operator's /admin view — 404 to anyone not in ADMIN_EMAILS

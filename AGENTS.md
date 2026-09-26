@@ -95,7 +95,7 @@ src/components/           React chrome; ui/ holds shadcn-style primitives
 scripts/board.ts          `pnpm board <tracks.json>` — a tracks file through the real importer
 worker/                   Cloudflare Worker — the API, and the SPA's static passthrough
   index.ts                the router; /api/* only, assets are served ahead of it
-  lib/                    session, google, users, auth (email and password), password,
+  lib/                    session, google, users, auth (email and password), password, account,
                           mail, turnstile, boards (and the project tree), presets,
                           admin (the operator's /admin view), crypto, http, limits
   migrations/             D1 schema, applied by CI before the script is deployed
@@ -266,15 +266,19 @@ Each is one line of what breaks; the reasoning is in the cited decision.
 - **Export size follows the board**, both axes even.
 - **Cancelling an export is terminating the worker.**
 
-### Worker (D39, D109)
+### Worker (D39, D109, D110)
 - **Every recursive CTE carries `n < WALK_LIMIT`** — a walk over a cycle does not terminate.
 - **The password KDF runs in the browser.** `deriveKey`'s iterations, salt prefix and email
   normalisation are frozen by a test vector; changing any locks every password account out.
   The browser's `normaliseEmail` and the Worker's must agree.
 - **No `users` row is written before its address is verified** — the Google join trusts it.
+- **`PASSWORD_PEPPER` is never rotated casually** — losing it locks out every password account.
+  `hashKey` throws without it rather than storing an unkeyed hash.
 - **An auth route never says whether an address has an account**: mail is sent in `waitUntil`,
   after an identical `ok`.
 - **Auth bodies must be `application/json`** — a `text/plain` form POST is the login CSRF.
+- **A new table that stores anything about a person joins `deleteAccount`'s list** (D110).
+  The cascade is a backstop, not the contract.
 - **Never mix a bare `?` with `?N` in one statement** — SQLite binds the wrong value, silently.
 - **Deleting a project deletes its subtree**; the confirmation counts it.
 - **`buildTree` must not trust its rows** — orphans to the root, cycles broken.

@@ -18,8 +18,9 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { LogOut, UserRound } from "lucide-react";
+import { LogOut, Trash2, UserRound } from "lucide-react";
 
+import { DeleteAccountDialog } from "@/components/DeleteAccountDialog";
 import { PasswordForm } from "@/components/PasswordForm";
 import { useI18n } from "@/i18n/context";
 import type { MessageKey } from "@/i18n/core";
@@ -81,6 +82,7 @@ export function AccountMenu({ account, loading, signOut }: AccountState) {
   const [authError, setAuthError] = useState<string | null>(readAuthError);
   const [linkError, setLinkError] = useState<MessageKey | null>(null);
   const [verifying, setVerifying] = useState(() => link !== null && "verify" in link);
+  const [deleting, setDeleting] = useState(false);
   const root = useRef<HTMLDivElement>(null);
 
   useEffect(forgetAuthParams, []);
@@ -216,8 +218,23 @@ export function AccountMenu({ account, loading, signOut }: AccountState) {
             <LogOut size={12} />
             {t("account.signOut")}
           </button>
+
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              setDeleting(true);
+            }}
+            className="flex items-center gap-1.5 rounded px-2 py-1 text-[11px] text-ink-400 transition hover:text-red-300"
+          >
+            <Trash2 size={12} />
+            {t("account.delete")}
+          </button>
         </div>
       )}
+
+      {deleting && <DeleteAccountDialog email={account.email} onCancel={() => setDeleting(false)} />}
     </div>
   );
 }

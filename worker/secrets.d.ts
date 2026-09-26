@@ -24,4 +24,10 @@ interface Env {
   RESEND_API_KEY: string;
   /** The Turnstile widget's secret, from `tofu output -raw turnstile_secret_key`. */
   TURNSTILE_SECRET_KEY: string;
+  /**
+   * Keys the stored password MACs (D109). Losing it locks out every password account until
+   * each is reset, so it is set once and not rotated casually:
+   *   openssl rand -base64 32 | wrangler secret put PASSWORD_PEPPER
+   */
+  PASSWORD_PEPPER: string;
 }

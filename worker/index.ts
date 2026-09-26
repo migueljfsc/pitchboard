@@ -46,6 +46,7 @@ import {
   listPresets,
   savePreset,
 } from "./lib/presets";
+import { deleteAccount } from "./lib/account";
 import { adminStats, adminUser, isAdmin } from "./lib/admin";
 import { fail, json } from "./lib/http";
 import { publishBoard, readShare, unpublishBoard } from "./lib/shares";
@@ -95,6 +96,13 @@ export default {
       case "GET /api/me": {
         const user = await resolveSession(env, request, now);
         return user ? json({ user }) : fail("unauthorized", 401);
+      }
+
+      // Erasure (D110). Everything the account owns goes in one transaction, and the cookie
+      // is cleared on the same response.
+      case "DELETE /api/me": {
+        const user = await resolveSession(env, request, now);
+        return user ? deleteAccount(env, request, user) : fail("unauthorized", 401);
       }
 
       // Idempotent, and never reports whether there was anything to sign out of: the

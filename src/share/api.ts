@@ -124,6 +124,14 @@ export async function signOut(): Promise<void> {
 }
 
 /**
+ * Deletes the account and everything it owns, irreversibly (D110). `confirm` is the address
+ * the coach typed; the Worker refuses unless it matches the account's own.
+ */
+export async function deleteAccount(confirm: string): Promise<void> {
+  await call("/me", { method: "DELETE", body: JSON.stringify({ confirm }) });
+}
+
+/**
  * Email and password (D109). `key` is `deriveKey`'s output — the password itself never leaves
  * the browser. `lang` picks the language of the email the Worker sends, since it has none.
  *

@@ -172,7 +172,7 @@ export async function register(ctx: AuthCtx): Promise<Response> {
   }
   if (!(await passesTurnstile(ctx.env, body.turnstile, ip))) return fail("captcha_failed", 400);
 
-  const token = await issueToken(ctx, "verify", email, await hashKey(body.key));
+  const token = await issueToken(ctx, "verify", email, await hashKey(body.key, ctx.env.PASSWORD_PEPPER));
   mail(ctx, email, "verify", body.lang, `${ctx.origin}/?verify=${token}`);
   return json({ ok: true });
 }
@@ -200,8 +200,16 @@ export async function login(ctx: AuthCtx): Promise<Response> {
 
   // A missing account and a wrong password are one answer, and cost the same: `verifyKey`
   // hashes before it compares, and a missing row still pays for the hash.
-  const ok = await verifyKey(body.key, user?.password_hash ?? "v1$missing$missing");
+  const pepper = ctx.env.PASSWORD_PEPPER;
+  const { ok, stale } = await verifyKey(body.key, user?.password_hash ?? "v2$missing$missing", pepper);
   if (!user || !ok) return fail("invalid_credentials", 401);
+
+  // The only moment the key is in hand, so the only moment an older row can be upgraded.
+  if (stale) {
+    await ctx.env.DB.prepare("UPDATE users SET password_hash = ? WHERE id = ?")
+      .bind(await hashKey(body.key, pepper), user.id)
+      .run();
+  }
 
   return signedIn(ctx.env, user.id, ctx.now);
 }
@@ -251,5 +259,5 @@ export async function resetPassword(ctx: AuthCtx): Promise<Response> {
   const user = await ctx.env.DB.prepare("SELECT 1 FROM users WHERE email = ?").bind(email).first();
   if (!user) return fail("invalid_token", 400);
 
-  return setPasswordAndSignIn(ctx, email, await hashKey(body.key));
+  return setPasswordAndSignIn(ctx, email, await hashKey(body.key, ctx.env.PASSWORD_PEPPER));
 }

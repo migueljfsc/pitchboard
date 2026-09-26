@@ -385,8 +385,11 @@ is English only and lazy-loaded.
 that is enforced loosely but not promised. So the browser derives a key with PBKDF2-SHA256 at
 600k iterations (OWASP) over the password, **salted with `pitchboard:v1:` + the normalised
 address** — Bitwarden's scheme, and it needs no endpoint that answers "does this address exist".
-The Worker stores `v1$salt$SHA-256(salt$key)`: a leaked table still costs 600k iterations a
-guess, and the key, not the stored value, is what logs in. Every constant in
+The Worker stores `v2$salt$HMAC(PASSWORD_PEPPER, salt$key)`: the pepper is a Worker secret held
+apart from D1, so a leaked table alone cannot start a guess, and with it each guess still costs
+600k iterations; the key, not the stored value, is what logs in. Unpeppered `v1` rows verify and
+are rewritten on their owner's next sign-in. Losing the pepper means a reset for every password
+account. Every constant in
 `src/share/password.ts` is load-bearing; a frozen test vector guards them. Workers Paid and
 moving to AWS were both weighed and rejected as cost for a problem the browser solves for free.
 
@@ -405,6 +408,15 @@ and per address (`AUTH_LIMIT`); bodies must be `application/json`, which a cross
 send without a preflight — the login-CSRF guard. **Mail is Resend** from `noreply@<domain>`:
 Cloudflare's Email Service sends to arbitrary recipients only on Workers Paid. Its DNS is in the
 stack. Email needs a domain someone owns, so D9's "custom domain" deferral ended here (D40).
+
+## D110 — Deleting an account is one transaction, by name
+`DELETE /api/me` empties every table that names the user — presets, boards, projects,
+identities, sessions, the address's pending email links — then the `users` row, in one D1 batch,
+so an account is gone or untouched. The list is the contract; the `ON DELETE CASCADE` keys are
+only a backstop for a table added and forgotten. Published links need nothing extra: a share is
+the board row (D7). The request repeats the account's address, which the UI makes the coach type
+— an irreversible delete that takes other people's links down is not one click away. It exits
+through `/?fresh=1`, like signing out, so the open board is not autosaved back.
 
 ---
 
