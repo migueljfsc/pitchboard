@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.67.0 (2026-09-26)
+
+### Feat
+
+- **editor**: keep drawings out of the dark, measure the frame, pick colours from one ball
+
 ## v0.66.0 (2026-09-25)
 
 ### Feat
