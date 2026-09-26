@@ -398,9 +398,23 @@ export interface AdminTotals {
   bytes: number;
 }
 
+/** Per UTC day (`YYYY-MM-DD`), only the days that had any. */
+export type AdminDaily = Array<{ day: string; n: number }>;
+
 export interface AdminStats {
   totals: AdminTotals;
   users: AdminUserSummary[];
+  series: {
+    /** Unix seconds; the window's first instant. */
+    since: number;
+    days: number;
+    signups: AdminDaily;
+    boards: AdminDaily;
+    /** Accounts created before the window — where the cumulative line starts. */
+    usersBefore: number;
+  };
+  /** How accounts sign in; each account is in exactly one bucket. */
+  methods: { google: number; password: number; both: number };
 }
 
 export interface AdminUserDetail {
@@ -425,7 +439,7 @@ export interface AdminUserDetail {
 export async function fetchAdminStats(): Promise<AdminStats> {
   const stats = await call<Partial<AdminStats>>("/admin/stats");
   // Same trap as `fetchAccount`: without the Worker, Vite answers with index.html and a 200.
-  if (!stats.totals || !stats.users) throw new ApiError("offline", 0);
+  if (!stats.totals || !stats.users || !stats.series || !stats.methods) throw new ApiError("offline", 0);
   return stats as AdminStats;
 }
 

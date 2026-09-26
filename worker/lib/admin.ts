@@ -21,6 +21,9 @@ export const ADMIN_USER_LIMIT = 500;
 
 const DAY_S = 24 * 60 * 60;
 
+/** How far back the charts reach. Ninety days is a season's worth, and bounds the rows. */
+export const SERIES_DAYS = 90;
+
 /** Pure, so the gate is testable without a Worker. */
 export function adminEmails(raw: string | undefined): Set<string> {
   return new Set(
@@ -51,7 +54,9 @@ const USER_COLUMNS = `
   (SELECT MAX(b.updated_at) FROM boards b WHERE b.user_id = u.id) AS last_board_at`;
 
 export async function adminStats({ env, now }: AdminCtx): Promise<Response> {
-  const [totals, users] = await env.DB.batch([
+  // Whole UTC days, today included: the last point is the total the tiles show.
+  const since = now - (now % DAY_S) - (SERIES_DAYS - 1) * DAY_S;
+  const [totals, users, signups, boardsCreated, before, methods] = await env.DB.batch([
     env.DB.prepare(
       `SELECT
          (SELECT COUNT(*) FROM users) AS users,
@@ -72,9 +77,40 @@ export async function adminStats({ env, now }: AdminCtx): Promise<Response> {
     env.DB.prepare(
       `SELECT ${USER_COLUMNS} FROM users u ORDER BY u.created_at DESC LIMIT ?1`,
     ).bind(ADMIN_USER_LIMIT),
+    // Per UTC day, only the days that had any; the page fills the gaps with zero.
+    env.DB.prepare(
+      `SELECT date(created_at, 'unixepoch') AS day, COUNT(*) AS n
+         FROM users WHERE created_at >= ?1 GROUP BY day ORDER BY day`,
+    ).bind(since),
+    env.DB.prepare(
+      `SELECT date(created_at, 'unixepoch') AS day, COUNT(*) AS n
+         FROM boards WHERE created_at >= ?1 GROUP BY day ORDER BY day`,
+    ).bind(since),
+    // Where the cumulative line starts: everyone who signed up before the window.
+    env.DB.prepare("SELECT COUNT(*) AS n FROM users WHERE created_at < ?1").bind(since),
+    env.DB.prepare(
+      `SELECT
+         COALESCE(SUM(g AND NOT p), 0) AS google,
+         COALESCE(SUM(p AND NOT g), 0) AS password,
+         COALESCE(SUM(g AND p), 0) AS both
+       FROM (SELECT password_hash IS NOT NULL AS p,
+                    EXISTS (SELECT 1 FROM identities i WHERE i.user_id = u.id) AS g
+               FROM users u)`,
+    ),
   ]);
 
-  return json({ totals: totals.results[0], users: users.results });
+  return json({
+    totals: totals.results[0],
+    users: users.results,
+    series: {
+      since,
+      days: SERIES_DAYS,
+      signups: signups.results,
+      boards: boardsCreated.results,
+      usersBefore: (before.results[0] as { n: number }).n,
+    },
+    methods: methods.results[0],
+  });
 }
 
 export async function adminUser({ env }: AdminCtx, userId: string): Promise<Response> {

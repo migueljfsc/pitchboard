@@ -378,7 +378,9 @@ Opening someone's board was left out on purpose: that is reading their work, not
 **`last_login_at` and `last_seen_at` are columns** (`0007`), because session rows die on sign-out
 and expiry; `last_seen_at` rides the daily session slide, so it is accurate to a day. Anonymous
 use — `#d=` links and boards never saved — does not reach the server and is not counted. The page
-is English only and lazy-loaded.
+is English only and lazy-loaded. Its charts are hand-drawn SVG, like the board (no library):
+90 whole UTC days of daily sign-ups and boards created, the sign-in method split, and last-seen
+recency from the account list, each with a table view; colours validated against `ink-800`.
 
 ## D109 — Email and password: the KDF runs in the browser, and no account is unverified
 **The expensive half of hashing runs client-side.** Measured on the edge, PBKDF2-SHA256 costs

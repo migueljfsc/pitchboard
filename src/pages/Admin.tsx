@@ -12,6 +12,20 @@ import {
   type AdminUserSummary,
 } from "@/share/api";
 import { sharePath } from "@/share/routes";
+import { ChartCard, ColumnChart, LineChart, Sparkline, StackedBar } from "./AdminCharts";
+import {
+  AMBER,
+  CATEGORICAL,
+  cumulative,
+  DAY_S,
+  fillDays,
+  lastWeeks,
+  NEUTRAL,
+  RECENCY,
+  shortDate,
+} from "./adminData";
+
+const WEEKS = 12;
 
 /**
  * The operator's usage view (D108): totals, the accounts, and one account's metadata.
@@ -72,8 +86,41 @@ export function Admin() {
   );
 }
 
+/** Where each account was last seen, oldest bucket last; `never` is its own neutral column. */
+function recency(users: AdminStats["users"]): number[] {
+  const now = Date.now() / 1000;
+  const limits = [1, 7, 30, 90].map((d) => d * DAY_S);
+  const buckets = [0, 0, 0, 0, 0, 0];
+  for (const u of users) {
+    if (u.last_seen_at === null) {
+      buckets[5]++;
+      continue;
+    }
+    const age = now - u.last_seen_at;
+    const i = limits.findIndex((limit) => age < limit);
+    buckets[i === -1 ? 4 : i]++;
+  }
+  return buckets;
+}
+
+const RECENCY_LABELS = ["Today", "This week", "This month", "3 months", "Older", "Never"];
+
 function Overview({ stats, onSelect }: { stats: AdminStats; onSelect: (id: string) => void }) {
-  const { totals, users } = stats;
+  const { totals, users, series, methods } = stats;
+  const charts = useMemo(() => {
+    const signups = fillDays(series.signups, series.since, series.days);
+    const boards = fillDays(series.boards, series.since, series.days);
+    const weekStarts = Array.from({ length: WEEKS }, (_, w) =>
+      shortDate(series.since + (series.days - (WEEKS - w) * 7) * DAY_S),
+    );
+    return {
+      accounts: cumulative(series.usersBefore, signups),
+      signupWeeks: lastWeeks(signups, WEEKS),
+      boardWeeks: lastWeeks(boards, WEEKS),
+      weekStarts,
+      seen: recency(users),
+    };
+  }, [series, users]);
   const [query, setQuery] = useState("");
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -94,9 +141,9 @@ function Overview({ stats, onSelect }: { stats: AdminStats; onSelect: (id: strin
 
       <Tiles
         items={[
-          ["Users", totals.users, `+${totals.signups_7d} this week · +${totals.signups_30d} in 30 days`],
+          ["Users", totals.users, `+${totals.signups_7d} this week · +${totals.signups_30d} in 30 days`, charts.signupWeeks],
           ["Active today", totals.active_1d, `${totals.active_7d} in 7 days · ${totals.active_30d} in 30`],
-          ["Boards", totals.boards, `${totals.boards_created_7d} new · ${totals.boards_updated_7d} edited this week`],
+          ["Boards", totals.boards, `${totals.boards_created_7d} new · ${totals.boards_updated_7d} edited this week`, charts.boardWeeks],
           ["Published", totals.published, "live /share links"],
           ["Projects", totals.projects, null],
           ["Squad presets", totals.presets, null],
@@ -104,6 +151,61 @@ function Overview({ stats, onSelect }: { stats: AdminStats; onSelect: (id: strin
           ["Stored boards", formatBytes(totals.bytes), "sum of documents"],
         ]}
       />
+
+      <div className="mt-6 grid gap-3 md:grid-cols-2">
+        <ChartCard
+          className="md:col-span-2"
+          title="Accounts over time"
+          subtitle={`All accounts, last ${series.days} days (UTC)`}
+          table={charts.accounts
+            .map((n, i) => [shortDate(series.since + i * DAY_S), n.toLocaleString()] as [string, string])
+            .reverse()}
+        >
+          <LineChart values={charts.accounts} since={series.since} unit="accounts" />
+        </ChartCard>
+
+        <ChartCard
+          title="Sign-ups per week"
+          subtitle={`Last ${WEEKS} weeks, labelled by the week's first day`}
+          table={charts.weekStarts.map((d, i) => [d, String(charts.signupWeeks[i])] as [string, string]).reverse()}
+        >
+          <ColumnChart values={charts.signupWeeks} labels={charts.weekStarts} colors={AMBER} unit="sign-ups" />
+        </ChartCard>
+
+        <ChartCard
+          title="Boards created per week"
+          subtitle={`Last ${WEEKS} weeks, labelled by the week's first day`}
+          table={charts.weekStarts.map((d, i) => [d, String(charts.boardWeeks[i])] as [string, string]).reverse()}
+        >
+          <ColumnChart values={charts.boardWeeks} labels={charts.weekStarts} colors={AMBER} unit="boards" />
+        </ChartCard>
+
+        <ChartCard
+          title="How people sign in"
+          subtitle="Every account, by the sign-in methods it has"
+          table={[
+            ["Google only", String(methods.google)],
+            ["Password only", String(methods.password)],
+            ["Both", String(methods.both)],
+          ]}
+        >
+          <StackedBar
+            segments={[
+              { label: "Google only", value: methods.google, color: CATEGORICAL[0] },
+              { label: "Password only", value: methods.password, color: CATEGORICAL[1] },
+              { label: "Both", value: methods.both, color: CATEGORICAL[2] },
+            ]}
+          />
+        </ChartCard>
+
+        <ChartCard
+          title="Last seen"
+          subtitle="Accounts by their most recent visit, to the day"
+          table={RECENCY_LABELS.map((l, i) => [l, String(charts.seen[i])] as [string, string])}
+        >
+          <ColumnChart values={charts.seen} labels={RECENCY_LABELS} colors={[...RECENCY, NEUTRAL]} unit="accounts" />
+        </ChartCard>
+      </div>
 
       <div className="mt-8 mb-3 flex items-center justify-between gap-4">
         <h2 className="text-sm font-semibold text-ink-300">
@@ -293,14 +395,20 @@ function Notice({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Tiles({ items }: { items: Array<[string, number | string, string | null]> }) {
+/** Label, value, an optional note, and an optional weekly trend drawn under it. */
+type Tile = [string, number | string, string | null, number[]?];
+
+function Tiles({ items }: { items: Tile[] }) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      {items.map(([label, value, note]) => (
+      {items.map(([label, value, note, trend]) => (
         <div key={label} className="rounded-lg border border-ink-700 bg-ink-800 p-3">
           <div className="text-[11px] tracking-wide text-ink-400 uppercase">{label}</div>
-          <div className="mt-1 text-2xl font-semibold text-ink-200 tabular-nums">{value}</div>
+          <div className="mt-1 text-2xl font-semibold text-ink-200">
+            {typeof value === "number" ? value.toLocaleString() : value}
+          </div>
           {note && <div className="mt-1 text-[11px] text-ink-500">{note}</div>}
+          {trend && <Sparkline values={trend} />}
         </div>
       ))}
     </div>
