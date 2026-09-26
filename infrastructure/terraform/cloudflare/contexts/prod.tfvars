@@ -15,8 +15,7 @@ domain = "migueljfsc.dev"
 
 # ---- Email (Resend) ----
 # Add pitchboard.migueljfsc.dev in Resend's dashboard, then paste its `resend._domainkey` value.
-resend_dkim_public_key = "p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDST4XAk3TU3xy9BeK/D6Z4M3vz3ygWapyfBPMiNyHtKOV3bk3KiH5TZu30eNQD2QeYkGe1u9JbNca+dK2jJ5f35DxnRA2y8wPjuIWCmsUIk1+etR9XpajIE407UhHw57gCu6FKWlGX9MjOdkt+OzWj63lg0GbTgLNghjyq3zUTTQIDAQAB"
-resend_region          = "eu-west-1"
+resend_dkim_public_key = "p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCrEI9q45Z3DuGWYfSWlDkxPQkEEfTmiv6zaNQJKm7SVWbQu9A1enlx/8WmpkD4mequdfp43nWn0YqTh/UNQx3gnkFz8+fhV/hA7DQ89A6/Iu7PAVEYsCVos3klxEgnoybq1mtgYQtVdB+eGY6QC1ZvSDnPBUTU+cv2vgDobUQ9WwIDAQAB"
 
 # ---- Turnstile ----
 # Until workers.dev is switched off, the sign-in form is served there too.

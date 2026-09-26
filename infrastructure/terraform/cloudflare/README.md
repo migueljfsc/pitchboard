@@ -16,7 +16,7 @@ and the bindings it needs are created here and passed through as outputs.
 | `kv.tf` | KV namespace — published board snapshots | **active** |
 | `data.tf` | Zone lookup | gated on `domain` |
 | `turnstile.tf` | Turnstile widget — bot check on register and password reset (D109) | **active** |
-| `email.tf` | Resend DNS — DKIM, bounce MX, SPF, DMARC (D109) | gated on `domain` and `resend_dkim_public_key` |
+| `email.tf` | Resend DNS — DKIM, the `send.` CNAME, DMARC (D109) | gated on `domain` and `resend_dkim_public_key` |
 
 The R2 bucket holds board preview images (OG cards for share links) and exported renders —
 binaries that belong in neither the git repo nor a D1 row. D1 and KV are the two halves of the

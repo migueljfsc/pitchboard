@@ -78,10 +78,10 @@ variable "resend_dkim_public_key" {
   EOT
 }
 
-variable "resend_region" {
+variable "resend_send_target" {
   type        = string
-  default     = "eu-west-1"
-  description = "The region chosen when the domain was added in Resend; it names the bounce MX host."
+  default     = "send.forge.rmta.net"
+  description = "Where Resend's `send.` record points, as its dashboard lists it for the domain."
 }
 
 ###################### TURNSTILE ######################

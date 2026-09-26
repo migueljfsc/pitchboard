@@ -7,10 +7,11 @@
 # reputation, and its SPF and DMARC, out of everyone else's way. Resend verifies
 # it as a domain of its own.
 #
-# Resend signs from a `send.` subdomain (bounce MX + SPF) and a DKIM key it
-# generates when the domain is added in its dashboard. That key is the one
-# value this stack cannot know, so every record waits for it: add the domain in
-# Resend, copy the `resend._domainkey` TXT value into `resend_dkim_public_key`,
+# Resend needs two records: a DKIM key it generates when the domain is added,
+# and a `send.` CNAME for bounces and SPF. The key is the one value this stack
+# cannot know, so every record waits for it: add the domain in Resend choosing
+# MANUAL setup (its automatic Cloudflare setup writes the same names behind this
+# stack's back), copy the `resend._domainkey` value into `resend_dkim_public_key`,
 # apply, then press Verify in Resend.
 # ==============================================================================
 
@@ -28,24 +29,17 @@ resource "cloudflare_dns_record" "resend_dkim" {
   ttl     = 1
 }
 
-resource "cloudflare_dns_record" "resend_bounce_mx" {
-  count = local.has_mail ? 1 : 0
-
-  zone_id  = data.cloudflare_zone.this[0].zone_id
-  name     = "send.${local.app_fqdn}"
-  type     = "MX"
-  content  = "feedback-smtp.${var.resend_region}.amazonses.com"
-  priority = 10
-  ttl      = 1
-}
-
-resource "cloudflare_dns_record" "resend_spf" {
+# Resend's bounce and SPF domain. One CNAME into Resend's own infrastructure, so the SPF and
+# bounce MX it points at are Resend's to change. A CNAME cannot share its name with any other
+# record, which is why nothing else lives on `send.`.
+resource "cloudflare_dns_record" "resend_send" {
   count = local.has_mail ? 1 : 0
 
   zone_id = data.cloudflare_zone.this[0].zone_id
   name    = "send.${local.app_fqdn}"
-  type    = "TXT"
-  content = "\"v=spf1 include:amazonses.com ~all\""
+  type    = "CNAME"
+  content = var.resend_send_target
+  proxied = false
   ttl     = 1
 }
 
