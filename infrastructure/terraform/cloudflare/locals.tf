@@ -22,7 +22,6 @@ locals {
   app_fqdn       = local.has_domain ? "${var.project_name}.${var.domain}" : null
   r2_public_fqdn = local.has_domain ? "${var.project_name}-${var.r2_public_hostname}.${var.domain}" : null
 
-  # Every hostname the sign-in form is served from. workers.dev stays in until it is
-  # switched off, or registering there fails the bot check.
+  # Every hostname the sign-in form is served from; a hostname missing here fails the bot check.
   turnstile_domains = compact(concat([local.app_fqdn], var.turnstile_extra_domains))
 }

@@ -18,5 +18,5 @@ domain = "migueljfsc.dev"
 resend_dkim_public_key = "p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCrEI9q45Z3DuGWYfSWlDkxPQkEEfTmiv6zaNQJKm7SVWbQu9A1enlx/8WmpkD4mequdfp43nWn0YqTh/UNQx3gnkFz8+fhV/hA7DQ89A6/Iu7PAVEYsCVos3klxEgnoybq1mtgYQtVdB+eGY6QC1ZvSDnPBUTU+cv2vgDobUQ9WwIDAQAB"
 
 # ---- Turnstile ----
-# Until workers.dev is switched off, the sign-in form is served there too.
-turnstile_extra_domains = ["pitchboard.migueljfscardoso.workers.dev"]
+# The app's own hostname only; workers.dev is off (wrangler.jsonc).
+turnstile_extra_domains = []

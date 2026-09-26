@@ -37,8 +37,6 @@ before any React touches it, and every phase ends at a state you can look at.
 
 - **Save the current shape as a custom formation.** The last item from M1. Formations are
   generated from notation (D11), so this needs somewhere to keep one that is not.
-- **Switch off `workers.dev`** once the custom domain is proved (D40), and drop it from
-  `turnstile_extra_domains`.
 - Known defects are in [`bugs.md`](./bugs.md). Non-goals are in `AGENTS.md` (D9).
 
 ## Definition of done, per change

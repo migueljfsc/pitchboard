@@ -364,8 +364,9 @@ credential can revoke its access mid-apply.
 
 **It is served from a domain bought through Cloudflare Registrar** (wrangler's `routes`, with
 `custom_domain`), because sending email needs one (D109); the zone's records are in the stack.
-`workers.dev` stays on until the domain is proved. The GitHub Pages copy was retired with it:
-it had no server, so no accounts, and one Worker is one thing to reason about.
+`workers.dev` is off, so there is one origin for cookies, OAuth and Turnstile. The GitHub Pages
+copy was retired with it: it had no server, so no accounts, and one Worker is one thing to
+reason about.
 
 ## D108 — The operator's view: `/admin`, metadata only
 One page for the site's owner: totals, the accounts, and one account's projects, boards and

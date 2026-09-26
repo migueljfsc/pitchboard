@@ -25,9 +25,10 @@
   // the resources and are identifiers, not secrets.
   // A subdomain of a personal domain shared across projects. The zone is already on this
   // account (Cloudflare Registrar puts it there); the custom domain brings its own DNS record
-  // and certificate. workers.dev stays on alongside it until the domain has been proved, and
-  // is switched off afterwards.
+  // and certificate. workers.dev is off: one origin, so there is one set of cookies, one OAuth
+  // redirect and one Turnstile hostname.
   "routes": [{ "pattern": "pitchboard.migueljfsc.dev", "custom_domain": true }],
+  "workers_dev": false,
 
   // Public by nature: the sender every verification and reset email carries (D109). The
   // domain's SPF and DKIM records are in the OpenTofu stack.

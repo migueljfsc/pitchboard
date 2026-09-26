@@ -1,8 +1,7 @@
 # The Worker
 
 Serves the SPA and the `/api/*` surface at
-https://pitchboard.migueljfsc.dev (and, until it is switched off,
-https://pitchboard.migueljfscardoso.workers.dev).
+https://pitchboard.migueljfsc.dev.
 
 `wrangler.jsonc` sits at the repository root, beside `package.json` — it is the project's
 deploy config, and its paths resolve against itself.
