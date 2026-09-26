@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.70.0 (2026-09-26)
+
+### Feat
+
+- **account**: delete an account and everything it owns; pepper stored passwords
+
 ## v0.69.0 (2026-09-26)
 
 ### Feat
