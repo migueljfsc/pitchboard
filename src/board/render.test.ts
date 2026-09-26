@@ -973,6 +973,13 @@ describe("the ruler", () => {
     expect(draw({ x: 10, y: 20, w: 15, h: 8 }, false).log).not.toContain(band);
   });
 
+  // Its readout reaches past the team names' offset, and a centred drawing puts it on them.
+  it("takes the team names away while it shows", () => {
+    const named = (ruler: RenderView["ruler"]) => draw(ruler).log.some((l) => l.startsWith('fillText("Home",'));
+    expect(named(null)).toBe(true);
+    expect(named({ x: 50, y: 30, w: 5, h: 8 })).toBe(false);
+  });
+
   // The left goal line is cropped out of a right half, and with it the old side ruler.
   it("follows the crop: a right half is measured on the right goal line", () => {
     const doc = createBoardDoc();

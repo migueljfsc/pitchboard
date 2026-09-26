@@ -167,7 +167,8 @@ export function drawBoard(
   clipToHalf(ctx, doc, view.half);
 
   drawPitch(ctx, doc.pitch, theme, true, view.turf);
-  drawTeamNames(ctx, doc, view.rotated);
+  // The ruler's readouts sit where the names do, and are the one thing read mid-drag.
+  if (!(view.interactive && view.ruler)) drawTeamNames(ctx, doc, view.rotated);
 
   // Annotations split across the stack. A shaded zone is background — it belongs
   // under the play, or it drowns it. Arrows, freehand and text are the coach
@@ -2576,9 +2577,9 @@ const CENTRED_M = 0.05;
  * nor is its goal line, so a right half takes its ruler on the right goal line. The middle of
  * the frame is marked on both, lit when the drawing is centred on it (D105).
  *
- * Outside the lines, in the surround, where nothing of the play is drawn; inside the team
- * name's offset on the goal line side, so the two never overlap. Numbers are upright however
- * the board is turned.
+ * Outside the lines, in the surround, where nothing of the play is drawn. Its readout reaches
+ * past the team names' offset, so the names are not drawn while it shows. Numbers are upright
+ * however the board is turned.
  */
 function drawRuler(
   ctx: Ctx,
