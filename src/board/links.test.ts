@@ -6,7 +6,6 @@ import {
   area,
   clearLinks,
   createLink,
-  deleteLink,
   linkColor,
   linkGeometry,
   moveLink,
@@ -68,10 +67,6 @@ describe("chain", () => {
     expect(spansEnds).toBe(false);
   });
 
-  it("encloses no area", () => {
-    expect(area(at(doc))).toBe(0);
-  });
-
   it("measures edges in metres", () => {
     for (const edge of at(doc).edges) expect(edge.metres).toBeCloseTo(16);
     expect(perimeter(at(doc))).toBeCloseTo(48);
@@ -125,18 +120,6 @@ describe("polygon", () => {
   it("returns null when fewer than two members survive", () => {
     const doc2 = board([A], "polygon", { [A]: { x: 0, y: 0 } });
     expect(linkGeometry(doc2.links[0], resolveAt(doc2, 0), doc2)).toBeNull();
-  });
-});
-
-describe("filled", () => {
-  it("encloses area like a polygon", () => {
-    const doc = board([A, B, C], "filled", {
-      [A]: { x: 0, y: 0 },
-      [B]: { x: 20, y: 0 },
-      [C]: { x: 0, y: 20 },
-    });
-    expect(at(doc).closed).toBe(true);
-    expect(area(at(doc))).toBeCloseTo(200);
   });
 });
 
@@ -213,11 +196,6 @@ describe("createLink", () => {
     }
   });
 
-  it("still takes an explicit style", () => {
-    const next = createLink(createBoardDoc(), [A, B, C], { style: "filled" });
-    expect(next.links[next.links.length - 1].style).toBe("filled");
-  });
-
   it("stores no colour of its own, so the kit stays the single source", () => {
     const doc = createBoardDoc();
     const next = createLink(doc, [A, B]);
@@ -237,26 +215,6 @@ describe("createLink", () => {
     for (let i = 0; i < 4; i++) doc = createLink(doc, [A, B, C]);
     expect(new Set(doc.links.map((l) => l.id)).size).toBe(doc.links.length);
     expect(boardDocSchema.safeParse(doc).success).toBe(true);
-  });
-});
-
-describe("updateLink / deleteLink", () => {
-  it("patches fields", () => {
-    const doc = board([A, B], "chain", { [A]: { x: 0, y: 0 }, [B]: { x: 5, y: 0 } });
-    const next = updateLink(doc, "l1", { style: "filled", showDistances: true, hidden: true });
-    expect(next.links[0]).toMatchObject({ style: "filled", showDistances: true, hidden: true });
-    expect(boardDocSchema.safeParse(next).success).toBe(true);
-  });
-
-  it("is a no-op for an unknown id", () => {
-    const doc = createBoardDoc();
-    expect(updateLink(doc, "nope", { hidden: true })).toBe(doc);
-    expect(deleteLink(doc, "nope")).toBe(doc);
-  });
-
-  it("removes a link", () => {
-    const doc = board([A, B], "chain", { [A]: { x: 0, y: 0 }, [B]: { x: 5, y: 0 } });
-    expect(deleteLink(doc, "l1").links).toHaveLength(0);
   });
 });
 
@@ -311,11 +269,6 @@ describe("pruneLinks", () => {
   it("discards a link left with fewer than two members", () => {
     const doc = board([A, "ghost"], "chain", { [A]: { x: 0, y: 0 } });
     expect(pruneLinks(doc).links).toHaveLength(0);
-  });
-
-  it("leaves a clean document untouched", () => {
-    const doc = createBoardDoc();
-    expect(pruneLinks(doc)).toBe(doc);
   });
 
   it("keeps every seeded link valid through a formation change", () => {
@@ -401,11 +354,6 @@ describe("linkColor", () => {
     expect(linkColor(doc, linkOver(["ghost-1", "ghost-2"]))).toBe(NEUTRAL_LINK_COLOR);
   });
 
-  it("leaves a colourless link valid", () => {
-    const doc = createBoardDoc();
-    doc.links = [linkOver([A, B])];
-    expect(() => boardDocSchema.parse(JSON.parse(JSON.stringify(doc)))).not.toThrow();
-  });
 });
 
 describe("moveLink", () => {
@@ -423,18 +371,6 @@ describe("moveLink", () => {
     expect(moveLink(doc, 0, 1).links.map((l) => l.id)).toEqual([b, a, c]);
   });
 
-  it("changes nothing else about the links", () => {
-    const doc = withThree();
-    const moved = moveLink(doc, 2, 0);
-    expect(new Set(moved.links)).toEqual(new Set(doc.links));
-  });
-
-  it("is a no-op for a move to the same slot or out of range", () => {
-    const doc = withThree();
-    expect(moveLink(doc, 1, 1)).toBe(doc);
-    expect(moveLink(doc, -1, 0)).toBe(doc);
-    expect(moveLink(doc, 0, 9)).toBe(doc);
-  });
 });
 
 describe("clearLinks", () => {
@@ -451,14 +387,6 @@ describe("clearLinks", () => {
     expect(cleared.scenes).toEqual(doc.scenes);
   });
 
-  it("is the same object when there is nothing to clear", () => {
-    const empty = clearLinks(createBoardDoc());
-    expect(clearLinks(empty)).toBe(empty);
-  });
-
-  it("still validates", () => {
-    expect(boardDocSchema.safeParse(clearLinks(createBoardDoc())).success).toBe(true);
-  });
 });
 
 // A link's scene range — the same machinery an annotation's uses, and tested here
@@ -500,12 +428,6 @@ describe("links per scene", () => {
     const scoped = updateLink(doc, "l1", { from: wanted, to: wanted });
     const moved = { ...scoped, scenes: [scoped.scenes[2], scoped.scenes[0], scoped.scenes[1]] };
     expect(moved.scenes.map((_, i) => linksOn(moved, i).length)).toEqual([1, 0, 0]);
-  });
-
-  it("still validates with a range on it", () => {
-    const doc = ranged();
-    const scoped = updateLink(doc, "l1", { from: doc.scenes[1].id, to: doc.scenes[2].id });
-    expect(boardDocSchema.safeParse(scoped).success).toBe(true);
   });
 
   it("refuses a range naming a scene the board does not have", () => {

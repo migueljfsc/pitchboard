@@ -131,35 +131,3 @@ export function cameraFromZoom(
   if (!Number.isFinite(at.x) || !Number.isFinite(at.y) || !Number.isFinite(zoom.z)) return null;
   return { at, zoom: Math.min(Math.max(zoom.z, 1), MAX_SCENE_ZOOM) };
 }
-
-/**
- * The screen zoom that shows what a camera shows — `cameraFromZoom` run backwards.
- * What the editor jumps to when a scene with a locked zoom is selected.
- */
-export function zoomFromCamera(
-  camera: SceneCamera,
-  width: number,
-  height: number,
-  mapping: ScreenMapping,
-): ScreenZoom {
-  const s = mapping.toScreen(camera.at);
-  const z = Math.min(Math.max(camera.zoom, 1), MAX_SCENE_ZOOM);
-  return { z, x: width / 2 - z * s.x, y: height / 2 - z * s.y };
-}
-
-/** Does a screen zoom show what this camera shows, to within a rounding? */
-export function zoomMatchesCamera(
-  zoom: ScreenZoom,
-  camera: SceneCamera | undefined,
-  width: number,
-  height: number,
-  mapping: ScreenMapping,
-): boolean {
-  if (!camera) return zoom.z <= 1.001;
-  const expected = zoomFromCamera(camera, width, height, mapping);
-  return (
-    Math.abs(expected.z - zoom.z) < 1e-3 &&
-    Math.abs(expected.x - zoom.x) < 0.5 &&
-    Math.abs(expected.y - zoom.y) < 0.5
-  );
-}

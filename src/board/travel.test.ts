@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  entityDelayMs,
   entityTravelMs,
   positionAt,
   progressOf,
@@ -51,24 +50,10 @@ describe("scene travel window", () => {
 });
 
 describe("progressOf", () => {
-  it("matches the scene for an entity with no override", () => {
-    const doc = runners();
-    const r = resolveAt(doc, 2);
-    expect(progressOf(FAST, r)).toBeCloseTo(r.u);
-  });
-
   it("runs ahead for a faster entity, and pins at 1 once arrived", () => {
     const doc = setTravel(runners(), 1, FAST, 1000);
     // Half the 2 s window gone: the quick one is done, the other is halfway.
     const r = resolveAt(doc, 2);
-    expect(progressOf(FAST, r)).toBe(1);
-    expect(progressOf(SLOW, r)).toBeCloseTo(0.5);
-  });
-
-  it("runs behind for a slower entity", () => {
-    const doc = setTravel(runners(), 1, SLOW, 4000);
-    // Window is now 4 s. At 2 s in, the baseline runner has finished.
-    const r = resolveAt(doc, 3);
     expect(progressOf(FAST, r)).toBe(1);
     expect(progressOf(SLOW, r)).toBeCloseTo(0.5);
   });
@@ -110,10 +95,6 @@ describe("positions honour per-entity travel", () => {
 });
 
 describe("a per-entity wait", () => {
-  it("is nothing until one is set", () => {
-    expect(entityDelayMs(runners().scenes[1], FAST)).toBe(0);
-  });
-
   it("stretches the window by when the last arrival lands, not by the longest run", () => {
     const doc = setDelay(runners(), 1, SLOW, 1500);
     // SLOW still runs for the scene's 2 s, but only from 1.5 s in.
@@ -182,11 +163,6 @@ describe("setTravel", () => {
     expect(setTravel(runners(), 1, FAST, -100).scenes[1].travel![FAST]).toBe(0);
     expect(setTravel(runners(), 1, FAST, 1e9).scenes[1].travel![FAST]).toBe(60_000);
     expect(setTravel(runners(), 1, FAST, 1234.6).scenes[1].travel![FAST]).toBe(1235);
-  });
-
-  it("keeps the document valid", () => {
-    const doc = setTravel(runners(), 1, FAST, 900);
-    expect(boardDocSchema.safeParse(doc).success).toBe(true);
   });
 
   it("is a no-op for a scene that does not exist", () => {

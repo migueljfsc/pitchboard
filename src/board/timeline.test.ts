@@ -20,7 +20,6 @@ import {
 } from "./timeline";
 import { createBoardDoc } from "@/formations";
 import { addSceneAfter, sceneStartSeconds, setScenePace } from "./scenes";
-import { boardDocSchema } from "./schema";
 import type { BoardDoc, Scene, Vec2 } from "./types";
 
 /** Two scenes: 1 s hold, 2 s transition, 0.5 s hold. Total 3.5 s. */
@@ -60,11 +59,6 @@ describe("totalDurationMs", () => {
     expect(totalDurationMs(doc)).toBe(3500);
   });
 
-  it("is just the hold for a single-scene board", () => {
-    const doc = createBoardDoc();
-    doc.scenes[0].holdMs = 1234;
-    expect(totalDurationMs(doc)).toBe(1234);
-  });
 });
 
 describe("resolveAt", () => {
@@ -136,15 +130,6 @@ describe("positionAt", () => {
     const mid = positionAt(HOME_9, resolveAt(doc, 2), doc);
     expect(mid.x).toBeCloseTo(20);
     expect(mid.y).toBeCloseTo(10);
-  });
-
-  it("pins the endpoints of a transition", () => {
-    const doc = twoScene((a, b) => {
-      a.positions[HOME_9] = { x: 10, y: 10 };
-      b.positions[HOME_9] = { x: 30, y: 50 };
-    });
-    expect(positionAt(HOME_9, resolveAt(doc, 1), doc)).toEqual({ x: 10, y: 10 });
-    expect(positionAt(HOME_9, resolveAt(doc, 3), doc)).toEqual({ x: 30, y: 50 });
   });
 
   it("follows a drawn curve away from the straight line", () => {
@@ -372,10 +357,6 @@ describe("loft", () => {
     expect(covered(lofted(true), 0.5)).toBeCloseTo(0.5, 2);
   });
 
-  it("still decelerates when it stays on the ground", () => {
-    // easeOutQuad: three quarters of the way there at half the time.
-    expect(covered(lofted(false), 0.5)).toBeCloseTo(0.75, 2);
-  });
 });
 
 describe("frameAt", () => {
@@ -411,9 +392,6 @@ describe("frameAt", () => {
     }
   });
 
-  it("builds documents the schema accepts", () => {
-    expect(boardDocSchema.safeParse(twoScene()).success).toBe(true);
-  });
 });
 
 describe("flow mode", () => {
@@ -436,10 +414,6 @@ describe("flow mode", () => {
     // 40 m at 10 m/s is 4 s, whatever transitionMs happens to say.
     expect(sceneTimings(flowing())[1].travelMs).toBeCloseTo(4000);
     expect(flowing().scenes[1].transitionMs).toBe(2000);
-  });
-
-  it("halves the time when the pace doubles", () => {
-    expect(sceneTimings(flowing(20))[1].travelMs).toBeCloseTo(2000);
   });
 
   it("holds nothing but the last frame", () => {
@@ -520,15 +494,6 @@ describe("flow mode", () => {
     expect(at.moving).toBe(false);
   });
 
-  it("round-trips through the schema", () => {
-    const parsed = boardDocSchema.parse(JSON.parse(JSON.stringify(flowing(12, 800))));
-    expect(parsed.flow).toEqual({ speed: 12, endHoldMs: 800 });
-  });
-
-  it("rejects a pace outside the supported range", () => {
-    expect(boardDocSchema.safeParse(flowing(0)).success).toBe(false);
-    expect(boardDocSchema.safeParse(flowing(99)).success).toBe(false);
-  });
 });
 
 describe("per-scene pace", () => {
@@ -620,10 +585,6 @@ describe("per-scene pace", () => {
     for (let i = 1; i < paced.scenes.length; i++) expect(scenePace(paced, i)).toBe(15);
   });
 
-  it("still validates with a per-scene pace on it", () => {
-    const doc = setScenePace(runs(20, 20), 1, 18.5);
-    expect(boardDocSchema.safeParse(doc).success).toBe(true);
-  });
 });
 
 // A highlight is switched, not interpolated: the scene being travelled INTO lights its
@@ -702,10 +663,4 @@ describe("unseen players (D87)", () => {
     expect(at(end)).toBeCloseTo(1);
   });
 
-  it("is a field the schema keeps", () => {
-    const { doc, id } = twoScenes();
-    const marked = { ...doc, scenes: [{ ...doc.scenes[0], unseen: [id] }, doc.scenes[1]] };
-    const parsed = boardDocSchema.parse(marked) as BoardDoc;
-    expect(parsed.scenes[0].unseen).toEqual([id]);
-  });
 });

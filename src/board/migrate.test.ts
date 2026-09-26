@@ -2,8 +2,7 @@ import { describe, expect, it } from "vitest";
 import { say } from "@/i18n/core";
 import { en } from "@/i18n/en";
 import { createBoardDoc } from "@/formations";
-import { CURRENT_VERSION, isCurrent, migrate } from "./migrate";
-import { boardDocSchema } from "./schema";
+import { CURRENT_VERSION, migrate } from "./migrate";
 
 describe("migrate", () => {
   it("passes a current document through untouched", () => {
@@ -11,12 +10,6 @@ describe("migrate", () => {
     const out = migrate(doc);
     expect(out.ok).toBe(true);
     if (out.ok) expect(out.doc).toBe(doc);
-  });
-
-  it("hands the validator something it accepts", () => {
-    const out = migrate(JSON.parse(JSON.stringify(createBoardDoc())));
-    if (!out.ok) throw new Error(out.error.key);
-    expect(boardDocSchema.safeParse(out.doc).success).toBe(true);
   });
 
   it("refuses a document from a newer build, by name", () => {
@@ -28,13 +21,10 @@ describe("migrate", () => {
     }
   });
 
-  it("refuses anything with no version", () => {
+  it("refuses anything with no version, or that is not an object at all", () => {
     for (const raw of [{}, { version: "1" }, { version: 0 }, { version: 1.5 }]) {
       expect(migrate(raw).ok).toBe(false);
     }
-  });
-
-  it("refuses what is not an object at all", () => {
     for (const raw of [null, undefined, 42, "board", [], true]) {
       const out = migrate(raw);
       expect(out.ok).toBe(false);
@@ -49,7 +39,4 @@ describe("migrate", () => {
     expect(migrate({ version: 1 }).ok).toBe(false);
   });
 
-  it("knows a current document when it sees one", () => {
-    expect(isCurrent(createBoardDoc())).toBe(true);
-  });
 });

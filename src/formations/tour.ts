@@ -58,8 +58,6 @@ export const TOUR_STEPS = [
   { id: "help", anchor: "tour", stage: {} },
 ] as const satisfies readonly { id: string; anchor?: string; stage: TourStage }[];
 
-export type TourStepId = (typeof TOUR_STEPS)[number]["id"];
-
 /**
  * The tour's board, named in the caller's language.
  *

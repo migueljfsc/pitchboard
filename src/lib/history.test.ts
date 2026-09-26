@@ -71,11 +71,6 @@ describe("undoStack / redoStack", () => {
     expect(redoStack(once).present).toBe("c");
   });
 
-  it("round-trips to exactly where it started", () => {
-    const s = run([["b"], ["c"]]);
-    expect(redoStack(redoStack(undoStack(undoStack(s))))).toEqual(s);
-  });
-
   it("undoes a merged gesture in one step, not one per move", () => {
     const s = run([["b", "drag-1"], ["c", "drag-1"], ["d", "drag-1"]]);
     expect(undoStack(s).present).toBe("a");

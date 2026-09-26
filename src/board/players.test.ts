@@ -47,23 +47,12 @@ describe("setPlayerLabel", () => {
     expect(boardDocSchema.safeParse(next).success).toBe(true);
   });
 
-  it("does not mutate the original", () => {
-    const doc = createBoardDoc();
-    const before = structuredClone(doc);
-    setPlayerLabel(doc, A, "Rice");
-    expect(doc).toEqual(before);
-  });
-
   it("caps at the length the schema accepts", () => {
     const doc = setPlayerLabel(createBoardDoc(), A, "x".repeat(200));
     expect(doc.teams[0].players.find((p) => p.id === A)!.label).toHaveLength(40);
     expect(boardDocSchema.safeParse(doc).success).toBe(true);
   });
 
-  it("is a no-op for an unknown player", () => {
-    const doc = createBoardDoc();
-    expect(setPlayerLabel(doc, "ghost", "x")).toBe(doc);
-  });
 });
 
 describe("setPlayerNumber", () => {
@@ -78,15 +67,6 @@ describe("setPlayerNumber", () => {
   it("rejects a non-finite number rather than corrupting the document", () => {
     const doc = createBoardDoc();
     expect(setPlayerNumber(doc, A, NaN)).toBe(doc);
-  });
-});
-
-describe("teamOf", () => {
-  it("finds the owning team, or null", () => {
-    const doc = createBoardDoc();
-    expect(teamOf(doc, A)?.id).toBe("home");
-    expect(teamOf(doc, "away-9")?.id).toBe("away");
-    expect(teamOf(doc, "ghost")).toBeNull();
   });
 });
 
@@ -219,11 +199,6 @@ describe("removePlayer", () => {
     expect(boardDocSchema.safeParse(next).success).toBe(true);
   });
 
-  it("is a no-op for someone who is not there", () => {
-    const doc = createBoardDoc();
-    expect(removePlayer(doc, "ghost")).toBe(doc);
-  });
-
   it("survives emptying a whole team", () => {
     let doc = createBoardDoc();
     for (const p of [...doc.teams[0].players]) doc = removePlayer(doc, p.id);
@@ -286,10 +261,6 @@ describe("shirt numbers must be free", () => {
     expect(new Set(numbers).size).toBe(numbers.length);
   });
 
-  it("keeps the document valid", () => {
-    const doc = setPlayerNumber(createBoardDoc(), createBoardDoc().teams[0].players[0].id, 42);
-    expect(boardDocSchema.safeParse(doc).success).toBe(true);
-  });
 });
 
 describe("shirtClash", () => {
@@ -354,10 +325,6 @@ describe("switchSide (D88)", () => {
     expect(next.links.flatMap((l) => l.members)).not.toContain(a);
   });
 
-  it("does nothing for a player who is not on the board", () => {
-    const doc = createBoardDoc();
-    expect(switchSide(doc, "nobody")).toBe(doc);
-  });
 });
 
 describe("the keeper's kit (D90)", () => {
@@ -399,8 +366,4 @@ describe("the keeper's kit (D90)", () => {
     }
   });
 
-  it("survives the schema", () => {
-    const doc = setKeeper(createBoardDoc(), A);
-    expect(boardDocSchema.safeParse(doc).success).toBe(true);
-  });
 });

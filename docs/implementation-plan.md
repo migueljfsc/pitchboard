@@ -1,9 +1,7 @@
 # Pitchboard — Implementation Plan
 
-What has been built, and what is left. Architecture detail lives in
-[`architecture.md`](./architecture.md); the reasoning behind the choices lives in
-[`decisions.md`](./decisions.md); the traps that survive the build live in
-[`AGENTS.md`](../AGENTS.md).
+What has been built, and what is left. Architecture is in [`architecture.md`](./architecture.md),
+the reasoning in [`decisions.md`](./decisions.md), the traps in [`AGENTS.md`](../AGENTS.md).
 
 **Sequencing principle, still in force:** the pure engine (`src/board/`) is built and tested
 before any React touches it, and every phase ends at a state you can look at.
@@ -14,77 +12,43 @@ before any React touches it, and every phase ends at a state you can look at.
 
 | Phase | What it added |
 |---|---|
-| M1 | Static board — pitch, two teams from 27 notation-generated formations, drag and marquee |
-| M2 | Scenes, curved runs, arc-length reparameterisation, passes, playback |
-| M3 | Links — live connectors recomputed every frame, with distances |
-| M4 | Export — MP4, WebM, GIF, PNG, all client-side |
-| M5 | Autosave, `#d=` share links, the read-only viewer, the migration seam |
-| M6 | OpenTofu stack, CI, release workflow, deploy |
-| M7 | Annotations — arrows, zones, freehand, text labels with boxes and backgrounds |
-| M8 | Board handling — JSON import/export, shots, per-scene run hiding, undo |
-| M9 | Seamless flow — one continuous movement at a fixed pace |
-| M10 | Squad presets and autosave |
-| — | Accounts, projects and saved boards on a Worker + D1 + KV (D39) |
-| — | The 3D view (D34), half-pitch and vertical framing, kit patterns, EN/PT (D38) |
-| — | Carry-forward editing (D41), per-entity waits (D42), ball handover (D43, D44) |
-| — | Squad presets follow the account rather than the browser (D46) |
-| — | Links with a scene range, and per-scene player highlights (D47) |
-| — | Selection, marquee and restyling in the 3D view (D48) |
-| — | Moving players and shaping runs in the 3D view (D49) |
-| — | Moving and resizing the drawing in the 3D view (D50) |
-| — | Drawing, and widening a label, in the 3D view — it edits everything the flat board does (D91) |
-| — | Unseen players keep their team's colour; ghosts are smaller (D92) |
-| — | Editor split into play and drawing, undo notices, the command palette (D93) |
-| — | Export shapes, captions and transparent PNGs (D94) |
-| — | Outline zones (D95) and a drawn ball, the first prop (D96) |
-| — | The ball's own timing, and passes met in stride (D97) |
-| — | Run starts and finishes, and runs that carry on through a scene (D98) |
-| — | Nested project folders, with cycle and depth guards (D51) |
-| — | Video import — `tracks.json` from the `football-tracks` sibling repo becomes a board (D52) |
-| — | The window starts at a set piece (D53) and is scored against a legal eleven (D54) |
-
-Everything above is complete and covered by tests. The per-phase task lists and build notes were
-retired once they stopped describing anything a reader has to decide; what outlived them is in
-`AGENTS.md` under **Known traps**.
+| M1 | Static board — pitch, two teams from 27 notation-generated formations, drag and marquee (D11) |
+| M2 | Scenes, curved runs, arc-length reparameterisation, passes, playback (D1, D44) |
+| M3 | Links — live connectors recomputed every frame, with distances (D47) |
+| M4 | Export — MP4, WebM, GIF, PNG, all client-side (D6) |
+| M5 | Autosave, `#d=` share links, the read-only viewer, the migration seam (D7, D31) |
+| M6 | OpenTofu stack, CI, release workflow, deploy (D40) |
+| M7 | Drawings — arrows, zones, freehand, text labels (D20) |
+| M8 | JSON import/export, shots, run hiding, undo (D23, D26) |
+| M9 | Seamless flow at a fixed pace (D14) |
+| M10 | Squad presets (D30) |
+| — | Accounts, nested projects and saved boards on a Worker + D1 + KV (D39) |
+| — | Framing: half-pitch, vertical, and the 3D view, which edits everything the flat board does (D12, D34, D91) |
+| — | Carry-forward editing, per-entity waits, run styles, the ball's own timing, lofts (D41, D14, D44) |
+| — | Kits with patterns and keepers, EN/PT, the grass and goals (D37, D38, D18) |
+| — | The spotlight — highlights for players, drawings and links, and drawings kept out of the dark (D100) |
+| — | Drawing: outlines, corners, drawn balls, link lines and heads, labels that snap and measure (D20, D47, D103) |
+| — | Editor layout, undo notices, the command palette, the tour, the colour picker (D93, D37) |
+| — | Export shapes, captions and transparent PNGs (D6) |
+| — | Video import from the `football-tracks` sibling repo (D52, D71, D75, D81, D87, D88) |
 
 ## Open
 
-- **Save the current shape as a custom formation.** The last item from M1 never built. Formations
-  are generated from notation (D11), so this needs somewhere to keep one that is not.
+- **Save the current shape as a custom formation.** The last item from M1. Formations are
+  generated from notation (D11), so this needs somewhere to keep one that is not.
 - **Custom domain.** Stubbed behind a `has_domain` flag; the app runs on `*.workers.dev`.
+- Known defects are in [`bugs.md`](./bugs.md). Non-goals are in `AGENTS.md` (D9).
 
 ## Definition of done, per change
 
-Two checks belong to every change, whatever it touches:
-
-- resize the window and confirm players do not move relative to the pitch
+- resize the window and confirm players do not move relative to the pitch — a pixel value
+  reaching the document is the most likely bug in the project, and this is how it shows
 - `pnpm lint && pnpm typecheck && pnpm test && pnpm build` clean
-
-The resize check is not ceremony: a pixel value reaching the document is the most likely bug in
-the project, and drifting-on-resize is how it shows.
 
 ## Testing
 
-Vitest, pure engine only, no component tests. The engine is numerical code where tests are cheap
-and load-bearing.
-
-| Target | Coverage |
-|---|---|
-| `geometry` | bezier evaluation, arc-length LUT accuracy, constant-speed reparameterisation |
-| `timeline` | scene boundaries, `t=0`, `t=end`, holds, waits, flow pacing, single-scene docs |
-| `ball` | every carrier case, pass timing, moving-target passes, glued offset, no ball at all |
-| `links` | chain vs polygon vertex order, distances against known coordinates |
-| `schema` | round-trip, invariant violations, oversized and malformed payloads |
-| `render` | a recording-proxy `ctx` that logs every call; the command log is the assertion |
-
-The recording proxy is the interesting one: it tests the renderer with no canvas polyfill and no
-image diffing, and it catches draw-order regressions cleanly.
-
-## Out of scope for v1
-
-- **Real player data** — a licensing problem, not an availability one (D9)
-- Cones and other pitch furniture
-- Five- and seven-a-side (D10)
-- Thirds and final-third crops — half-pitch shipped, thirds did not
-- Touch support
-- Heatmaps and average-position overlays
+Vitest, engine only, no component tests. Tests exercise behaviour through the engine's public
+operations — build a board, edit it the way the editor does, and assert what the timeline, the
+renderer or the importer produce — and every known trap in `AGENTS.md` has a test that fails when
+it is reintroduced. The renderer is tested through a recording-proxy `ctx` that logs every call,
+so draw order and geometry are asserted without a canvas polyfill or image diffing.

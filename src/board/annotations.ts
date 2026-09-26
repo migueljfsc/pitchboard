@@ -17,7 +17,6 @@ import type {
   AnnotationKind,
   BoardDoc,
   PathCurve,
-  Scene,
   Vec2,
 } from "./types";
 import { clamp, cubicAt, distanceToSegment, type Bezier } from "./geometry";
@@ -803,8 +802,5 @@ export function pruneAnnotations(doc: BoardDoc): BoardDoc {
 
   return changed ? withAnnotations(doc, next) : doc;
 }
-
-/** Scene ids in timeline order — the range control's option list. */
-export const sceneOptions = (doc: BoardDoc): Scene[] => doc.scenes;
 
 const dist = (a: Vec2, b: Vec2): number => Math.hypot(a.x - b.x, a.y - b.y);

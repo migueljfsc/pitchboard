@@ -3,7 +3,6 @@ import { setupOf } from "./templates";
 import { addSceneAfter, setSceneCamera } from "@/board/scenes";
 import { addAnnotation, draftAnnotation } from "@/board/annotations";
 import { createLink } from "@/board/links";
-import { boardDocSchema } from "@/board/schema";
 import { createBoardDoc } from "@/formations";
 
 describe("setupOf", () => {
@@ -33,7 +32,4 @@ describe("setupOf", () => {
     expect(setup.links.every((l) => l.from === undefined && l.to === undefined)).toBe(true);
   });
 
-  it("is a valid board", () => {
-    expect(boardDocSchema.safeParse(setup).success).toBe(true);
-  });
 });

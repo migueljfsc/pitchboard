@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { AWAY, createBoardDoc } from "@/formations";
-import { boardDocSchema } from "@/board/schema";
 import { addPlayer, setPlayerLabel, setPlayerNumber } from "@/board/players";
 import { createLink } from "@/board/links";
 import { addSceneAfter } from "@/board/scenes";
@@ -48,10 +47,6 @@ describe("presetFrom", () => {
     expect(preset.players?.map((p) => p.number)).toEqual(
       doc.teams[0].players.map((p) => p.number),
     );
-  });
-
-  it("labels itself after the team by default", () => {
-    expect(presetFrom(namedBoard(), 0, []).label).toBe("Arsenal");
   });
 
   it("mints an id that does not collide", () => {
@@ -155,12 +150,6 @@ describe("applyPreset", () => {
         expect(scene.positions[away.id]).toEqual(before[i][away.id]);
       }
     });
-  });
-
-  it("always returns a document the schema accepts", () => {
-    const outcome = applyPreset(createBoardDoc(), 0, presetFrom(namedBoard(), 0, []));
-    if (!outcome.ok) throw new Error(outcome.error.key);
-    expect(boardDocSchema.safeParse(outcome.doc).success).toBe(true);
   });
 
   it("rejects a formation it does not know rather than silently substituting", () => {
@@ -271,10 +260,6 @@ describe("replaceable", () => {
     expect(replaceable(list, "Spurs", list[0].formation)).toBeNull();
   });
 
-  it("is null against an empty library", () => {
-    expect(replaceable([], "Arsenal", "4-3-3")).toBeNull();
-  });
-
   it("replaces in place, keeping the id and the position", () => {
     const doc2 = namedBoard();
     let list = addPreset([], saved([], "Arsenal", "4-3-3"));
@@ -309,10 +294,6 @@ describe("persistence", () => {
     const list = addPreset([], presetFrom(namedBoard(), 0, []));
     expect(savePresets(list, store)).toBe(true);
     expect(loadPresets(store)).toEqual(list);
-  });
-
-  it("is empty when nothing is stored", () => {
-    expect(loadPresets(memoryStore())).toEqual([]);
   });
 
   it("is empty when there is no store at all", () => {

@@ -148,7 +148,7 @@ export type Scene = {
    *
    * PER SCENE, AND NEVER CARRIED FORWARD. What a highlight says is "watch these
    * two, here", and that is a claim about one moment: copying it into the scenes
-   * after it says something the coach did not (D47). A drag carries because a
+   * after it says something the coach did not (D100). A drag carries because a
    * position is a fact that persists until something changes it; attention is not.
    */
   highlight?: Record<string, string>;
@@ -333,15 +333,6 @@ export type Annotation =
 export type TextAlign = "left" | "right";
 
 export type AnnotationKind = Annotation["kind"];
-
-/** Shapes drawn by dragging a box or a line out from the first point. */
-export const SEGMENT_KINDS = ["arrow", "line", "rect", "ellipse"] as const;
-
-/** Shapes that carry a dash style. */
-export const DASHED_KINDS = ["arrow", "line"] as const;
-
-/** Zones sit under everything; the rest sit above the tokens. */
-export const ZONE_KINDS = ["rect", "ellipse", "polygon"] as const;
 
 /**
  * The grass: a lighter or darker shade of the one green, and how real it looks.

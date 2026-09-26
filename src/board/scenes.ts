@@ -13,7 +13,6 @@ import type {
   RunStyle,
   Scene,
   SceneCamera,
-  Vec2,
 } from "./types";
 import { BALL_ID } from "./types";
 import {
@@ -464,7 +463,7 @@ export function setSpotlight(doc: BoardDoc, index: number, dim: number): BoardDo
  *
  * NEVER CARRIES FORWARD, unlike a drag or a nudge (D41). A position is a fact that
  * stands until something changes it; attention is about one moment, and copying it
- * into the following scenes would say something the coach did not (D47).
+ * into the following scenes would say something the coach did not (D100).
  */
 export function setHighlight(
   doc: BoardDoc,
@@ -503,11 +502,6 @@ export function setHighlight(
 
 export function isHighlighted(scene: Scene | undefined, entityId: string): boolean {
   return scene?.highlight?.[entityId] !== undefined;
-}
-
-/** The halo colour set for an entity on a scene, or null where it is not lit. */
-export function highlightOf(scene: Scene | undefined, entityId: string): string | null {
-  return scene?.highlight?.[entityId] ?? null;
 }
 
 /**
@@ -681,19 +675,4 @@ export function ballCurve(doc: BoardDoc, r: Resolved): Bezier | null {
 
   const curve = r.to.ballPath ?? straightCurve(p0, p1);
   return { p0, c1: curve.c1, c2: curve.c2, p1 };
-}
-
-/**
- * Control points for a gentle arc between two points, used as the starting shape
- * when a run is first curved. Bowed perpendicular to the straight line.
- */
-export function defaultCurve(from: Vec2, to: Vec2, bow = 0.22): PathCurve {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const nx = -dy * bow;
-  const ny = dx * bow;
-  return {
-    c1: { x: from.x + dx / 3 + nx, y: from.y + dy / 3 + ny },
-    c2: { x: from.x + (dx * 2) / 3 + nx, y: from.y + (dy * 2) / 3 + ny },
-  };
 }

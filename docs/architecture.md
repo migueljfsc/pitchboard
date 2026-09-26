@@ -1,25 +1,24 @@
 # Pitchboard — Architecture
 
-Technical reference for the board engine. Read this before touching `src/board/`.
+Technical reference for the board engine. Read this before touching `src/board/`. The reasoning
+behind each choice is in [`decisions.md`](decisions.md); what breaks when it is ignored is in
+[`AGENTS.md`](../AGENTS.md).
 
 ---
 
 ## 1. The core rule
 
-**The renderer is a pure function of `(document, time)`.**
+**The renderer is a pure function of `(document, time, view)`.**
 
 ```ts
 drawBoard(ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
           doc: BoardDoc,
           t: number,           // seconds from timeline start
-          view: Viewport): void
+          view: RenderView): void
 ```
 
-No DOM access, no React, no module-level mutable state, no reads of `Date.now()` or
-`Math.random()`. Given the same three arguments it must emit the same pixels, every time, in
-any thread.
-
-Everything else follows from this:
+No DOM, no React, no module-level mutable state, no `Date.now()` or `Math.random()`. The same
+arguments emit the same pixels in any thread:
 
 ```
                     ┌──────────────────────────────┐
@@ -29,610 +28,278 @@ Everything else follows from this:
                     ┌──────────────┴───────────────┐
                     ▼                              ▼
         EDITOR (main thread)            EXPORTER (Web Worker)
-        <canvas> + rAF loop             OffscreenCanvas 1920×1080
+        <canvas> + rAF loop             OffscreenCanvas
         pointer hit-testing             t = 0 … duration, step 1/fps
-        React chrome around it          → mediabunny CanvasSource
-                                        → MP4 / WebM / GIF
+        React chrome around it          → mediabunny / gifenc
 ```
 
-Two payoffs. The exporter renders offline, faster than realtime, dropping no frames — it never
-touches `requestAnimationFrame` or the compositor. And preview/export divergence becomes
-structurally impossible rather than a class of bug to hunt.
-
-**The rule that protects it:** if you find yourself wanting to read something from the DOM,
-a React ref, or a hook inside `render.ts`, that value belongs in `BoardDoc` or `Viewport`
-instead. There is no third source of truth.
+The exporter renders offline, faster than realtime, dropping no frames, and preview/export
+divergence is structurally impossible. If `render.ts` wants something from the DOM, a ref or a
+hook, that value belongs in `BoardDoc` or `RenderView`. Caches are allowed only as memos the
+caller owns (`RenderView.turf`) that change no pixel.
 
 ---
 
-## 2. Coordinate system
+## 2. Coordinates
 
-All document coordinates are **pitch metres**, origin at the top-left corner of the pitch,
-`x` along the length, `y` across the width. Never pixels.
+All document coordinates are **pitch metres**, origin at the top-left corner, `x` along the
+length, `y` across. `Viewport` (`scale` in CSS px per metre, offsets, `rotated`, `half`) maps
+metres to the screen as one affine matrix (`viewMatrix`); `toPitch` turns a pointer event into
+metres once and all hit maths happens there. `fitViewport` derives it purely from the box size,
+so the same document renders identically at any canvas size.
 
-This buys three things: the renderer is resolution-independent, export at any size is a scale
-change, and link distance metrics are already in the right unit.
+`RenderView` is `Viewport` plus the canvas size and everything the editor wants drawn —
+selection, hover, marquee, draft, guides, ruler, ghosts, trail, caption, `interactive`. Export
+passes `interactive: false`, which only ever removes chrome.
 
-```ts
-type Viewport = { scale: number; offsetX: number; offsetY: number }   // px per metre, px, px
-
-// What drawBoard actually receives. Canvas size is included so a single call
-// paints the surround too and yields a complete frame — the export worker relies
-// on that. Selection and hover are arguments, never read from React, which is
-// what keeps the renderer pure.
-type RenderView = Viewport & {
-  width: number; height: number
-  interactive: boolean
-  selection?: ReadonlySet<string>
-  hover?: string | null
-  marquee?: { a: Vec2; b: Vec2 } | null
-}
-
-const toScreen = (p: Vec2, v: Viewport) => ({ x: p.x * v.scale + v.offsetX,
-                                              y: p.y * v.scale + v.offsetY })
-const toPitch  = (p: Vec2, v: Viewport) => ({ x: (p.x - v.offsetX) / v.scale,
-                                              y: (p.y - v.offsetY) / v.scale })
-```
-
-`toPitch` is what makes pointer hit-testing work: convert the event position once, then do all
-hit maths in metres.
+**Device pixel ratio** lives in the canvas transform (`ctx.setTransform(dpr, …)`) and never in
+`Viewport.scale`; the exporter renders at an explicit size and ignores it.
 
 ### Pitch dimensions
 
-Real IFAB dimensions. Getting these exact is most of the difference between looking amateur and
-looking right, so they live in one table in `src/board/pitch.ts` and are never inlined.
+Real IFAB dimensions, in one table in `src/board/pitch.ts` and never inlined.
 
 | Feature | Value (m) |
 |---|---|
 | Pitch | 105 × 68 |
-| Goal width | 7.32 |
-| Goal depth (drawn) | 2.0 |
+| Goal width / drawn depth | 7.32 / 2.0 |
 | Six-yard box | 5.5 deep × 18.32 wide |
 | Penalty area | 16.5 deep × 40.32 wide |
 | Penalty spot | 11.0 from goal line |
-| Penalty arc radius | 9.15 |
-| Centre circle radius | 9.15 |
+| Penalty arc / centre circle radius | 9.15 |
 | Centre spot / corner arc radius | 0.3 / 1.0 |
 | Line width | 0.12 |
 
-The penalty arc is the part people get wrong: it is the portion of a 9.15 m circle centred on
-the **penalty spot** that falls outside the penalty area, not an arc on the box edge. Draw it
-with `ctx.arc` clipped to `x > 16.5`, or compute the intersection angle directly.
-
-### Device pixel ratio
-
-Editor only — the exporter renders at an explicit size and ignores DPR.
-
-```ts
-canvas.width  = cssWidth  * devicePixelRatio
-canvas.height = cssHeight * devicePixelRatio
-ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0)
-```
-
-`Viewport.scale` stays in CSS pixels per metre. DPR is handled by the transform above and must
-not leak into the viewport, or export sizing will be wrong on retina machines.
-
 ---
 
-## 3. Document schema
+## 3. Document
 
-`src/board/types.ts` is the single source of truth for the shape; `src/board/schema.ts` derives
-the zod validator and is imported by both the app and the Worker. This mirrors the
-`cv.ts` / `site.ts` convention in the sibling projects.
+`src/board/types.ts` is the single source of truth, documented field by field;
+`src/board/schema.ts` is the zod validator the app and the Worker both import. A new board comes
+from `createBoardDoc()` in `src/formations/` because a board is formation-driven.
 
-Documents are constructed by `createBoardDoc()` in `src/formations/index.ts` rather than by a
-factory in `schema.ts` — a new board is entirely formation-driven, and putting it there would
-make `schema.ts` depend on the presets.
+The shape, in brief:
 
-```ts
-type Vec2 = { x: number; y: number }
-
-/** Cubic bezier control points, in pitch metres. Endpoints come from the scene positions. */
-type PathCurve = { c1: Vec2; c2: Vec2 }
-
-type Player = {
-  id: string
-  number: number
-  label: string          // surname or free text
-}
-
-type Team = {
-  id: string
-  name: string
-  color: string          // token fill
-  textColor: string      // number/label contrast colour
-  players: Player[]
-  hidden?: boolean
-  formation?: string     // the preset it was built from, e.g. "4-3-3"
-}
-
-type Scene = {
-  id: string
-  name: string
-  transitionMs: number                       // travel time INTO this scene (ignored on scene 0)
-  holdMs: number                             // still time at this scene
-  positions: Record<string, Vec2>            // entityId → position, metres
-  paths: Record<string, PathCurve | null>    // entityId → curve travelled INTO this scene
-  carrier: string | null                     // player holding the ball, or null
-  ballPos?: Vec2                             // only when carrier === null
-  ballPath?: PathCurve | null                // curve for a pass or a loose-ball travel
-  travel?: Record<string, number>            // per-entity travel time, ms, overriding transitionMs
-  hiddenRuns?: string[]                      // entities whose arrow is not drawn (BALL_ID allowed)
-  shot?: boolean                             // the ball's travel in is a strike, not a pass
-}
-
-type LinkStyle = 'chain' | 'polygon' | 'filled'
-
-type Link = {
-  id: string
-  name: string                               // "Back 4", "Midfield 3"
-  members: string[]                          // ordered — order defines chain sequence
-  style: LinkStyle
-  color?: string                             // absent = follow the members' kit (linkColor)
-  showDistances: boolean
-}
-
-type AnnotationDash = 'solid' | 'dashed' | 'wavy'   // run | pass | dribble
-
-/** Fixed geometry that depends on nobody — the opposite of a link in every respect. */
-type Annotation = {
-  id: string
-  from: string                               // scene id it first appears on
-  to: string | null                          // last scene id; null runs to the end
-  color: string
-  hidden?: boolean
-} & (
-  | { kind: 'arrow' | 'line'; a: Vec2; b: Vec2; curve?: PathCurve | null; dash: AnnotationDash }
-  | { kind: 'rect' | 'ellipse'; a: Vec2; b: Vec2 }   // a/b are the bounding box
-  | { kind: 'pen'; points: Vec2[] }                  // simplified on commit, capped at 400
-  | { kind: 'text'; at: Vec2; text: string; size?: number }   // multiplier on TEXT_SIZE, 0.4–4
-)
-
-type BoardDoc = {
-  version: 1
-  name: string
-  pitch: { length: number; width: number }   // defaults 105 × 68
-  tokenScale?: number                        // 0.5–2.5, default DEFAULT_TOKEN_SCALE (1.25)
-  flow?: { speed: number; endHoldMs: number } // seamless playback; absent = per-scene timings
-  teams: [Team, Team]
-  scenes: Scene[]                            // at least one
-  links: Link[]
-  annotations?: Annotation[]                 // absent on a board drawn before M7
-}
+```
+BoardDoc   version 1, name, pitch, tokenScale?, flow?, grass?, origin?
+  teams    [Team, Team]    id, name, color, textColor, pattern?, keeper?, formation?, hidden?,
+                           players: { id, number, label }[]
+  scenes   Scene[] (≥1)    id, name, transitionMs, holdMs,
+                           positions  id → Vec2        (every player, every scene)
+                           paths      id → curve       (the run INTO this scene)
+                           carrier | ballPos, ballPath, shot?, loft?
+                           travel?, delay?, run?, hiddenRuns?
+                           highlight?, spotlight?, unseen?
+  links    Link[]          members (ordered), style, line?, arrows?, animate?, color?, from?, to?, lit?
+  annotations? Annotation[] kind-tagged shapes with from/to scene ids, color, hidden?, lit?
 ```
 
-### Schema invariants
+**Everything optional means its absence is the old behaviour**, so a new field needs no
+migration and every published link still opens. Where a real migration is owed, `version` bumps
+and `src/board/migrate.ts` converts on load, before validation.
 
-Enforced by zod, and worth asserting in tests because violations produce confusing render bugs
-rather than crashes:
+**Paths are stored on the scene being travelled into.** Scene *i*'s `paths[e]` is how *e* gets
+from scene *i-1* to scene *i*, so deleting a scene cannot orphan a path.
 
-- `scenes.length >= 1`
-- every `scenes[i].positions` has a key for every player in both teams
-- `paths` keys are a subset of `positions` keys
-- `carrier`, when set, references a real player id
-- `ballPos` is present exactly when `carrier === null`
-- `links[].members` reference real player ids, and `length >= 2`
-- `annotations[].from` and `.to` reference real scene ids, or `to` is null
-- `scenes[0].transitionMs` is ignored — there is nothing to travel from
-
-`Team.formation` lives in the document rather than in editor state so a board that arrives by
-import or share still knows its own shape. That is what makes a positions-only reset possible:
-without it, resetting could only reach the hard-coded defaults.
-
-**Paths are stored on the scene being travelled into.** Scene *i*'s `paths[e]` describes how
-entity *e* gets from its scene *i-1* position to its scene *i* position. Storing it on the
-destination means deleting a scene cannot orphan a path — the path dies with the scene that
-owned it.
-
-### Versioning
-
-`version` is a literal `1`. Any future schema change bumps it and adds a migration in
-`src/board/migrate.ts` that runs on load, before validation. Share links are immutable and
-permanent, so a v1 document published today must still open years from now.
+Schema invariants worth knowing, because a violation renders wrong rather than crashing: every
+scene has a position for every player; a carrier is a real player and never coexists with
+`ballPos`; link members are real players, at least two; ranges name real scene ids.
 
 ---
 
 ## 4. Timeline
 
-### Layout
-
-Scene 0 contributes only its hold. Every later scene contributes a transition then a hold.
+Scene 0 contributes only its hold; every later scene a transition then a hold.
 
 ```
- t=0
- │
  ├─ s0.hold ─┼─ s1.transition ─┼─ s1.hold ─┼─ s2.transition ─┼─ s2.hold ─┤
- │           │                 │           │                 │           │
- static      travelling        static      travelling        static     end
 ```
 
-```
-totalMs = scenes[0].holdMs
-        + Σ (scenes[i].transitionMs + scenes[i].holdMs)   for i in 1..n-1
-```
-
-### Timing
-
-`sceneTimings(doc)` is the single source of what each scene is worth: `totalDurationMs`,
-`resolveAt` and `sceneStartSeconds` all read it rather than the raw fields. Two modes feed it —
-the per-scene `transitionMs`/`holdMs`, or `doc.flow`, which paces every transition at one speed
-and holds only the final frame. See D27, including why removing the holds is not on its own
-enough to make playback seamless.
-
-### Resolution
+`sceneTimings(doc)` is the one source of what each scene is worth — a transition stretches to
+the latest `delay + travel` of anyone in it, and flow mode replaces all of it with a single pace
+(D14). `resolveAt(doc, t)` walks the segments and returns:
 
 ```ts
 type Resolved = {
-  from: Scene          // scene being interpolated out of
-  to: Scene            // scene being interpolated into
-  u: number            // 0..1 raw progress; exactly 1 during holds
-  moving: boolean      // false during a hold — lets the renderer skip path decoration
+  from: Scene; to: Scene   // equal during a hold
+  u: number                // 0..1, exactly 1 during a hold
+  moving: boolean
+  index: number            // index of `to` — what ranges and highlights switch on
+  ms?: number              // absolute time; styled runs move during holds (D14)
 }
-
-resolveAt(doc: BoardDoc, t: number): Resolved
 ```
 
-Walk the segments accumulating time. During a hold, return `from === to` and `u = 1` so callers
-need no special case. Clamp `t` to `[0, totalMs/1000]`; scrubbing past either end is common and
-must not produce `NaN`.
+`t` is clamped, so scrubbing past either end never produces NaN.
 
-### Entity position
+**Positions.** No path: `lerp` on the ease. A path: the cubic bezier at `s(ease(u))`, endpoints
+from the two scenes, controls from the path. Default ease is `easeInOutCubic`; run styles are
+Hermite eases, placed by `ms`.
 
-```ts
-positionAt(entityId, resolved, doc): Vec2
-```
+### Arc-length reparameterisation
 
-- no path → `lerp(from.positions[e], to.positions[e], ease(u))`
-- path → cubic bezier at `s(ease(u))`, endpoints from the two scenes, controls from the path
-
-Default easing is `easeInOutCubic`. A run may choose a sharp start or finish, or run on through
-its scene into the next (`Scene.run`, D98); those are Hermite eases with a chosen speed at each
-end, and a run carried on through a scene is placed by absolute time (`Resolved.ms`), because it
-moves during that scene's hold.
-
-### Arc-length reparameterisation — the one piece of real maths
-
-A cubic bezier sampled at uniform `u` does **not** move at uniform speed. Control points cluster
-parameter space near the curve's tighter regions, so a player visibly surges through one part of
-a run and stalls in another. It reads as broken the first time you scrub a curved run, and it is
-the single most likely thing to get wrong in this codebase.
-
-The fix: build a cumulative arc-length table, then invert it.
-
-```
-1. Sample the curve at 64 uniform u values, accumulating chord length between samples.
-2. Normalise to get L(u) ∈ [0,1] — fraction of total length travelled by parameter u.
-3. Invert: given desired fraction d, binary-search the table for the bracketing pair and
-   linearly interpolate to recover u. That is s(d).
-4. Evaluate the bezier at s(d), not at d.
-```
-
-64 samples is comfortably enough for the curve lengths a tactics board produces; the residual
-error is far below a pixel.
-
-**The table is deliberately not cached.** Building one is ~2,000 flops; 22 entities at 60 fps is
-under 3 MFLOP/s, which is nothing. A cache would need invalidating whenever an endpoint or a
-control point moved, and it would put mutable module state on the renderer's path — the one
-thing `drawBoard`'s purity rule forbids. Recomputing is cheaper than being wrong.
-
-`src/board/geometry.ts` owns this, and it is the most heavily tested file in the repo. The test
-that matters asserts constant speed numerically: sampled at uniform parameter the chord lengths
-vary by more than 1.5x, and after reparameterisation by less than 1.05x.
+A cubic sampled at uniform `u` does not move at uniform speed — players surge and stall through
+curves. `geometry.ts` samples 64 chord lengths, normalises them to a cumulative table, and inverts
+it by binary search, so the bezier is evaluated at `s(d)` rather than `d`. It is deliberately not
+cached: ~2,000 flops per curve is nothing, and a cache is mutable state on the renderer's path.
+The test asserts constant speed numerically (chord lengths within 1.05x after, over 1.5x before).
 
 ---
 
-## 5. Ball model
+## 5. The ball
 
-The ball is derived, not stored — while carried it has no independent position. `scene.carrier`
-names the holder. A **pass is a carrier change**; there is no pass object. This is what keeps
-the model small.
+The ball is derived, not stored, while carried. **A pass is a carrier change.**
 
 | `from.carrier` → `to.carrier` | Behaviour |
 |---|---|
-| `A → A` | Glued to A's interpolated position, offset ~1.2 m along A's direction of travel. A dribble: the ball moves, but the movement is A's, so no ball line is drawn |
-| `A → B` | **Pass.** Travels from A's position to B's, following `to.ballPath` if drawn |
-| `A → null` | Loose. Travels from A's position to `to.ballPos` |
-| `null → B` | Collected. Travels from `from.ballPos` to B's position |
-| `null → null` | Free entity — `ballPos` to `ballPos`, along `ballPath` if drawn |
+| `A → A` | Glued ahead of A along his travel — a dribble; no ball line |
+| `A → B` | Pass, along `ballPath` if drawn |
+| `A → null` | Loose, to `to.ballPos` |
+| `null → B` | Collected, from `from.ballPos` |
+| `null → null` | Free, `ballPos` to `ballPos` |
 
-Two details that matter:
-
-**Pass easing is different.** Player movement uses `easeInOutCubic`; a pass uses `easeOutQuad` —
-struck hard, decelerating. A ball that eases in like a jogging player looks wrong immediately.
-
-**Endpoints are evaluated live, each at its own instant** (`passEnds`, D97). The ball has its
-own wait and travel: until the release it stays at the passer's feet, and the pass is met where
-the receiver is when it arrives — in his stride — after which he carries it. Both ends come from
-`positionAt`, never from raw scene data. Aiming at
-the receiver's scene-*start* position instead lands the ball tens of metres adrift and teleports
-it onto them at the handoff — there is a test for exactly that.
-
-The glued offset points along the carrier's direction of travel (falling back to a fixed
-downfield offset when stationary) so the ball sits ahead of the player and the token's number
-stays readable.
-
-### Highlights
-
-`Scene.highlight` is a record of entity id to halo colour: who matters in this scene, and what
-colour to say it in. It sits beside `carrier`, `travel` and `delay` because that is the axis it
-varies on — a player is in every scene, and what changes is whether they matter in this one.
-
-`highlightAt(id, resolved)` interpolates the strength on the same easing the positions use, so
-the glow comes up as the player arrives rather than snapping on when the transition starts. It
-never carries forward, which is the one place it deliberately parts company with a drag (D41 vs
-D47).
+A ground pass decelerates (`easeOutQuad`), a lofted one does not. The ball has its own wait and
+travel: `passEnds` samples the release (the passer wherever he has run) and the arrival (the
+receiver wherever he is then) once each, and both the ball and its line read it (D44).
 
 ---
 
 ## 6. Links
 
-The headline feature. A link is a connector recomputed every frame from its members' current
-interpolated positions — players still move individually, and the connector deforms as they do.
+A link is recomputed every frame from its members' interpolated positions:
 
 ```ts
-linkGeometry(link: Link, resolved: Resolved, doc: BoardDoc): {
-  points: Vec2[]           // member positions, in member order
-  closed: boolean
-  edges: { a: Vec2; b: Vec2; metres: number }[]
-}
+linkGeometry(link, resolved, doc): { points: Vec2[]; closed: boolean; edges: { a; b; metres }[] }
 ```
 
-- `chain` — open polyline in member order. A back 4 must **not** close back on itself; that
-  closing edge running the width of the pitch is the obvious wrong output.
-- `polygon` — closed path.
-- `filled` — closed path plus translucent fill. The enclosed area visibly collapses and expands,
-  which is the clearest read of a unit compressing or getting stretched.
-
-A link also carries a **scene range** — `from` and `to`, the same pair an annotation has and the
-same rule, in `board/range.ts` so neither module has to import the other. Both ends are optional
-here and neither means the open end, so a link that has never been ranged shows on every scene
-exactly as links always did (D47).
-
-`showDistances` labels each edge at its midpoint in metres. Distances come straight from the
-pitch-metre coordinates — no conversion, which is a large part of why the coordinate system is
-what it is. Labels are drawn upright regardless of edge angle; rotating text with the edge looks
-clever and reads badly.
-
-Member order is meaningful for `chain` and for the perimeter walk of `polygon`, so the editor
-must expose reordering, not just add/remove.
+`chain` is an open polyline in member order and must never close; `polygon` closes it; `filled`
+adds a translucent fill whose area visibly compresses and stretches. `showDistances` labels each
+edge in metres, upright. A link's scene range lives in `range.ts`, shared with annotations and
+owned by neither (D47).
 
 ---
 
 ## 7. Renderer
 
-### Draw order
-
-Back to front. Order is fixed; hit-testing walks it in reverse.
+### Draw order, flat board
 
 ```
-1. pitch surface + markings          (pitch.ts)
-2. annotation zones                  shaded areas are background; over the play they drown it
-3. links                             under players, so tokens stay legible
-4. link distance labels
-5. motion paths / arrowheads         only when moving, or when the entity is selected
-5b. the ball's own line              dashed for a pass, doubled for a shot; scene.hiddenRuns suppresses either
-6. player tokens + numbers/labels
-7. ball                              above players — it must never be occluded
-8. annotation marks                  arrows, freehand, text — the coach talking over the top
-9. selection affordances             editor only, suppressed during export
+ 1. pitch, goals, team names         (pitch.ts)
+ 2. zones                            background; each lit one's glow just under it
+ 3. links + distance labels          under the tokens, so numbers stay legible
+ 4. trail, run paths, ball line      paths only while moving or selected
+ 5. ghosts of other scenes
+ 6. halos and pools                  one pass for every entity, before any token
+ 7. tokens
+ 8. ball
+ 9. marks — arrows, lines, freehand, drawn balls
+10. the spotlight's darkness         pools, lit shapes and `lit` drawings cut out of it
+11. text labels                      above the darkness, always
+12. editor chrome                    selection, handles, marquee, guides, ruler — interactive only
+13. caption                          screen space
 ```
 
-Annotations straddle the stack: zones at 2, everything else at 8. Hit-testing walks the same
-split, so a zone loses a click to a player standing on it and an arrow wins one.
+Hit-testing walks the same order in reverse, so a zone loses a click to a player standing in it
+and an arrow wins one.
 
-Selection handles, marquee, and hover states are gated behind `view.interactive`. Export passes
-`false`, which is the only branch in the renderer that distinguishes the two contexts — and it
-only ever *removes* chrome, never changes board content.
+### The 3D view
 
-### Token rendering
-
-Tokens are circles of fixed metre radius (~1.1 m), so they scale with the pitch and keep correct
-relative size at every export resolution. Number centred, label below the token. Font size is
-derived from `view.scale` so text stays proportional rather than shrinking to nothing at 4×.
-
----
-
-### Undo
-
-`src/lib/history.ts` holds past/present/future snapshots of `BoardDoc` outside the document, so
-nothing about editing history reaches the schema, a share link or an export. Coalescing is by
-explicit key rather than by time — see D26.
-
-### Panels
-
-The left rail holds everything that makes a board: teams, drawing tools, links, the selection.
-The right rail is an inventory of one thing — every shape drawn, with the scenes it appears on.
-It exists because the canvas can only show the drawing for the scene it is on, so a shape ranged
-to scene 4 is both invisible and unfindable from scene 1; selecting it there jumps the scrubber
-to where it starts. It collapses to a strip, since an empty rail is 256px of pitch given away.
-
-Shapes are grouped by their **starting** scene, and each group collapses. Reordering is confined
-to one group: the group is decided by the shape's starting scene, so a row dropped into another
-group would snap straight back, and a drop that crossed groups would index the wrong rows. A
-cross-group drop is therefore a no-op rather than a move, and no drop line is drawn outside the
-group a drag began in.
+`projection.ts` builds one camera (`cameraFor`) used by the renderer and every hit test. The
+ground — everything that lies on the grass — is drawn flat into an OffscreenCanvas and warped
+strip by strip (`warpGround`), since perspective is not an affine transform. Everything standing
+— tokens, ball, halos, text, drawn balls — is drawn afterwards as billboards at their projected
+points, the far goal before and the near goal after. The darkness is applied in screen space
+over both.
 
 ---
 
 ## 8. Interaction
 
-`src/board/interaction.ts`. Hand-rolled, and small — this is the cost of not using a canvas
-library, and it is about 350 lines.
-
-Hit-testing, in reverse draw order, all in pitch metres:
+`src/board/interaction.ts`, hand-rolled and in pitch metres.
 
 | Target | Test |
 |---|---|
-| Token | distance to centre < token radius |
-| Bezier control handle | distance to point < handle radius, only when parent selected |
-| Path | `ctx.isPointInStroke` against a widened stroke |
-| Link edge | point-to-segment distance < threshold |
-| Annotation mark | point-to-segment against the sampled stroke, above tokens |
-| Annotation zone | inside the rect, or inside the normalised ellipse, below tokens |
-| Annotation handle | distance to point, only for the selected shape — tested before everything |
-| Text label | radius scaled by `textSize(ann)` — the box is not axis-aligned on a rotated board |
+| Token / ball | distance to centre < scaled radius |
+| Curve handle | distance to point, only when its entity is selected |
+| Link edge | point-to-segment distance |
+| Mark | distance to the sampled stroke, above tokens |
+| Zone | inside the shape (filled) or near its edge (outline), below tokens |
+| Annotation handle | only for the selected shape, tested first |
+| Text label | its box in its own upright axes (`rotated`) |
 
-Selection is a `Set<entityId>`. Shift-click toggles; marquee adds everything intersecting.
-Dragging a selection applies the same delta to every member, preserving relative spacing. The
-line nudge shifts a whole unit up- or downfield in one action — the most common edit when
-setting up consecutive scenes, and painful without it.
+Selection is a `Set` of ids; shift toggles, a marquee adds. A drag applies one delta to every
+selected entity, and carries it into following scenes by the rule in D41. Snapping (`snapPoint`,
+`snapLabel`) draws guides across the pitch; ⌘/Ctrl places freely.
 
-Editing only ever mutates the **current scene's** `positions`. Dragging a player never
-retroactively changes an earlier scene.
+**Under the camera** every pointer point is unprojected to metres first (`pointFrom`, checked by
+`onGrass`). Things on the grass are tested with `unprojectPitch` and the flat tests; things
+standing are tested with `unbillboard` in the space they were drawn in (D91).
 
-### Interaction under the camera
-
-The angled view takes pointer input too, and splits hit-testing the way it splits drawing (D48).
-It edits everything the flat board does (D91): every point the pointer hands over is unprojected
-to pitch metres first, so a token follows the cursor's own place on the grass and a shape drawn
-under the camera is ordinary pitch geometry once laid flat. A label's handles are part of its
-billboard and are tested there, like the words.
-
-| Where it lies | How it is tested |
-|---|---|
-| On the grass — zones, connectors, the marquee | `unprojectPitch`, then the flat tests unchanged |
-| Standing — token, ball, text label, drawn ball | `unbillboard`, in the metre space it was drawn in |
-
-`unproject` is the ground map rearranged rather than searched, so the first row is exact; the
-second is what keeps a token's grab area the size it looks, near camera and far. `cameraFor`
-builds the one camera that both the renderer and the hit tests use.
-
-The 3D draw order is not the flat one, so the hit-test order differs too: text stands above the
-players and a drawn ball stands among them (both `isStanding`), while the rest of their layer is
-in the ground image beneath them.
+**Undo** (`src/lib/history.ts`) keeps whole-document snapshots outside the document, coalesced by
+an explicit gesture key (D26).
 
 ---
 
 ## 9. Export
 
-`src/export/` — four consumers, one seam. `frame.ts` decides how big a frame is, when it happens
-and how it is viewed; everything else renders through it. All of it is pure and tested, so the
-size the dialog quotes before you commit is the size the worker actually produces.
+`src/export/frame.ts` is the one seam every consumer renders through — size, timing and view —
+so the size the dialog quotes is the size produced.
 
 ```ts
-exportSize(longEdge, doc, pitchView): Size        // even on both axes — see D28
-exportView(doc, size, pitchView): RenderView      // interactive: false, nothing else differs
-frameCount(seconds, fps): number                  // covers [0, duration), never duration itself
+exportSize(longEdge, doc, pitchView, shape): Size   // even on both axes (D6)
+exportView(doc, size, pitchView, look): RenderView  // interactive: false; caption, transparency
+frameCount(seconds, fps): number                    // covers [0, duration)
 ```
 
-Frames stop short of `duration` deliberately: the timeline always ends on a hold, so a frame at
-exactly `duration` repeats the one before it — a wasted frame in an MP4 and a visible stutter at
-the seam of a looping GIF.
+Frames stop short of `duration`: the timeline ends on a hold, so that frame would repeat the one
+before it and stutter a looping GIF.
 
-### The worker
+**The worker** (`src/export/worker.ts`) owns the loop: one `ExportRequest` in, progress out, the
+finished file transferred rather than cloned. Each frame is `drawBoard` then an awaited
+`source.add`, which respects encoder backpressure. No compositor, so nothing is captured stale.
+Cancelling terminates the worker.
 
-`src/export/worker.ts` owns the loop. The main thread posts one `ExportRequest` and receives
-progress; there is no shared state and no second copy of the document.
+**Formats** are chosen by mediabunny's capability check for the requested size, loaded
+dynamically so the encoder stays out of the main bundle: MP4 (H.264), else WebM (VP9, VP8); GIF
+through `gifenc` is a first-class choice, with one palette for the whole clip. **PNG**
+(`image.ts`) is the scrubber's frame, on the main thread, through the same `exportView`.
 
-```ts
-const source = new CanvasSource(offscreen, { codec, quality: new Quality({ bitrate }) })
-output.addVideoTrack(source, { frameRate: fps })
-await output.start()
-
-for (let i = 0; i < frames; i++) {
-  drawBoard(ctx, doc, frameTime(i, fps), view)
-  await source.add(frameTime(i, fps), 1 / fps)   // awaited: respects encoder backpressure
-}
-await output.finalize()
-```
-
-Because this is an `OffscreenCanvas` in a worker there is no compositor to wait on — no
-`requestAnimationFrame` sync, and no frame can be captured stale. That is the whole reason export
-lives off the main thread, and it is why a 19.5 s clip encodes at 1920x1318/60 in about 7 s.
-
-**Cancelling is termination**, not a cooperative flag. The encode loop is a tight synchronous run
-in a thread of its own, so killing the scope takes the `VideoEncoder` and the `OffscreenCanvas`
-with it and leaves nothing to leak. `client.ts` terminates on cancel, on error, on completion and
-on unmount, and is safe to call twice.
-
-The finished file is **transferred**, not cloned — a 1080p60 clip is tens of megabytes.
-
-### Format ladder
-
-Resolved at runtime through mediabunny's codec-capability check, never by user-agent sniffing.
-The check depends on the dimensions, so it is re-asked when the resolution changes: a machine
-that encodes 720p H.264 may refuse 4K. `capability.ts` imports it dynamically, keeping the
-encoder out of the main bundle — the dialog is the only thing that ever asks.
-
-| Format | Codec | Availability |
-|---|---|---|
-| MP4 | H.264 (avc) | Chrome, Edge, Safari 16.4+, Firefox 130+ desktop |
-| WebM | VP9, then VP8 | where AVC encoding is unavailable |
-| GIF | `gifenc` | universal |
-
-GIF is a **first-class choice in the export dialog**, not a downgrade path — it is the format that
-actually pastes into a group chat. It needs one palette for the whole animation; see D29 for how
-it is built and why it is not the board's named colours.
-
-**A GIF delay is a whole number of centiseconds.** At 30 fps every frame rounds 33.3 ms down to
-30 ms and a ten-second animation finishes a second early. `gifDelays()` takes differences of
-rounded cumulative times instead, so the error stays inside the frame it belongs to rather than
-accumulating; the offered rates divide 100 exactly, and 50 is the ceiling because browsers clamp
-anything faster to 10 fps.
-
-### PNG
-
-`src/export/image.ts`, main thread — one frame needs no worker, and staying here means it works
-without `OffscreenCanvas` too. Exports whatever frame the scrubber sits on, through the same
-`exportView`, so the still and the video agree by construction. Rendering at 3840 and downscaling
-to 960 matches a native 960 render, which is what "line weights scale proportionally" means in
-practice: font sizes derive from `view.scale` rather than being fixed in pixels.
+---
 
 ## 10. Persistence and sharing
 
-Snapshots are **immutable**. Publishing mints a new id; opening a link gives you a fork. This
-removes edit authorisation from the system entirely, and it matches what sharing a tactic
-actually means — you are sending someone a position, not granting write access.
-
-Three layers:
-
-1. **Work in progress** — autosaved to `localStorage` (`share/local.ts`, debounced: a drag emits
-   a document per pointermove and a `localStorage` write is synchronous on the main thread), plus
-   explicit `.json` import/export, plus **squad presets** (`share/presets.ts`) — a named library
-   of one-team setups, reusing `setupTeamSchema` so a preset and a hand-written setup file are the
-   same shape. See D30 and D31. The library is the browser's only while nobody is signed in:
-   signed in it is the account's, one row per preset, and `lib/usePresets.ts` is the seam that
-   picks between the two. There is never one of each (D46).
-   The JSON half shipped early, in `src/share/json.ts`. It accepts two shapes, told apart by
-   `version`: a whole `BoardDoc`, and a much shorter **setup** document naming a formation, an
-   eleven and its units. A setup is built into a board and then validated *as* a board, so
-   nothing reaches the editor the schema would reject. Link members in a setup are shirt
-   numbers, resolved once the squad exists; a side that lists links replaces the ones its
-   formation seeded, and a side that says nothing keeps them.
-2. **Self-contained link** — `#d=<base64url(deflate(json))>` using the native `CompressionStream`.
-   No backend, works offline, survives the API being down. Used whenever the result fits the URL
-   length budget.
-3. **KV share** — for anything larger.
-
-### Projects nest
-
-`projects.parent_id` is a nullable self-reference — an adjacency list, NULL at the root (D51).
-The tree is at most twenty-five rows and the client fetches it whole, so `src/lib/projects.ts`
-derives everything from that one list: the rail, the indentation, the subtree a folder shows,
-and the ancestors a selection has to open.
-
-Two things the Worker has to enforce, because it is the only place that sees the whole tree:
-
-| Guard | Why |
-|---|---|
-| No cycles | A folder filed under its own descendant is reachable from no root — it vanishes rather than moves |
-| Depth ≤ 5 | Measured as the new parent's depth **plus the height of the subtree being carried** |
-
-Both are recursive CTEs with an explicit row bound, so a walk over already-corrupt data stops
-instead of hanging. Deleting a folder cascades through its subfolders and their boards in one
-statement, which is why the confirmation counts the subtree first.
+1. **Work in progress** is autosaved to `localStorage` (`share/local.ts`, debounced) through
+   `share/storage.ts`, which validates every read and never throws (D31). Boards also go out and
+   in as `.json` — a whole `BoardDoc`, or a short **setup** naming a formation and an XI that is
+   built into a board and validated as one (D23).
+2. **Share links** — `#d=<base64url(deflate-raw(json))>`, decoded by the page, opened read-only
+   in the Viewer with one way out: fork (D7).
+3. **Accounts** (D39) — signed in, boards live in projects in D1 and are mutable. Publishing
+   one mints a `/share/<slug>` that points at the board and follows its edits, unlike `#d=`
+   (D7). Squad presets follow the account (D30).
 
 ### Worker API
 
-| Route | Behaviour |
+`worker/index.ts` answers `/api/*`; static assets are served ahead of it. It imports the same
+`schema.ts`, so client and server cannot disagree about a valid document.
+
+| Routes | |
 |---|---|
-| `POST /api/boards` | zod-validate, reject > 256 KB, store under a generated short id, return `{ id }` |
-| `GET /api/boards/:id` | return the stored doc, `404` if absent |
-| `GET /*` | static asset passthrough for the SPA |
+| `GET /api/me`, `POST /api/auth/logout`, `GET /api/auth/google/{start,callback}` | session and Google sign-in |
+| `GET/POST /api/projects`, `PATCH/DELETE /api/projects/:id` | the project tree (D39) |
+| `GET/POST /api/projects/:id/boards`, `GET/PATCH/DELETE /api/boards` | boards in a project; bulk move and delete |
+| `GET/PUT/PATCH/DELETE /api/boards/:id`, `POST /api/boards/:id/copy` | one board |
+| `POST/DELETE /api/boards/:id/publish`, `GET /api/shares/:slug` | a board's live share link; the one route with no session |
+| `GET/POST /api/presets`, `PUT/DELETE /api/presets/:id` | squad presets (D30) |
 
-The Worker imports the same `schema.ts` the app uses, so the client and the server cannot
-disagree about what a valid document is.
+Every write is size-capped (`MAX_DOC_BYTES`, 256 KB) and zod-validated. Projects nest as an
+adjacency list; the cycle and depth guards and every recursive walk's row bound live in
+`worker/lib/boards.ts`.
 
-Guards: size cap, zod validation, and a Cloudflare rate-limiting binding on `POST`. The binding
-constraint is the free KV tier's **1k writes/day** — reads are 100k/day and will not be the
-limit. Protect writes accordingly.
+---
+
+## 11. The importer
+
+`src/import/` turns a `tracks.json` from the sibling `football-tracks` into a board: `tracks.ts`
+is the contract, `reduce.ts` the numerical half (fragments, runs, the roster, who has the ball),
+`index.ts` what becomes a player and a scene. Its rules are D52, D71, D73, D75, D81, D87, D88;
+`pnpm board` is how a change is judged.

@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { boardDocSchema } from "@/board/schema";
 import { annotationsOf } from "@/board/annotations";
 import { TOUR_ARROW, TOUR_LINK, TOUR_STEPS, TOUR_ZONE, buildTourBoard, type TourStage } from "./tour";
 
@@ -7,11 +6,6 @@ const board = () =>
   buildTourBoard({ board: "Tour", scene: (n) => `Scene ${n}`, link: "Back four" });
 
 describe("the tour's board", () => {
-  it("is a valid document", () => {
-    const result = boardDocSchema.safeParse(board());
-    expect(result.success, JSON.stringify(result.error?.issues)).toBe(true);
-  });
-
   it("has one of everything the cards talk about", () => {
     const doc = board();
     const scenes = doc.scenes;

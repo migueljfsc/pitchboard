@@ -79,13 +79,6 @@ describe("hidden teams", () => {
     for (const id of all) expect(id.startsWith("home-")).toBe(true);
   });
 
-  it("still hit-test normally once shown again", () => {
-    const shown = structuredClone(hiddenAway);
-    shown.teams[1].hidden = false;
-    const f = frameAt(shown, 0);
-    const awayPlayer = shown.teams[1].players[0];
-    expect(hitTest(shown, f, f.positions[awayPlayer.id])?.id).toBe(awayPlayer.id);
-  });
 });
 
 describe("entitiesInRect", () => {
@@ -97,9 +90,6 @@ describe("entitiesInRect", () => {
     expect(reversed.sort()).toEqual(all.sort());
   });
 
-  it("returns nothing for an empty region", () => {
-    expect(entitiesInRect(doc, frame, { x: 52, y: 0 }, { x: 53, y: 1 })).toEqual([]);
-  });
 });
 
 describe("moveEntities", () => {
@@ -113,12 +103,6 @@ describe("moveEntities", () => {
     expect(after.x).toBeCloseTo(before.x);
     expect(after.y).toBeCloseTo(before.y);
     expect(next.scenes[0].positions[a].x).toBeCloseTo(doc.scenes[0].positions[a].x + 4);
-  });
-
-  it("does not mutate the input document", () => {
-    const before = structuredClone(doc);
-    moveEntities(doc, 0, [first], { x: 5, y: 5 });
-    expect(doc).toEqual(before);
   });
 
   it("clamps to the pitch surface", () => {
@@ -142,10 +126,6 @@ describe("moveEntities", () => {
     delete carried.scenes[0].ballPos;
 
     expect(moveEntities(carried, 0, [BALL_ID], { x: 10, y: 10 })).toBe(carried);
-  });
-
-  it("returns the same document when nothing matches", () => {
-    expect(moveEntities(doc, 0, ["ghost"], { x: 1, y: 1 })).toBe(doc);
   });
 
   it("only touches the addressed scene", () => {

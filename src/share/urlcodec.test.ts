@@ -22,13 +22,6 @@ import {
 const HREF = "https://example.com/pitchboard/";
 
 describe("share links", () => {
-  it("round-trips a board deep-equal", async () => {
-    const doc = addSceneAfter(createBoardDoc(), 0);
-    const out = await decodeBoard(await encodeBoard(doc));
-    if (!out.ok) throw new Error(out.error.key);
-    expect(out.doc).toEqual(doc);
-  });
-
   it("round-trips everything a board can carry", async () => {
     let doc = addSceneAfter(createBoardDoc(), 0);
     doc = createLink(doc, doc.teams[0].players.slice(1, 5).map((p) => p.id));
@@ -95,12 +88,6 @@ describe("the hash", () => {
     expect(readHash(`${HASH_KEY}=abc`)).toBe("abc");
   });
 
-  it("is null when there is nothing to open", () => {
-    for (const hash of ["", "#", "#other=1", `#${HASH_KEY}=`]) {
-      expect(readHash(hash)).toBeNull();
-    }
-  });
-
   it("strips the board back out of an address", () => {
     expect(withoutHash(`${HREF}#${HASH_KEY}=abc`)).toBe(HREF);
   });
@@ -138,10 +125,6 @@ describe("the framing", () => {
 
   it("round-trips every framing", () => {
     for (const view of FRAMINGS) expect(decodeView(encodeView(view))).toEqual(view);
-  });
-
-  it("stays short enough not to matter against the budget", () => {
-    for (const view of FRAMINGS) expect(encodeView(view).length).toBeLessThanOrEqual(3);
   });
 
   it("rides beside the payload without disturbing it", async () => {

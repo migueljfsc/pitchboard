@@ -96,4 +96,3 @@ export const tracksSchema = z.object({
 export type TracksFile = z.infer<typeof tracksSchema>;
 export type Track = z.infer<typeof track>;
 export type Sample = z.infer<typeof sample>;
-export type TeamLabel = (typeof TEAM_LABELS)[number];

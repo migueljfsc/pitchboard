@@ -15,8 +15,8 @@ directory: `.github/workflows/deploy-worker.yml` builds, migrates and ships it.
 
 ## Why the Worker is not in the OpenTofu stack
 
-D8 said OpenTofu owns durable infra and wrangler owns the deploy. D40 records why that is a
-technical fact rather than a preference, after the alternative was investigated properly:
+D40: OpenTofu owns durable infra and wrangler owns the deploy. That is a technical fact rather
+than a preference, established after the alternative was investigated properly:
 
 A Worker that serves static assets is deployed in three calls — register a manifest of file
 hashes, upload the bodies in buckets, then `PUT` the script referencing a **completion JWT that

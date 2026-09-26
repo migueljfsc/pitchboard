@@ -485,7 +485,7 @@ export function Inspector({
 
           {/* HIGHLIGHT — one ball: a colour lights the selection in it, Off puts it out.
               Also offered on the first scene: there is no run into it, but there is
-              certainly someone to watch in it. Never carried forward (D47). */}
+              certainly someone to watch in it. Never carried forward (D100). */}
           <Group label={t("inspect.group.highlight")}>
             <div className="flex items-center gap-2">
               <ColorPicker

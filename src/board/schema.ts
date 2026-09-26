@@ -6,7 +6,6 @@
  */
 
 import { z } from "zod";
-import type { BoardDoc } from "./types";
 import { BALL_ID } from "./types";
 import {
   MAX_POLYGON,
@@ -296,8 +295,3 @@ export const boardDocSchema = boardDocShape.superRefine((doc, ctx) => {
     });
   });
 });
-
-/** Throws on invalid input. Use `boardDocSchema.safeParse` where a result is wanted. */
-export function parseBoardDoc(input: unknown): BoardDoc {
-  return boardDocSchema.parse(input) as BoardDoc;
-}

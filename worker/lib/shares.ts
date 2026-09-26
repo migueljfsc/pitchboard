@@ -3,7 +3,7 @@
  *
  * TWO SHARING MECHANISMS, TWO AUDIENCES, AND THEY DO NOT MEET. The anonymous one predates
  * accounts and stays exactly as it was: the whole board deflated into a `#d=` fragment, which
- * browsers never send to a server, so nothing here is involved and D33's reasoning is intact.
+ * browsers never send to a server, so nothing here is involved and D7's reasoning is intact.
  * This is the other one — for people with an account who want a link short enough to say out
  * loud.
  *
@@ -14,7 +14,7 @@
  * they are looking at is stale.
  *
  * Immutability lives in the other one. `#d=` carries the entire board inside the URL, so it
- * is frozen by construction, needs no account and never reaches a server at all (D33).
+ * is frozen by construction, needs no account and never reaches a server at all (D7).
  *
  * Publishing is therefore just minting a slug. There is no snapshot to write, nothing in KV,
  * and withdrawing is clearing one column.

@@ -3,7 +3,7 @@
 OpenTofu for Pitchboard's Cloudflare resources. Single stack, files split by concern (mirrors
 the layout in `motorcycle-journey/infrastructure/terraform/cloudflare`).
 
-Per D8, **OpenTofu owns durable infra and wrangler owns the deploy**. There is deliberately no
+Per D40, **OpenTofu owns durable infra and wrangler owns the deploy**. There is deliberately no
 `cloudflare_workers_script` here, and there will not be one: the Worker is deployed by wrangler,
 and the bindings it needs are created here and passed through as outputs.
 

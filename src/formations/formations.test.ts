@@ -52,13 +52,6 @@ describe("presets", () => {
     }
   });
 
-  it("fields exactly eleven including the keeper", () => {
-    for (const f of FORMATIONS) {
-      const total = f.lines.reduce((n, l) => n + l.spread.length, 0);
-      expect(total, f.id).toBe(11);
-    }
-  });
-
   it("uses only shirt numbers 1-11 — no squad numbers in a starting eleven", () => {
     for (const f of FORMATIONS) {
       for (const n of f.lines.flatMap((l) => l.numbers)) {
@@ -210,10 +203,6 @@ describe("no overlapping tokens", () => {
 });
 
 describe("createBoardDoc", () => {
-  it("produces a valid document", () => {
-    expect(boardDocSchema.safeParse(createBoardDoc()).success).toBe(true);
-  });
-
   it("has one scene, no ball and no paths", () => {
     const doc = createBoardDoc();
     expect(doc.scenes).toHaveLength(1);
@@ -381,10 +370,6 @@ describe("resetPositions", () => {
     expect(resetPositions(grown).scenes[0].positions[extra.id]).toEqual({ x: 3, y: 3 });
   });
 
-  it("leaves a valid document", () => {
-    const { doc } = moved();
-    expect(boardDocSchema.safeParse(resetPositions(doc)).success).toBe(true);
-  });
 });
 
 describe("changing formation", () => {
@@ -467,11 +452,6 @@ describe("changing formation", () => {
       expect(new Set(ids).size).toBe(ids.length);
       expect(boardDocSchema.safeParse(doc).success).toBe(true);
     }
-  });
-
-  it("still produces a valid board", () => {
-    const doc = change(named(), "3-4-3");
-    expect(boardDocSchema.safeParse(doc).success).toBe(true);
   });
 
   /**

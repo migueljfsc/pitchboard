@@ -44,7 +44,7 @@ Chain, polygon, or filled per link, with optional live distance labels in metres
 | **Drawing** | Arrows, lines, freehand, zones and text labels, each with a range of scenes it appears on. |
 | **Views** | Full pitch or either half, horizontal or vertical, flat or through one fixed angled camera. |
 | **Export** | `mediabunny` for MP4 (H.264) and WebM (VP9), `gifenc` for GIF. Format chosen by runtime capability check; size follows the board's own aspect rather than a broadcast one. |
-| **Sharing** | Small boards fit in a compressed URL fragment with no backend. Larger ones, and anything saved to an account, go to a Cloudflare Worker backed by D1 and R2. |
+| **Sharing** | A board fits in a compressed URL fragment with no backend, frozen as it was. A board saved to an account can also be published to a short link that follows its edits. |
 | **Storage** | Squad presets and the board in progress autosave to `localStorage`, validated on every read and discarded rather than repaired. Signing in adds projects and saved boards. |
 
 ## Stack

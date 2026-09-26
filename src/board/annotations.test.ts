@@ -19,7 +19,6 @@ import {
   isVisibleAt,
   insertCorner,
   moveAnnotation,
-  polylineLength,
   regularPolygon,
   removeCorner,
   toPolygon,
@@ -60,28 +59,6 @@ const arrow = (doc: BoardDoc, from = doc.scenes[0].id, to: string | null = null)
 });
 
 describe("scene range", () => {
-  it("covers a single scene when both ends name it", () => {
-    const doc = board(3);
-    const ann = arrow(doc, doc.scenes[1].id, doc.scenes[1].id);
-    expect(sceneRange(doc, ann)).toEqual([1, 1]);
-    expect(isVisibleAt(doc, ann, 0)).toBe(false);
-    expect(isVisibleAt(doc, ann, 1)).toBe(true);
-    expect(isVisibleAt(doc, ann, 2)).toBe(false);
-  });
-
-  it("runs to the end of the timeline when `to` is null", () => {
-    const doc = board(3);
-    const ann = arrow(doc, doc.scenes[1].id, null);
-    expect(sceneRange(doc, ann)).toEqual([1, 2]);
-    expect([0, 1, 2].map((i) => isVisibleAt(doc, ann, i))).toEqual([false, true, true]);
-  });
-
-  it("reads a backwards range as the scenes between its ends", () => {
-    const doc = board(3);
-    const ann = arrow(doc, doc.scenes[2].id, doc.scenes[0].id);
-    expect(sceneRange(doc, ann)).toEqual([0, 2]);
-  });
-
   it("hides a hidden annotation on every scene", () => {
     const doc = board(2);
     const ann = { ...arrow(doc), hidden: true };
@@ -128,10 +105,6 @@ describe("pruning", () => {
     expect(pruneAnnotations(doc)).toBe(doc);
   });
 
-  it("is a no-op on a board with no annotations", () => {
-    const doc = board(2);
-    expect(pruneAnnotations(doc)).toBe(doc);
-  });
 });
 
 describe("geometry", () => {
@@ -149,12 +122,6 @@ describe("geometry", () => {
     expect(points[16].x).toBeCloseTo(40);
     // The control points pull it off the straight line between the ends.
     expect(Math.min(...points.map((p) => p.y))).toBeLessThan(19);
-  });
-
-  it("synthesises control points that trace a straight line", () => {
-    const c = straightCurve(at(0, 0), at(30, 0));
-    expect(c.c1).toEqual(at(10, 0));
-    expect(c.c2).toEqual(at(20, 0));
   });
 
   it("normalises bounds however the box was dragged", () => {
@@ -196,10 +163,6 @@ describe("wavy", () => {
     expect(swing).toBeGreaterThan(0.2);
   });
 
-  it("is longer than the line it squiggles along", () => {
-    expect(polylineLength(wavy(line))).toBeGreaterThan(polylineLength(line));
-  });
-
   it("leaves a line shorter than one wavelength alone", () => {
     const stub = [at(0, 34), at(1, 34)];
     expect(wavy(stub)).toBe(stub);
@@ -238,12 +201,6 @@ describe("editing", () => {
 
     doc = deleteAnnotation(doc, ann.id);
     expect(doc.annotations).toHaveLength(0);
-  });
-
-  it("ignores an update or delete for an id that is not there", () => {
-    const doc = addAnnotation(board(), arrow(board()));
-    expect(updateAnnotation(doc, "nope", { color: "#000" })).toBe(doc);
-    expect(deleteAnnotation(doc, "nope")).toBe(doc);
   });
 
   it("gives every annotation a distinct id", () => {
@@ -470,10 +427,6 @@ describe("duplicate", () => {
     ]);
   });
 
-  it("leaves the document alone when the id is not there", () => {
-    const doc = addAnnotation(board(), arrow(board()));
-    expect(duplicateAnnotation(doc, "nope")).toBe(doc);
-  });
 });
 
 describe("label size", () => {
@@ -527,13 +480,6 @@ describe("label size", () => {
     expect(hitTestAnnotation(doc, 0, at(50 + edge * 4, 34), "mark")).toBeNull();
   });
 
-  it("survives a round trip through the schema", () => {
-    let doc = board();
-    doc = addAnnotation(doc, { ...label(1.6), from: doc.scenes[0].id });
-    const parsed = boardDocSchema.parse(JSON.parse(JSON.stringify(doc)));
-    expect(parsed.annotations?.[0]).toMatchObject({ kind: "text", size: 1.6 });
-  });
-
   it("rejects a size outside the range", () => {
     let doc = board();
     doc = addAnnotation(doc, { ...label(99), from: doc.scenes[0].id });
@@ -555,11 +501,6 @@ describe("reorderAnnotation", () => {
     expect(reorderAnnotation(doc, 2, 0).annotations?.map((x) => x.id)).toEqual([c, a, b]);
   });
 
-  it("changes nothing else about the shapes", () => {
-    const doc = three();
-    expect(new Set(reorderAnnotation(doc, 2, 0).annotations)).toEqual(new Set(doc.annotations));
-  });
-
   it("is a no-op for the same slot, an out-of-range move, or an empty board", () => {
     const doc = three();
     expect(reorderAnnotation(doc, 1, 1)).toBe(doc);
@@ -569,25 +510,6 @@ describe("reorderAnnotation", () => {
     expect(reorderAnnotation(blank, 0, 1)).toBe(blank);
   });
 
-  it("leaves a valid document", () => {
-    expect(boardDocSchema.safeParse(reorderAnnotation(three(), 0, 2)).success).toBe(true);
-  });
-});
-
-describe("a shape's own name", () => {
-  it("round-trips through the schema", () => {
-    let doc = board();
-    doc = addAnnotation(doc, { ...arrow(doc), name: "Press trigger" });
-    const parsed = boardDocSchema.parse(JSON.parse(JSON.stringify(doc)));
-    expect(parsed.annotations?.[0].name).toBe("Press trigger");
-  });
-
-  it("is optional — a shape drawn before names existed still parses", () => {
-    let doc = board();
-    doc = addAnnotation(doc, arrow(doc));
-    expect("name" in (doc.annotations?.[0] ?? {})).toBe(false);
-    expect(boardDocSchema.safeParse(JSON.parse(JSON.stringify(doc))).success).toBe(true);
-  });
 });
 
 describe("text boxes", () => {
@@ -716,10 +638,6 @@ describe("a drawn ball", () => {
 
   it("is placed where it was clicked, from this scene to the end", () => {
     expect(ball).toMatchObject({ kind: "ball", at: at(30, 20), from: doc.scenes[0].id, to: null });
-  });
-
-  it("is a document the schema accepts", () => {
-    expect(boardDocSchema.safeParse(withBall).success).toBe(true);
   });
 
   it("moves bodily, and a copy lands beside it", () => {

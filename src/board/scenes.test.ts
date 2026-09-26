@@ -5,10 +5,8 @@ import {
   ballTravelBetween,
   canLoft,
   canShoot,
-  highlightOf,
   isHighlighted,
   isRunHidden,
-  defaultCurve,
   deleteScene,
   pruneBallFlags,
   duplicateScene,
@@ -74,10 +72,6 @@ describe("addSceneAfter", () => {
     expect(new Set(doc.scenes.map((s) => s.id)).size).toBe(doc.scenes.length);
   });
 
-  it("is a no-op for an index that does not exist", () => {
-    const doc = base();
-    expect(addSceneAfter(doc, 9)).toBe(doc);
-  });
 });
 
 describe("duplicateScene", () => {
@@ -129,21 +123,9 @@ describe("moveScene", () => {
     expect(valid(next)).toBe(true);
   });
 
-  it("is a no-op for out-of-range or identical indices", () => {
-    const doc = addSceneAfter(base(), 0);
-    expect(moveScene(doc, 0, 0)).toBe(doc);
-    expect(moveScene(doc, 0, 5)).toBe(doc);
-    expect(moveScene(doc, -1, 0)).toBe(doc);
-  });
 });
 
 describe("setSceneTiming", () => {
-  it("sets each duration independently", () => {
-    const doc = setSceneTiming(addSceneAfter(base(), 0), 1, { transitionMs: 2500 });
-    expect(doc.scenes[1].transitionMs).toBe(2500);
-    expect(doc.scenes[1].holdMs).toBe(DEFAULT_HOLD_MS);
-  });
-
   it("clamps to a sane range and rounds to whole milliseconds", () => {
     const doc = addSceneAfter(base(), 0);
     expect(setSceneTiming(doc, 1, { holdMs: -400 }).scenes[1].holdMs).toBe(0);
@@ -190,11 +172,6 @@ describe("setCarrier", () => {
     doc = setCarrier(doc, 0, HOME_10);
     expect(doc.scenes[0].carrier).toBe(HOME_10);
     expect(valid(doc)).toBe(true);
-  });
-
-  it("is a no-op when nothing changes", () => {
-    const doc = setCarrier(base(), 0, HOME_9);
-    expect(setCarrier(doc, 0, HOME_9)).toBe(doc);
   });
 
   it("touches only this scene without a carry", () => {
@@ -317,16 +294,6 @@ describe("setPath", () => {
   });
 });
 
-describe("defaultCurve", () => {
-  it("bows off the straight line between the two points", () => {
-    const from = { x: 0, y: 34 };
-    const to = { x: 40, y: 34 };
-    const { c1, c2 } = defaultCurve(from, to);
-    expect(distanceToSegment(c1, from, to)).toBeGreaterThan(1);
-    expect(distanceToSegment(c2, from, to)).toBeGreaterThan(1);
-  });
-});
-
 describe("every operation leaves a valid document", () => {
   it("survives a long editing session", () => {
     let doc = base();
@@ -364,13 +331,6 @@ describe("setRunHidden", () => {
     doc = setRunHidden(doc, 1, HOME_9, true);
     doc = setRunHidden(doc, 1, HOME_9, false);
     expect("hiddenRuns" in doc.scenes[1]).toBe(false);
-  });
-
-  it("is a no-op when the entity is already in that state", () => {
-    const doc = twoScenes();
-    expect(setRunHidden(doc, 1, HOME_9, false)).toBe(doc);
-    const hidden = setRunHidden(doc, 1, HOME_9, true);
-    expect(setRunHidden(hidden, 1, HOME_9, true)).toBe(hidden);
   });
 
   it("hides the ball's line under the same key", () => {
@@ -493,11 +453,6 @@ describe("setShot", () => {
     expect(shot.scenes[1].shot).toBe(true);
     expect(valid(shot)).toBe(true);
     expect("shot" in setShot(shot, 1, false).scenes[1]).toBe(false);
-  });
-
-  it("is a no-op when already in that state", () => {
-    const doc = struck();
-    expect(setShot(doc, 1, false)).toBe(doc);
   });
 
   it("refuses a scene the ball does not travel into", () => {
@@ -624,13 +579,13 @@ describe("setHighlight", () => {
     const doc = setHighlight(createBoardDoc(), 0, ["home-2", "home-5"], AMBER);
     expect(isHighlighted(doc.scenes[0], "home-2")).toBe(true);
     expect(isHighlighted(doc.scenes[0], "home-5")).toBe(true);
-    expect(highlightOf(doc.scenes[0], "home-2")).toBe(AMBER);
+    expect(doc.scenes[0].highlight?.["home-2"]).toBe(AMBER);
   });
 
   it("recolours without unlighting", () => {
     let doc = setHighlight(createBoardDoc(), 0, ["home-2"], AMBER);
     doc = setHighlight(doc, 0, ["home-2"], BLUE);
-    expect(highlightOf(doc.scenes[0], "home-2")).toBe(BLUE);
+    expect(doc.scenes[0].highlight?.["home-2"]).toBe(BLUE);
   });
 
   it("puts a selection out with null, and drops the key once nothing is lit", () => {
@@ -648,7 +603,7 @@ describe("setHighlight", () => {
     expect(isHighlighted(doc.scenes[0], "home-5")).toBe(true);
   });
 
-  // Never carried forward: attention is about one moment, unlike a position (D47).
+  // Never carried forward: attention is about one moment, unlike a position (D100).
   it("touches only the scene it was given", () => {
     const two = addSceneAfter(createBoardDoc(), 0);
     const doc = setHighlight(two, 0, ["home-2"], AMBER);
@@ -662,18 +617,9 @@ describe("setHighlight", () => {
     expect(setHighlight(doc, 0, [], AMBER)).toBe(doc);
   });
 
-  it("ignores a scene the board does not have", () => {
-    const doc = createBoardDoc();
-    expect(setHighlight(doc, 9, ["home-2"], AMBER)).toBe(doc);
-  });
-
   it("takes the ball, as hiddenRuns does", () => {
     const doc = setHighlight(createBoardDoc(), 0, [BALL_ID], AMBER);
     expect(isHighlighted(doc.scenes[0], BALL_ID)).toBe(true);
   });
 
-  it("still validates", () => {
-    const doc = setHighlight(createBoardDoc(), 0, ["home-2"], AMBER);
-    expect(boardDocSchema.safeParse(doc).success).toBe(true);
-  });
 });

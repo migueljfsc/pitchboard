@@ -3,7 +3,7 @@
 Working conventions for this repo. Architecture detail lives in
 [`docs/architecture.md`](docs/architecture.md), the build order in
 [`docs/implementation-plan.md`](docs/implementation-plan.md), and the reasoning behind every
-choice in [`docs/decisions.md`](docs/decisions.md).
+choice in [`docs/decisions.md`](docs/decisions.md) — cited below as Dn.
 
 ## Mission
 
@@ -28,7 +28,7 @@ Everything else is negotiable. These are not.
 2. **No pixels in the document.** All coordinates are pitch metres on a 105 × 68 pitch.
    `Viewport` converts at the edges; `devicePixelRatio` lives in the canvas transform and never
    in `Viewport.scale`. Breaking this shows up as players drifting on window resize or on a
-   retina display.
+   retina display — and DPR applied twice looks right on a 1× monitor only.
 
 ## Hard decisions — do not relitigate without asking
 
@@ -39,7 +39,8 @@ Everything else is negotiable. These are not.
 - **A pass is a carrier change** (`scene.carrier`), not a separate object type.
 - **`mediabunny`**, not `mp4-muxer`/`webm-muxer` (deprecated) and not `MediaRecorder` (realtime,
   drops frames).
-- **Immutable share snapshots.** No accounts, no edit keys, no authorisation model.
+- **`#d=` share links are immutable snapshots**, with no edit keys and no server. An account's
+  published `/share/<slug>` is the other mechanism: a live pointer to its board (D7).
 - **OpenTofu owns durable infra; wrangler owns the deploy.** Do not add
   `cloudflare_workers_script` to the stack. This is not a preference: deploying a Worker with
   static assets needs a completion JWT that Cloudflare expires after an hour, obtained by
@@ -49,10 +50,8 @@ Everything else is negotiable. These are not.
 ## Non-goals for v1 — do not build
 
 Real player data and autocomplete, cones, thirds views, touch support, heatmaps, custom domain.
-All are deliberate deferrals with reasoning in `docs/decisions.md`.
-
-The drawing toolkit was one of these and is no longer — annotations shipped in M7, and half-pitch
-shipped early. See D20.
+All are deliberate deferrals (D9). The drawing toolkit and half-pitch were once on this list and
+have shipped (D20).
 
 ## Repository layout
 
@@ -61,6 +60,7 @@ docs/                     architecture, implementation plan, decisions
 src/board/                the engine — zero React, zero DOM
   types.ts                BoardDoc — single source of truth for the schema
   schema.ts               zod validator, shared with the Worker
+  migrate.ts              version dispatch, run before validation on every load
   pitch.ts                IFAB dimensions table + markings
   geometry.ts             bezier, arc-length LUT, easing
   timeline.ts             (doc, t) → resolved positions, incl. ball carrier
@@ -71,12 +71,12 @@ src/board/                the engine — zero React, zero DOM
   highlights.ts           what a scene's highlight names, and pruning it when that leaves
   projection.ts           the 3D view — one fixed camera, and the ground warp
   render.ts               drawBoard() — the one renderer
-  interaction.ts          hit-testing, drag, selection
+  interaction.ts          hit-testing, drag, selection, snapping
 src/formations/           preset shapes, each seeding its own links
 src/export/               worker render loop, mediabunny, gifenc, PNG
 src/import/               video-derived tracks in, a board out — see the sibling repo below
   tracks.ts               tracks.json's zod schema; the contract with football-tracks
-  reduce.ts               the numerical half — fragments to runs, and choosing the window
+  reduce.ts               the numerical half — fragments to runs, the roster, the ball
   index.ts                what becomes a player, what becomes a scene, what is refused
 src/share/                localStorage, URL-hash codec, API client
   storage.ts              the ONLY place localStorage is touched; never throws
@@ -88,12 +88,10 @@ src/i18n/                 EN and PT; en.ts is the source of truth for the keys
   core.ts                 pure runtime — the engine imports only `Message` from here
 src/fonts.ts              registers the label face, for the page and the export worker
 src/App.tsx               picks Viewer or Editor from the hash; no router
-src/pages/Viewer.tsx      read-only playback of a shared board, with fork
-src/pages/Admin.tsx       the operator's usage view (D108)
-src/board/migrate.ts      version dispatch, run before validation on every load
+src/pages/                Editor, Viewer — read-only playback of a shared board, with fork —
+                          and Admin, the operator's usage view (D108)
 src/components/           React chrome; ui/ holds shadcn-style primitives
-scripts/board.ts          `pnpm board <tracks.json>` — a tracks file through the real importer,
-                          described in one line. The bar every producer change is judged on
+scripts/board.ts          `pnpm board <tracks.json>` — a tracks file through the real importer
 worker/                   Cloudflare Worker — the API, and the SPA's static passthrough
   index.ts                the router; /api/* only, assets are served ahead of it
   lib/                    session, google, users, boards (and the project tree), presets,
@@ -104,13 +102,9 @@ infrastructure/terraform/cloudflare/    OpenTofu — R2, D1, KV. Durable resourc
 ```
 
 The Worker is application code and lives with the application, not under `infrastructure/`.
-What *is* infrastructure is the deploy, and that is a workflow rather than a directory:
-OpenTofu cannot own a Workers deploy (D40), so `.github/workflows/deploy-worker.yml` does.
 `pnpm types` regenerates the ambient bindings; `pnpm deploy:worker` is a local dry-run escape
-hatch, but CI owns the real deploy.
-
-`src/board/types.ts` is the canonical schema, in the same spirit as `cv.ts` in `portfolio` and
-`site.ts` in `motorcycle-journey`. Components never redefine document shape.
+hatch, but CI owns the real deploy. `src/board/types.ts` is the canonical schema: components
+never redefine document shape.
 
 ## The sibling repo
 
@@ -124,10 +118,10 @@ format and have to be changed together.
 **Active work is over there, not here.** `football-tracks/PLAN.md` opens with *Where this
 stands*; read it before touching either side of the seam.
 
-**`pnpm board` is how a change over there is judged.** It runs a tracks file through
-`boardFromTracks` — the real one, loaded through Vite so the aliases resolve — and prints the
-roster, the window, the observed player-seconds, the furthest a player travels and how many
-runs are curved:
+**`pnpm board` is how a change over there is judged** — a tracks file through the real
+`boardFromTracks`, loaded through Vite, printing the roster, the window, observed
+player-seconds, `seen`/`worst`, travel, curved runs and turnovers. Anything measured on the
+source is re-measured through it before it counts: a better ball is not a better board.
 
 ```
 pnpm board ../football-tracks/work/SNGS-151/tracks.json          # one clip
@@ -135,448 +129,183 @@ pnpm board ../football-tracks/work/*/cmp.*.json --json           # a comparison,
 pnpm board ../football-tracks/work/Untitled/tracks.json --scenes  # who has the ball, scene by scene
 ```
 
-Seven improvements measured on the producer's own frames have failed to move any of those
-numbers. The table used to be rewritten by hand for each of them; it is a command now.
-
 ## Engineering conventions
 
 - pnpm, Node >= 22.12. TypeScript strict.
 - React 19 + Vite 8 + Tailwind v4, following `wtc/ui/` — its ESLint config and `components/ui/`
   primitives are directly reusable.
 - Conventional Commits, enforced by commitizen in `commit-msg` and by CI on PRs. Use `cz commit`.
-- `pre-commit install` after cloning. The eslint/typecheck hooks self-activate once `.ts` files
-  exist.
+- `pre-commit install` after cloning.
 - Tests are Vitest, engine only — no component tests. The engine is pure numerical code where
-  tests are cheap and load-bearing.
+  tests are cheap and load-bearing: test behaviour through the engine's public operations, and
+  keep a test for every trap below rather than for every helper.
 - Match the surrounding style. Do not refactor beyond the task.
 
 ## Known traps
 
-- **Arc-length reparameterisation.** A cubic bezier sampled at uniform `u` does not move at
-  uniform speed — players visibly surge and stall through curves. Build the 64-sample LUT and
-  invert it. Test numerically, not by eye.
-- **Pass endpoints must be evaluated live.** Target the receiver's *interpolated* position, not
-  their final scene position, or the ball flies to where they will be and jumps on arrival.
-- **`scenes[0].transitionMs` is meaningless** — there is nothing to travel from. Guard it in the
-  timeline maths or the first segment gets double-counted.
-- **Annotations are not links.** A link has no geometry and is recomputed every frame from its
-  members; an annotation is fixed geometry that depends on nobody. Do not merge them.
-- **An annotation's scene range is stored as scene ids**, never indices — reordering scenes must
-  carry the drawing with them. `deleteScene` prunes dangling ranges rather than dropping shapes.
-- **A link's range is optional at BOTH ends, and an annotation's is not.** Absent means the open
-  end, so a link with neither shows on every scene — which is what every link written before
-  ranges existed means, and why no migration was owed (D47). Anything treating a link's `from`
-  as required makes those links vanish from every board already published. The rule lives in
-  `range.ts` and not in `annotations.ts`: links must not import annotations, and `scenes.ts`
-  cannot hold it because it imports `annotations.ts` and would close a cycle.
-- **A highlight does NOT carry forward, and a position does** (D41 vs D47). A drag reaches into
-  the scenes nobody meant anything by because a position stands until something changes it.
-  Attention is about one moment; `setHighlight` touches the one scene it is given, and making it
-  behave like a nudge would put a glow on scenes the coach never looked at.
-- **`lit` is cut by the drawing's own pixels, not by a highlight's band** (D106). The band a
-  highlight cuts is metres of lit grass and reads as a glow on its own, so `drawKept` draws the
-  kept drawings and links into the darkness with `destination-out`; only areas (zones, filled
-  links) are cut as shapes. It never darkens a scene — `lightsAnything` reads highlights alone.
-- **The ruler measures the crop, not the pitch** (D105). On a right half the side ruler is on
-  the RIGHT goal line, because the left one is clipped away; the frame's middle is the crop's
-  middle in metres, never a pixel.
-- **A highlight can name a drawing or a link, so a key can outlive what it names** (D104). A
-  scene with any key goes dark; `lightsAnything` is what the spotlight asks, not the key count,
-  and deletes prune through `withAnnotations`/`withLinks`. A lit drawing is NOT redrawn above
-  the darkness — it gets a glow under it and a hole cut to its shape, or a lit zone covers the
-  players in it.
-- **A highlight and its darkness switch together, at the START of the move into their scene**
-  (D102). Fading either one on the positions' easing puts them out of step: a pool opening by
-  `e` inside darkness deepening by `e` dims the lit player mid-move. Both read `Resolved.to`.
-- **The halo is a billboard, drawn in a pass of its own.** In 3D it goes through `billboard()`
-  like everything else upright, or it lands as an ellipse squashed into the grass. And it is
-  drawn for every entity BEFORE any token rather than beside its own — tokens overlap, so a halo
-  drawn with its token sits on top of the neighbour drawn a moment earlier.
-- **A text label is the one annotation that is not in pitch space.** It stays upright while the
-  board turns, so on a vertical board its lines run along pitch y and stack along pitch x —
-  which is why `boundsOf`, `annotationHandles`, `dragAnnotationHandle` and `hitTestAnnotation`
-  all take `rotated`. It defaults to the flat case, so forgetting it fails quietly and only on
-  a rotated board: the box, the width handle and the grab area sit ninety degrees off the words.
-- **A label's width is looked up, never estimated and never measured** (D103). `glyphs.ts`
-  holds the shipped face's advances and the renderer draws that face (`TEXT_FONT_FAMILY`) with
-  `fontKerning = "none"`, so wrap, box, panel, handle and hit test agree exactly. Changing the
-  font files without re-measuring the table, or turning kerning back on, puts the words
-  somewhere the box is not. The face is loaded before React mounts AND in the export worker —
-  miss the worker and exports wrap in a fallback font. It is set at `TEXT_RENDER_PX` and
-  scaled down: at a few pixels Chrome hints advances and a line draws ~18% wide.
-- **A label's box hugs its words, and its width handle sits on the panel's outline.** A
-  greedy wrap at the widest line's width reproduces the same lines — that is what makes
-  grabbing the handle a no-op. The drag subtracts the panel padding before doubling.
-- **Formation slots pair by ORDER, not by id.** `buildTeam` mints `<team>-<number>` ids, but
-  renumbering a player keeps their id — so after a renumber those ids no longer match the squad.
-  Anything mapping a fresh build onto an existing team walks both lists by index.
-- **A field that validates on every keystroke blocks the value you are typing.** Renumbering a
-  7 to 12 passes through 1 on the way, so refusing a taken 1 refuses the edit before the second
-  digit exists. Retyping a pace of 10 as 20 is worse: it passes through the empty string, which
-  no document can hold, so a fully controlled input snaps back mid-edit. Every numeric field
-  holds its own text, commits only what is valid, and restores on blur — use
-  `components/ui/NumberField.tsx` rather than writing another one. `SizeField` in `DrawPanel.tsx`
-  is the one remaining copy: it is an unlabelled inline variant for a toolbar row, and it also
-  does not track a value changing underneath it.
-- **Two players on one shirt share an id**, since an id is `<team>-<number>`, and the second
-  overwrites the first in every scene's positions. A formation's own numbers never collide; a
-  squad carried into a new shape can. `buildTeam` moves the loser to the lowest free shirt —
-  but the setup importer still REJECTS duplicates a file states outright. Reject what was
-  written wrong, resolve what was left to us (D32).
-- **A formation change keeps the squad and drops that side's links** (D32). Seeded links are
-  appended, so keeping the old ones stacks a stale connector under the new one. Link ownership
-  is read from the OLD team: a carried squad keeps its ids, so the prune would not catch them.
-- **A carry is judged scene-by-scene, never against the scene being edited.** A drag or a nudge
-  applies its delta to every following scene the entity does not travel into (D41). Deciding that
-  by comparing each scene to the EDITED one makes the boundary depend on a distance the edit is
-  itself changing — a second nudge in the same direction then captures a scene the first stopped
-  at. Compare each scene to the one before it and the boundary is stable under the carry.
-- **A curve's controls are absolute pitch coordinates**, so an endpoint that moves without them
-  warps the run. `c1` follows the start, `c2` follows the end, and both follow what the clamp
-  ALLOWED rather than what was asked, or a token stopped by the touchline drags its curve past it.
-- **A wait is not a shorter travel.** `Scene.delay` holds an entity at its start; `Scene.travel`
-  changes how long its run takes. The window fits the latest `delay + travel`, not the longest
-  single run (D42) — and flow mode ignores both, because everyone keeps step.
-- **A ghost is drawn from the scene, not from a frame.** `RenderView.ghosts` names scene indices
-  and the renderer reads their stored positions directly; only the ball needs `ballAt`, because a
-  carried ball has no stored position. In 3D they go through `billboard()` like everything else
-  upright, or they land squashed into the grass.
-- **In flow mode the timings are derived from the positions**, so any edit retimes the
-  animation and slides the scrubber into the middle of a transition. The board then draws
-  interpolated positions — a dragged player lags the cursor — while the edit lands on the scene
-  you think you are looking at. Re-pin the scrubber to the selected scene on every change.
-- **Zero holds is not seamless.** `easeInOutCubic` starts and ends at zero velocity, so removing
-  the holds still leaves every player stopping dead at each scene boundary. Flow mode is linear
-  for that reason — see D27. For ONE player, a run style of `end: "through"` is the answer (D98).
-- **A run through a scene is placed by TIME, not by the scene being travelled into** (D98). A
-  player who runs on through scene k moves during k's hold, when `resolveAt` says nothing is
-  moving and `u` is 1. That is why `Resolved` carries `ms`, and why a Resolved built by hand
-  for another instant must drop it (`ms: undefined`) — spreading `...r` with a new `u` keeps
-  the old time, and a runner is drawn where he was, not where `u` says.
-- **Both-gradual is `easeInOutCubic`, exactly, and every other run style is a Hermite** (D98).
-  Replacing the default with smoothstep or any other "equivalent" ease moves every board ever
-  drawn. `runsThrough` is the only rule for whether a "through" applies — a wait on the next
-  scene, the last scene, a standstill on either side and flow mode all turn it off.
-- **`Scene.shot` must not outlive the travel it describes.** It marks the ball's arrival, so
-  setting a carrier invalidates it on that scene AND the next, and deleting or reordering a scene
-  invalidates it for a neighbour. `pruneBallFlags` runs inside `replace` for that reason. `canShoot`
-  is the only rule for whether a strike is possible — gate and flag disagreeing is what let one
-  go stale (D24).
-- **Giving the ball away carries forward.** `setCarrier` takes the same `Carry` a drag does: the
-  handover reaches every following scene nothing happens to the ball in, because those scenes are
-  still the kick-off nobody has said anything about yet (D43). `"all"` reaches no further than
-  `"stationary"` — a handover has no delta to translate, so carrying past a pass could only
-  overwrite it.
-- **There is no ball until somebody is given it.** A scene has one when it names a carrier or
-  stores a position, and a new board does neither — so `ballAt` returns `null` and the renderer,
-  the hit-test and the ghosts all have to check (D44). A ball appearing for the first time appears
-  on its new holder rather than travelling in, and arriving is not a travel, so it cannot be a
-  shot. The schema's only rule is that a scene never holds both a carrier and a `ballPos`.
-- **`Scene.loft` is the second flag on the same travel.** It lifts the ball off the ground
-  and, like `shot`, means nothing where the ball does not fly — so `pruneBallFlags` asks
-  each its own question (`canShoot` needs a loose travel, `canLoft` only a travel at all)
-  and both can be set at once (D45). A lofted ball also drops `ballAt`'s `easeOutQuad`:
-  the turf is what slows a ground pass, and leaving the deceleration in lands the ball
-  beside the receiver at the top of its arc, where it hangs and then falls straight down.
-- **A dribble is not a pass.** The ball is glued to its carrier, so it moves as far as they
-  run. Anything deciding what the ball *did* must read the carrier change (`ballTravelBetween`),
-  never the distance the ball covered.
-- **An arrowhead only hides what is inside it.** The head is a triangle narrowing to the tip, so
-  a shaft drawn all the way to that tip emerges from under it wherever the triangle gets narrower
-  than the shaft is wide. On a shot that is two rails appearing to overshoot the arrow and run on
-  to the ball. The shaft stops inside the head instead (`SHAFT_INTO_HEAD`).
-- **The ball's line comes from `passEnds`, not guessed.** It is the one definition of where a
-  pass is struck and where it is met, shared with `ballAt`, so carrier glue, the ball's own
-  wait and travel, and the receiver's own run are included rather than reimplemented (D97).
-  Sampling the ends at `u=0` and `u=1` instead is right only while the ball has no timing of
-  its own, and silently wrong the moment it does.
-- **The ball keeps its own time, and the pass is met in stride** (D97). Before its release the
-  passer still has it, glued to him wherever he has run; after its arrival the receiver has it
-  and carries it on. The meeting point is the receiver where he IS when the ball gets there,
-  not the end of his run — sampled once, never re-read per frame, or the ball homes in.
-- **A drag emits a document per `pointermove`.** Anything recording document history has to be
-  told where the gesture ends, or one drag becomes forty undo steps — hence the merge key in
-  `useHistory`. See D26.
-- **Chains must not close.** A back 4 rendered as a closed polygon draws an edge across the
-  width of the pitch. Member order is load-bearing for chains and polygon perimeters.
-- **GIF palette shimmer.** Quantise once for the whole animation, never per frame, or the pitch
-  greens crawl between frames. The palette comes from sampled frames rather than the board's
-  named colours — antialiased edges and translucent fills are most of the picture (D29).
-- **A GIF delay is a whole number of centiseconds.** Rounding each frame independently runs a
-  30 fps clip a second short over ten seconds. Take differences of rounded cumulative times.
-- **Export size follows the board's aspect, not 16:9** (D28), and both axes must be even or the
-  H.264 encoder refuses the frame.
-- **Cancelling an export is terminating the worker.** A cooperative flag cannot be read from
-  inside a synchronous encode loop.
-- **The penalty arc** is the part of a 9.15 m circle centred on the *penalty spot* that falls
-  outside the box — not an arc on the box edge.
-- **A hash change does not reload the page.** Pasting a `#d=` link into a tab that already has
-  Pitchboard open fires `hashchange` and nothing else, so anything reading the hash once at mount
-  silently ignores the link. `replaceState` fires no event at all — clearing the hash in code has
-  to update the state too (D33).
-- **There is only ever ONE squad library.** Signed in it is the account's; signed out it is the
-  browser's; nothing writes both (D46). A cache in `localStorage` "just in case", or an offline
-  fallback that lets saving carry on locally, rebuilds the second library the whole design
-  avoids — and the merge has no answer, because the same squad edited on two sides is two
-  squads. That is also why adoption clears the local copy, and only once every preset landed.
-- **A recursive CTE over a cycle does not terminate.** Every tree walk in `worker/lib/boards.ts`
-  carries an explicit `n < WALK_LIMIT`, and it is not belt-and-braces: the guards that keep the
-  tree acyclic are in the same file, so trusting them inside the walk means the first corrupt row
-  hangs the request that would have found it (D51).
-- **Never mix a bare `?` with `?N` in one SQL statement.** SQLite gives the bare one "largest
-  index so far, plus one", which is not where it appears — so it binds the wrong value, silently.
-  `updateProject` numbers all six for that reason.
-- **Deleting a project deletes everything under it**, subfolders included, through the
-  self-referencing cascade. The confirmation counts the subtree; a dialog that says "and every
-  board inside it" is lying about a folder that holds four more.
-- **`buildTree` must not trust its rows.** They come over the network and the shape is guarded
-  server-side, so an orphan is filed at the root rather than dropped — losing a folder loses its
-  boards from the view — and a cycle is broken by a visited set rather than recursed into.
-- **Anything read from `localStorage` is untrusted input** — it survives app versions and can be
-  hand-edited in devtools. Validate it and discard what fails; never repair it (D31).
-- **A stored preset names players by shirt number, never by id.** Ids are minted per board and a
-  renumbered player keeps theirs, so an id in a file means nothing later (D30).
-- **Perspective cannot be a canvas transform.** `ctx.transform` is affine; a trapezoid is not.
-  That is why the 3D view warps a flat ground layer instead of setting a matrix, and why nothing
-  in `pitch.ts` had to learn about the camera (D34).
-- **In 3D, metre space lands on the grass.** Anything new drawn inside the ground layer takes the
-  perspective — which is usually right. Anything that must stay upright and unsquashed has to be
-  added to the billboard pass explicitly; it will not get there by itself. Tokens, the ball,
-  text annotations and drawn balls are the current list — `isStanding` names the two
-  annotations.
-- **A billboard's axes are the screen's, not the pitch's.** Inside `billboard()` one unit is still
-  a metre, but +y is down the frame however the board is oriented underneath. That is what makes a
-  token a circle rather than an ellipse — and it means a pitch-space offset copied into there
-  points somewhere else.
-- **The 3D view edits everything the flat board does** (D91). Every point the pointer hands
-  over is unprojected to pitch metres before anything reads it, so nothing drawn under the camera
-  is special once laid flat. A freehand circle drawn in 3D is an oval on the flat board — that is
-  the foreshortening of the hand, not a bug. Anything new that consumes a pointer point must take
-  it from `pointFrom` and check `onGrass`, or it gets NaN above the horizon.
-- **A label's handles live in its billboard, not on the grass** (D91). Everything else a coach
-  draws is pitch geometry in the ground layer and its handles warp with it. A text label's are
-  drawn inside `billboard()` around the words and tested with `hitTestTiltedTextHandle`; the width
-  drag hands `dragAnnotationHandle` a point from `tiltedTextPoint` with `rotated` FALSE, because a
-  billboard's axes are the screen's. Handles computed in pitch metres around the anchor land on
-  empty grass.
-- **Above the horizon there is no ground, and `unproject` returns NaN.** One NaN reaching a delta
-  puts NaN into a position and the board is gone. `onGrass` is checked once in `BoardCanvas`
-  rather than in each of the six places a point is consumed — a drag holds where it was, and a
-  gesture released up there commits from its last good move.
-- **Under the camera, hit-testing splits the way drawing does.** Anything on the GRASS is tested
-  by `unprojectPitch` and the ordinary flat tests; anything STANDING — token, ball, text label —
-  is a billboard and is tested with `unbillboard`, in the space it was drawn in. Testing a token
-  against the grass beneath it grabs an ellipse nowhere near the pixels, which is the objection
-  that kept the view read-only in the first place.
-- **The 3D draw order is not the flat one, so neither is the hit-test order.** Flat, marks sit
-  above the tokens. Under the camera only TEXT does, and a drawn ball stands AMONG them — the
-  rest of their layer is in the ground image, under the players. `hitTestGroundAnnotation`
-  leaves both out of that pass (`isStanding`), because `hitTestTiltedText` has already had them.
-- **A drawn ball is not the match ball** (D96). It is an annotation: scene-ranged, placed with a
-  click, and invisible to `ballAt`, carriers, shots and lofts. Anything that reads "the ball"
-  means the match ball; a drawn one only ever reaches the renderer and the shape hit-tests.
-- **An outline zone is grabbed by its edge** (D95). `filled: false` is the only way to say it and
-  absent means filled, so a check written as `ann.filled` rather than `ann.filled !== false`
-  empties every zone drawn before the choice existed.
-- **Anything that deletes or replaces work goes through `notify`** (D93), so it can be undone
-  from the notice. A delete wired straight to `setDoc` works and silently loses the Undo.
-- **There is ONE camera.** `cameraFor` is called by the renderer and by every hit test. Building
-  a projection beside the pointer handling is a second answer to where a player is on screen, and
-  the two drift exactly the way preview and export would.
-- **Tilt implies a vertical board**, so `framingOf` forces it and the rotation control is disabled
-  rather than left to disagree. Export follows: `boardAspect` returns the projected aspect, which
-  for a full pitch is very nearly square (D34).
-- **The goals are the only thing with a height**, and `project(sx, sy, up)` is the only way to get
-  one. They are depth-sorted by being drawn at either end of the billboard pass — far goal before,
-  near goal after — which is exact only because no player is ever outside the goal lines.
-- **A goal with height eats the space behind it**, so the 3D view seats team names further out
-  than the flat board does (`TEAM_NAME_OFFSET_3D`). The net's back edge reaches ~2.5 m up-screen
-  from the goal line and the flat 4.3 m draws the name straight through it.
-- **Tilt is never written to `PitchView.rotated`.** `framingOf` applies it at render time instead,
-  so the flat orientation survives a trip through 3D. Setting it on the toggle would work and would
-  quietly lose what the user had (D36).
-- **The share link's framing rides BESIDE the payload**, in `v=`, never inside `BoardDoc` — no
-  migration, and every link published before it still opens. The crop is the sharer's and the
-  viewer cannot change it; rotation and 3D are the viewer's own (D35).
-- **Anything added to `Team` must be carried through `TeamSpec`, at every site that builds one.**
-  `buildTeam` mints the whole team object, so whatever the spec does not name is dropped — the same
-  trap as the squad and the links (D32, D37). There are THREE builders and missing one fails
-  quietly, in only that path: `changeFormation`, the setup importer in `json.ts`, and `applyPreset`.
-  Kit pattern shipped having missed the third, so a preset stored it and lost it on the way back in.
-- **A pure module must not return prose.** `migrate`, `urlcodec`, `json` and `presets` return a
-  `Message` — a key and its variables — because none of their callers agree on a language (D38).
-  Adding a `throw new SetupError("some sentence")` puts English back into a module with no user.
-- **Never assemble a sentence from fragments.** Anything with a variable in it is a whole key with
-  a placeholder. Prepending a translated "Team 1: " to a translated remainder bakes English word
-  order into every other language — which is why `resolveTeamLinks` takes a discriminator and picks
-  between four whole keys rather than gluing two together.
-- **`en.ts` declares the keys; `pt.ts` must answer all of them** or it does not compile. What the
-  types cannot check is inside the strings, so `i18n.test.ts` compares `{placeholders}` across
-  locales — a renamed variable typechecks and then renders `{name}` to a user.
-- **A document does not change language when the reader does.** Boards keep the names they were
-  given; only a NEW one is seeded from the active locale, through the labels `createBoardDoc` and
-  the scene helpers accept. Locale itself is presentation and never enters `BoardDoc` (D38).
-- **The window is the WHOLE CLIP, and coverage ranks the roster without excluding from it**
-  (D81). A position outside a track's span is HELD, not invented -- `positionAt` clamps to the
-  first or last sighting -- so trimming the clip to where most of the roster is on screen bought
-  honesty the board already had and cost the other half of the play. Every clip fields eleven a
-  side now; the price is the `dens` column, which fell to 27-54% and now means "share drawn from
-  a live sighting" rather than "share that is not fiction".
-- **`dens` and `seen` falling is not automatically a regression any more.** They count live
-  sightings, and a board that holds a player who walked out of shot scores lower than one that
-  left him off the team entirely. Read them with the roster: 11 v 11 at 48% beats 5 v 10 at 69%.
-- **Trim an end only where NOTHING was seen** (D81). Half a roster is unseen at the first frame
-  of any clip because half of it walks into shot later, and scoring that as emptiness cuts the
-  opening of the play every time. Likewise a ball event pins the window open only where somebody
-  is visible at it -- SNGS-100 has 348 straight frames with no player sampled at all.
-- **The roster has FEWER SLOTS than the clip has appearances** (D82). Galatasaray produce
-  fifteen tracks across thirteen seconds of one coach's clip -- seven for the build-up, five
-  more for the attack -- against eleven places. No ranking fields them all, and weighting
-  coverage by distance to the ball was measured for exactly that and changed the ORDER without
-  changing the SET (543 points of `seen` across fourteen boards before, 542 after). The way out
-  is upstream: fewer fragments, or a board that can leave a player out of a scene.
-- **The roster is a COVER, not a ranking** (D82). Since the window is the whole clip, "seen for
-  most of it" means "wherever the camera settled", so ranking by it cuts every player from the
-  first half of a move -- it cut the two Galatasaray players pressing a goalkeeper from 7 and
-  12 metres. `bestCover` takes whoever adds most of the passage nobody chosen was seen in. Two
-  traps inside it: it must keep filling when the clip is already covered (stopping at zero gain
-  fields nine a side), and coverage is a DEPTH not a flag (1/(1+n)), or a second player in a
-  thin passage is worth nothing and the board loses the shape of a press.
-- **`positionAt` CLAMPS, so any rule that names a player must check he was THERE** (D84).
-  `nearestTo` does; both carrier backfills did not, and a board opened with the ball at a
-  goalkeeper's feet three hundred frames before his track began, sixty metres from the play.
-  The same trap is one edit away anywhere a scene is handed an id rather than finding one.
-- **"The scenes before the flight belong to whoever struck it" needs a floor** (D84). When the
-  only unattributable flight is the last scene, "before it" is the entire board. The ball was
-  his from when he GOT it: stop at the last scene somebody was named at.
-- **A ball in the AIR is not where the board would draw it** (D83, and D66 before it). Its
-  projection bows away from the near touchline and back, by up to ten metres -- a signature no
-  rolling ball has. `airborne` drops those frames before anything reads the ball, so one loft
-  is one pass. It needs BOTH tests: the bow, and `MAX_AIR_S`, because the runs being judged end
-  where the ball was lost rather than where it landed -- SNGS-100 had 91% of its ball called
-  airborne on the bow alone.
-- **`chooseWindow` is GONE** (D81), with its constants, helpers and tests. The board is the
-  whole clip. Do not reintroduce a passage chooser without reading D81 first -- the premise it
-  rested on, that an unseen position is invented, is false.
-- **A TRACK is not a player: `splitImpossible` runs first and the tracker's switches make it
-  frequent** (D54) — 56 tracks arrive as 147 pieces, so a side's fragments far outnumber its
-  players and anything past `MAX_PER_SIDE` is discarded. Anything counting tracks is counting
-  fragments. This sank the old window objective twice over (slack alone bought seconds by
-  gutting a side, 11 v 8 over 2.8 s becoming 17 v 1 over 8.6 s) and it still governs the roster
-  cut, which ranks fragments and keeps eleven.
-- **`coverage` measures a track's SPAN, not its samples** (D67). A track seen at both ends of a
-  window and nowhere in between covers it completely, and the board draws that player standing
-  still through the gap. Use `witnessed` for any question of the form "how much of this player
-  did we see"; `coverage` survives only where a span is genuinely what is meant.
-- **Half of a board used to be positions nobody saw**, and no metric said so — the coach did.
-  `pnpm board` reports `seen` (drawn positions with a sighting within 0.25 s) and `worst` (the
-  emptiest scene); they are the fidelity bar, and a passage that scores well on watched
-  player-seconds can still be mostly remembered (D67).
-- **Nearest is not holding: the ball has to REACH him.** A through ball threaded past two
-  defenders was nearest each of them for 0.6 s at 3.5 and 2.7 m and the hold test named both --
-  a turnover the clip never had, which `steady` then used to revert the attacker who received
-  it. `carrierAt` asks for the ball inside `SNAP_M` at least once. `turns` in `pnpm board` is
-  the count to watch; `--scenes` shows which track took it.
-- **A pass in flight is the passer's until somebody has it, near a defender or not.** The
-  kicker rule only reached a ball `LOOSE_M` from everybody, so a pass two or three metres past
-  a defender was drawn stopping in space -- one pass as two movements. A scene a sighting took
-  the ball away at stays with the player who lost it WHEN a later scene names a holder; a shot,
-  with nobody to land on, is still drawn as one.
-- **A change of SIDE has to be seen twice.** One sighting beside the attacker after a keeper's
-  save handed the ball back, and `steady` read the save as the flicker. Asking every hold for
-  two sightings is wrong -- `airborne` thins the ball, and it emptied a real carrier's scenes.
-- **A ball flying over a player is not a pass to him** (D71). `z = 0` makes a lofted ball's
-  board position its shadow sweeping the pitch, so every player it crosses is briefly the
-  nearest. The carrier is whoever KEEPS it. Speed cannot be the test -- half of all real
-  receptions show the ball above 9 m/s, because a pass arrives through the air.
-- **Never judge whether the football is any good** (D73). The coach chose the clip; ranking
-  passages by progression, final-third entries or shots decides for them what is worth looking
-  at. Fidelity is the whole objective — "where the football is" is about the clip, "whether the
-  football is interesting" is about the game and is not ours.
-- **A turnover that gives the ball straight back never happened** (D72). One-scene possession
-  flips are the measurement, not a tackle, and `steady` reverts them across sides.
-- **Carrying a holder forward is a reading of the ball's SILENCE, and it expires** (D74). Past
-  `CARRY_S` with no sighting behind the scene, nobody is named -- a board that shows possession
-  stopping is honest about what was tracked; one that shows the wrong team passing is not.
-  Measured backwards only: a sighting after the scene says where the ball got to, not who had it.
-- **The ball is evidence, not only a pointer at a player** (D75). A pass to an untracked
-  receiver and a shot both end with the ball in nobody's possession, and a board built only from
-  carriers draws them as a dribble. `flights` makes the moment it comes loose a scene, and a
-  scene naming nobody draws the ball where it was seen -- if that sighting is on the field.
-- **The roster keeps room for whoever the ball goes through** (D80). Coverage ranks the other
-  twenty-one; the man on the ball is reserved like a restart's taker, or the pass he receives
-  lands on grass because he is not on the board. It costs density -- he is less watched than the
-  players standing in shot -- and the window's honesty floor is measured before he is added.
-- **A ball nobody holds is drawn at the nearest player's FEET** (D79), not at the sighting: a
-  metre and a half is the camera model, and a pass drawn into the gap beside a player reads as a
-  pass into space. It does not name him -- the hold test already declined that.
-- **A one-touch pass is a change of DIRECTION, not a hold** (D78). The hold test asks who keeps
-  the ball, which is right about a fly-over and wrong about quick play -- nobody keeps it.
-  `touchedAt` answers where the hold test is silent, and events get their own scene gap (0.2 s)
-  because three passes in a second otherwise collapse into one.
-- **A track whose side nobody could read BLOCKS the ball** (D78). Stepping over it hands the
-  ball to the next player along, who may be an opponent -- that is how a keeper came to pass to
-  the opposition on a clip where he never did. `referee` is not a blocker: that side WAS read.
-- **A shot is a SILENCE, not a sighting** (D76). Nobody sees a struck ball until it is in the
-  net, so `breaks` marks both ends of a gap the ball moved across -- and the departure only
-  where somebody still had it, or a pass in flight gets split in two.
-- **The board wears the kits the file measured** (D77). `tracks.json` may carry `kits`, and
-  where it does, that is what the sides are painted -- `home` is the side defending the nearer
-  goal, which is not the side a coach calls home, so the colours are the only thing that ties
-  the board to the clip he watched. Text colour follows the kit's luminance, not the side.
-  The measurement is snapped to `PALETTE` first: a colour the picker does not offer cannot be
-  re-picked or matched by a link, and the two sides may never land on the same swatch.
-- **A ball behind the line between the posts is a GOAL, and stays in the net** (D76). Drawn on
-  the line instead, it sits among the defenders who were standing there and the board reads as
-  a turnover; drawn back on the pitch by the next sighting, worse. Outside the posts the same
-  sighting is just a bad fit, and is dropped.
-- **"The passes that really happened" is itself an inference** (D71). SoccerNet annotates a
-  ball, not possession, and its ball is the same z = 0 shadow -- so a drawn pass that agrees
-  with it may still be wrong, and only somebody watching the clip can settle it.
-- **An arrow shorter than the camera's own error is noise, not a run** (D69). A third of every
-  board's arrows were a standing player wobbling. Compare against where the player was last
-  DRAWN, so a real slow drift still accumulates into a run.
-- **A fidelity rule must never touch an EVENT** (D68). A kick-off has nobody else gathered
-  round it, so a floor on "how much of the roster is on screen" deletes exactly the moment the
-  board exists for. Gate the scenes the split invented, never the ball.
-- **Honesty, the roster and the ball cannot be ordered — only two can be floors** (D68). Every
-  ordering was measured and each one sacrifices the third completely.
-- **Candidate windows are bounded by events as well as by track endpoints** (D68). Without that,
-  "the four seconds around that pass" is not a passage the chooser can even consider.
-- **A scene is the worst place to draw from memory, and the split aims straight at it.**
-  `chooseScenes` looks for the frame where a player deviates most from their interpolation, and
-  a player the tracker just lost deviates hardest of all (D67).
-- **A coverage FLOOR is a fraction of the window, so a short window clears it more easily**
-  (D66). Anything that counts tracks passing a coverage share is therefore biased towards short
-  passages, and the bias is structural: SNGS-147's board was nineteen fragments over 3.2 s,
-  which is eight real players. `MIN_OBSERVED_S` is the floor that cannot be gamed that way, and
-  since D81 it is the only one -- coverage ranks the roster and no longer excludes from it.
-- **Scoring a window by observed player-seconds trades the team for the clock** (D66): 86
-  seconds bought with 21 real players over eleven clips. Measured, not shipped.
-- **Judge a window by coverage TIMES duration, not by either.** Duration flatters interpolation
-  and coverage is a fraction of the window, so a short window flatters every track in it (D52).
-  Their product is the observed player-seconds the board is actually built from.
-- **The window objective is about PLAYERS, so it walks past set pieces** (D53). During a corner
-  the players bunch in the box and occlude each other, their tracks fragment, and the coverage
-  count drops — so a window objective built on players picks the open play afterwards and the
-  board never contains the corner. Moot since D81, which keeps the whole clip; `restartAt`
-  survives because the board still opens on the kick.
-  `restartAt` reads the ball resting on a corner arc or the centre spot straight out of
-  `ball.samples`, so nothing in `tracks.json` had to change and every existing file still works.
-  A free kick has no canonical position and is deliberately unreachable by it.
-- **A better ball is not a better board.** Fixing the ball at the corner improved five clips'
-  ball accuracy and left four of their boards byte-identical, because the window excluded the
-  frames that got better. Anything measured on the source has to be re-measured through
-  `boardFromTracks` before it counts as shipped.
-- **A speed measured across one frame is a position error multiplied by fps.** Every
-  threshold in `src/import/reduce.ts` that divides by a frame interval was tuned on 32 fps
-  footage; at 48 fps the same 12 m/s is a quarter of a metre between samples, which is under
-  the noise on a carried homography. It shattered one clip's tracks into five times as many
-  fragments, and the board that came out validated, scored its best-ever fidelity, and
-  contained no curved run at all — because `coverage` is a fraction of the window, so a
-  shorter window flatters every fragment and the chooser retreats to the 2.5 s floor where
-  nothing has room to bend. A good score on a short window is the symptom to distrust (D52).
-- **DPR double-application** looks correct on a 1× monitor and wrong everywhere else.
+Each is one line of what breaks; the reasoning is in the cited decision.
+
+### Geometry and rendering
+- **Arc-length reparameterisation.** Uniform `u` on a bezier surges and stalls through curves;
+  build the 64-sample LUT and invert it. Test numerically, not by eye.
+- **The penalty arc** is the part of a 9.15 m circle centred on the *penalty spot* outside the
+  box — not an arc on the box edge.
+- **An arrowhead only hides what is inside it.** A shaft drawn to the tip pokes out where the head
+  narrows; it stops inside the head (`SHAFT_INTO_HEAD`).
+- **A ghost is drawn from the stored scene, not a frame**; only the ball needs `ballAt`. In 3D
+  ghosts go through `billboard()`.
+
+### The 3D view (D34, D91)
+- **Perspective cannot be a canvas transform** — it warps a flat ground layer.
+- **In 3D, metre space lands on the grass.** Anything that must stay upright joins the billboard
+  pass explicitly: tokens, ball, halos, text labels and drawn balls (`isStanding`).
+- **A billboard's axes are the screen's.** +y is down the frame however the board is turned; a
+  pitch-space offset copied in points elsewhere.
+- **There is ONE camera**, `cameraFor`, used by the renderer and every hit test.
+- **Every pointer point comes from `pointFrom` and is checked with `onGrass`** — above the horizon
+  `unproject` is NaN, and one NaN in a delta loses the board.
+- **Hit-testing splits as drawing does.** Grass things through `unprojectPitch` and the flat
+  tests; standing things with `unbillboard`. The 3D order differs from flat: only text sits above
+  the tokens, a drawn ball stands among them, so `hitTestGroundAnnotation` skips both.
+- **A label's handles live in its billboard**, tested with `hitTestTiltedTextHandle`; its width
+  drag passes `rotated` FALSE.
+- **Tilt implies a vertical board and is never written to `PitchView.rotated`** (`framingOf`), and
+  export follows the projected aspect (`boardAspect`).
+- **The goals are the only thing with height** (`project(sx, sy, up)`), depth-sorted by being
+  drawn at either end of the billboard pass. A goal with height eats the space behind it, hence
+  `TEAM_NAME_OFFSET_3D`.
+
+### Timing and runs (D14, D44)
+- **`scenes[0].transitionMs` is meaningless.** Guard it or the first segment is double-counted.
+- **A wait is not a shorter travel.** The window fits the latest `delay + travel`; flow mode
+  ignores both.
+- **Zero holds is not seamless** — `easeInOutCubic` stops at every boundary. Flow mode is linear;
+  for one player, `end: "through"`.
+- **Both-gradual is `easeInOutCubic`, exactly.** Any "equivalent" ease moves every board ever
+  drawn. `runsThrough` is the only rule for whether "through" applies.
+- **A run through a scene is placed by TIME.** A Resolved built by hand for another instant must
+  drop `ms`, or a runner is drawn where he was.
+- **In flow mode any edit retimes the animation** — re-pin the scrubber to the selected scene on
+  every change, or the edit lands on a scene the coach is not looking at.
+- **A curve's controls are absolute.** `c1` follows the start, `c2` the end, both by what the
+  clamp ALLOWED.
+
+### The ball (D44)
+- **There is no ball until somebody is given it.** `ballAt` returns null; renderer, hit-test and
+  ghosts all check.
+- **A dribble is not a pass.** What the ball DID is read from the carrier change
+  (`ballTravelBetween`), never from the distance it covered.
+- **`shot` and `loft` must not outlive their travel.** A carrier change, delete or reorder
+  prunes them (`pruneBallFlags` in `replace`); `canShoot` and `canLoft` are the only gates.
+- **A lofted ball drops `easeOutQuad`**, or it hangs beside the receiver and falls vertically.
+- **The ball's line and its flight come from `passEnds`**, sampled once — never `u=0`/`u=1`, which
+  is wrong the moment the ball has timing of its own, and never re-read per frame, or it homes in.
+- **Pass endpoints are live** — the receiver's interpolated position, not his final mark.
+- **Giving the ball away carries forward**, and `"all"` reaches no further than `"stationary"`.
+- **A drawn ball is not the match ball** (D20); nothing that reads "the ball" sees it.
+
+### Editing (D41, D26, D93)
+- **A carry is judged scene-by-scene, never against the edited scene**, or a second nudge
+  captures a scene the first stopped at.
+- **A drag emits a document per `pointermove`** — history needs the merge key.
+- **Anything that deletes or replaces work goes through `notify`**, or the Undo is silently lost.
+- **A field that validates per keystroke blocks the value being typed** (7 → 12 passes through 1;
+  20 passes through ""). Use `components/ui/NumberField.tsx`; `SizeField` in `DrawPanel.tsx` is
+  the one remaining copy.
+
+### Links and drawings (D47, D20, D103)
+- **Annotations are not links.** Do not merge them.
+- **An annotation's range is scene ids, required; a link's is optional at BOTH ends.** Treating a
+  link's `from` as required hides it on every published board. The rule is in `range.ts`.
+- **Chains must not close**, and member order is load-bearing.
+- **An outline zone is `filled: false`; absent is filled.** Write `ann.filled !== false`.
+- **A text label is not in pitch space.** `boundsOf`, `annotationHandles`, `dragAnnotationHandle`
+  and `hitTestAnnotation` take `rotated` and default to flat, so forgetting it fails only on a
+  rotated board.
+- **A label's width is looked up, never measured.** Changing the font files without re-measuring
+  `glyphs.ts`, turning kerning back on, or missing the face in the export worker puts the words
+  where the box is not. It is drawn at `TEXT_RENDER_PX` and scaled down.
+- **The label box hugs its words; the width drag subtracts the panel padding before doubling.**
+- **The ruler measures the crop** — on a right half it sits on the RIGHT goal line.
+
+### Highlights and the spotlight (D100)
+- **A highlight does NOT carry forward; a position does.** `setHighlight` touches one scene.
+- **A highlight and its darkness switch together at the START of the move** — both read
+  `Resolved.to`.
+- **A key can outlive what it names.** Deletes prune through `withAnnotations`/`withLinks`; the
+  spotlight asks `lightsAnything`, never the key count.
+- **A lit drawing is never redrawn above the darkness** — glow under it, hole cut to its shape.
+  **`lit` is cut by the drawing's own pixels** (`drawKept`), and never darkens a scene.
+- **The halo is a billboard, drawn for every entity before any token**, or it sits on a neighbour.
+
+### Formations, squads and kits (D11, D30, D37)
+- **Formation slots pair by ORDER, not id** — a renumbered player keeps his id.
+- **Two players on one shirt share an id** and the second overwrites the first. `buildTeam` moves
+  the loser to the lowest free shirt; the setup importer REJECTS duplicates a file states.
+- **A formation change drops that side's links**, and ownership is read from the OLD team.
+- **Anything added to `Team` goes through `TeamSpec` at all THREE builders** — `changeFormation`,
+  the setup importer in `json.ts`, and `applyPreset`. Missing one fails quietly on that path.
+- **A stored preset names players by shirt number**, never by id.
+- **There is only ever ONE squad library** — never a local cache while signed in.
+
+### Storage, sharing and language (D7, D31, D38)
+- **Anything read from `localStorage` is untrusted** — validate and discard, never repair.
+- **A hash change does not reload the page**; listen for `hashchange`, and `replaceState` fires no
+  event at all.
+- **The share link's framing rides beside the payload** in `v=`, never inside `BoardDoc`.
+- **A pure module must not return prose** — it returns a `Message`.
+- **Never assemble a sentence from fragments** — a whole key with a placeholder.
+- **`pt.ts` must answer every key `en.ts` declares**; `i18n.test.ts` checks placeholders match.
+- **A document does not change language when the reader does.**
+
+### Export (D6)
+- **Quantise the GIF palette once**, from sampled frames; **delays are differences of rounded
+  cumulative times**.
+- **Export size follows the board**, both axes even.
+- **Cancelling an export is terminating the worker.**
+
+### Worker (D39)
+- **Every recursive CTE carries `n < WALK_LIMIT`** — a walk over a cycle does not terminate.
+- **Never mix a bare `?` with `?N` in one statement** — SQLite binds the wrong value, silently.
+- **Deleting a project deletes its subtree**; the confirmation counts it.
+- **`buildTree` must not trust its rows** — orphans to the root, cycles broken.
+
+### The importer (D52, D71, D73, D75, D81)
+- **Never judge whether the football is any good.** Fidelity is the whole objective.
+- **A track is not a player.** `splitImpossible` runs first; anything counting tracks counts
+  fragments.
+- **A speed across one frame is a position error times fps.** Thresholds dividing by a frame
+  interval break at a new frame rate, and a good score on a short board is the symptom.
+- **The window is the WHOLE CLIP** — `positionAt` holds a player outside his track. Trim an end
+  only where NOTHING was seen. `chooseWindow` is gone; do not bring a passage chooser back.
+- **The roster is a COVER with depth, not a ranking**, and it keeps filling once covered; the
+  players the ball goes through are reserved. There are fewer slots than appearances.
+- **`coverage` measures a span; use `witnessed`** for "how much of him did we see". `seen` and
+  `dens` falling is not automatically a regression — read them with the roster.
+- **A fidelity rule never touches an event** — a kick-off has nobody gathered round it. Gate the
+  scenes the split invented, never the ball.
+- **A scene is the worst place to draw from memory, and the split aims at it.** `chooseScenes`
+  splits where a player deviates most from his interpolation, and a player just lost deviates
+  hardest — hence `SCENE_BACKED_FLOOR`.
+- **`positionAt` CLAMPS, so every rule that names a player checks he was THERE.** The kicker
+  backfill stops at the last scene somebody was named at.
+- **The carrier is whoever KEEPS the ball, within `SNAP_M` at least once**; a fly-over is not a
+  pass, and speed cannot tell them apart.
+- **A one-touch pass is a change of direction** (`touchedAt`); events get their own 0.2 s gap.
+- **A one-scene turnover that hands the ball back never happened** (`steady`); a change of side is
+  seen twice; a keeper's catch and a lost tackle are not turnovers.
+- **A holder's silence expires** (`CARRY_S`), measured backwards only.
+- **A pass in flight is the passer's until somebody has it**; a flight with a player at both ends
+  holds the kicker.
+- **A shot is a silence** (`breaks`), marked at its departure only where somebody still had it.
+- **Behind the line between the posts is a goal, and stays in the net.**
+- **A loose ball is drawn at the nearest player's feet**, without naming him.
+- **An unreadable track BLOCKS the ball**; `referee` does not.
+- **A ball in the air is not where the board draws it** — `airborne` needs the bow AND `MAX_AIR_S`.
+- **An arrow shorter than the camera's error is noise** (`STILL_M`), compared with where the
+  player was last DRAWN.
+- **The board wears the kits the file measured**, snapped to `PALETTE`; `home` is the side
+  defending the nearer goal, not the coach's home side.
 
 ## Definition of done
 

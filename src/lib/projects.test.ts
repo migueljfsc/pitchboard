@@ -59,9 +59,6 @@ describe("buildTree", () => {
     expect(names(buildTree([project("self", "self"), project("ok")]))).toEqual(["ok"]);
   });
 
-  it("is empty for no projects", () => {
-    expect(buildTree([])).toEqual([]);
-  });
 });
 
 describe("visibleRows", () => {
@@ -117,10 +114,6 @@ describe("subtreeIds", () => {
 describe("ancestorIds", () => {
   it("climbs to the root, nearest first", () => {
     expect(ancestorIds(tree, "setpieces")).toEqual(["home", "season"]);
-  });
-
-  it("is empty at the root", () => {
-    expect(ancestorIds(tree, "season")).toEqual([]);
   });
 
   it("terminates on a cycle", () => {

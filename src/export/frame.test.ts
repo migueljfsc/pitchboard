@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createBoardDoc } from "@/formations";
 import { PITCH_PADDING } from "@/board/pitch";
-import { totalSeconds } from "@/board/scenes";
 import {
   boardAspect,
   exportSize,
@@ -125,11 +124,6 @@ describe("export look", () => {
     expect(view.transparent).toBe(true);
   });
 
-  it("adds nothing when there is no look", () => {
-    const view = exportView(doc, exportSize(1280, doc));
-    expect("caption" in view).toBe(false);
-    expect("transparent" in view).toBe(false);
-  });
 });
 
 describe("frameCount", () => {
@@ -143,9 +137,6 @@ describe("frameCount", () => {
     expect(frameCount(0.001, 24)).toBe(1);
   });
 
-  it("gives a real board a sane frame count", () => {
-    expect(frameCount(totalSeconds(doc), 30)).toBeGreaterThan(0);
-  });
 });
 
 describe("gifDelays", () => {

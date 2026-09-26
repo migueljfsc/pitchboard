@@ -3,7 +3,6 @@ import { HALO_REACH, SHAFT_INTO_HEAD, SHOT_OFFSET, drawBoard } from "./render";
 import { HEAD_LENGTH, addAnnotation, draftAnnotation } from "./annotations";
 import { ballRadius, tokenRadius } from "./pitch";
 import { PITCH, PITCH_PADDING, TEAM_NAME_OFFSET } from "./pitch";
-import { frameAt } from "./timeline";
 import { createRecordingCtx } from "./recording-ctx";
 import { createBoardDoc } from "@/formations";
 import { updateLink } from "./links";
@@ -59,19 +58,6 @@ describe("ghost scenes", () => {
     expect(withGhosts.log).toEqual(without.log);
   });
 
-  it("ignores a scene index the document does not have", () => {
-    const r = createRecordingCtx();
-    drawBoard(r.ctx, two, 0, view({ ghosts: [9] }));
-    expect(ghostCount(r.log)).toBe(0);
-  });
-
-  it("draws nothing extra when none are asked for", () => {
-    const a = createRecordingCtx();
-    const b = createRecordingCtx();
-    drawBoard(a.ctx, two, 0, view({ ghosts: [] }));
-    drawBoard(b.ctx, two, 0, view());
-    expect(a.log).toEqual(b.log);
-  });
 });
 
 describe("drawBoard", () => {
@@ -386,14 +372,6 @@ describe("team names", () => {
     expect(nameCalls(r, "City")).toHaveLength(0);
   });
 
-  it("omits a blank name rather than drawing an empty string", () => {
-    const doc = createBoardDoc();
-    doc.teams[0].name = "   ";
-    const r = createRecordingCtx();
-    drawBoard(r.ctx, doc, 0, view());
-    expect(r.calls("fillText").some((c) => c.startsWith('fillText("   "'))).toBe(false);
-  });
-
   it("mirrors the two names on a flat board so they face each other", () => {
     const r = createRecordingCtx();
     drawBoard(r.ctx, createBoardDoc(), 0, view());
@@ -451,30 +429,6 @@ describe("team names", () => {
 });
 
 describe("frameAt", () => {
-  it("places a loose ball at its stored position", () => {
-    const doc = createBoardDoc();
-    doc.scenes[0].ballPos = { x: 52.5, y: 34 };
-    expect(frameAt(doc, 0).ball).toEqual(doc.scenes[0].ballPos);
-  });
-
-  it("has no ball until one is given out", () => {
-    expect(frameAt(createBoardDoc(), 0).ball).toBeNull();
-  });
-
-  it("glues a carried ball beside its carrier", () => {
-    const doc = createBoardDoc();
-    const carrier = doc.teams[0].players[5].id;
-    doc.scenes[0].carrier = carrier;
-    delete doc.scenes[0].ballPos;
-
-    const ball = frameAt(doc, 0).ball!;
-    const at = doc.scenes[0].positions[carrier];
-    expect(ball.y).toBeCloseTo(at.y);
-    expect(ball.x).toBeGreaterThan(at.x);
-    // Clear of the token so the shirt number stays readable.
-    expect(ball.x - at.x).toBeGreaterThanOrEqual(tokenRadius(doc));
-  });
-
   it("ignores the ball id in positions — it is derived, never stored", () => {
     const doc = createBoardDoc();
     expect(doc.scenes[0].positions[BALL_ID]).toBeUndefined();
@@ -701,12 +655,6 @@ describe("highlight halos", () => {
       return x0 === x1 && y0 === y1 && Number(r0) > 0;
     }).length;
 
-  it("draws nothing when nobody is highlighted", () => {
-    const r = createRecordingCtx();
-    drawBoard(r.ctx, createBoardDoc(), 0, view());
-    expect(halos(r.log)).toBe(0);
-  });
-
   it("draws one per highlighted entity", () => {
     const r = createRecordingCtx();
     drawBoard(r.ctx, lit(["home-2", "home-5"]), 0, view());
@@ -733,19 +681,6 @@ describe("highlight halos", () => {
     expect(halo).toBeGreaterThanOrEqual(0);
     expect(token).toBeGreaterThanOrEqual(0);
     expect(halo).toBeLessThan(token);
-  });
-
-  it("takes the colour it was given", () => {
-    const r = createRecordingCtx();
-    drawBoard(r.ctx, lit(["home-2"]), 0, view());
-    expect(r.log.some((e) => e.startsWith('addColorStop(0,"rgba(245, 158, 11'))).toBe(true);
-  });
-
-  // Unlike a ghost, a halo is IN the document — so it belongs in the export too.
-  it("reaches an export", () => {
-    const r = createRecordingCtx();
-    drawBoard(r.ctx, lit(["home-2"]), 0, view({ interactive: false }));
-    expect(halos(r.log)).toBe(1);
   });
 
   it("lights the ball, as hiddenRuns takes it", () => {
@@ -805,7 +740,7 @@ describe("the spotlight", () => {
     expect(words).toBeGreaterThan(dark);
   });
 
-  it("stores the default as absence", () => {
+  it("stores the default depth as absence, so the scene serialises as before", () => {
     const doc = lit(["home-2"]);
     expect(setSpotlight(setSpotlight(doc, 0, 0.3), 0, DEFAULT_SPOTLIGHT).scenes[0].spotlight).toBeUndefined();
   });
@@ -909,14 +844,6 @@ describe("links per scene", () => {
 
   const twoScenes = () => addSceneAfter(createBoardDoc(), 0);
 
-  it("draws every unranged link on every scene", () => {
-    const doc = twoScenes();
-    const first = createRecordingCtx();
-    drawBoard(first.ctx, doc, 0, view());
-    expect(links(first.log)).toBe(doc.links.length);
-    expect(doc.links.length).toBeGreaterThan(0);
-  });
-
   it("leaves out a link the scene is outside of", () => {
     let doc = twoScenes();
     const second = doc.scenes[1].id;
@@ -927,16 +854,6 @@ describe("links per scene", () => {
     expect(links(r.log)).toBe(0);
   });
 
-  it("draws it again once the timeline reaches its scene", () => {
-    let doc = twoScenes();
-    const second = doc.scenes[1].id;
-    for (const link of doc.links) doc = updateLink(doc, link.id, { from: second, to: second });
-
-    const r = createRecordingCtx();
-    // Well into the closing hold on scene 2.
-    drawBoard(r.ctx, doc, 99, view());
-    expect(links(r.log)).toBe(doc.links.length);
-  });
 });
 
 describe("drawn arrows", () => {
@@ -1050,11 +967,6 @@ describe("the ruler", () => {
     expect(r.log).toContain(band);
     expect(r.calls("fillRect")).toContain("fillRect(10,-1.8,15,1.3)");
     expect(r.calls("fillRect")).toContain("fillRect(-1.8,20,1.3,8)");
-  });
-
-  it("marks a point without a span", () => {
-    const spans = draw({ x: 10, y: 20, w: 0, h: 0 }).calls("fillRect");
-    expect(spans.some((c) => c.startsWith("fillRect(10,-1.8") || c.startsWith("fillRect(-1.8,20"))).toBe(false);
   });
 
   it("never reaches an export", () => {

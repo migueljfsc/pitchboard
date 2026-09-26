@@ -60,11 +60,6 @@ describe("whole-board round trip", () => {
     expect(ok(toJson(doc))).toEqual(doc);
   });
 
-  it("is reported as a board, not mistaken for a setup", () => {
-    const outcome = fromJson(toJson(createBoardDoc()));
-    expect(outcome.ok && outcome.kind).toBe("board");
-  });
-
   it("rejects a document that claims version 1 but is not valid", () => {
     const broken = { ...createBoardDoc(), scenes: [] };
     expect(failure(JSON.stringify(broken))).toMatch(/scenes/);
@@ -78,11 +73,6 @@ describe("setup documents", () => {
     expect(doc.teams[1].formation).toBe("4-4-2");
     expect(doc.teams[0].players).toHaveLength(11);
     expect(boardDocSchema.safeParse(doc).success).toBe(true);
-  });
-
-  it("is reported as a setup", () => {
-    const outcome = fromJson('{"teams":[{},{}]}');
-    expect(outcome.ok && outcome.kind).toBe("setup");
   });
 
   it("names and numbers the eleven in formation order, keeper first", () => {

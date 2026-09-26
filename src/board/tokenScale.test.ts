@@ -5,14 +5,12 @@ import {
   TOKEN_RADIUS,
   ballRadius,
   tokenRadius,
-  tokenScaleOf,
 } from "./pitch";
 import { ballGlue, frameAt } from "./timeline";
 import { hitTest } from "./interaction";
 import { drawBoard } from "./render";
 import { createRecordingCtx } from "./recording-ctx";
 import { fitViewport } from "./geometry";
-import { boardDocSchema } from "./schema";
 import { createBoardDoc } from "@/formations";
 import type { BoardDoc, RenderView } from "./types";
 
@@ -29,18 +27,9 @@ function view(doc: BoardDoc): RenderView {
 }
 
 describe("tokenScaleOf", () => {
-  it("falls back to the board default when unset", () => {
-    expect(tokenScaleOf(createBoardDoc())).toBe(DEFAULT_TOKEN_SCALE);
+  it("is the board default when unset, and scales token, ball and carry offset together", () => {
     expect(tokenRadius(createBoardDoc())).toBeCloseTo(TOKEN_RADIUS * DEFAULT_TOKEN_SCALE);
-    expect(ballRadius(createBoardDoc())).toBeCloseTo(BALL_RADIUS * DEFAULT_TOKEN_SCALE);
-  });
-
-  it("takes an explicit 1x as the literal size", () => {
     expect(tokenRadius(scaled(1))).toBe(TOKEN_RADIUS);
-    expect(ballRadius(scaled(1))).toBe(BALL_RADIUS);
-  });
-
-  it("scales the token, the ball and the carry offset together", () => {
     const big = scaled(2);
     expect(tokenRadius(big)).toBeCloseTo(TOKEN_RADIUS * 2);
     expect(ballRadius(big)).toBeCloseTo(BALL_RADIUS * 2);
@@ -48,33 +37,22 @@ describe("tokenScaleOf", () => {
   });
 });
 
-describe("hit-testing agrees with the drawn size", () => {
-  // The real risk: the renderer grows a token but hit-testing keeps the old
-  // radius, so the visible edge of a player stops being clickable.
-  it("a point outside a small token is inside a large one", () => {
-    const small = scaled(1);
-    const big = scaled(2);
-    const at = frameAt(small, 0).positions[A];
-    const justOutside = { x: at.x + TOKEN_RADIUS * 1.6, y: at.y };
-
-    expect(hitTest(small, frameAt(small, 0), justOutside, 0)).toBeNull();
-    expect(hitTest(big, frameAt(big, 0), justOutside, 0)?.id).toBe(A);
-  });
-
-  it("a shrunken token stops being clickable at its old edge", () => {
-    const tiny = scaled(0.5);
-    const at = frameAt(tiny, 0).positions[A];
-    const oldEdge = { x: at.x + TOKEN_RADIUS * 0.9, y: at.y };
-    expect(hitTest(tiny, frameAt(tiny, 0), oldEdge, 0)).toBeNull();
-  });
-
-  it("the centre is always a hit, at any scale", () => {
-    for (const k of [0.5, 1, 1.7, 2.5]) {
-      const doc = scaled(k);
-      const f = frameAt(doc, 0);
-      expect(hitTest(doc, f, f.positions[A])?.id).toBe(A);
-    }
-  });
+// The real risk: the renderer grows a token but hit-testing keeps the old radius, so the
+// visible edge of a player stops being clickable — or an old edge stays clickable.
+it("hit-testing agrees with the drawn size", () => {
+  const small = scaled(1);
+  const big = scaled(2);
+  const tiny = scaled(0.5);
+  const at = frameAt(small, 0).positions[A];
+  const justOutside = { x: at.x + TOKEN_RADIUS * 1.6, y: at.y };
+  expect(hitTest(small, frameAt(small, 0), justOutside, 0)).toBeNull();
+  expect(hitTest(big, frameAt(big, 0), justOutside, 0)?.id).toBe(A);
+  expect(hitTest(tiny, frameAt(tiny, 0), { x: at.x + TOKEN_RADIUS * 0.9, y: at.y }, 0)).toBeNull();
+  for (const k of [0.5, 1, 1.7, 2.5]) {
+    const doc = scaled(k);
+    const f = frameAt(doc, 0);
+    expect(hitTest(doc, f, f.positions[A])?.id).toBe(A);
+  }
 });
 
 describe("rendering", () => {
@@ -102,18 +80,5 @@ describe("rendering", () => {
     drawBoard(plain.ctx, createBoardDoc(), 0, view(createBoardDoc()));
     drawBoard(explicit.ctx, scaled(DEFAULT_TOKEN_SCALE), 0, view(scaled(DEFAULT_TOKEN_SCALE)));
     expect(explicit.log).toEqual(plain.log);
-  });
-});
-
-describe("schema", () => {
-  it("accepts the supported range and rejects beyond it", () => {
-    expect(boardDocSchema.safeParse(scaled(0.5)).success).toBe(true);
-    expect(boardDocSchema.safeParse(scaled(2.5)).success).toBe(true);
-    expect(boardDocSchema.safeParse(scaled(0.1)).success).toBe(false);
-    expect(boardDocSchema.safeParse(scaled(9)).success).toBe(false);
-  });
-
-  it("accepts a document without the field", () => {
-    expect(boardDocSchema.safeParse(createBoardDoc()).success).toBe(true);
   });
 });

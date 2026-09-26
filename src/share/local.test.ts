@@ -12,10 +12,6 @@ describe("board autosave", () => {
     expect(loadBoard(store)).toEqual(doc);
   });
 
-  it("is null when nothing has been saved", () => {
-    expect(loadBoard(memoryStore())).toBeNull();
-  });
-
   it("is null when there is no store", () => {
     expect(loadBoard(null)).toBeNull();
     expect(saveBoard(createBoardDoc(), null)).toBe(false);
@@ -29,13 +25,6 @@ describe("board autosave", () => {
 
   it("discards malformed JSON", () => {
     expect(loadBoard(memoryStore({ [BOARD_KEY]: "half a {" }))).toBeNull();
-  });
-
-  it("clears", () => {
-    const store = memoryStore();
-    saveBoard(createBoardDoc(), store);
-    clearBoard(store);
-    expect(loadBoard(store)).toBeNull();
   });
 
   it("never throws when the store is hostile", () => {

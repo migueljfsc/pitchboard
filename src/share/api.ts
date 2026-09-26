@@ -140,10 +140,6 @@ export async function createProject(name: string, parentId?: string | null): Pro
   return project;
 }
 
-export async function renameProject(id: string, name: string): Promise<void> {
-  await call(`/projects/${id}`, { method: "PATCH", body: JSON.stringify({ name }) });
-}
-
 /**
  * Re-file a folder. `null` puts it back at the root.
  *

@@ -12,7 +12,6 @@
  * late to add one.
  */
 
-import type { BoardDoc } from "./types";
 import { msg, type Message } from "@/i18n/core";
 
 /** The version this build writes. Bumped by any breaking schema change. */
@@ -69,6 +68,3 @@ export function migrate(raw: unknown): MigrateOutcome {
 
   return { ok: true, doc: current };
 }
-
-/** True when a document is already at the version this build writes. */
-export const isCurrent = (doc: BoardDoc): boolean => doc.version === CURRENT_VERSION;

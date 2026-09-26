@@ -37,7 +37,7 @@ import {
 } from "./annotations";
 import { HANDLE_RADIUS, concealedPlayers } from "./render";
 import { SAME_PLACE, clamp, distanceToSegment, halfRange } from "./geometry";
-import { projectPitch, unbillboard, unprojectPitch, type Camera } from "./projection";
+import { projectPitch, unbillboard, type Camera } from "./projection";
 
 export type HitTarget = { kind: "token" | "ball"; id: string } | null;
 
@@ -468,9 +468,6 @@ const tiltedText = (doc: BoardDoc, sceneIndex: number, id: string | null) => {
   const ann = visibleAt(doc, sceneIndex).find((a) => a.id === id);
   return ann?.kind === "text" ? ann : undefined;
 };
-
-/** The place on the grass under a screen point. NaN above the horizon, where there is none. */
-export const tiltedPitchPoint = (screen: Vec2, cam: Camera): Vec2 => unprojectPitch(screen, cam);
 
 /** Player ids whose token centre falls inside the rectangle spanned by `a` and `b`. */
 export function entitiesInRect(doc: BoardDoc, frame: Frame, a: Vec2, b: Vec2): string[] {

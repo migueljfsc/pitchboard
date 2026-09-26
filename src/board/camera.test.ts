@@ -6,8 +6,6 @@ import {
   cameraTransform,
   screenMapping,
   unzoomPoint,
-  zoomFromCamera,
-  zoomMatchesCamera,
 } from "./camera";
 import { resolveAt } from "./timeline";
 import { addSceneAfter, sceneStartSeconds, setSceneCamera } from "./scenes";
@@ -94,20 +92,6 @@ describe("scene cameras", () => {
     expect(cameraFromZoom({ z: 3, x: 0, y: 0 }, 0, 0, screenMapping(base, flat, 0, 0, 1))).toBeNull();
     const nan = { at: { x: NaN, y: 10 }, zoom: 3 };
     expect(setSceneCamera(base, 1, nan)).toBe(base);
-  });
-
-  it("turn back into the zoom that framed them, and know when they are showing", () => {
-    const zoom = { z: 2.5, x: -900, y: -500 };
-    const camera = cameraFromZoom(zoom, W, H, mapping)!;
-    const back = zoomFromCamera(camera, W, H, mapping);
-    expect(back.z).toBeCloseTo(zoom.z, 6);
-    expect(back.x).toBeCloseTo(zoom.x, 6);
-    expect(back.y).toBeCloseTo(zoom.y, 6);
-    expect(zoomMatchesCamera(zoom, camera, W, H, mapping)).toBe(true);
-    expect(zoomMatchesCamera({ ...zoom, x: zoom.x + 40 }, camera, W, H, mapping)).toBe(false);
-    // No camera is the whole board, which only the unzoomed view matches.
-    expect(zoomMatchesCamera(NO_SCREEN_ZOOM, undefined, W, H, mapping)).toBe(true);
-    expect(zoomMatchesCamera(zoom, undefined, W, H, mapping)).toBe(false);
   });
 
   it("are drawn through by an export, and not by the editor unless asked", () => {

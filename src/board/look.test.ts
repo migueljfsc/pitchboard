@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { drawBoard } from "./render";
-import { DEFAULT_THEME, lighten, themeFor } from "./pitch";
+import { DEFAULT_THEME, themeFor } from "./pitch";
 import { createRecordingCtx } from "./recording-ctx";
 import { fitViewport } from "./geometry";
 import { setKeeper } from "./players";
 import { setCarrier } from "./scenes";
-import { boardDocSchema } from "./schema";
 import { createBoardDoc } from "@/formations";
 import type { BoardDoc, RenderView } from "./types";
 
@@ -45,21 +44,12 @@ describe("the grass (D89)", () => {
     }
   });
 
-  it("leaves a colour alone when asked to move it by nothing", () => {
-    expect(lighten("#1c6b3c", 0)).toBe("#1c6b3c");
-  });
-
   it("falls back to the plain stripes where there is no OffscreenCanvas to draw turf on", () => {
     expect(typeof OffscreenCanvas).toBe("undefined");
     const doc = { ...createBoardDoc(), grass: { texture: "natural" as const } };
     expect(log(doc)).toEqual(log(createBoardDoc()));
   });
 
-  it("is refused outside its range", () => {
-    const doc = { ...createBoardDoc(), grass: { shade: 2 } };
-    expect(boardDocSchema.safeParse(doc).success).toBe(false);
-    expect(boardDocSchema.safeParse({ ...doc, grass: { shade: -0.4 } }).success).toBe(true);
-  });
 });
 
 describe("the keeper's kit (D90)", () => {

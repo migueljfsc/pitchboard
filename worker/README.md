@@ -95,7 +95,7 @@ They do not meet, and that is deliberate.
 | changes as the owner edits | never, it is a frozen copy | yes, it is a live pointer |
 | works on GitHub Pages | yes | no, and cannot |
 
-The anonymous one predates accounts and is untouched by any of this (D33). The account one
+The anonymous one predates accounts and is untouched by any of this (D7). The account one
 exists because a link you can read down a phone is worth having, and because reloading it
 should show the board as it is now — otherwise "share" means "share, then remember to
 republish" (0004). Withdrawing is clearing one column; publishing again mints a NEW slug, so a

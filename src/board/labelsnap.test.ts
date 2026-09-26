@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TEXT_BG_PAD, addAnnotation, boundsOf, textSize } from "./annotations";
 import { snapLabel } from "./interaction";
-import { boardDocSchema } from "./schema";
 import { createBoardDoc } from "@/formations";
 import type { Annotation, BoardDoc } from "./types";
 
@@ -66,22 +65,5 @@ describe("snapLabel", () => {
     // 16.5 is the box's edge; 11 the penalty spot. Centred at 16.3, the box edge is nearer.
     const ann = label(doc, "t1", { x: 16.3, y: 20 }, "x");
     expect(snapLabel(doc, 0, ann, ann.at, false).at.x).toBeCloseTo(16.5, 9);
-  });
-});
-
-describe("text alignment", () => {
-  it("round-trips, and is optional", () => {
-    let doc = board();
-    doc = addAnnotation(doc, { ...label(doc, "t1", { x: 50, y: 30 }), align: "left" });
-    doc = addAnnotation(doc, label(doc, "t2", { x: 50, y: 40 }));
-    const parsed = boardDocSchema.parse(JSON.parse(JSON.stringify(doc)));
-    expect(parsed.annotations?.[0]).toMatchObject({ align: "left" });
-    expect("align" in (parsed.annotations?.[1] ?? {})).toBe(false);
-  });
-
-  it("refuses an alignment it does not know", () => {
-    let doc = board();
-    doc = addAnnotation(doc, { ...label(doc, "t1", { x: 50, y: 30 }), align: "justify" as "left" });
-    expect(boardDocSchema.safeParse(JSON.parse(JSON.stringify(doc))).success).toBe(false);
   });
 });

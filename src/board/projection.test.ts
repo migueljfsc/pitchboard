@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  CAMERA_DISTANCE,
   GROUND_SQUASH,
   TILT,
   cameraFor,
@@ -29,14 +28,6 @@ describe("projectionFor", () => {
     expect(p.top).toBeGreaterThanOrEqual(-1e-9);
     expect(p.bottom).toBeLessThanOrEqual(700 + 1e-9);
     expect(nearHalf * 2).toBeLessThanOrEqual(1000 + 1e-9);
-  });
-
-  it("touches at least one edge, so nothing is left unused", () => {
-    const p = build(1000, 700);
-    const filledW = p.contentAcross * p.depthScale(1);
-    const filledH = (p.bottom - p.top) * (1 + HEADROOM);
-    const slack = Math.min(1000 - filledW, 700 - filledH);
-    expect(slack).toBeLessThan(1e-6);
   });
 
   it("puts the near end lower on screen and larger than the far end", () => {
@@ -180,15 +171,6 @@ describe("tiltedAspect", () => {
     expect(tiltedAspect(ACROSS, ALONG)).toBeCloseTo(fitted, 6);
   });
 
-  it("is squarer than the pitch it is drawn from", () => {
-    // 105 x 68 rotated is 0.65 wide; foreshortening brings it back toward 1.
-    const flat = ACROSS / ALONG;
-    const tilted = tiltedAspect(ACROSS, ALONG);
-    expect(tilted).toBeGreaterThan(flat);
-    expect(tilted).toBeGreaterThan(0.9);
-    expect(tilted).toBeLessThan(1.15);
-  });
-
   it("survives a half-pitch, which is wider than it is long", () => {
     const half = 52.5 + PITCH_PADDING * 2;
     expect(tiltedAspect(ACROSS, half)).toBeGreaterThan(1);
@@ -201,19 +183,6 @@ describe("framingOf", () => {
     expect(framingOf({ half: "full", rotated: false, tilt: true }).rotated).toBe(true);
   });
 
-  it("leaves a flat board alone", () => {
-    const flat = { half: "left" as const, rotated: false };
-    expect(framingOf(flat)).toBe(flat);
-  });
-});
-
-describe("the camera constants", () => {
-  it("is a tilt on a long lens, which is what the look is", () => {
-    expect(TILT).toBeGreaterThan(20);
-    expect(TILT).toBeLessThan(70);
-    // Short enough to splay the near touchline would read as a fisheye.
-    expect(CAMERA_DISTANCE).toBeGreaterThan(4);
-  });
 });
 
 // The inverse is what lets the pointer become a place on the grass, so the 3D view

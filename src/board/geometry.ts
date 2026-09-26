@@ -12,13 +12,9 @@ import { PITCH_PADDING } from "./pitch";
 
 // ---------------------------------------------------------------- vectors
 
-export const vec = (x: number, y: number): Vec2 => ({ x, y });
-
 export const add = (a: Vec2, b: Vec2): Vec2 => ({ x: a.x + b.x, y: a.y + b.y });
 
 export const sub = (a: Vec2, b: Vec2): Vec2 => ({ x: a.x - b.x, y: a.y - b.y });
-
-export const scaleVec = (a: Vec2, k: number): Vec2 => ({ x: a.x * k, y: a.y * k });
 
 export const distance = (a: Vec2, b: Vec2): number => Math.hypot(a.x - b.x, a.y - b.y);
 

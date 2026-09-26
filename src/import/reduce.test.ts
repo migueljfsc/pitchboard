@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { PALETTE } from "@/components/ui/palette";
 import { AWAY, HOME } from "@/formations";
 import { boardFromTracks } from "./index";
-import { boardDocSchema } from "@/board/schema";
 import {
   airborne,
   bestCover,
@@ -357,10 +356,6 @@ describe("steady", () => {
     expect(steady(passed)).toEqual(passed);
   });
 
-  it("says nothing where nobody is holding it", () => {
-    const gap = ["home-1", null, "away-9", null, "home-2"];
-    expect(steady(gap)).toEqual(gap);
-  });
 });
 
 describe("witnessed", () => {
@@ -460,9 +455,6 @@ describe("restartAt", () => {
     expect(restartAt(ball, pitch, 25)).toBe(160);
   });
 
-  it("says nothing about a file with no ball", () => {
-    expect(restartAt([], pitch, 25)).toBeNull();
-  });
 });
 
 describe("impossible movement", () => {
@@ -570,10 +562,6 @@ describe("carrierAt", () => {
   it("will not use a sighting from another moment", () => {
     // The ball moves. Where it was a second ago says nothing about who holds it now.
     expect(carrierAt([ball(15, 21, 30)], players, 60)).toBeNull();
-  });
-
-  it("says nothing when the ball was never found", () => {
-    expect(carrierAt([], players, 15)).toBeNull();
   });
 
   it("does not hand the ball to a player it is flying over", () => {
@@ -1343,11 +1331,6 @@ describe("takenFrom", () => {
     expect(takenFrom(seen, players, 10, "away-1", 25)).toEqual({ lost: true, taker: null });
   });
 
-  it("says nothing without sightings to judge", () => {
-    const players = [run("home-1", "home", 1, 40, 20, 30)];
-    expect(takenFrom([ball(10, 20, 30)], players, 10, "home-1", 25).lost).toBe(false);
-    expect(takenFrom([], players, 10, "home-1", 25).lost).toBe(false);
-  });
 });
 
 describe("boardFromTracks and players nobody saw (D87)", () => {
@@ -1394,9 +1377,4 @@ describe("boardFromTracks keeps where the board came from (D88)", () => {
     }
   });
 
-  it("is a field the schema keeps", () => {
-    const result = boardFromTracks(file([straightRun(1, "home", 20), straightRun(2, "away", 40)]));
-    if (!result.ok) throw new Error("refused");
-    expect(boardDocSchema.parse(result.doc).origin).toEqual(result.doc.origin);
-  });
 });
