@@ -15,6 +15,8 @@ and the bindings it needs are created here and passed through as outputs.
 | `d1.tf` | D1 database — users, sessions, projects, boards | **active** |
 | `kv.tf` | KV namespace — published board snapshots | **active** |
 | `data.tf` | Zone lookup | gated on `domain` |
+| `turnstile.tf` | Turnstile widget — bot check on register and password reset (D109) | **active** |
+| `email.tf` | Resend DNS — DKIM, bounce MX, SPF, DMARC (D109) | gated on `domain` and `resend_dkim_public_key` |
 
 The R2 bucket holds board preview images (OG cards for share links) and exported renders —
 binaries that belong in neither the git repo nor a D1 row. D1 and KV are the two halves of the
@@ -42,6 +44,7 @@ worth settling before the first one.
    - Account · Workers R2 Storage · Edit
    - Account · D1 · Edit
    - Account · Workers KV Storage · Edit
+   - Account · Turnstile · Edit
    - Zone · DNS · Edit and Zone · Zone · Read (only needed once `domain` is set)
    ```sh
    export CLOUDFLARE_API_TOKEN=...        # provider auth
@@ -105,5 +108,5 @@ Two consequences worth holding onto:
 
 Everything in this stack sits inside a free tier that Cloudflare enforces by **refusing
 requests, not by billing** — R2 gives 10 GB-month, 1M class-A and 10M class-B operations per
-month, with no egress charge. The stack stays at $0 as long as `domain` is empty; a registered
-domain is the only line item that would ever cost anything.
+month, with no egress charge. Turnstile is free. The registered domain, renewed at cost through
+Cloudflare Registrar, is the only line item; it is bought by hand and is not in this stack.

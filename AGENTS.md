@@ -49,9 +49,9 @@ Everything else is negotiable. These are not.
 
 ## Non-goals for v1 — do not build
 
-Real player data and autocomplete, cones, thirds views, touch support, heatmaps, custom domain.
-All are deliberate deferrals (D9). The drawing toolkit and half-pitch were once on this list and
-have shipped (D20).
+Real player data and autocomplete, cones, thirds views, touch support, heatmaps.
+All are deliberate deferrals (D9). The drawing toolkit, half-pitch and a custom domain were once
+on this list and have shipped (D20, D109).
 
 ## Repository layout
 
@@ -81,6 +81,7 @@ src/import/               video-derived tracks in, a board out — see the sibli
 src/share/                localStorage, URL-hash codec, API client
   storage.ts              the ONLY place localStorage is touched; never throws
   urlcodec.ts             #d= share links: deflate + base64url, and the budget
+  password.ts             the browser's half of password hashing; every constant load-bearing
   json.ts                 board and setup files in and out; owns setupTeamSchema
   presets.ts              named one-team squad presets, built on setupTeamSchema
   local.ts                autosave of the board in progress
@@ -94,11 +95,12 @@ src/components/           React chrome; ui/ holds shadcn-style primitives
 scripts/board.ts          `pnpm board <tracks.json>` — a tracks file through the real importer
 worker/                   Cloudflare Worker — the API, and the SPA's static passthrough
   index.ts                the router; /api/* only, assets are served ahead of it
-  lib/                    session, google, users, boards (and the project tree), presets,
+  lib/                    session, google, users, auth (email and password), password,
+                          mail, turnstile, boards (and the project tree), presets,
                           admin (the operator's /admin view), crypto, http, limits
   migrations/             D1 schema, applied by CI before the script is deployed
 wrangler.jsonc            bindings and asset routing; the ONLY place a binding is declared
-infrastructure/terraform/cloudflare/    OpenTofu — R2, D1, KV. Durable resources only
+infrastructure/terraform/cloudflare/    OpenTofu — R2, D1, KV, Turnstile, DNS. Durable resources only
 ```
 
 The Worker is application code and lives with the application, not under `infrastructure/`.
@@ -264,8 +266,15 @@ Each is one line of what breaks; the reasoning is in the cited decision.
 - **Export size follows the board**, both axes even.
 - **Cancelling an export is terminating the worker.**
 
-### Worker (D39)
+### Worker (D39, D109)
 - **Every recursive CTE carries `n < WALK_LIMIT`** — a walk over a cycle does not terminate.
+- **The password KDF runs in the browser.** `deriveKey`'s iterations, salt prefix and email
+  normalisation are frozen by a test vector; changing any locks every password account out.
+  The browser's `normaliseEmail` and the Worker's must agree.
+- **No `users` row is written before its address is verified** — the Google join trusts it.
+- **An auth route never says whether an address has an account**: mail is sent in `waitUntil`,
+  after an identical `ok`.
+- **Auth bodies must be `application/json`** — a `text/plain` form POST is the login CSRF.
 - **Never mix a bare `?` with `?N` in one statement** — SQLite binds the wrong value, silently.
 - **Deleting a project deletes its subtree**; the confirmation counts it.
 - **`buildTree` must not trust its rows** — orphans to the root, cycles broken.

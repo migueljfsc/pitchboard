@@ -362,6 +362,11 @@ nor hold — so `.github/workflows/deploy-worker.yml` deploys, from `main`, gate
 typecheck, tests and build. The Cloudflare API token is made by hand: a stack that owns its own
 credential can revoke its access mid-apply.
 
+**It is served from a domain bought through Cloudflare Registrar** (wrangler's `routes`, with
+`custom_domain`), because sending email needs one (D109); the zone's records are in the stack.
+`workers.dev` stays on until the domain is proved. The GitHub Pages copy was retired with it:
+it had no server, so no accounts, and one Worker is one thing to reason about.
+
 ## D108 — The operator's view: `/admin`, metadata only
 One read-only page for the site's owner: totals, the accounts, and one account's projects, boards
 and presets. **The gate is `ADMIN_EMAILS`**, a secret so the address stays out of the repository,
@@ -373,6 +378,33 @@ Opening someone's board was left out on purpose: that is reading their work, not
 and expiry; `last_seen_at` rides the daily session slide, so it is accurate to a day. Anonymous
 use — `#d=` links and boards never saved — does not reach the server and is not counted. The page
 is English only and lazy-loaded.
+
+## D109 — Email and password: the KDF runs in the browser, and no account is unverified
+**The expensive half of hashing runs client-side.** Measured on the edge, PBKDF2-SHA256 costs
+~0.27 ms of CPU per thousand iterations: 100k took 26–30 ms against a 10 ms free-tier budget
+that is enforced loosely but not promised. So the browser derives a key with PBKDF2-SHA256 at
+600k iterations (OWASP) over the password, **salted with `pitchboard:v1:` + the normalised
+address** — Bitwarden's scheme, and it needs no endpoint that answers "does this address exist".
+The Worker stores `v1$salt$SHA-256(salt$key)`: a leaked table still costs 600k iterations a
+guess, and the key, not the stored value, is what logs in. Every constant in
+`src/share/password.ts` is load-bearing; a frozen test vector guards them. Workers Paid and
+moving to AWS were both weighed and rejected as cost for a problem the browser solves for free.
+
+**Registering never creates an account.** The hash waits on a single-use `email_tokens` row and
+the `users` row is written when the emailed link comes back, so every account's address has been
+proved — which keeps `users.ts` joining a Google sign-in by email safe. Registering an address
+that already has an account sets the password on it through the same link: that is how a Google
+account gains one, and only the mailbox's owner can finish it. A password set by link ends every
+other session. Links go to the page (`/?verify=`, `/?reset=`), which POSTs them, because mail
+scanners follow GETs. Register and reset-request answer `ok` before any lookup or send
+(`waitUntil`), and sign-in says only "wrong email or password", so nothing reveals whether an
+address has an account.
+
+**Abuse:** the routes that send mail take Turnstile; every auth route is rate limited per client
+and per address (`AUTH_LIMIT`); bodies must be `application/json`, which a cross-site form cannot
+send without a preflight — the login-CSRF guard. **Mail is Resend** from `noreply@<domain>`:
+Cloudflare's Email Service sends to arbitrary recipients only on Workers Paid. Its DNS is in the
+stack. Email needs a domain someone owns, so D9's "custom domain" deferral ended here (D40).
 
 ---
 

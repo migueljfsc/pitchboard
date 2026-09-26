@@ -1,16 +1,14 @@
 # Pitchboard
 
 [![ci](https://github.com/migueljfsc/pitchboard/actions/workflows/ci.yml/badge.svg)](https://github.com/migueljfsc/pitchboard/actions/workflows/ci.yml)
-[![deploy](https://github.com/migueljfsc/pitchboard/actions/workflows/deploy.yml/badge.svg)](https://github.com/migueljfsc/pitchboard/actions/workflows/deploy.yml)
+[![deploy](https://github.com/migueljfsc/pitchboard/actions/workflows/deploy-worker.yml/badge.svg)](https://github.com/migueljfsc/pitchboard/actions/workflows/deploy-worker.yml)
 
 An animated football tactics board that runs in the browser. Draw a formation, move players
 between scenes along curved runs, and export the result as **MP4**, **GIF**, or **PNG** —
 all client-side, no server rendering.
 
-**Live:** https://migueljfsc.github.io/pitchboard/ — published by
-[`deploy.yml`](.github/workflows/deploy.yml) on every push to `main`. The API and share links run
-on a Cloudflare Worker, deployed alongside it by
-[`deploy-worker.yml`](.github/workflows/deploy-worker.yml).
+**Live:** https://pitchboard.migueljfsc.dev — one Cloudflare Worker serving the app and its API,
+deployed by [`deploy-worker.yml`](.github/workflows/deploy-worker.yml) on every push to `main`.
 
 > Releases are cut by [`release.yml`](.github/workflows/release.yml): commitizen bumps the
 > version from conventional commits, updates the changelog, tags, and opens a GitHub Release.
@@ -49,11 +47,10 @@ Chain, polygon, or filled per link, with optional live distance labels in metres
 
 ## Stack
 
-React 19 + TypeScript (strict) + Vite 8 + Tailwind v4. Deployed to GitHub Pages by
-`.github/workflows/deploy.yml` on every push to `main`, behind the same lint / typecheck / test
-/ build gates CI runs.
+React 19 + TypeScript (strict) + Vite 8 + Tailwind v4.
 
-The Worker in [`worker/`](worker/) serves `/api/*` and the share pages. OpenTofu in
+The Worker in [`worker/`](worker/) serves the built app, `/api/*` and the share pages, behind the
+same lint / typecheck / test / build gates CI runs. OpenTofu in
 [`infrastructure/terraform/cloudflare`](infrastructure/terraform/cloudflare) owns the durable
 resources — R2, D1, KV — and deliberately does not own the deploy, which is
 [`deploy-worker.yml`](.github/workflows/deploy-worker.yml). The reasoning is D40 in
@@ -67,13 +64,10 @@ pnpm dev          # http://localhost:5173
 pnpm test         # vitest — engine only
 pnpm lint
 pnpm typecheck
-pnpm build        # base path /pitchboard/ for GitHub Pages
+pnpm build
 ```
 
 Node >= 22.12. Package manager: pnpm.
-
-`base` is only applied to production builds, so `pnpm dev` stays at the root. Override it with
-`PITCHBOARD_BASE=/ pnpm build` for a root-domain deploy.
 
 ### Contributing to yourself later
 

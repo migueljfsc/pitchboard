@@ -60,6 +60,7 @@ import {
   SESSION_TTL_S,
 } from "./lib/session";
 import { userForGoogleIdentity } from "./lib/users";
+import { login, register, requestReset, resetPassword, verifyEmail, type AuthCtx } from "./lib/auth";
 
 /**
  * Sign-in ends in a browser navigation, not a fetch, so a failure has to be something a page
@@ -75,7 +76,7 @@ function backToApp(origin: string, error?: string): Response {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
     if (!url.pathname.startsWith("/api/")) {
@@ -102,6 +103,18 @@ export default {
         await destroySession(env, request);
         return json({ ok: true }, 200, { "set-cookie": clearedSessionCookie() });
       }
+
+      // Email and password (D109). Each answers JSON and sets the session cookie itself.
+      case "POST /api/auth/register":
+        return register(authCtx(env, request, ctx, url, now));
+      case "POST /api/auth/verify":
+        return verifyEmail(authCtx(env, request, ctx, url, now));
+      case "POST /api/auth/login":
+        return login(authCtx(env, request, ctx, url, now));
+      case "POST /api/auth/reset/request":
+        return requestReset(authCtx(env, request, ctx, url, now));
+      case "POST /api/auth/reset":
+        return resetPassword(authCtx(env, request, ctx, url, now));
 
       case "GET /api/auth/google/start": {
         const { state, verifier } = newOauthChallenge();
@@ -178,6 +191,14 @@ export default {
     }
   },
 };
+
+/**
+ * Links in emails are built from the origin the request arrived on, like the Google callback,
+ * so a link sent from the custom domain comes back to it.
+ */
+function authCtx(env: Env, request: Request, ctx: ExecutionContext, url: URL, now: number): AuthCtx {
+  return { env, request, waitUntil: (promise) => ctx.waitUntil(promise), origin: url.origin, now };
+}
 
 /**
  * Everything that needs a signed-in user. Ids are matched by shape, so a malformed one is a

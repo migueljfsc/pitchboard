@@ -10,9 +10,7 @@
  *   /admin         the operator's usage view (D108). The Worker decides who sees data.
 
  *
- * All resolve only on the Worker, which serves index.html for unknown paths. The GitHub
- * Pages deploy has neither the rewrite nor the server, which is correct — it has no accounts
- * either.
+ * All resolve because the Worker serves index.html for unknown paths.
  */
 
 const BOARD_PATH = /^\/board\/([A-Za-z0-9_-]{22})$/;

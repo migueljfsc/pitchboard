@@ -23,6 +23,7 @@ before any React touches it, and every phase ends at a state you can look at.
 | M9 | Seamless flow at a fixed pace (D14) |
 | M10 | Squad presets (D30) |
 | — | Accounts, nested projects and saved boards on a Worker + D1 + KV (D39) |
+| — | Email and password sign-in, verified by email, on a custom domain (D109, D40) |
 | — | Framing: half-pitch, vertical, and the 3D view, which edits everything the flat board does (D12, D34, D91) |
 | — | Carry-forward editing, per-entity waits, run styles, the ball's own timing, lofts (D41, D14, D44) |
 | — | Kits with patterns and keepers, EN/PT, the grass and goals (D37, D38, D18) |
@@ -36,7 +37,8 @@ before any React touches it, and every phase ends at a state you can look at.
 
 - **Save the current shape as a custom formation.** The last item from M1. Formations are
   generated from notation (D11), so this needs somewhere to keep one that is not.
-- **Custom domain.** Stubbed behind a `has_domain` flag; the app runs on `*.workers.dev`.
+- **Switch off `workers.dev`** once the custom domain is proved (D40), and drop it from
+  `turnstile_extra_domains`.
 - Known defects are in [`bugs.md`](./bugs.md). Non-goals are in `AGENTS.md` (D9).
 
 ## Definition of done, per change

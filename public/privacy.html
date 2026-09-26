@@ -94,7 +94,7 @@
   <body>
     <main>
       <h1>Privacy Policy</h1>
-      <p class="meta">Pitchboard · Last updated 30 August 2026</p>
+      <p class="meta">Pitchboard · Last updated 26 September 2026</p>
 
       <div class="lede">
         <p>
@@ -146,9 +146,11 @@
           are stored. Your Google password is never seen or received.
         </li>
         <li>
-          <strong>Email and password.</strong> Your email address is stored.
-          Your password is not: only an irreversible cryptographic hash of it is
-          kept, which cannot be turned back into the original.
+          <strong>Email and password.</strong> Your email address is stored,
+          once you have confirmed it through a link sent to it. Your password
+          never leaves your browser: it is turned into an irreversible
+          cryptographic key there, and only a further hash of that key is kept,
+          which cannot be turned back into the original.
         </li>
       </ul>
       <p>
@@ -189,7 +191,14 @@
           published boards and uploaded images, acting as a processor on
           instructions. Cloudflare also processes IP addresses and basic request
           metadata to deliver and protect the service, and keeps short-lived
-          operational logs.
+          operational logs. When you create an account with a password or ask to
+          reset one, Cloudflare Turnstile checks that the request comes from a
+          person.
+        </li>
+        <li>
+          <strong>Resend</strong> delivers the emails that confirm your address
+          and reset your password. It receives your email address and the
+          message, and nothing else. No other email is ever sent.
         </li>
         <li>
           <strong>Google</strong> is involved only if you choose Google sign-in,

@@ -60,14 +60,40 @@ variable "domain" {
   type        = string
   default     = ""
   description = <<-EOT
-    Apex domain managed in this Cloudflare account. When empty, all DNS and custom-domain
-    resources are skipped and the Worker is reached on its workers.dev subdomain instead.
-    Set it only if the project earns a domain — see docs/decisions.md.
+    Personal apex domain in this Cloudflare account, bought through Cloudflare Registrar and
+    shared with other projects — this stack only creates records under `project_name`. The
+    Worker is served from <project_name>.<domain> (wrangler.jsonc `routes`) and email is sent
+    from it (D109). When empty, all DNS and custom-domain resources are skipped.
   EOT
+}
+
+###################### EMAIL (Resend) ######################
+
+variable "resend_dkim_public_key" {
+  type        = string
+  default     = ""
+  description = <<-EOT
+    The `resend._domainkey` TXT value Resend shows once the domain is added there (starts
+    `p=`). Public by nature — it is published in DNS. Empty skips every email record.
+  EOT
+}
+
+variable "resend_region" {
+  type        = string
+  default     = "eu-west-1"
+  description = "The region chosen when the domain was added in Resend; it names the bounce MX host."
+}
+
+###################### TURNSTILE ######################
+
+variable "turnstile_extra_domains" {
+  type        = list(string)
+  default     = []
+  description = "Hostnames besides the app's own the sign-in form is served from, such as the workers.dev one."
 }
 
 variable "r2_public_hostname" {
   type        = string
   default     = "media"
-  description = "Subdomain used to publicly serve the R2 bucket (e.g. media.<domain>)."
+  description = "Suffix of the hostname that publicly serves the R2 bucket (<project_name>-media.<domain>)."
 }

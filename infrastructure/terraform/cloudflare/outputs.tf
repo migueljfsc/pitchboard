@@ -29,3 +29,14 @@ output "kv_snapshots_namespace_id" {
   value       = cloudflare_workers_kv_namespace.snapshots.id
   description = "KV namespace id for published snapshots, for the kv_namespaces binding."
 }
+
+output "turnstile_sitekey" {
+  value       = cloudflare_turnstile_widget.auth.sitekey
+  description = "Turnstile sitekey — public, pasted into src/components/Turnstile.tsx."
+}
+
+output "turnstile_secret_key" {
+  value       = cloudflare_turnstile_widget.auth.secret
+  sensitive   = true
+  description = "Turnstile secret, for `wrangler secret put TURNSTILE_SECRET_KEY`. Read with -raw."
+}

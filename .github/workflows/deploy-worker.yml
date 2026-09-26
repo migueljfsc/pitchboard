@@ -10,10 +10,6 @@ name: deploy-worker
 # can live in state and be re-planned. The stack owns the durable resources; this owns the
 # deploy, and the split is technical rather than stylistic.
 #
-# The Pages deploy in deploy.yml runs in parallel and is untouched — D39 keeps it alive so
-# existing links resolve while the Worker proves itself. The two differ in one build input:
-# Pages serves from a /pitchboard/ base, the Worker serves from the root.
-#
 # Required GitHub secrets (same two the terraform workflow uses):
 #   CLOUDFLARE_API_TOKEN    — needs Account · Workers Scripts · Edit and Account · D1 · Edit
 #   CLOUDFLARE_ACCOUNT_ID
@@ -56,7 +52,7 @@ jobs:
     # Add required reviewers to this environment in repo settings to gate deploys.
     environment:
       name: cloudflare-production
-      url: https://pitchboard.migueljfscardoso.workers.dev
+      url: https://pitchboard.migueljfsc.dev
     steps:
       - uses: actions/checkout@v7
 
@@ -76,10 +72,7 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
 
-      # The Worker serves from the root; the default /pitchboard/ base is for Pages.
       - run: pnpm build
-        env:
-          PITCHBOARD_BASE: /
 
       # Schema before code, so a new version never meets a table it predates.
       # Migrations are forward-only and must be additive: this runs unattended, and the

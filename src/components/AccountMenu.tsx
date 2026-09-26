@@ -10,15 +10,23 @@
  * The sign-in failure path arrives as a query parameter rather than a response, because the
  * OAuth callback ends in a redirect and there is no fetch to fail. It is read once and then
  * stripped from the address, so a refresh does not resurrect an old complaint.
+ *
+ * The emailed links arrive the same way (D109): `?verify=<token>` is spent as soon as the page
+ * opens, and `?reset=<token>&email=<address>` opens the menu on a new-password form. Both go
+ * to the page, not to the API, because mail scanners follow GET links and would spend the
+ * token before the coach ever saw it; only a POST from the page uses it.
  */
 
 import { useEffect, useRef, useState } from "react";
 import { LogOut, UserRound } from "lucide-react";
 
+import { PasswordForm } from "@/components/PasswordForm";
 import { useI18n } from "@/i18n/context";
+import type { MessageKey } from "@/i18n/core";
+import { enterSignedIn, errorKey } from "@/lib/signIn";
 import { cn } from "@/lib/utils";
 import type { AccountState } from "@/lib/useAccount";
-import { startGoogleSignIn } from "@/share/api";
+import { verifyEmail } from "@/share/api";
 
 /** Codes the Worker actually emits; anything else is a bug and reads as the generic line. */
 const KNOWN_ERRORS = new Set(["access_denied", "invalid_state", "email_unverified"]);
@@ -35,10 +43,26 @@ function readAuthError(): string | null {
   return KNOWN_ERRORS.has(value) ? value : "unknown";
 }
 
-function forgetAuthError(): void {
+/** A link from an email, read as purely as `readAuthError` and for the same reason. */
+type EmailLink = { verify: string } | { reset: string; email: string };
+
+function readEmailLink(): EmailLink | null {
+  const params = new URLSearchParams(window.location.search);
+  const verify = params.get("verify");
+  if (verify) return { verify };
+  const reset = params.get("reset");
+  const email = params.get("email");
+  if (reset && email) return { reset, email };
+  return null;
+}
+
+/** Tokens are credentials: out of the address before anything else can copy it. */
+const LINK_PARAMS = ["auth_error", "verify", "reset", "email"];
+
+function forgetAuthParams(): void {
   const url = new URL(window.location.href);
-  if (!url.searchParams.has("auth_error")) return;
-  url.searchParams.delete("auth_error");
+  if (!LINK_PARAMS.some((name) => url.searchParams.has(name))) return;
+  for (const name of LINK_PARAMS) url.searchParams.delete(name);
   // replaceState so the back button does not walk into a failed sign-in, and so the hash —
   // which may carry a shared board (D33) — survives untouched.
   window.history.replaceState(null, "", url.toString());
@@ -51,11 +75,33 @@ function forgetAuthError(): void {
  */
 export function AccountMenu({ account, loading, signOut }: AccountState) {
   const { t } = useI18n();
-  const [open, setOpen] = useState(false);
+  const [link] = useState<EmailLink | null>(readEmailLink);
+  // A reset link opens straight onto its form; anything else waits for a click.
+  const [open, setOpen] = useState(() => link !== null && "reset" in link);
   const [authError, setAuthError] = useState<string | null>(readAuthError);
+  const [linkError, setLinkError] = useState<MessageKey | null>(null);
+  const [verifying, setVerifying] = useState(() => link !== null && "verify" in link);
   const root = useRef<HTMLDivElement>(null);
 
-  useEffect(forgetAuthError, []);
+  useEffect(forgetAuthParams, []);
+
+  // Spent once. StrictMode's second mount finds the token already deleted by the first and
+  // gets `invalid_token`, which is why a success navigates away before anything can render it.
+  const verifyToken = link && "verify" in link ? link.verify : null;
+  useEffect(() => {
+    if (!verifyToken) return;
+    let live = true;
+    verifyEmail(verifyToken)
+      .then(enterSignedIn)
+      .catch((cause: unknown) => {
+        if (!live) return;
+        setLinkError(errorKey(cause));
+        setVerifying(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [verifyToken]);
 
   useEffect(() => {
     if (!open) return;
@@ -75,11 +121,13 @@ export function AccountMenu({ account, loading, signOut }: AccountState) {
   if (loading) return <div className="w-[76px] shrink-0" aria-hidden />;
 
   if (!account) {
+    const reset = link && "reset" in link ? { token: link.reset, email: link.email } : undefined;
     return (
       <div ref={root} className="relative shrink-0">
         <button
           type="button"
-          onClick={startGoogleSignIn}
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
           title={t("account.signIn.why")}
           className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
         >
@@ -87,14 +135,31 @@ export function AccountMenu({ account, loading, signOut }: AccountState) {
           {t("account.signIn")}
         </button>
 
-        {authError && (
+        {open && (
+          <div className="absolute right-0 top-full z-40 mt-1.5 flex w-[320px] flex-col gap-1.5 rounded-md border border-ink-600 bg-ink-800 p-2 shadow-lg shadow-black/40">
+            <PasswordForm initialMode={reset ? "reset" : "signIn"} reset={reset} />
+          </div>
+        )}
+
+        {!open && verifying && (
+          <div className="absolute right-0 top-full z-40 mt-1.5 w-72 rounded-md border border-ink-600 bg-ink-800 p-2 shadow-lg shadow-black/40">
+            <p role="status" className="text-[11px] leading-relaxed text-ink-200">
+              {t("account.password.verifying")}
+            </p>
+          </div>
+        )}
+
+        {!open && (authError || linkError) && (
           <div className="absolute right-0 top-full z-40 mt-1.5 flex w-72 flex-col gap-1.5 rounded-md border border-ink-600 bg-ink-800 p-2 shadow-lg shadow-black/40">
             <p role="alert" className="text-[11px] leading-relaxed text-amber-200">
-              {t(`account.error.${authError}` as "account.error.unknown")}
+              {linkError ? t(linkError) : t(`account.error.${authError}` as "account.error.unknown")}
             </p>
             <button
               type="button"
-              onClick={() => setAuthError(null)}
+              onClick={() => {
+                setAuthError(null);
+                setLinkError(null);
+              }}
               className="self-end rounded border border-ink-600 px-2 py-1 text-[11px] text-ink-300 transition hover:border-accent hover:text-white"
             >
               {t("account.error.dismiss")}

@@ -20,4 +20,8 @@ interface Env {
    * operator's address stays out of the repository. Unset means nobody is an admin.
    */
   ADMIN_EMAILS?: string;
+  /** Resend API key, sending access only. Every verification and reset email goes through it. */
+  RESEND_API_KEY: string;
+  /** The Turnstile widget's secret, from `tofu output -raw turnstile_secret_key`. */
+  TURNSTILE_SECRET_KEY: string;
 }

@@ -1,13 +1,14 @@
 /**
  * Random identifiers and hashing, on the Workers runtime's WebCrypto.
  *
- * Nothing here is a password KDF. Password hashing is deliberately expensive and lives with
- * the auth endpoints, where its cost is measured against the free tier's 10 ms CPU budget.
- * These are the cheap primitives: 128 bits of randomness for an id, 256 for a session token,
- * and one SHA-256 for turning a token into the key it is stored under.
+ * Nothing here is a password KDF, and nothing on the server is: the expensive part of hashing
+ * a password runs in the browser, because PBKDF2 at a useful work factor costs several times
+ * the free tier's 10 ms CPU budget (D109). These are the cheap primitives: 128 bits of
+ * randomness for an id, 256 for a session token, and one SHA-256 for turning a token into the
+ * key it is stored under.
  */
 
-function base64url(bytes: Uint8Array): string {
+export function base64url(bytes: Uint8Array): string {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   // Padding is stripped so the value is safe in a cookie, where `=` separates name from value.

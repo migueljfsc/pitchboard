@@ -32,9 +32,7 @@ const Admin = lazy(() => import("@/pages/Admin").then((m) => ({ default: m.Admin
  * opened for editing, which the Editor resolves for itself since it needs an
  * account to do it. This is still not a router — a path is one more thing the
  * address can be, read once, because changing one is a page load rather than an
- * event. Both resolve only on the Worker, which serves index.html for unknown
- * paths; the Pages deploy has neither the rewrite nor the server, which is
- * correct, since it has no accounts either.
+ * event. Both resolve because the Worker serves index.html for unknown paths.
  */
 export function App() {
   const { t, tm } = useI18n();

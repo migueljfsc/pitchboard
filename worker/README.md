@@ -1,7 +1,8 @@
 # The Worker
 
 Serves the SPA and the `/api/*` surface at
-https://pitchboard.migueljfscardoso.workers.dev.
+https://pitchboard.migueljfsc.dev (and, until it is switched off,
+https://pitchboard.migueljfscardoso.workers.dev).
 
 `wrangler.jsonc` sits at the repository root, beside `package.json` — it is the project's
 deploy config, and its paths resolve against itself.
@@ -12,11 +13,15 @@ lib/
   session.ts       the cookie, the row it points at, lazy expiry, sliding renewal
   google.ts        OAuth: authorize URL, PKCE, code exchange, claim validation
   users.ts         external identity to account, link rather than duplicate
+  auth.ts          email and password: register, verify, sign in, reset (D109)
+  password.ts      the server's half of password hashing — one salted SHA-256
+  mail.ts          the verification and reset emails, through Resend
+  turnstile.ts     the bot check on the two routes that send mail
   boards.ts        projects and boards; ownership is a WHERE clause, never a check
   shares.ts        publishing to /share/<slug>, and the one public read
   admin.ts         the operator's /admin view — 404 to anyone not in ADMIN_EMAILS
   limits.ts        per-user quotas — D39 wanted them shipping with the feature
-  crypto.ts        ids, session tokens, SHA-256 — no password KDF lives here
+  crypto.ts        ids, session tokens, SHA-256
   http.ts          JSON responses, all no-store
 secrets.d.ts       the secrets wrangler.jsonc cannot hold, merged into Env
 migrations/        D1 schema, forward-only
@@ -27,8 +32,8 @@ migrations/        D1 schema, forward-only
 The free tier refuses work rather than billing, so the limits are the design constraints:
 
 - **10 ms CPU per request.** Waiting on D1, KV or `fetch` does *not* count — only compute
-  does. This is why sessions are a D1 lookup rather than a third-party cache, and why Google
-  sign-in is cheap while a password KDF is the one expensive thing in the codebase.
+  does. This is why sessions are a D1 lookup rather than a third-party cache, and why the
+  password KDF runs in the browser (D109): 600k PBKDF2 iterations would cost ~160 ms here.
 - **100,000 requests/day.** Asset requests are free and unlimited and do not count, which is
   why `run_worker_first` is an array of patterns and not `true`.
 - **D1: 5M row reads, 100k row writes per day.** Session renewal slides only once a session
@@ -77,11 +82,8 @@ CI, on a push to `main` touching this directory or the app it serves. Locally, o
 dry run:
 
 ```sh
-PITCHBOARD_BASE=/ pnpm build && pnpm deploy:worker --dry-run
+pnpm build && pnpm deploy:worker --dry-run
 ```
-
-`PITCHBOARD_BASE=/` matters: the default build targets the `/pitchboard/` base path that
-GitHub Pages serves from, and the Worker serves from the root.
 
 ## The two share links
 
@@ -93,7 +95,6 @@ They do not meet, and that is deliberate.
 | where the board lives | in the URL | the board row itself |
 | does the server see it | **no** — browsers never send a fragment | yes |
 | changes as the owner edits | never, it is a frozen copy | yes, it is a live pointer |
-| works on GitHub Pages | yes | no, and cannot |
 
 The anonymous one predates accounts and is untouched by any of this (D7). The account one
 exists because a link you can read down a phone is worth having, and because reloading it

@@ -2,9 +2,7 @@
  * The API client — the only place in the app that talks to the Worker.
  *
  * SAME ORIGIN, ALWAYS. Every path is relative, so the session cookie rides along without
- * `credentials` ceremony and there is no origin to configure. On the GitHub Pages deploy
- * these calls simply fail, which is correct: that host has no server behind it (D39 keeps it
- * running for existing links, not for accounts).
+ * `credentials` ceremony and there is no origin to configure.
  *
  * ERRORS ARE CODES, NOT SENTENCES. The Worker has no locale, so it answers with
  * `{ error: "board_limit_reached" }` and the caller turns that into words through i18n — the
@@ -123,6 +121,48 @@ export function startGoogleSignIn(): void {
 
 export async function signOut(): Promise<void> {
   await call("/auth/logout", { method: "POST" });
+}
+
+/**
+ * Email and password (D109). `key` is `deriveKey`'s output — the password itself never leaves
+ * the browser. `lang` picks the language of the email the Worker sends, since it has none.
+ *
+ * Register and requestReset resolve the same whether or not the address has an account; that
+ * is the Worker refusing to say, not this client failing to ask.
+ */
+export async function registerWithPassword(
+  email: string,
+  key: string,
+  turnstile: string,
+  lang: string,
+): Promise<void> {
+  await call("/auth/register", {
+    method: "POST",
+    body: JSON.stringify({ email, key, turnstile, lang }),
+  });
+}
+
+export async function verifyEmail(token: string): Promise<void> {
+  await call("/auth/verify", { method: "POST", body: JSON.stringify({ token }) });
+}
+
+export async function signInWithPassword(email: string, key: string): Promise<void> {
+  await call("/auth/login", { method: "POST", body: JSON.stringify({ email, key }) });
+}
+
+export async function requestPasswordReset(
+  email: string,
+  turnstile: string,
+  lang: string,
+): Promise<void> {
+  await call("/auth/reset/request", {
+    method: "POST",
+    body: JSON.stringify({ email, turnstile, lang }),
+  });
+}
+
+export async function resetPassword(token: string, email: string, key: string): Promise<void> {
+  await call("/auth/reset", { method: "POST", body: JSON.stringify({ token, email, key }) });
 }
 
 // --- projects ---------------------------------------------------------------------------
