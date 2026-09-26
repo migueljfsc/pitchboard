@@ -316,3 +316,77 @@ export async function fetchShare(slug: string): Promise<{ name: string; doc: str
 
 /** Where a slug is read back. Absolute, because the point of it is to be sent to someone. */
 export const shareUrl = (slug: string): string => `${window.location.origin}${sharePath(slug)}`;
+
+// --- admin (D108) -----------------------------------------------------------------------
+
+/** A user's footprint, as the operator sees it. Counts and dates only — never a document. */
+export interface AdminUserSummary {
+  id: string;
+  email: string;
+  display_name: string | null;
+  created_at: number;
+  last_login_at: number | null;
+  last_seen_at: number | null;
+  projects: number;
+  boards: number;
+  published: number;
+  presets: number;
+  bytes: number;
+  last_board_at: number | null;
+}
+
+export interface AdminTotals {
+  users: number;
+  signups_7d: number;
+  signups_30d: number;
+  active_1d: number;
+  active_7d: number;
+  active_30d: number;
+  projects: number;
+  boards: number;
+  boards_created_7d: number;
+  boards_updated_7d: number;
+  published: number;
+  presets: number;
+  sessions: number;
+  bytes: number;
+}
+
+export interface AdminStats {
+  totals: AdminTotals;
+  users: AdminUserSummary[];
+}
+
+export interface AdminUserDetail {
+  user: AdminUserSummary;
+  projects: Array<{ id: string; name: string; parent_id: string | null; created_at: number; updated_at: number }>;
+  boards: Array<{
+    id: string;
+    name: string;
+    project_id: string;
+    share_slug: string | null;
+    version: number;
+    created_at: number;
+    updated_at: number;
+    bytes: number;
+    /** Null when the stored document is not valid JSON. */
+    scenes: number | null;
+  }>;
+  presets: Array<{ id: string; label: string; created_at: number; updated_at: number }>;
+}
+
+/** A 404 for anyone who is not the operator — the route does not admit to existing. */
+export async function fetchAdminStats(): Promise<AdminStats> {
+  const stats = await call<Partial<AdminStats>>("/admin/stats");
+  // Same trap as `fetchAccount`: without the Worker, Vite answers with index.html and a 200.
+  if (!stats.totals || !stats.users) throw new ApiError("offline", 0);
+  return stats as AdminStats;
+}
+
+export async function fetchAdminUser(id: string): Promise<AdminUserDetail> {
+  const detail = await call<Partial<AdminUserDetail>>(`/admin/users/${id}`);
+  if (!detail.user || !detail.boards || !detail.projects || !detail.presets) {
+    throw new ApiError("offline", 0);
+  }
+  return detail as AdminUserDetail;
+}

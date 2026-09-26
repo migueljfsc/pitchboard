@@ -1,12 +1,15 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import type { BoardDoc } from "@/board/types";
 import { Editor } from "@/pages/Editor";
 import { Viewer } from "@/pages/Viewer";
 import { decodeBoard, readHash, readView, withoutHash, type DecodeOutcome } from "@/share/urlcodec";
 import { fetchShare } from "@/share/api";
 import { parseStoredDoc } from "@/share/cloud";
-import { readShareSlug } from "@/share/routes";
+import { isAdminPath, readShareSlug } from "@/share/routes";
 import { useI18n } from "@/i18n/context";
+
+/** Loaded only on /admin, so no visitor downloads the operator's page. */
+const Admin = lazy(() => import("@/pages/Admin").then((m) => ({ default: m.Admin })));
 
 /**
  * Chooses what the address is asking for.
@@ -96,6 +99,14 @@ export function App() {
     // replaceState fires no hashchange, so the listener above will not see this.
     setHash("");
   };
+
+  if (isAdminPath()) {
+    return (
+      <Suspense fallback={null}>
+        <Admin />
+      </Suspense>
+    );
+  }
 
   if (slug && !shared) return <Splash>{t("share.opening")}</Splash>;
 

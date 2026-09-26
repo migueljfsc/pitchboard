@@ -14,6 +14,7 @@ lib/
   users.ts         external identity to account, link rather than duplicate
   boards.ts        projects and boards; ownership is a WHERE clause, never a check
   shares.ts        publishing to /share/<slug>, and the one public read
+  admin.ts         the operator's /admin view — 404 to anyone not in ADMIN_EMAILS
   limits.ts        per-user quotas — D39 wanted them shipping with the feature
   crypto.ts        ids, session tokens, SHA-256 — no password KDF lives here
   http.ts          JSON responses, all no-store
@@ -31,7 +32,8 @@ The free tier refuses work rather than billing, so the limits are the design con
 - **100,000 requests/day.** Asset requests are free and unlimited and do not count, which is
   why `run_worker_first` is an array of patterns and not `true`.
 - **D1: 5M row reads, 100k row writes per day.** Session renewal slides only once a session
-  has lost more than a day of life, which caps it at one write per session per day.
+  has lost more than a day of life, which caps it at one write per session per day — two
+  rows, since the account's `last_seen_at` moves with it.
 - **KV: 100k reads but only 1,000 writes per day.** Writes are the scarce thing, so KV holds
   published snapshots — written once, then only read — and never per-request state. A publish
   is one write; the OAuth state that could have gone there is a cookie for exactly this reason.
@@ -52,6 +54,7 @@ Not in `wrangler.jsonc`, not in OpenTofu, not in state:
 ```sh
 wrangler secret put GOOGLE_CLIENT_ID
 wrangler secret put GOOGLE_CLIENT_SECRET
+wrangler secret put ADMIN_EMAILS          # comma-separated; unset means no admin (D108)
 ```
 
 They survive a deploy, so this is a one-time step. Their types live in `secrets.d.ts`, which

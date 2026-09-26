@@ -15,4 +15,9 @@ interface Env {
   GOOGLE_CLIENT_ID: string;
   /** Google OAuth client secret. Never leaves the Worker. */
   GOOGLE_CLIENT_SECRET: string;
+  /**
+   * Comma-separated addresses allowed into /api/admin/*. A secret rather than a var so the
+   * operator's address stays out of the repository. Unset means nobody is an admin.
+   */
+  ADMIN_EMAILS?: string;
 }

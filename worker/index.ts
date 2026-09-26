@@ -46,6 +46,7 @@ import {
   listPresets,
   savePreset,
 } from "./lib/presets";
+import { adminStats, adminUser, isAdmin } from "./lib/admin";
 import { fail, json } from "./lib/http";
 import { publishBoard, readShare, unpublishBoard } from "./lib/shares";
 import { SLUG_LENGTH } from "./lib/limits";
@@ -169,7 +170,11 @@ export default {
       }
 
       default:
-        return (await publicRoute(env, request, url)) ?? (await dispatch(env, request, url, now));
+        return (
+          (await publicRoute(env, request, url)) ??
+          (await adminRoute(env, request, url, now)) ??
+          (await dispatch(env, request, url, now))
+        );
     }
   },
 };
@@ -191,6 +196,25 @@ async function publicRoute(env: Env, request: Request, url: URL): Promise<Respon
   const match = SHARE_ROUTE.exec(url.pathname);
   if (!match || request.method !== "GET") return null;
   return readShare(env, match[1]);
+}
+
+/**
+ * The operator's surface (D108). Anything under /api/admin/ that is not a route, not a GET,
+ * not signed in or not an admin answers the same 404, so none of it can be told apart from a
+ * path that does not exist. The session is checked only once the path matches.
+ */
+const ADMIN_STATS = /^\/api\/admin\/stats$/;
+const ADMIN_USER = new RegExp(`^/api/admin/users/${ID}$`);
+
+async function adminRoute(env: Env, request: Request, url: URL, now: number): Promise<Response | null> {
+  if (!url.pathname.startsWith("/api/admin/")) return null;
+  const userId = ADMIN_USER.exec(url.pathname)?.[1];
+  const known = ADMIN_STATS.test(url.pathname) || userId !== undefined;
+  if (request.method !== "GET" || !known) return fail("not_found", 404);
+  if (!isAdmin(await resolveSession(env, request, now), env.ADMIN_EMAILS)) {
+    return fail("not_found", 404);
+  }
+  return userId ? adminUser({ env, now }, userId) : adminStats({ env, now });
 }
 
 const ROUTES: Array<{ method: string; pattern: RegExp; handle: (ctx: Ctx, ...p: string[]) => Promise<Response> }> = [

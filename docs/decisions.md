@@ -1882,3 +1882,15 @@ shows them while chosen. The team's kit no longer folds: it was folded for its s
 **Still the palette, and only the palette.** A free colour input was left out on purpose: kits
 are snapped to `PALETTE` on import (D77) so that a colour can always be picked again and a link
 matched to a kit exactly, and an arbitrary hex undoes both.
+
+## D108 — The operator's view: `/admin`, metadata only
+One read-only page for the site's owner: totals, the accounts, and one account's projects, boards
+and presets. **The gate is `ADMIN_EMAILS`**, a secret so the address stays out of the repository,
+matched against the session's Google-verified email. Anything under `/api/admin/` answers **404**
+to anyone else, signed in or not, so the surface cannot be found by probing. **Metadata only**:
+counts, dates, sizes and scene counts, computed inside D1 so a document never enters the Worker.
+Opening someone's board was left out on purpose: that is reading their work, not measuring use.
+**`last_login_at` and `last_seen_at` are columns** (`0007`), because session rows die on sign-out
+and expiry; `last_seen_at` rides the daily session slide, so it is accurate to a day. Anonymous
+use — `#d=` links and boards never saved — does not reach the server and is not counted. The page
+is English only and lazy-loaded.

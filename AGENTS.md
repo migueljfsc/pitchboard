@@ -89,6 +89,7 @@ src/i18n/                 EN and PT; en.ts is the source of truth for the keys
 src/fonts.ts              registers the label face, for the page and the export worker
 src/App.tsx               picks Viewer or Editor from the hash; no router
 src/pages/Viewer.tsx      read-only playback of a shared board, with fork
+src/pages/Admin.tsx       the operator's usage view (D108)
 src/board/migrate.ts      version dispatch, run before validation on every load
 src/components/           React chrome; ui/ holds shadcn-style primitives
 scripts/board.ts          `pnpm board <tracks.json>` — a tracks file through the real importer,
@@ -96,7 +97,7 @@ scripts/board.ts          `pnpm board <tracks.json>` — a tracks file through t
 worker/                   Cloudflare Worker — the API, and the SPA's static passthrough
   index.ts                the router; /api/* only, assets are served ahead of it
   lib/                    session, google, users, boards (and the project tree), presets,
-                          crypto, http, limits
+                          admin (the operator's /admin view), crypto, http, limits
   migrations/             D1 schema, applied by CI before the script is deployed
 wrangler.jsonc            bindings and asset routing; the ONLY place a binding is declared
 infrastructure/terraform/cloudflare/    OpenTofu — R2, D1, KV. Durable resources only

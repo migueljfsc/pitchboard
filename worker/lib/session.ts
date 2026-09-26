@@ -87,11 +87,15 @@ export async function createSession(
 ): Promise<{ token: string; expiresAt: number }> {
   const token = newSessionToken();
   const expiresAt = now + SESSION_TTL_S;
-  await env.DB.prepare(
-    "INSERT INTO sessions (id, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
-  )
-    .bind(await tokenDigest(token), userId, now, expiresAt)
-    .run();
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO sessions (id, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
+    ).bind(await tokenDigest(token), userId, now, expiresAt),
+    env.DB.prepare("UPDATE users SET last_login_at = ?1, last_seen_at = ?1 WHERE id = ?2").bind(
+      now,
+      userId,
+    ),
+  ]);
   return { token, expiresAt };
 }
 
@@ -128,9 +132,14 @@ export async function resolveSession(
   if (shouldRenew(row.expires_at, now)) {
     // Awaited rather than deferred: it happens at most once a day per session, and a
     // background write that loses a race would silently sign someone out a month later.
-    await env.DB.prepare("UPDATE sessions SET expires_at = ? WHERE id = ?")
-      .bind(now + SESSION_TTL_S, id)
-      .run();
+    // `last_seen_at` rides on the same slide, so it is accurate to a day at one row a day.
+    await env.DB.batch([
+      env.DB.prepare("UPDATE sessions SET expires_at = ? WHERE id = ?").bind(
+        now + SESSION_TTL_S,
+        id,
+      ),
+      env.DB.prepare("UPDATE users SET last_seen_at = ? WHERE id = ?").bind(now, row.id),
+    ]);
   }
 
   return { id: row.id, email: row.email, displayName: row.display_name };

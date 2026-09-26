@@ -1,21 +1,25 @@
 /**
  * What a path can mean.
  *
- * Two, and they are the only reason this app knows about paths at all — it is still not a
+ * Three, and they are the only reason this app knows about paths at all — it is still not a
  * router (D33's "no router" holds; a path is one more thing the address can be, read once,
  * because changing one is a page load rather than an event).
  *
  *   /board/<id>    a saved board, opened for editing. Needs an account.
  *   /share/<slug>  a published board, opened read-only. Needs nothing.
+ *   /admin         the operator's usage view (D108). The Worker decides who sees data.
 
  *
- * Both resolve only on the Worker, which serves index.html for unknown paths. The GitHub
+ * All resolve only on the Worker, which serves index.html for unknown paths. The GitHub
  * Pages deploy has neither the rewrite nor the server, which is correct — it has no accounts
  * either.
  */
 
 const BOARD_PATH = /^\/board\/([A-Za-z0-9_-]{22})$/;
 const SHARE_PATH = /^\/share\/([2-9bcdfghjkmnpqrstvwxz]{8})$/;
+
+export const isAdminPath = (pathname = window.location.pathname): boolean =>
+  pathname === "/admin" || pathname === "/admin/";
 
 export const boardPath = (id: string): string => `/board/${id}`;
 export const sharePath = (slug: string): string => `/share/${slug}`;
