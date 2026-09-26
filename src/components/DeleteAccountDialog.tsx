@@ -75,7 +75,19 @@ export function DeleteAccountDialog({ email, onCancel }: { email: string; onCanc
         </h2>
         <p className="mt-2 text-xs leading-relaxed text-ink-300">{t("account.delete.message")}</p>
         <label className="mt-4 block text-[11px] text-ink-300">
-          {t("account.delete.typeEmail", { email })}
+          {/* One key with its placeholder, split only to style the address inside it. */}
+          {t("account.delete.typeEmail")
+            .split("{email}")
+            .flatMap((part, i) =>
+              i === 0
+                ? [part]
+                : [
+                    <strong key={i} className="font-semibold text-accent">
+                      {email}
+                    </strong>,
+                    part,
+                  ],
+            )}
           <input
             ref={input}
             type="email"

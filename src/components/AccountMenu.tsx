@@ -21,7 +21,7 @@ import { useEffect, useRef, useState } from "react";
 import { LogOut, Trash2, UserRound } from "lucide-react";
 
 import { DeleteAccountDialog } from "@/components/DeleteAccountDialog";
-import { PasswordForm } from "@/components/PasswordForm";
+import { SignInDialog } from "@/components/SignInDialog";
 import { useI18n } from "@/i18n/context";
 import type { MessageKey } from "@/i18n/core";
 import { enterSignedIn, errorKey } from "@/lib/signIn";
@@ -129,7 +129,7 @@ export function AccountMenu({ account, loading, signOut }: AccountState) {
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
+          aria-haspopup="dialog"
           title={t("account.signIn.why")}
           className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
         >
@@ -138,9 +138,11 @@ export function AccountMenu({ account, loading, signOut }: AccountState) {
         </button>
 
         {open && (
-          <div className="absolute right-0 top-full z-40 mt-1.5 flex w-[320px] flex-col gap-1.5 rounded-md border border-ink-600 bg-ink-800 p-2 shadow-lg shadow-black/40">
-            <PasswordForm initialMode={reset ? "reset" : "signIn"} reset={reset} />
-          </div>
+          <SignInDialog
+            initialMode={reset ? "reset" : "signIn"}
+            reset={reset}
+            onClose={() => setOpen(false)}
+          />
         )}
 
         {!open && verifying && (
