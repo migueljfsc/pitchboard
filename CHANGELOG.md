@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.68.0 (2026-09-26)
+
+### Feat
+
+- **admin**: an operator-only usage view at /admin
+
 ## v0.67.0 (2026-09-26)
 
 ### Feat
