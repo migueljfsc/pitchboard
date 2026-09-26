@@ -1647,6 +1647,8 @@ export function Editor({ initialDoc }: Props = {}) {
             {t("tour.open")}
           </button>
 
+          <span className="mx-1 h-5 w-px bg-ink-600" />
+
           <button
             type="button"
             data-tour="present"
@@ -1714,22 +1716,27 @@ export function Editor({ initialDoc }: Props = {}) {
             }}
           />
 
-          {/* A plain link in Buy Me a Coffee's colours, not their embed script: a script tag in
-              React never runs, and theirs would send every visitor's IP to a third party. */}
+          <span className="mx-1 h-5 w-px bg-ink-600" />
+
+          {/* The last control in the row. It is the only one about the app rather than the
+              board, and it should not move when signing in adds two more. */}
+          <LocaleSwitch />
+
+          {/* Not a control, so it sits past the controls, behind a divider and as an icon only:
+              it must never be mistaken for, or crowd, a feature. A plain link in the app's
+              accent rather than Buy Me a Coffee's embed script — a script tag in React never
+              runs, and theirs would send every visitor's IP to a third party. */}
+          <span className="mx-1 h-5 w-px bg-ink-600" />
           <a
             href="https://buymeacoffee.com/migueljfsc"
             target="_blank"
             rel="noopener noreferrer"
             title={t("app.coffee")}
-            className="flex items-center gap-1.5 rounded-md border border-black bg-[#FFDD00] px-2.5 py-1.5 text-xs font-semibold text-black transition hover:brightness-95"
+            aria-label={t("app.coffee")}
+            className="flex size-7 shrink-0 items-center justify-center rounded-md bg-accent text-ink-900 transition hover:brightness-110"
           >
-            <Coffee size={13} />
-            <span className="hidden xl:inline">{t("app.coffee")}</span>
+            <Coffee size={14} />
           </a>
-
-          {/* Last in the row, always. It is the only control that is about the app rather
-              than about the board, and it should not move when signing in adds two more. */}
-          <LocaleSwitch />
         </div>
       </header>
       )}
