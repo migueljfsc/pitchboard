@@ -970,7 +970,7 @@ export function BoardCanvas({
         const snapped =
           e.metaKey || e.ctrlKey
             ? { at: wanted, guides: [] }
-            : snapLabel(doc, annotationScene(), label, wanted, rotated);
+            : snapLabel(doc, annotationScene(), label, wanted, rotated, pitchView.half);
         setGuides(snapped.guides);
         setRuler(boundsOf({ ...label, at: snapped.at }, rotated));
         if (snapped.at.x !== label.at.x || snapped.at.y !== label.at.y) {

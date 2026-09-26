@@ -4,6 +4,8 @@ import { cn } from "@/lib/utils";
 
 type Props = {
   title: string;
+  /** Drawn before the title, so a section can be found at a glance. */
+  icon?: ReactNode;
   /** Small muted text on the right of the header, e.g. a count. */
   badge?: string;
   defaultOpen?: boolean;
@@ -24,6 +26,7 @@ type Props = {
 /** Collapsible sidebar group. Open state is local unless `open` is supplied. */
 export function Section({
   title,
+  icon,
   badge,
   defaultOpen = true,
   open: controlled,
@@ -52,6 +55,7 @@ export function Section({
           size={13}
           className={cn("shrink-0 text-ink-400 transition-transform", !open && "-rotate-90")}
         />
+        {icon && <span className="flex shrink-0 items-center text-ink-400">{icon}</span>}
         <span className="flex-1 text-[11px] font-semibold uppercase tracking-wide text-ink-200">
           {title}
         </span>

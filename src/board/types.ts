@@ -221,6 +221,12 @@ export type Link = {
   /** Hidden links stay in the document but are not drawn. */
   hidden?: boolean;
   /**
+   * Never dimmed: a scene's spotlight cuts round it as it does round a highlight, without
+   * the glow. Absent is dimmed with everything else. It does not darken a scene by itself —
+   * only a highlight does (D106).
+   */
+  lit?: boolean;
+  /**
    * Scene id this link first appears on. Absent means the first scene.
    *
    * Both ends are optional, unlike an annotation's, which are required — a link
@@ -257,6 +263,11 @@ type AnnotationBase = {
   color: string;
   /** Hidden annotations stay in the document but are not drawn. */
   hidden?: boolean;
+  /**
+   * Never dimmed, as a link's `lit`. Meaningless on text, which is above the darkness
+   * already (D106).
+   */
+  lit?: boolean;
 };
 
 /** Two-point shapes share `a`/`b`, which keeps drag-to-create uniform. */

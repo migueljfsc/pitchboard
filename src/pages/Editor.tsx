@@ -7,8 +7,27 @@ import { ViewControls, type Ghosts } from "@/components/ViewControls";
 import { Section } from "@/components/ui/Section";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
+  AlignVerticalJustifyCenter,
+  AlignVerticalSpaceAround,
   Check,
+  CircleDot,
+  CircleOff,
+  CircleStop,
   Command as CommandIcon,
+  Copy,
+  Eye,
+  EyeOff,
+  FastForward,
+  Frame,
+  Link2,
+  MousePointer2,
+  PencilLine,
+  Plus,
+  Route,
+  Shapes,
+  Sparkles,
+  Trash2,
+  UserMinus,
   History,
   LayoutTemplate,
   Download,
@@ -95,7 +114,6 @@ import {
 } from "@/board/scenes";
 import {
   addPlayer,
-  displayName,
   removePlayer,
   setKeeper,
   setPlayerLabel,
@@ -989,9 +1007,10 @@ export function Editor({ initialDoc }: Props = {}) {
       const ann = annotationsOf(doc).find((a) => a.id === target.id);
       if (!ann) return [];
       return [
-        { label: t("draw.duplicate"), onSelect: () => onDuplicateAnnotation(ann.id) },
+        { label: t("draw.duplicate"), icon: <Copy size={13} />, onSelect: () => onDuplicateAnnotation(ann.id) },
         {
           label: t(ann.hidden ? "draw.showThis" : "draw.hideThis"),
+          icon: ann.hidden ? <Eye size={13} /> : <EyeOff size={13} />,
           onSelect: () =>
             setDoc({
               ...doc,
@@ -1001,16 +1020,20 @@ export function Editor({ initialDoc }: Props = {}) {
             }),
         },
         "divider",
-        { label: t("draw.delete"), danger: true, onSelect: () => deleteShape(ann.id) },
+        { label: t("draw.delete"), icon: <Trash2 size={13} />, danger: true, onSelect: () => deleteShape(ann.id) },
       ];
     }
 
     if (target.kind === "board") {
       return [
-        { label: t("timeline.addScene"), onSelect: addScene },
-        { label: t("menu.present"), onSelect: () => setPresent(true) },
+        { label: t("timeline.addScene"), icon: <Plus size={13} />, onSelect: addScene },
+        { label: t("menu.present"), icon: <Presentation size={13} />, onSelect: () => setPresent(true) },
         "divider",
-        { label: t("template.open"), onSelect: () => openTemplates(menu?.at ?? { x: 0, y: 0 }) },
+        {
+          label: t("template.open"),
+          icon: <LayoutTemplate size={13} />,
+          onSelect: () => openTemplates(menu?.at ?? { x: 0, y: 0 }),
+        },
       ];
     }
 
@@ -1023,27 +1046,35 @@ export function Editor({ initialDoc }: Props = {}) {
       const has = scene.carrier === only;
       items.push({
         label: has ? t("inspect.ball.release") : t("menu.giveBall"),
+        icon: has ? <CircleOff size={13} /> : <CircleDot size={13} />,
         onSelect: () => onCarrierChange(has ? null : only),
       });
     }
     if (players.length > 0) {
       items.push({
         label: t(activeScene === 0 ? "inspect.resetMove.first" : "inspect.resetMove"),
+        icon: <Undo2 size={13} />,
         disabled: !canResetMove(doc, activeScene, players),
         onSelect: onResetMove,
       });
       if (editScene !== undefined && !doc.flow && editScene < doc.scenes.length - 1) {
         const all = players.every((id) => runEndOf(doc.scenes[editScene], id) === "through");
-        items.push({ label: t(all ? "menu.stopHere" : "menu.runOn"), onSelect: onToggleRunsOn });
+        items.push({
+          label: t(all ? "menu.stopHere" : "menu.runOn"),
+          icon: all ? <CircleStop size={13} /> : <FastForward size={13} />,
+          onSelect: onToggleRunsOn,
+        });
       }
     }
     items.push({
       label: t(highlighted ? "menu.unhighlight" : "menu.highlight"),
+      icon: <Sparkles size={13} />,
       onSelect: () => onHighlightChange(highlighted ? null : highlightColor),
     });
     if (players.length > 0) {
       items.push({
         label: t(trailOn ? "menu.trail.hide" : "menu.trail.show"),
+        icon: <Route size={13} />,
         onSelect: () => setTrailOn(!trailOn),
       });
     }
@@ -1052,29 +1083,33 @@ export function Editor({ initialDoc }: Props = {}) {
       items.push("divider", {
         label: t("menu.lineUp"),
         title: t("menu.lineUp.hint"),
+        icon: <AlignVerticalJustifyCenter size={13} />,
         onSelect: () => onArrange("line"),
       });
       if (players.length >= 3) {
         items.push({
           label: t("menu.spaceEvenly"),
           title: t("menu.spaceEvenly.hint"),
+          icon: <AlignVerticalSpaceAround size={13} />,
           onSelect: () => onArrange("space"),
         });
       }
-      items.push({ label: t("palette.link"), onSelect: onCreateLink });
+      items.push({ label: t("palette.link"), icon: <Link2 size={13} />, onSelect: onCreateLink });
     }
 
     if (only) {
       items.push(
         "divider",
-        { label: t("menu.rename"), onSelect: () => onEditName() },
+        { label: t("menu.rename"), icon: <PencilLine size={13} />, onSelect: () => onEditName() },
         {
           label: t("inspect.removeMovement"),
+          icon: <RotateCcw size={13} />,
           disabled: !hasMovement(doc, [only]),
           onSelect: onRemoveAllMovement,
         },
         {
-          label: t("inspect.remove", { who: displayName(doc, only) }),
+          label: t("inspect.remove"),
+          icon: <UserMinus size={13} />,
           danger: true,
           onSelect: () => onRemovePlayer(only),
         },
@@ -1691,7 +1726,13 @@ export function Editor({ initialDoc }: Props = {}) {
           style={{ width: layout.left }}
           className="flex shrink-0 flex-col overflow-y-auto border-r border-ink-700 bg-ink-800"
         >
-          <Section title={t("section.view")} open={viewOpen} onOpenChange={setViewOpen} tour="view">
+          <Section
+            title={t("section.view")}
+            icon={<Frame size={13} />}
+            open={viewOpen}
+            onOpenChange={setViewOpen}
+            tour="view"
+          >
             <ViewControls
               view={pitchView}
               onChange={setPitchView}
@@ -1708,6 +1749,7 @@ export function Editor({ initialDoc }: Props = {}) {
               two stacked. */}
           <Section
             title={t("section.formations")}
+            icon={<Users size={13} />}
             tour="formations"
             badge={`${formationOf(0)} v ${formationOf(1)}`}
             open={formationsOpen}
@@ -1770,6 +1812,7 @@ export function Editor({ initialDoc }: Props = {}) {
 
           <Section
             title={t("section.selection")}
+            icon={<MousePointer2 size={13} />}
             tour="selection"
             badge={visible.size ? String(visible.size) : undefined}
             open={selectionOpen}
@@ -1810,6 +1853,7 @@ export function Editor({ initialDoc }: Props = {}) {
           </Section>
           <Section
             title={t("section.links")}
+            icon={<Link2 size={13} />}
             tour="links"
             badge={String(doc.links.length)}
             open={linksOpen}
@@ -2144,6 +2188,7 @@ export function Editor({ initialDoc }: Props = {}) {
               </div>
               <Section
                 title={t("section.drawn")}
+                icon={<Shapes size={13} />}
                 badge={String(annotationsOf(doc).length)}
                 flush
               >

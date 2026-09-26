@@ -14,6 +14,7 @@
 import type {
   Annotation,
   BoardDoc,
+  Link,
   LinkArrows,
   PitchHalf,
   RenderView,
@@ -234,11 +235,16 @@ export function drawBoard(
   // Over everything the board shows, under the editor's own chrome — and under the
   // coach's words, which are read rather than looked past: a label in the dark is a
   // note nobody can make out.
+  const kept = keptLit(doc, frame, marks);
   drawSpotlight(
     ctx,
     halos.map((h) => ({ at: h.at, r: poolRadius(h, scale), strength: h.strength })),
     spotlightDim(doc, frame.resolved),
     lit,
+    {
+      areas: keptAreas(doc, frame, kept, false),
+      footprint: (layer) => drawKept(layer, doc, frame, kept, view.rotated, t),
+    },
   );
   for (const ann of marks) {
     if (ann.kind !== "text") continue;
@@ -257,7 +263,7 @@ export function drawBoard(
     drawMarquee(ctx, view.marquee.a, view.marquee.b);
   }
   if (view.interactive && view.guides?.length) drawGuides(ctx, doc, view.guides);
-  if (view.interactive && view.ruler) drawRuler(ctx, doc, view.ruler, view.rotated);
+  if (view.interactive && view.ruler) drawRuler(ctx, doc, view.ruler, view.rotated, view.half);
 
   ctx.restore();
   drawCaption(ctx, doc, frame, view);
@@ -472,7 +478,25 @@ function drawTilted(
     return [{ at: { x: at.x, y: at.y }, r: poolRadius(h, scale) * at.scale, strength: h.strength }];
   });
   const shapes = lit.flatMap((shape) => projectShape(shape, cam) ?? []);
-  drawSpotlight(ctx, holes, spotlightDim(doc, frame.resolved), shapes);
+  // What is kept out of the dark lies on the grass, so its footprint is drawn in a ground
+  // layer of its own and warped into the darkness the way the board itself is.
+  const kept = keptLit(doc, frame, marks);
+  let keptGround: OffscreenCanvas | null = null;
+  if (kept.marks.length > 0 || kept.links.length > 0) {
+    keptGround = new OffscreenCanvas(proj.sourceW, proj.sourceH);
+    const kctx = keptGround.getContext("2d");
+    if (kctx) {
+      kctx.setTransform(...viewMatrix(groundView));
+      clipToHalf(kctx, doc, view.half);
+      drawKept(kctx, doc, frame, kept, true, t, true);
+    }
+  }
+  drawSpotlight(ctx, holes, spotlightDim(doc, frame.resolved), shapes, {
+    areas: keptAreas(doc, frame, kept, true).flatMap((a) => projectShape(a, cam) ?? []),
+    footprint: (layer) => {
+      if (keptGround) warpGround(layer, keptGround, proj);
+    },
+  });
   drawTiltedText(ctx, view, cam, marks, frame);
   ctx.restore();
 }
@@ -1206,6 +1230,58 @@ function litShapes(doc: BoardDoc, frame: Frame, marks: Annotation[]): LitShape[]
   return [...shapes, ...litLinkShapes(doc, frame)];
 }
 
+/**
+ * What is kept out of the dark on this frame without being highlighted (D106): the drawings
+ * (text aside, which is above the dark already) and the links marked `lit`. A highlight on
+ * the same one wins — it is cut, and glows, as a highlight.
+ */
+type Kept = { marks: Annotation[]; links: Link[] };
+
+function keptLit(doc: BoardDoc, frame: Frame, marks: Annotation[]): Kept {
+  const kept = (x: { id: string; lit?: boolean }) => x.lit === true && !highlightAt(x.id, frame.resolved);
+  return {
+    marks: marks.filter((a) => a.kind !== "text" && kept(a)),
+    links: doc.links.filter(kept),
+  };
+}
+
+/**
+ * The AREAS a kept drawing or link covers, cut clean out of the darkness: a zone and a
+ * filled link are drawn translucent, so their own pixels would only thin the dark over them,
+ * and the players standing in them should come out with them. Lines are not here — they
+ * are cut by their own pixels (`drawKept`), which is exactly their footprint and no glow.
+ */
+function keptAreas(doc: BoardDoc, frame: Frame, kept: Kept, standing: boolean): LitShape[] {
+  const ballR = ballRadius(doc);
+  const out: LitShape[] = [];
+  for (const ann of kept.marks) {
+    const area = isZone(ann) ? !("filled" in ann) || ann.filled !== false : standing && ann.kind === "ball";
+    if (!area) continue;
+    const shape = litShapeOf(ann, ballR);
+    if (shape) out.push({ ...shape, width: 0 });
+  }
+  for (const link of kept.links) {
+    if (link.style !== "filled") continue;
+    const g = linkGeometry(link, frame.resolved, doc);
+    if (g) out.push({ points: g.points, closed: g.closed, fill: true, width: 0, color: linkColor(doc, link) });
+  }
+  return out;
+}
+
+/**
+ * Draws the kept drawings and links exactly as the board does, into whatever context it is
+ * given — the darkness layer with `destination-out`, where their own pixels are the cut.
+ * `ground` leaves out what stands up under the camera, which is not in the ground layer.
+ */
+function drawKept(ctx: Ctx, doc: BoardDoc, frame: Frame, kept: Kept, rotated: boolean, t: number, ground = false): void {
+  const ballR = ballRadius(doc);
+  for (const ann of kept.marks) {
+    if (isZone(ann)) drawZone(ctx, ann);
+    else if (!(ground && isStanding(ann))) drawMark(ctx, ann, rotated, ballR);
+  }
+  if (kept.links.length > 0) drawLinks(ctx, { ...doc, links: kept.links }, frame, rotated, t);
+}
+
 /** A lit shape through the camera, in screen pixels, its width taken at its own depth. */
 function projectShape(shape: LitShape, cam: Camera): LitShape | null {
   const points: Vec2[] = [];
@@ -1299,7 +1375,13 @@ const COVER = 1e5;
  * Without an OffscreenCanvas (the tests, or an old browser) the holes are hard-edged
  * and even-odd — the same composition, cruder at the edges.
  */
-function drawSpotlight(ctx: Ctx, holes: Hole[], dim: number, shapes: LitShape[] = []): void {
+function drawSpotlight(
+  ctx: Ctx,
+  holes: Hole[],
+  dim: number,
+  shapes: LitShape[] = [],
+  kept: { areas: LitShape[]; footprint: (layer: Ctx) => void } | null = null,
+): void {
   // Dark whenever the scene highlights anything, even with no player to cut a pool for: a
   // scene that lights only a drawing still goes dark around it. `spotlightDim` is 0 on a
   // scene with no highlight at all, so that stays untouched.
@@ -1356,6 +1438,19 @@ function drawSpotlight(ctx: Ctx, holes: Hole[], dim: number, shapes: LitShape[] 
       layer.stroke();
       layer.restore();
     }
+  }
+
+  // A drawing kept out of the dark is cut to its own footprint and no further: an area
+  // cleanly, and a line by its own pixels, so nothing round it lights up (D106).
+  if (kept) {
+    layer.fillStyle = "rgba(0,0,0,1)";
+    for (const area of kept.areas) {
+      tracePath(layer, area);
+      layer.fill("evenodd");
+    }
+    layer.save();
+    kept.footprint(layer);
+    layer.restore();
   }
 
   ctx.save();
@@ -2469,11 +2564,17 @@ function drawGuides(
 /** How far outside the lines the ruler's ticks start, and how long they run, in metres. */
 const RULER_GAP = 0.5;
 const RULER_TICK = [0.45, 0.9, 1.3] as const;
+/** How near the middle of the frame a dragged drawing's centre has to be to count as on it. */
+const CENTRED_M = 0.05;
 
 /**
- * A ruler along the far touchline and the left goal line, with the span a dragged drawing
- * covers shaded on both and its centre marked — so it can be placed at a round number of
- * metres, not by eye.
+ * A ruler along the far touchline and the goal line the crop shows, with the span a dragged
+ * drawing covers shaded on both and its centre marked — so it can be placed at a round
+ * number of metres, not by eye.
+ *
+ * It covers the crop and not the pitch: on a half view the other half is not on screen, and
+ * nor is its goal line, so a right half takes its ruler on the right goal line. The middle of
+ * the frame is marked on both, lit when the drawing is centred on it (D105).
  *
  * Outside the lines, in the surround, where nothing of the play is drawn; inside the team
  * name's offset on the goal line side, so the two never overlap. Numbers are upright however
@@ -2484,10 +2585,16 @@ function drawRuler(
   doc: BoardDoc,
   box: { x: number; y: number; w: number; h: number },
   rotated: boolean,
+  half: PitchHalf,
 ): void {
   const at = { x: box.x + box.w / 2, y: box.y + box.h / 2 };
   const L = doc.pitch.length;
   const W = doc.pitch.width;
+  const [x0, x1] = halfRange(half, L);
+  const mid = { x: (x0 + x1) / 2, y: W / 2 };
+  // Which goal line the side ruler sits on, and which way is outwards from it.
+  const far = half === "right";
+  const out = (d: number) => (far ? L + d : -d);
   const tick = (m: number) => (m % 10 === 0 ? RULER_TICK[2] : m % 5 === 0 ? RULER_TICK[1] : RULER_TICK[0]);
   const label = (text: string, p: Vec2, color: string) =>
     upright(ctx, p, rotated, () => {
@@ -2499,28 +2606,51 @@ function drawRuler(
   ctx.strokeStyle = "rgba(255,255,255,0.45)";
   ctx.lineWidth = 0.08;
   ctx.beginPath();
-  for (let m = 0; m <= Math.floor(L); m++) {
+  for (let m = Math.ceil(x0); m <= Math.floor(x1); m++) {
     ctx.moveTo(m, -RULER_GAP);
     ctx.lineTo(m, -RULER_GAP - tick(m));
   }
   for (let m = 0; m <= Math.floor(W); m++) {
-    ctx.moveTo(-RULER_GAP, m);
-    ctx.lineTo(-RULER_GAP - tick(m), m);
+    ctx.moveTo(out(RULER_GAP), m);
+    ctx.lineTo(out(RULER_GAP + tick(m)), m);
   }
   ctx.stroke();
 
   ctx.font = "600 0.95px Inter, system-ui, -apple-system, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const out = RULER_GAP + RULER_TICK[2] + 0.9;
-  for (let m = 0; m <= L; m += 10) label(String(m), { x: m, y: -out }, "rgba(255,255,255,0.6)");
-  for (let m = 0; m <= W; m += 10) label(String(m), { x: -out, y: m }, "rgba(255,255,255,0.6)");
+  const numbers = RULER_GAP + RULER_TICK[2] + 0.9;
+  for (let m = Math.ceil(x0 / 10) * 10; m <= x1; m += 10) {
+    label(String(m), { x: m, y: -numbers }, "rgba(255,255,255,0.6)");
+  }
+  for (let m = 0; m <= W; m += 10) label(String(m), { x: out(numbers), y: m }, "rgba(255,255,255,0.6)");
+
+  // The middle of the frame on each ruler: a small wedge pointing at the pitch, in the
+  // accent once the drawing's centre is on it.
+  const tip = RULER_GAP + RULER_TICK[2] + 0.15;
+  const wedge = (onX: boolean, centred: boolean) => {
+    ctx.beginPath();
+    if (onX) {
+      ctx.moveTo(mid.x, -tip);
+      ctx.lineTo(mid.x - 0.45, -tip - 0.7);
+      ctx.lineTo(mid.x + 0.45, -tip - 0.7);
+    } else {
+      ctx.moveTo(out(tip), mid.y);
+      ctx.lineTo(out(tip + 0.7), mid.y - 0.45);
+      ctx.lineTo(out(tip + 0.7), mid.y + 0.45);
+    }
+    ctx.closePath();
+    ctx.fillStyle = centred ? "rgba(251,191,36,1)" : "rgba(255,255,255,0.7)";
+    ctx.fill();
+  };
+  wedge(true, Math.abs(at.x - mid.x) < CENTRED_M);
+  wedge(false, Math.abs(at.y - mid.y) < CENTRED_M);
 
   // The span it covers, shaded along each ruler's ticks. A point covers none.
   ctx.fillStyle = "rgba(251,191,36,0.22)";
   const band = RULER_TICK[2];
   if (box.w > 0) ctx.fillRect(box.x, -RULER_GAP - band, box.w, band);
-  if (box.h > 0) ctx.fillRect(-RULER_GAP - band, box.y, band, box.h);
+  if (box.h > 0) ctx.fillRect(far ? L + RULER_GAP : -RULER_GAP - band, box.y, band, box.h);
 
   // Its centre on each ruler: a tick in the accent, and its distance in metres.
   ctx.strokeStyle = "rgba(251,191,36,0.95)";
@@ -2528,13 +2658,13 @@ function drawRuler(
   ctx.beginPath();
   ctx.moveTo(at.x, -RULER_GAP);
   ctx.lineTo(at.x, -RULER_GAP - RULER_TICK[2] - 0.3);
-  ctx.moveTo(-RULER_GAP, at.y);
-  ctx.lineTo(-RULER_GAP - RULER_TICK[2] - 0.3, at.y);
+  ctx.moveTo(out(RULER_GAP), at.y);
+  ctx.lineTo(out(RULER_GAP + RULER_TICK[2] + 0.3), at.y);
   ctx.stroke();
   ctx.font = "700 1.05px Inter, system-ui, -apple-system, sans-serif";
   const accent = "rgba(251,191,36,1)";
-  label(`${at.x.toFixed(1)} m`, { x: at.x, y: -out - 1.3 }, accent);
-  label(`${at.y.toFixed(1)} m`, { x: -out - 2.2, y: at.y }, accent);
+  label(`${at.x.toFixed(1)} m`, { x: at.x, y: -numbers - 1.3 }, accent);
+  label(`${at.y.toFixed(1)} m`, { x: out(numbers + 2.2), y: at.y }, accent);
   ctx.restore();
 }
 

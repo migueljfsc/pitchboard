@@ -817,6 +817,62 @@ describe("the spotlight", () => {
     expect(darkness(render(doc))?.fill).toBe(`fillStyle="rgba(0,0,0,${DEFAULT_SPOTLIGHT})"`);
   });
 
+  describe("a drawing or link never dimmed", () => {
+    const zone = (doc: BoardDoc) =>
+      draftAnnotation(doc, "rect", doc.scenes[0].id, { x: 10, y: 10 }, { x: 30, y: 20 }, { color: "#abcdef" });
+    /** The glow's widest band, in the drawing's own colour. */
+    const glows = (log: string[]) => log.filter((e) => e === "lineWidth=2.4").length;
+
+    it("does not darken a scene by itself", () => {
+      const base = createBoardDoc();
+      const doc = addAnnotation(base, { ...zone(base), lit: true });
+      expect(darkness(render(doc))).toBeNull();
+      const link = { ...base, links: base.links.map((l) => ({ ...l, lit: true })) };
+      expect(darkness(render(link))).toBeNull();
+    });
+
+    // The darkness is only layered where an OffscreenCanvas exists; stand one in to see it.
+    it("is cut from the darkness by its own pixels, not by a band round it", () => {
+      const layers: ReturnType<typeof createRecordingCtx>[] = [];
+      const real = (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas;
+      (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = class {
+        getContext() {
+          const r = createRecordingCtx();
+          layers.push(r);
+          return r.ctx;
+        }
+      };
+      try {
+        const base = lit(["home-2"]);
+        const arrow = draftAnnotation(base, "arrow", base.scenes[0].id, { x: 20, y: 20 }, { x: 40, y: 20 }, {
+          color: "#abcdef",
+        });
+        const doc = addAnnotation(base, { ...arrow, lit: true });
+        const r = createRecordingCtx();
+        const ctx = new Proxy(r.ctx, {
+          get: (target, prop) => (prop === "canvas" ? { width: 100, height: 100 } : Reflect.get(target, prop)),
+        });
+        drawBoard(ctx, doc, 0, view());
+        const dark = layers.find((l) => l.log.includes('globalCompositeOperation="destination-out"'));
+        expect(dark).toBeDefined();
+        // The arrow drawn into the darkness in its own colour, and no soft band in the cut.
+        expect(dark!.log).toContain('strokeStyle="#abcdef"');
+        expect(dark!.log.some((e) => e.startsWith("lineWidth=3.96"))).toBe(false);
+      } finally {
+        (globalThis as { OffscreenCanvas?: unknown }).OffscreenCanvas = real;
+      }
+    });
+
+    it("gets no glow in a dark scene, where a highlight would", () => {
+      const base = lit(["home-2"]);
+      const ann = { ...zone(base), lit: true };
+      const plain = addAnnotation(base, ann);
+      expect(darkness(render(plain))).not.toBeNull();
+      expect(glows(render(plain))).toBe(0);
+      expect(glows(render(setHighlight(plain, 0, ["home-2", ann.id], "#f59e0b")))).toBe(1);
+    });
+  });
+
   it("stays light where the only highlight names something no longer on the board", () => {
     const base = createBoardDoc();
     const doc = { ...base, scenes: [{ ...base.scenes[0], highlight: { "ann-gone": "#fff" } }] };
@@ -1003,5 +1059,25 @@ describe("the ruler", () => {
 
   it("never reaches an export", () => {
     expect(draw({ x: 10, y: 20, w: 15, h: 8 }, false).log).not.toContain(band);
+  });
+
+  // The left goal line is cropped out of a right half, and with it the old side ruler.
+  it("follows the crop: a right half is measured on the right goal line", () => {
+    const doc = createBoardDoc();
+    const r = createRecordingCtx();
+    const half = { ...view(), ...fitViewport(W, H, doc.pitch.length, doc.pitch.width, { half: "right", rotated: false }) };
+    drawBoard(r.ctx, doc, 0, { ...half, ruler: { x: 70, y: 20, w: 10, h: 8 } });
+    expect(r.calls("fillRect")).toContain("fillRect(105.5,20,1.3,8)");
+    expect(r.calls("fillRect")).not.toContain("fillRect(-1.8,20,1.3,8)");
+    expect(r.calls("moveTo")).not.toContain("moveTo(10,-0.5)");
+  });
+
+  it("lights the middle of the frame once the drawing is centred on it", () => {
+    const lit = 'fillStyle="rgba(251,191,36,1)"';
+    const wedges = (ruler: RenderView["ruler"]) =>
+      draw(ruler).log.filter((e, i, log) => e === lit && log[i + 1] === "fill()").length;
+    expect(wedges({ x: 50, y: 30, w: 5, h: 8 })).toBe(2);
+    expect(wedges({ x: 50, y: 30, w: 6, h: 8 })).toBe(1);
+    expect(wedges({ x: 10, y: 10, w: 6, h: 8 })).toBe(0);
   });
 });

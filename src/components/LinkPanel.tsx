@@ -11,6 +11,7 @@ import {
   Play,
   Ruler,
   Sparkles,
+  Sun,
   Trash2,
   X,
 } from "lucide-react";
@@ -28,7 +29,7 @@ import {
 } from "@/board/links";
 import { sceneSpan } from "@/board/range";
 import { isHighlighted, setHighlight } from "@/board/scenes";
-import { PALETTE } from "@/components/ui/palette";
+import { ColorPicker } from "@/components/ui/ColorPicker";
 import { SceneSelect } from "@/components/ui/SceneSelect";
 import type { Change } from "@/lib/history";
 import { cn } from "@/lib/utils";
@@ -352,6 +353,13 @@ function LinkRow({
           {link.name}
         </button>
         <Tiny
+          label={t(link.lit ? "links.letDim" : "links.keepLit")}
+          active={link.lit ?? false}
+          onClick={() => onChange({ lit: link.lit ? undefined : true })}
+        >
+          <Sun size={12} />
+        </Tiny>
+        <Tiny
           label={t(lit ? "links.unhighlight" : "links.highlight")}
           active={lit}
           onClick={onToggleLit}
@@ -441,36 +449,18 @@ function LinkRow({
           </div>
 
           <div>
-            <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("links.colour")}</span>
-            <div className="mt-1 flex flex-wrap items-center gap-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("links.colour")}</span>
               {/* Auto is the default: the link tracks its members' kit, so
                   recolouring the team recolours the link with it. */}
-              <button
-                type="button"
-                onClick={() => onChange({ color: undefined })}
-                title={t("links.auto.title")}
-                className={cn(
-                  "rounded border px-1.5 py-0.5 text-[11px] transition",
-                  link.color === undefined
-                    ? "border-accent text-accent"
-                    : "border-ink-600 text-ink-400 hover:text-ink-200",
-                )}
-              >
-                {t("links.auto")}
-              </button>
-              {PALETTE.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  aria-label={t("links.colorAria", { name: link.name, color: c })}
-                  onClick={() => onChange({ color: c })}
-                  className={cn(
-                    "size-4 rounded-full ring-1 transition",
-                    link.color === c ? "ring-2 ring-accent" : "ring-white/15 hover:ring-white/40",
-                  )}
-                  style={{ background: c }}
-                />
-              ))}
+              <ColorPicker
+                size="md"
+                value={link.color ?? null}
+                label={t("links.colour.pick", { name: link.name })}
+                optionLabel={(c) => t("links.colorAria", { name: link.name, color: c })}
+                none={{ label: t("links.auto"), title: t("links.auto.title"), preview: linkColor(doc, link) }}
+                onChange={(c) => onChange({ color: c ?? undefined })}
+              />
             </div>
           </div>
 

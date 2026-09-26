@@ -49,6 +49,18 @@ describe("snapLabel", () => {
     expect(guides).toContainEqual({ x: left });
   });
 
+  // On half a pitch the middle of the frame is the middle of that half, which no marking is.
+  it("draws a label onto the middle of the frame on a half view, and only there", () => {
+    const doc = board();
+    const ann = label(doc, "t1", { x: 78.5, y: 20 });
+    expect(snapLabel(doc, 0, ann, ann.at, false, "right")).toEqual({
+      at: { x: 78.75, y: 20 },
+      guides: [{ x: 78.75 }],
+    });
+    expect(snapLabel(doc, 0, ann, ann.at, false).at.x).toBe(78.5);
+    expect(snapLabel(doc, 0, label(doc, "t1", { x: 26, y: 20 }, "x"), { x: 26, y: 20 }, false, "left").at.x).toBe(26.25);
+  });
+
   it("takes the nearer of two lines on the same axis", () => {
     const doc = board();
     // 16.5 is the box's edge; 11 the penalty spot. Centred at 16.3, the box edge is nearer.

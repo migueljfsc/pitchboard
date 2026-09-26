@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlignCenter,
   AlignLeft,
@@ -18,10 +18,11 @@ import {
   Pin,
   Sparkles,
   Square,
+  Sun,
   Trash2,
   Type,
 } from "lucide-react";
-import type { Annotation, AnnotationDash, BoardDoc, TextAlign, Tool } from "@/board/types";
+import type { Annotation, AnnotationDash, AnnotationKind, BoardDoc, TextAlign, Tool } from "@/board/types";
 import { isDrawTool } from "@/board/types";
 import {
   POLYGON_SIDES_MAX,
@@ -36,7 +37,7 @@ import { isHighlighted, setHighlight } from "@/board/scenes";
 import { KIND_KEY } from "@/components/ui/kinds";
 import { NumberField } from "@/components/ui/NumberField";
 import { Stepper } from "@/components/ui/Stepper";
-import { PALETTE } from "@/components/ui/palette";
+import { ColorPicker } from "@/components/ui/ColorPicker";
 import type { Change } from "@/lib/history";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n/context";
@@ -119,15 +120,110 @@ export function DrawPanel({
   const patch = (id: string, fields: Partial<Annotation>, merge?: string) =>
     onDocChange(updateAnnotation(doc, id, fields), merge);
 
-  // The style row follows what is being worked on: the selected shape if there is
-  // one, the armed tool otherwise. A zone has a fill and no line style; everything
-  // else the other way round.
-  const isZone = (kind: string) => kind === "rect" || kind === "ellipse" || kind === "polygon";
-  const zone = active !== null ? isZone(active.kind) : isZone(tool);
+  // The style rows follow what is being worked on: the selected shape if there is one,
+  // the armed tool otherwise, and nothing with neither. Each kind gets only the rows it
+  // has — a zone a fill, an arrow or a line a dash, a drawn ball no colour at all.
+  const kind: AnnotationKind | null = active?.kind ?? (isDrawTool(tool) ? tool : null);
+  const zone = kind === "rect" || kind === "ellipse" || kind === "polygon";
+  const dashed = kind === "arrow" || kind === "line";
   const activeFilled =
     active && (active.kind === "rect" || active.kind === "ellipse" || active.kind === "polygon")
       ? active.filled !== false
       : filled;
+  const activeDash = active && (active.kind === "arrow" || active.kind === "line") ? active.dash : dash;
+
+  const styleRows =
+    kind === null || kind === "ball" ? null : (
+      <>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("draw.color")}</span>
+          <ColorPicker
+            size="md"
+            value={active?.color ?? color}
+            label={t("draw.color.pick")}
+            optionLabel={(c) => t("draw.colorAria", { color: c })}
+            onChange={(c) => {
+              if (!c) return;
+              onColorChange(c);
+              if (active) patch(active.id, { color: c });
+            }}
+          />
+        </div>
+
+        {zone && (
+          <div className="flex gap-1">
+            {([true, false] as const).map((value) => (
+              <button
+                key={String(value)}
+                type="button"
+                aria-pressed={activeFilled === value}
+                title={t(value ? "draw.fill.filled.hint" : "draw.fill.outline.hint")}
+                onClick={() => {
+                  onFilledChange(value);
+                  if (
+                    active &&
+                    (active.kind === "rect" || active.kind === "ellipse" || active.kind === "polygon")
+                  ) {
+                    // Undefined rather than true, so a filled zone serialises as it always did.
+                    patch(active.id, { filled: value ? undefined : false });
+                  }
+                }}
+                className={cn(
+                  "flex-1 rounded border px-1 py-1 text-[11px] transition",
+                  activeFilled === value
+                    ? "border-accent text-accent"
+                    : "border-ink-600 text-ink-400 hover:text-ink-200",
+                )}
+              >
+                {t(value ? "draw.fill.filled" : "draw.fill.outline")}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {dashed && (
+          <div className="flex gap-1">
+            {DASHES.map((d) => (
+              <button
+                key={d.value}
+                type="button"
+                aria-pressed={activeDash === d.value}
+                title={t(`draw.dash.${d.key}.hint` as MessageKey)}
+                onClick={() => {
+                  onDashChange(d.value);
+                  if (active && (active.kind === "arrow" || active.kind === "line")) {
+                    patch(active.id, { dash: d.value });
+                  }
+                }}
+                className={cn(
+                  "flex-1 rounded border px-1 py-1 text-[11px] transition",
+                  activeDash === d.value
+                    ? "border-accent text-accent"
+                    : "border-ink-600 text-ink-400 hover:text-ink-200",
+                )}
+              >
+                {t(`draw.dash.${d.key}` as MessageKey)}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* The count a drag starts from. Once drawn, corners are added and taken out
+            on the shape itself, so a selected polygon has no count to set. */}
+        {kind === "polygon" && !active && (
+          <NumberField
+            label={t("draw.sides")}
+            title={t("draw.sides.title")}
+            value={sides}
+            min={POLYGON_SIDES_MIN}
+            max={POLYGON_SIDES_MAX}
+            step={1}
+            unit=""
+            onCommit={(n) => onSidesChange(Math.round(n))}
+          />
+        )}
+      </>
+    );
 
   return (
     <div className="flex flex-col gap-3">
@@ -175,105 +271,11 @@ export function DrawPanel({
         </button>
       </div>
 
-      {/* Style for the NEXT shape, and for the selected one if there is one. */}
-      <div className="flex flex-wrap gap-1">
-        {PALETTE.map((c) => (
-          <button
-            key={c}
-            type="button"
-            aria-label={t("draw.colorAria", { color: c })}
-            onClick={() => {
-              onColorChange(c);
-              // A drawn ball is always drawn as a ball, so a colour would change nothing.
-              if (active && active.kind !== "ball") patch(active.id, { color: c });
-            }}
-            className={cn(
-              "size-4 rounded-full ring-1 transition",
-              (active?.color ?? color) === c
-                ? "ring-2 ring-accent"
-                : "ring-white/15 hover:ring-white/40",
-            )}
-            style={{ background: c }}
-          />
-        ))}
-      </div>
-
-      {zone ? (
-        <div className="flex gap-1">
-          {([true, false] as const).map((value) => (
-            <button
-              key={String(value)}
-              type="button"
-              aria-pressed={activeFilled === value}
-              title={t(value ? "draw.fill.filled.hint" : "draw.fill.outline.hint")}
-              onClick={() => {
-                onFilledChange(value);
-                if (
-                  active &&
-                  (active.kind === "rect" || active.kind === "ellipse" || active.kind === "polygon")
-                ) {
-                  // Undefined rather than true, so a filled zone serialises as it always did.
-                  patch(active.id, { filled: value ? undefined : false });
-                }
-              }}
-              className={cn(
-                "flex-1 rounded border px-1 py-1 text-[11px] transition",
-                activeFilled === value
-                  ? "border-accent text-accent"
-                  : "border-ink-600 text-ink-400 hover:text-ink-200",
-              )}
-            >
-              {t(value ? "draw.fill.filled" : "draw.fill.outline")}
-            </button>
-          ))}
-        </div>
-      ) : (
-      <div className="flex gap-1">
-        {DASHES.map((d) => (
-          <button
-            key={d.value}
-            type="button"
-            title={t(`draw.dash.${d.key}.hint` as MessageKey)}
-            onClick={() => {
-              onDashChange(d.value);
-              if (active && (active.kind === "arrow" || active.kind === "line")) {
-                patch(active.id, { dash: d.value });
-              }
-            }}
-            className={cn(
-              "flex-1 rounded border px-1 py-1 text-[11px] transition",
-              (active && (active.kind === "arrow" || active.kind === "line")
-                ? active.dash
-                : dash) === d.value
-                ? "border-accent text-accent"
-                : "border-ink-600 text-ink-400 hover:text-ink-200",
-            )}
-          >
-            {t(`draw.dash.${d.key}` as MessageKey)}
-          </button>
-        ))}
-      </div>
-      )}
-
-      {/* The count a drag starts from. Once drawn, corners are added and taken out
-          on the shape itself, so a selected polygon has no count to set. */}
-      {tool === "polygon" && active?.kind !== "polygon" && (
-        <NumberField
-          label={t("draw.sides")}
-          title={t("draw.sides.title")}
-          value={sides}
-          min={POLYGON_SIDES_MIN}
-          max={POLYGON_SIDES_MAX}
-          step={1}
-          unit=""
-          onCommit={(n) => onSidesChange(Math.round(n))}
-        />
-      )}
-
       {active ? (
         <Selected
           doc={doc}
           ann={active}
+          style={styleRows}
           onPatch={(fields, merge) => patch(active.id, fields, merge)}
           onToPolygon={() => onDocChange(toPolygon(doc, active.id))}
           onDelete={() => onDelete(active.id)}
@@ -292,11 +294,23 @@ export function DrawPanel({
           }
         />
       ) : (
-        <p className="text-[11px] leading-relaxed text-ink-300">
-          {!isDrawTool(tool)
-            ? t("draw.hint.select", { n: annotations.length })
-            : t("draw.hint.drawing")}
-        </p>
+        <>
+          {/* The armed tool's style, for the shape it draws next. With nothing armed there
+              is nothing for it to apply to, so it is not shown. */}
+          {kind && styleRows && (
+            <div className="flex flex-col gap-2 rounded-md border border-ink-600 bg-ink-800 p-2">
+              <span className="text-[11px] uppercase tracking-wide text-ink-300">
+                {t("draw.next", { kind: t(KIND_KEY[kind]) })}
+              </span>
+              {styleRows}
+            </div>
+          )}
+          <p className="text-[11px] leading-relaxed text-ink-300">
+            {!isDrawTool(tool)
+              ? t("draw.hint.select", { n: annotations.length })
+              : t("draw.hint.drawing")}
+          </p>
+        </>
       )}
     </div>
   );
@@ -306,6 +320,7 @@ export function DrawPanel({
 function Selected({
   doc,
   ann,
+  style,
   onPatch,
   onToPolygon,
   onDelete,
@@ -316,6 +331,8 @@ function Selected({
 }: {
   doc: BoardDoc;
   ann: Annotation;
+  /** Colour, fill or dash — the rows the panel also shows for the armed tool. */
+  style: ReactNode;
   onPatch: (fields: Partial<Annotation>, merge?: string) => void;
   onToPolygon: () => void;
   onDelete: () => void;
@@ -346,9 +363,25 @@ function Selected({
     <div className="flex flex-col gap-2 rounded-md border border-accent bg-ink-700 p-2">
       <div className="flex items-center justify-between">
         <span className="text-[11px] uppercase tracking-wide text-ink-300">
-          {t("draw.selected", { kind: t(KIND_KEY[ann.kind]) })}
+          {t(KIND_KEY[ann.kind])}
         </span>
         <div className="flex items-center gap-0.5">
+          {/* Out of the dark on every scene, with no glow. Text is out of it already. */}
+          {ann.kind !== "text" && (
+            <button
+              type="button"
+              aria-label={t(ann.lit ? "draw.letDim" : "draw.keepLit")}
+              title={t(ann.lit ? "draw.letDim" : "draw.keepLit")}
+              aria-pressed={ann.lit ?? false}
+              onClick={() => onPatch({ lit: ann.lit ? undefined : true })}
+              className={cn(
+                "flex size-5 items-center justify-center rounded transition",
+                ann.lit ? "text-accent" : "text-ink-400 hover:text-white",
+              )}
+            >
+              <Sun size={12} />
+            </button>
+          )}
           {/* Lit on this scene only, glowing in its own colour and out of the dark. */}
           <button
             type="button"
@@ -386,6 +419,8 @@ function Selected({
           </button>
         </div>
       </div>
+
+      {style}
 
       {ann.kind === "text" && (
         <div className="flex items-start gap-1.5">
@@ -501,7 +536,7 @@ function TextAlignRow({
 /**
  * The panel behind a label: whether there is one, and how solid it is.
  *
- * No colour is the fourth state of the swatch row rather than a checkbox, because it
+ * No colour is a state of the colour picker rather than a checkbox, because it
  * is what every label already is — a picker with nothing selected would be lying.
  * Clearing it drops `bgOpacity` too: an opacity with nothing to be opaque is a value
  * that outlives its meaning, and the next colour picked should start from the default
@@ -518,37 +553,16 @@ function TextBackground({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("draw.bg")}</span>
-      <div className="flex flex-wrap items-center gap-1">
-        <button
-          type="button"
-          title={t("draw.bg.none")}
-          aria-label={t("draw.bg.noneAria")}
-          aria-pressed={ann.bg === undefined}
-          onClick={() => onPatch({ bg: undefined, bgOpacity: undefined })}
-          className={cn(
-            "flex size-4 items-center justify-center rounded-full text-ink-400 ring-1 transition",
-            ann.bg === undefined
-              ? "ring-2 ring-accent"
-              : "ring-white/15 hover:text-ink-200 hover:ring-white/40",
-          )}
-        >
-          <Ban size={10} />
-        </button>
-        {PALETTE.map((c) => (
-          <button
-            key={c}
-            type="button"
-            aria-label={t("draw.bg.aria", { color: c })}
-            aria-pressed={ann.bg === c}
-            onClick={() => onPatch({ bg: c })}
-            className={cn(
-              "size-4 rounded-full ring-1 transition",
-              ann.bg === c ? "ring-2 ring-accent" : "ring-white/15 hover:ring-white/40",
-            )}
-            style={{ background: c }}
-          />
-        ))}
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("draw.bg")}</span>
+        <ColorPicker
+          size="md"
+          value={ann.bg ?? null}
+          label={t("draw.bg.pick")}
+          optionLabel={(c) => t("draw.bg.aria", { color: c })}
+          none={{ label: t("draw.bg.none"), title: t("draw.bg.noneAria"), icon: <Ban size={10} /> }}
+          onChange={(c) => onPatch(c ? { bg: c } : { bg: undefined, bgOpacity: undefined })}
+        />
       </div>
 
       {/* Nothing to be opaque without a colour, so the control is absent rather than

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeftRight,
+  Ban,
   ChevronRight,
   Info,
   RotateCcw,
@@ -24,7 +25,7 @@ import {
 import { cn } from "@/lib/utils";
 import { NumberField } from "@/components/ui/NumberField";
 import { Stepper } from "@/components/ui/Stepper";
-import { PALETTE } from "@/components/ui/palette";
+import { ColorPicker } from "@/components/ui/ColorPicker";
 import { useI18n } from "@/i18n/context";
 import type { Message } from "@/i18n/core";
 
@@ -292,20 +293,20 @@ export function Inspector({
             />
             {!isKeeper && (
               <SmallButton
-                label={t("inspect.makeKeeper", { who: displayName(doc, player.id) })}
+                label={t("inspect.makeKeeper")}
                 title={t("inspect.makeKeeper.hint")}
                 icon={<Shirt size={13} />}
                 onClick={() => onMakeKeeper(player.id)}
               />
             )}
             <SmallButton
-              label={t("inspect.switchSide", { who: displayName(doc, player.id) })}
+              label={t("inspect.switchSide")}
               title={t("inspect.switchSide.hint")}
               icon={<ArrowLeftRight size={13} />}
               onClick={() => onSwitchSide(player.id)}
             />
             <SmallButton
-              label={t("inspect.remove", { who: displayName(doc, player.id) })}
+              label={t("inspect.remove")}
               title={t("inspect.remove.hint")}
               icon={<UserMinus size={13} />}
               danger
@@ -474,7 +475,7 @@ export function Inspector({
               ) : (
                 <SmallButton
                   icon={<span aria-hidden>⚽</span>}
-                  label={carries ? t("inspect.ball.release") : t("inspect.ball.give", { who: nameOf(only!) })}
+                  label={carries ? t("inspect.ball.release") : t("inspect.ball.give")}
                   title={t("inspect.ball.hint")}
                   onClick={() => onCarrierChange(carries ? null : only)}
                 />
@@ -482,37 +483,24 @@ export function Inspector({
             </Group>
           )}
 
-          {/* HIGHLIGHT — one row: a swatch lights the selection in that colour, Off puts
-              it out. Also offered on the first scene: there is no run into it, but there
-              is certainly someone to watch in it. Never carried forward (D47). */}
+          {/* HIGHLIGHT — one ball: a colour lights the selection in it, Off puts it out.
+              Also offered on the first scene: there is no run into it, but there is
+              certainly someone to watch in it. Never carried forward (D47). */}
           <Group label={t("inspect.group.highlight")}>
-            <div className="flex flex-wrap items-center gap-1">
-              {PALETTE.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  aria-label={t("inspect.highlight.colour", { color: c })}
-                  aria-pressed={highlighted && highlightColor === c}
-                  title={t("inspect.highlight.on.hint")}
-                  onClick={() => onHighlightChange(c)}
-                  className={cn(
-                    "size-4 rounded-full ring-1 transition",
-                    highlighted && highlightColor === c
-                      ? "ring-2 ring-accent ring-offset-1 ring-offset-ink-800"
-                      : "ring-white/15 hover:ring-white/40",
-                  )}
-                  style={{ background: c }}
-                />
-              ))}
-              <button
-                type="button"
-                disabled={!highlighted}
-                title={t("inspect.highlight.off.hint")}
-                onClick={() => onHighlightChange(null)}
-                className="ml-auto rounded border border-ink-600 px-2 py-0.5 text-[11px] text-ink-300 transition enabled:hover:border-ink-400 enabled:hover:text-white disabled:opacity-40"
-              >
-                {t("inspect.highlight.none")}
-              </button>
+            <div className="flex items-center gap-2">
+              <ColorPicker
+                size="md"
+                value={highlighted ? highlightColor : null}
+                label={t("inspect.highlight.pick")}
+                optionLabel={(c) => t("inspect.highlight.colour", { color: c })}
+                none={{
+                  label: t("inspect.highlight.none"),
+                  title: t("inspect.highlight.off.hint"),
+                  icon: <Ban size={10} />,
+                }}
+                onChange={onHighlightChange}
+              />
+              <span className="text-[11px] text-ink-400">{t("inspect.highlight.on.hint")}</span>
             </div>
           </Group>
 

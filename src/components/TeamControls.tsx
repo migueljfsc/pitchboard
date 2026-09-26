@@ -1,9 +1,8 @@
-import { useState } from "react";
-import { ChevronDown, Eye, EyeOff, UserPlus } from "lucide-react";
+import { Eye, EyeOff, UserPlus } from "lucide-react";
 import type { BoardDoc, TeamPattern } from "@/board/types";
 import { FORMATIONS, FORMATION_GROUPS, type Direction } from "@/formations";
 import { MAX_SQUAD } from "@/board/players";
-import { PALETTE } from "@/components/ui/palette";
+import { ColorPicker } from "@/components/ui/ColorPicker";
 import { contrastOn } from "@/lib/color";
 import type { Change } from "@/lib/history";
 import { SquadPresets } from "@/components/SquadPresets";
@@ -45,12 +44,8 @@ export function TeamControls({
 }: Props) {
   const { t } = useI18n();
   const team = doc.teams[teamIndex];
-  // The kit is set once and read constantly, so its twenty-odd swatches fold
-  // behind one row that shows what the side is wearing.
-  const [kitOpen, setKitOpen] = useState(false);
-
   // `merge` collapses a burst of keystrokes into one undo step; the colour
-  // swatches pass nothing, so each is a step of its own.
+  // pickers pass nothing, so each is a step of its own.
   const patch = (fields: Partial<BoardDoc["teams"][0]>, merge?: string) => {
     const teams = doc.teams.slice() as BoardDoc["teams"];
     teams[teamIndex] = { ...teams[teamIndex], ...fields };
@@ -129,100 +124,58 @@ export function TeamControls({
         {t("team.addPlayer", { n: team.players.length })}
       </button>
 
-      <button
-        type="button"
-        onClick={() => setKitOpen(!kitOpen)}
-        aria-expanded={kitOpen}
-        title={t("team.kit.title")}
-        className="flex items-center gap-2 rounded-md border border-ink-600 bg-ink-900 px-2 py-1.5 text-xs text-ink-200 transition hover:border-ink-400"
-      >
-        <span
-          className="h-4 w-6 shrink-0 rounded-sm ring-1 ring-white/20"
-          style={{ background: swatch(team.pattern ?? "solid", team.color) }}
-        />
-        <span
-          className="size-4 shrink-0 rounded-full ring-1 ring-white/20"
-          title={t("team.keeperKit")}
-          style={{ background: team.keeper ? team.keeper.color : noKit(team.color) }}
-        />
-        <span className="flex-1 text-left">{t("team.kit")}</span>
-        <ChevronDown
-          size={13}
-          className={cn("shrink-0 text-ink-400 transition-transform", !kitOpen && "-rotate-90")}
-        />
-      </button>
-
-      {kitOpen && (
-      <div className="flex flex-col gap-3 rounded-md border border-ink-700 bg-ink-900/40 p-2">
-      <div className="flex flex-wrap gap-1.5">
-        {PALETTE.map((c) => (
-          <button
-            key={c}
-            type="button"
-            aria-label={t("team.colorAria", { team: team.name, color: c })}
-            onClick={() => patch({ color: c, textColor: contrastOn(c) })}
-            className={cn(
-              "size-5 rounded-full ring-1 transition",
-              team.color === c ? "ring-2 ring-accent" : "ring-white/15 hover:ring-white/40",
-            )}
-            style={{ background: c }}
-          />
-        ))}
-      </div>
-
-      <div className="flex gap-1.5">
-        {PATTERNS.map((p) => (
-          <button
-            key={p.value}
-            type="button"
-            aria-label={t("team.patternAria", { pattern: t(p.key), team: team.name })}
-            aria-pressed={(team.pattern ?? "solid") === p.value}
-            onClick={() => patch({ pattern: p.value === "solid" ? undefined : p.value })}
-            title={t(p.key)}
-            className={cn(
-              "h-5 flex-1 rounded ring-1 transition",
-              (team.pattern ?? "solid") === p.value
-                ? "ring-2 ring-accent"
-                : "ring-white/15 hover:ring-white/40",
-            )}
-            style={{ background: swatch(p.value, team.color) }}
-          />
-        ))}
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <span className="text-[11px] uppercase tracking-wide text-ink-400">
-          {t("team.keeperKit")}
+      {/* The kit: one ball for the shirt, which the pattern paints over, and one for
+          the keeper, whose empty state is the team's own kit struck through. */}
+      <div className="flex items-center gap-2" title={t("team.kit.title")}>
+        <span className="w-16 shrink-0 text-[11px] uppercase tracking-wide text-ink-400">
+          {t("team.shirt")}
         </span>
-        <div className="flex flex-wrap gap-1.5">
-          <button
-            type="button"
-            aria-label={t("team.keeperNoneAria", { team: team.name })}
-            title={t("team.keeperNone")}
-            onClick={() => patch({ keeper: undefined })}
-            className={cn(
-              "size-5 rounded-full ring-1 transition",
-              !team.keeper ? "ring-2 ring-accent" : "ring-white/15 hover:ring-white/40",
-            )}
-            style={{ background: noKit(team.color) }}
-          />
-          {PALETTE.map((c) => (
+        <ColorPicker
+          size="md"
+          value={team.color}
+          preview={swatch(team.pattern ?? "solid", team.color)}
+          label={t("team.color.pick", { team: team.name })}
+          optionLabel={(c) => t("team.colorAria", { team: team.name, color: c })}
+          onChange={(c) => c && patch({ color: c, textColor: contrastOn(c) })}
+        />
+        <div className="flex flex-1 gap-1.5">
+          {PATTERNS.map((p) => (
             <button
-              key={c}
+              key={p.value}
               type="button"
-              aria-label={t("team.keeperColorAria", { team: team.name, color: c })}
-              onClick={() => patch({ keeper: { ...team.keeper, color: c, textColor: contrastOn(c) } })}
+              aria-label={t("team.patternAria", { pattern: t(p.key), team: team.name })}
+              aria-pressed={(team.pattern ?? "solid") === p.value}
+              onClick={() => patch({ pattern: p.value === "solid" ? undefined : p.value })}
+              title={t(p.key)}
               className={cn(
-                "size-5 rounded-full ring-1 transition",
-                team.keeper?.color === c ? "ring-2 ring-accent" : "ring-white/15 hover:ring-white/40",
+                "h-5 flex-1 rounded ring-1 transition",
+                (team.pattern ?? "solid") === p.value
+                  ? "ring-2 ring-accent"
+                  : "ring-white/15 hover:ring-white/40",
               )}
-              style={{ background: c }}
+              style={{ background: swatch(p.value, team.color) }}
             />
           ))}
         </div>
       </div>
+
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("team.keeperKit")}</span>
+        <ColorPicker
+          size="md"
+          value={team.keeper?.color ?? null}
+          label={t("team.keeper.pick", { team: team.name })}
+          optionLabel={(c) => t("team.keeperColorAria", { team: team.name, color: c })}
+          none={{
+            label: t("team.keeperNone"),
+            title: t("team.keeperNoneAria", { team: team.name }),
+            preview: noKit(team.color),
+          }}
+          onChange={(c) =>
+            patch({ keeper: c ? { ...team.keeper, color: c, textColor: contrastOn(c) } : undefined })
+          }
+        />
       </div>
-      )}
     </div>
   );
 }

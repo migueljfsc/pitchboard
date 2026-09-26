@@ -6,7 +6,7 @@
  * Closes on a choice, a click anywhere else, Escape, or the page scrolling.
  */
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 export type MenuItem =
@@ -18,6 +18,8 @@ export type MenuItem =
       danger?: boolean;
       /** Why it is disabled, or what it does. */
       title?: string;
+      /** Drawn before the label, so options can be told apart at a glance. */
+      icon?: ReactNode;
     }
   | "divider";
 
@@ -80,6 +82,8 @@ export function ContextMenu({
     (item, i, all) =>
       item !== "divider" || (i > 0 && i < all.length - 1 && all[i - 1] !== "divider"),
   );
+  // Where any item has an icon, the rest keep its space, so the labels line up.
+  const iconed = shown.some((item) => item !== "divider" && item.icon);
 
   return (
     <div
@@ -104,12 +108,22 @@ export function ContextMenu({
               item.onSelect();
             }}
             className={cn(
-              "block w-full px-3 py-1.5 text-left text-xs transition disabled:opacity-40",
+              "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition disabled:opacity-40",
               item.danger
                 ? "text-red-300 enabled:hover:bg-red-500/15"
                 : "text-ink-200 enabled:hover:bg-ink-700 enabled:hover:text-white",
             )}
           >
+            {iconed && (
+              <span
+                className={cn(
+                  "flex size-3.5 shrink-0 items-center justify-center",
+                  !item.danger && "text-ink-400",
+                )}
+              >
+                {item.icon}
+              </span>
+            )}
             {item.label}
           </button>
         ),

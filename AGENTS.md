@@ -172,6 +172,13 @@ numbers. The table used to be rewritten by hand for each of them; it is a comman
   the scenes nobody meant anything by because a position stands until something changes it.
   Attention is about one moment; `setHighlight` touches the one scene it is given, and making it
   behave like a nudge would put a glow on scenes the coach never looked at.
+- **`lit` is cut by the drawing's own pixels, not by a highlight's band** (D106). The band a
+  highlight cuts is metres of lit grass and reads as a glow on its own, so `drawKept` draws the
+  kept drawings and links into the darkness with `destination-out`; only areas (zones, filled
+  links) are cut as shapes. It never darkens a scene — `lightsAnything` reads highlights alone.
+- **The ruler measures the crop, not the pitch** (D105). On a right half the side ruler is on
+  the RIGHT goal line, because the left one is clipped away; the frame's middle is the crop's
+  middle in metres, never a pixel.
 - **A highlight can name a drawing or a link, so a key can outlive what it names** (D104). A
   scene with any key goes dark; `lightsAnything` is what the spotlight asks, not the key count,
   and deletes prune through `withAnnotations`/`withLinks`. A lit drawing is NOT redrawn above

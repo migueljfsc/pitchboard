@@ -89,6 +89,7 @@ const link = z.object({
   arrows: z.enum(["none", "forward", "both"]).optional(),
   animate: z.boolean().optional(),
   hidden: z.boolean().optional(),
+  lit: z.boolean().optional(),
   /** Scene ids, checked against the real scene list by the refinement below.
    *  Both optional — absent is the open end, which is what every link predating
    *  ranges means (D47). */
@@ -104,6 +105,7 @@ const annotationBase = {
   to: z.string().min(1).nullable(),
   color: z.string().min(1),
   hidden: z.boolean().optional(),
+  lit: z.boolean().optional(),
 };
 
 const dash = z.enum(["solid", "dashed", "wavy"]);

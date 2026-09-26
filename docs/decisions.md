@@ -1842,5 +1842,43 @@ edges. Measured from where it was grabbed, so a snap is exact. Not under the cam
 label is a billboard, and its box is nowhere on the grass. **Alignment** is `align`, left or
 right, absent meaning centred — so no migration — and the box stays centred on `at` whichever
 way its lines sit. **The ruler** shows while any drawing is moved: metre ticks outside the far
-touchline and the left goal line, the span the drawing covers shaded on both and its centre
-marked in metres. Only on a move, not a handle drag, and only on the flat board.
+touchline and the goal line the crop shows, the span the drawing covers shaded on both and its
+centre marked in metres. Only on a move, not a handle drag, and only on the flat board.
+
+**It measures the frame, not the pitch.** A coach centring notes on a horizontal half found the
+ruler no help: it ran 0–105 with the other half cropped away, and its goal-line side sat on the
+left goal line, which a right half does not show. So the ticks cover only the crop, the side
+ruler moves to the right goal line on a right half, and the middle of the frame is marked on
+both with a wedge that lights when the drawing's centre is on it. The frame is `fitViewport` of
+the crop with even padding, in the editor and in an export alike, so its middle is the crop's
+middle in metres — no pixel enters the document. On a half view that middle is also a line a
+label snaps to, since no marking runs there.
+
+## D106 — A drawing or a link can be kept out of the dark
+A coach wanted the choice labels already have: a drawing that stays readable when the spotlight
+falls, without the glow that says "watch this". So a drawing or a link can be `lit`: never
+dimmed, on every scene it shows on. Per drawing rather than per scene, because that is what a
+label is — and a highlight, which is per scene (D104), stays the stronger statement on top.
+
+**It is cut to its own footprint, and no further.** It first shipped as a highlight's hole minus
+the glow, and the hole alone read as a glow: the band a highlight cuts round a line is metres of
+lit grass. So a kept drawing is drawn INTO the darkness layer with `destination-out` by the same
+functions that draw it on the board (`drawKept`), and its own pixels are the cut — an arrowhead
+included, a dashed line's gaps left dark. Under the camera it is drawn into a ground layer of its
+own and warped into the darkness as the board is. An area is the exception: a zone or a filled
+link is drawn translucent and would only thin the dark over itself, so its area is cut clean
+(`keptAreas`), and the players standing in it come out with it. The drawing keeps its place in the
+stack. It does not darken a scene: only a highlight does, and `lightsAnything` reads the highlight
+keys alone. Highlighted as well, the highlight wins. Absent is dimmed, which is every drawing and
+link before the choice existed, so no migration. Text has no toggle; it is above the dark already.
+
+## D107 — A colour is one ball that opens the palette
+Seven rows of eight swatches — shirt, keeper, drawing, label panel, link, highlight — made the
+panels mostly colour. Each is now one ball showing what is in use, opening `PALETTE` in a small
+popover (`ColorPicker`). The states a row had besides a colour — no panel, a link's Auto, no
+highlight, the keeper in the team's kit — are an entry at the head of the popover, and the ball
+shows them while chosen. The team's kit no longer folds: it was folded for its swatches.
+
+**Still the palette, and only the palette.** A free colour input was left out on purpose: kits
+are snapped to `PALETTE` on import (D77) so that a colour can always be picked again and a link
+matched to a kit exactly, and an arbitrary hex undoes both.

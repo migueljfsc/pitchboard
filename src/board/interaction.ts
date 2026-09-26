@@ -11,7 +11,7 @@
  * see `Carry`.
  */
 
-import type { Annotation, BoardDoc, Link, PathCurve, Scene, Vec2 } from "./types";
+import type { Annotation, BoardDoc, Link, PathCurve, PitchHalf, Scene, Vec2 } from "./types";
 import { BALL_ID } from "./types";
 import { PITCH, ballRadius, tokenRadius } from "./pitch";
 import {
@@ -36,7 +36,7 @@ import {
   type AnnotationHandle,
 } from "./annotations";
 import { HANDLE_RADIUS, concealedPlayers } from "./render";
-import { SAME_PLACE, clamp, distanceToSegment } from "./geometry";
+import { SAME_PLACE, clamp, distanceToSegment, halfRange } from "./geometry";
 import { projectPitch, unbillboard, unprojectPitch, type Camera } from "./projection";
 
 export type HitTarget = { kind: "token" | "ball"; id: string } | null;
@@ -855,18 +855,22 @@ function labelBox(ann: TextAnnotation, rotated: boolean): { x0: number; x1: numb
  * edges of every other label on the scene.
  *
  * Markings along x are the goal lines, the halfway line, both boxes' edges and the penalty
- * spots; along y the touchlines, the middle, and both boxes' sides.
+ * spots; along y the touchlines, the middle, and both boxes' sides. The middle of the frame
+ * is a line too: on a half view it is the middle of that half, which no marking is (D105).
  */
 export function labelSnapLines(
   doc: BoardDoc,
   sceneIndex: number,
   except: string,
   rotated: boolean,
+  half: PitchHalf = "full",
 ): { xs: number[]; ys: number[] } {
   const L = doc.pitch.length;
   const W = doc.pitch.width;
   const inset = [PITCH.sixYardDepth, PITCH.penaltySpot, PITCH.penaltyDepth];
+  const [x0, x1] = halfRange(half, L);
   const xs = [0, L / 2, L, ...inset, ...inset.map((d) => L - d)];
+  if (half !== "full") xs.push((x0 + x1) / 2);
   const ys = [
     0,
     W / 2,
@@ -895,9 +899,10 @@ export function snapLabel(
   ann: TextAnnotation,
   at: Vec2,
   rotated: boolean,
+  half: PitchHalf = "full",
   tolerance = SNAP_M,
 ): { at: Vec2; guides: Guide[] } {
-  const { xs, ys } = labelSnapLines(doc, sceneIndex, ann.id, rotated);
+  const { xs, ys } = labelSnapLines(doc, sceneIndex, ann.id, rotated, half);
   const b = labelBox({ ...ann, at }, rotated);
   const best = (features: number[], lines: number[]) => {
     let hit: { shift: number; line: number } | null = null;
