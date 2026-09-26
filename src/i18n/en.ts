@@ -722,6 +722,7 @@ export const en = {
   "preset.error.unknown": "That did not work, so your squads were left as they were.",
 
   // --------------------------------------------------------------- account
+  "app.coffee": "Buy me a coffee",
   "account.signIn": "Sign in",
   "account.signIn.google": "Continue with Google",
   "account.signIn.why": "Sign in to keep your boards and group them into projects.",

@@ -44,6 +44,7 @@ import {
   Undo2,
   Upload,
   Users,
+  Coffee,
 } from "lucide-react";
 import { Inspector } from "@/components/Inspector";
 import { DrawingsPanel } from "@/components/DrawingsPanel";
@@ -1712,6 +1713,19 @@ export function Editor({ initialDoc }: Props = {}) {
               window.location.assign("/?fresh=1");
             }}
           />
+
+          {/* A plain link in Buy Me a Coffee's colours, not their embed script: a script tag in
+              React never runs, and theirs would send every visitor's IP to a third party. */}
+          <a
+            href="https://buymeacoffee.com/migueljfsc"
+            target="_blank"
+            rel="noopener noreferrer"
+            title={t("app.coffee")}
+            className="flex items-center gap-1.5 rounded-md border border-black bg-[#FFDD00] px-2.5 py-1.5 text-xs font-semibold text-black transition hover:brightness-95"
+          >
+            <Coffee size={13} />
+            <span className="hidden xl:inline">{t("app.coffee")}</span>
+          </a>
 
           {/* Last in the row, always. It is the only control that is about the app rather
               than about the board, and it should not move when signing in adds two more. */}

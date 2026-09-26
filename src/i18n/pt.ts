@@ -715,6 +715,7 @@ export const pt: Dictionary = {
   "preset.error.unknown": "Não resultou, por isso os seus planteis ficaram como estavam.",
 
   // --------------------------------------------------------------- account
+  "app.coffee": "Paga-me um café",
   "account.signIn": "Entrar",
   "account.signIn.google": "Continuar com Google",
   "account.signIn.why": "Inicie sessão para guardar os seus quadros e agrupá-los em projetos.",
