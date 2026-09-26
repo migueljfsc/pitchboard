@@ -47,7 +47,7 @@ import {
   savePreset,
 } from "./lib/presets";
 import { deleteAccount } from "./lib/account";
-import { adminStats, adminUser, isAdmin } from "./lib/admin";
+import { adminDeleteUser, adminStats, adminUser, isAdmin } from "./lib/admin";
 import { fail, json } from "./lib/http";
 import { publishBoard, readShare, unpublishBoard } from "./lib/shares";
 import { SLUG_LENGTH } from "./lib/limits";
@@ -95,7 +95,10 @@ export default {
     switch (route) {
       case "GET /api/me": {
         const user = await resolveSession(env, request, now);
-        return user ? json({ user }) : fail("unauthorized", 401);
+        // `admin` tells the account menu to offer the way to /admin, and tells only the admin.
+        return user
+          ? json({ user: { ...user, admin: isAdmin(user, env.ADMIN_EMAILS) } })
+          : fail("unauthorized", 401);
       }
 
       // Erasure (D110). Everything the account owns goes in one transaction, and the cookie
@@ -228,8 +231,9 @@ async function publicRoute(env: Env, request: Request, url: URL): Promise<Respon
 }
 
 /**
- * The operator's surface (D108). Anything under /api/admin/ that is not a route, not a GET,
- * not signed in or not an admin answers the same 404, so none of it can be told apart from a
+ * The operator's surface (D108). Reads are GETs; the one write is DELETE on a user (D110).
+ * Anything under /api/admin/ that is not one of those, not signed in or not an admin answers
+ * the same 404, so none of it can be told apart from a
  * path that does not exist. The session is checked only once the path matches.
  */
 const ADMIN_STATS = /^\/api\/admin\/stats$/;
@@ -238,11 +242,13 @@ const ADMIN_USER = new RegExp(`^/api/admin/users/${ID}$`);
 async function adminRoute(env: Env, request: Request, url: URL, now: number): Promise<Response | null> {
   if (!url.pathname.startsWith("/api/admin/")) return null;
   const userId = ADMIN_USER.exec(url.pathname)?.[1];
-  const known = ADMIN_STATS.test(url.pathname) || userId !== undefined;
-  if (request.method !== "GET" || !known) return fail("not_found", 404);
+  const read = request.method === "GET" && (ADMIN_STATS.test(url.pathname) || userId !== undefined);
+  const erase = request.method === "DELETE" && userId !== undefined;
+  if (!read && !erase) return fail("not_found", 404);
   if (!isAdmin(await resolveSession(env, request, now), env.ADMIN_EMAILS)) {
     return fail("not_found", 404);
   }
+  if (erase) return adminDeleteUser({ env, now }, request, userId);
   return userId ? adminUser({ env, now }, userId) : adminStats({ env, now });
 }
 

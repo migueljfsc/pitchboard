@@ -1,8 +1,9 @@
 /**
  * The operator's view: who has an account, and how much the site is used (D108).
  *
- * READ-ONLY, AND METADATA ONLY. Counts, dates and sizes — never a board's document, a preset's
- * body or a session. Sizes and scene counts are computed inside D1 (`length`, `json_*`), so a
+ * METADATA ONLY. Counts, dates and sizes — never a board's document, a preset's body or a
+ * session. The one write is erasing an account (D110), for a deletion request that arrives by
+ * email rather than through the account's own menu. Sizes and scene counts are computed inside D1 (`length`, `json_*`), so a
  * document never crosses into the Worker and the 10 ms CPU budget is spent on nothing but
  * serialising the answer.
  *
@@ -11,6 +12,7 @@
  * `ADMIN_EMAILS`, compared against the session's email, which Google verified at sign-in.
  */
 
+import { body, confirms, eraseAccount } from "./account";
 import { fail, json } from "./http";
 import type { SessionUser } from "./session";
 
@@ -104,4 +106,18 @@ export async function adminUser({ env }: AdminCtx, userId: string): Promise<Resp
     boards: boards.results,
     presets: presets.results,
   });
+}
+
+/**
+ * Erasing someone else's account (D110). The request repeats that account's address, as the
+ * owner's own delete does, so a stale page or a mistyped id cannot take the wrong one. Logged by
+ * id only — the log outlives the account, and the address was the personal data.
+ */
+export async function adminDeleteUser({ env }: AdminCtx, request: Request, userId: string): Promise<Response> {
+  const user = await env.DB.prepare("SELECT email FROM users WHERE id = ?").bind(userId).first<{ email: string }>();
+  if (!user) return fail("not_found", 404);
+  if (!confirms(await body(request), user.email)) return fail("confirmation_mismatch", 400);
+  await eraseAccount(env, userId, user.email);
+  console.log("admin erased account", userId);
+  return json({ ok: true });
 }

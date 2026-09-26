@@ -1,20 +1,30 @@
 /**
- * Deleting the account (D110).
+ * Deleting an account (D110) — the coach's own, or, from /admin, someone else's.
  *
- * Not `ConfirmDialog`: this one waits on the server, can fail, and asks the coach to type their
- * address first. That is the one irreversible action in the app that takes other people's
- * links down with it, so a reflexive Enter must not be enough.
- *
- * On success it navigates to `/?fresh=1`, the same exit as signing out, so the board the coach
- * had open — possibly one that no longer exists — is not autosaved back into this browser.
+ * Not `ConfirmDialog`: this one waits on the server, can fail, and asks for the account's
+ * address to be typed first. Deleting an account takes other people's links down with it, so a
+ * reflexive Enter must not be enough. What happens after a success is the caller's: `onDelete`
+ * resolves once it is done, and a rejection shows the failure line.
  */
 
 import { useEffect, useRef, useState } from "react";
 
 import { useI18n } from "@/i18n/context";
-import { ApiError, deleteAccount } from "@/share/api";
 
-export function DeleteAccountDialog({ email, onCancel }: { email: string; onCancel: () => void }) {
+export function DeleteAccountDialog({
+  email,
+  title,
+  message,
+  onDelete,
+  onCancel,
+}: {
+  /** The account being deleted — what has to be typed. */
+  email: string;
+  title: string;
+  message: string;
+  onDelete: (typed: string) => Promise<void>;
+  onCancel: () => void;
+}) {
   const { t } = useI18n();
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
@@ -40,14 +50,8 @@ export function DeleteAccountDialog({ email, onCancel }: { email: string; onCanc
     setBusy(true);
     setFailed(false);
     try {
-      await deleteAccount(typed);
-      window.location.assign("/?fresh=1");
-    } catch (error) {
-      // Already gone, from another tab: the outcome the coach asked for.
-      if (error instanceof ApiError && error.status === 401) {
-        window.location.assign("/?fresh=1");
-        return;
-      }
+      await onDelete(typed);
+    } catch {
       setFailed(true);
       setBusy(false);
     }
@@ -71,9 +75,9 @@ export function DeleteAccountDialog({ email, onCancel }: { email: string; onCanc
         }}
       >
         <h2 id="delete-account-title" className="text-sm font-semibold text-white">
-          {t("account.delete.title")}
+          {title}
         </h2>
-        <p className="mt-2 text-xs leading-relaxed text-ink-300">{t("account.delete.message")}</p>
+        <p className="mt-2 text-xs leading-relaxed text-ink-300">{message}</p>
         <label className="mt-4 block text-[11px] text-ink-300">
           {/* One key with its placeholder, split only to style the address inside it. */}
           {t("account.delete.typeEmail")

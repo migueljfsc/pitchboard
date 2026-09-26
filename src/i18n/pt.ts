@@ -726,6 +726,7 @@ export const pt: Dictionary = {
   "account.error.email_unverified": "A Google não verificou esse endereço de email.",
   "account.error.unknown": "O início de sessão não foi concluído. Tenta novamente.",
   "account.error.dismiss": "Dispensar",
+  "account.admin": "Administração",
   "account.delete": "Eliminar conta…",
   "account.dialog.title": "A sua conta Pitchboard",
   "account.dialog.close": "Fechar",

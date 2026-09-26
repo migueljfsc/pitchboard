@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { DeleteAccountDialog } from "@/components/DeleteAccountDialog";
 import {
+  adminDeleteUser,
   ApiError,
   fetchAccount,
   fetchAdminStats,
@@ -142,6 +144,7 @@ function Overview({ stats, onSelect }: { stats: AdminStats; onSelect: (id: strin
 
 function UserDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const [detail, setDetail] = useState<AdminUserDetail | "failed" | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -167,13 +170,36 @@ function UserDetail({ id, onBack }: { id: string; onBack: () => void }) {
 
       {detail && detail !== "failed" && (
         <>
-          <header className="mb-6">
-            <h1 className="text-lg font-semibold text-ink-200">{detail.user.display_name ?? detail.user.email}</h1>
-            <p className="text-xs text-ink-400">
-              {detail.user.email} · joined {formatDate(detail.user.created_at)} · last login{" "}
-              {formatDate(detail.user.last_login_at)} · last seen {formatDate(detail.user.last_seen_at)}
-            </p>
+          <header className="mb-6 flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-lg font-semibold text-ink-200">{detail.user.display_name ?? detail.user.email}</h1>
+              <p className="text-xs text-ink-400">
+                {detail.user.email} · joined {formatDate(detail.user.created_at)} · last login{" "}
+                {formatDate(detail.user.last_login_at)} · last seen {formatDate(detail.user.last_seen_at)}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDeleting(true)}
+              className="shrink-0 rounded-md border border-red-500/60 px-3 py-1.5 text-xs text-red-300 transition hover:bg-red-600 hover:text-white"
+            >
+              Delete account
+            </button>
           </header>
+
+          {deleting && (
+            <DeleteAccountDialog
+              email={detail.user.email}
+              title="Delete this account?"
+              message="This account and everything in it will be deleted. This cannot be undone."
+              onDelete={async (typed) => {
+                await adminDeleteUser(id, typed);
+                // A reload rather than patching state: the totals and the list both change.
+                window.location.assign("/admin");
+              }}
+              onCancel={() => setDeleting(false)}
+            />
+          )}
 
           <Tiles
             items={[

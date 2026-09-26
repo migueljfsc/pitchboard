@@ -733,6 +733,7 @@ export const en = {
   "account.error.email_unverified": "Google has not verified that email address.",
   "account.error.unknown": "Sign-in did not complete. Please try again.",
   "account.error.dismiss": "Dismiss",
+  "account.admin": "Admin",
   "account.delete": "Delete account…",
   "account.dialog.title": "Your Pitchboard account",
   "account.dialog.close": "Close",

@@ -47,6 +47,8 @@ export interface Account {
   id: string;
   email: string;
   displayName: string | null;
+  /** In ADMIN_EMAILS; offers the way to /admin (D108). The Worker still checks every call. */
+  admin?: boolean;
 }
 
 export class ApiError extends Error {
@@ -425,6 +427,11 @@ export async function fetchAdminStats(): Promise<AdminStats> {
   // Same trap as `fetchAccount`: without the Worker, Vite answers with index.html and a 200.
   if (!stats.totals || !stats.users) throw new ApiError("offline", 0);
   return stats as AdminStats;
+}
+
+/** Erases another account (D110). `confirm` is the address the operator typed. */
+export async function adminDeleteUser(id: string, confirm: string): Promise<void> {
+  await call(`/admin/users/${id}`, { method: "DELETE", body: JSON.stringify({ confirm }) });
 }
 
 export async function fetchAdminUser(id: string): Promise<AdminUserDetail> {

@@ -18,7 +18,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { LogOut, Trash2, UserRound } from "lucide-react";
+import { LogOut, Shield, Trash2, UserRound } from "lucide-react";
 
 import { DeleteAccountDialog } from "@/components/DeleteAccountDialog";
 import { SignInDialog } from "@/components/SignInDialog";
@@ -27,7 +27,7 @@ import type { MessageKey } from "@/i18n/core";
 import { enterSignedIn, errorKey } from "@/lib/signIn";
 import { cn } from "@/lib/utils";
 import type { AccountState } from "@/lib/useAccount";
-import { verifyEmail } from "@/share/api";
+import { ApiError, deleteAccount, verifyEmail } from "@/share/api";
 
 /** Codes the Worker actually emits; anything else is a bug and reads as the generic line. */
 const KNOWN_ERRORS = new Set(["access_denied", "invalid_state", "email_unverified"]);
@@ -208,6 +208,17 @@ export function AccountMenu({ account, loading, signOut }: AccountState) {
             </p>
           </div>
 
+          {account.admin && (
+            <a
+              role="menuitem"
+              href="/admin"
+              className="flex items-center gap-1.5 rounded border border-ink-600 px-2 py-1.5 text-[11px] text-ink-200 transition hover:border-accent hover:text-white"
+            >
+              <Shield size={12} />
+              {t("account.admin")}
+            </a>
+          )}
+
           <button
             type="button"
             role="menuitem"
@@ -236,7 +247,25 @@ export function AccountMenu({ account, loading, signOut }: AccountState) {
         </div>
       )}
 
-      {deleting && <DeleteAccountDialog email={account.email} onCancel={() => setDeleting(false)} />}
+      {deleting && (
+        <DeleteAccountDialog
+          email={account.email}
+          title={t("account.delete.title")}
+          message={t("account.delete.message")}
+          onDelete={async (typed) => {
+            try {
+              await deleteAccount(typed);
+            } catch (error) {
+              // Already gone, from another tab: the outcome the coach asked for.
+              if (!(error instanceof ApiError && error.status === 401)) throw error;
+            }
+            // The same exit as signing out, so the open board — possibly one that no longer
+            // exists — is not autosaved back into this browser.
+            window.location.assign("/?fresh=1");
+          }}
+          onCancel={() => setDeleting(false)}
+        />
+      )}
     </div>
   );
 }

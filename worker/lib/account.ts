@@ -18,7 +18,7 @@
 import { fail, json } from "./http";
 import { clearedSessionCookie, type SessionUser } from "./session";
 
-async function body(request: Request): Promise<Record<string, unknown>> {
+export async function body(request: Request): Promise<Record<string, unknown>> {
   try {
     const parsed: unknown = await request.json();
     return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
@@ -34,21 +34,25 @@ async function body(request: Request): Promise<Record<string, unknown>> {
  * needs a CORS preflight this Worker never grants, and the SameSite=Lax cookie is withheld.
  */
 export async function deleteAccount(env: Env, request: Request, user: SessionUser): Promise<Response> {
-  const { confirm } = await body(request);
-  if (typeof confirm !== "string" || confirm.trim().toLowerCase() !== user.email) {
-    return fail("confirmation_mismatch", 400);
-  }
+  if (!confirms(await body(request), user.email)) return fail("confirmation_mismatch", 400);
+  await eraseAccount(env, user.id, user.email);
+  return json({ ok: true }, 200, { "set-cookie": clearedSessionCookie() });
+}
 
-  const id = user.id;
+/** The typed address, compared the way addresses are stored: trimmed and lowercased. */
+export function confirms(body: Record<string, unknown>, email: string): boolean {
+  return typeof body.confirm === "string" && body.confirm.trim().toLowerCase() === email;
+}
+
+/** Shared by the owner's own delete and the operator's (D110), so the two cannot drift. */
+export async function eraseAccount(env: Env, id: string, email: string): Promise<void> {
   await env.DB.batch([
     env.DB.prepare("DELETE FROM presets WHERE user_id = ?").bind(id),
     env.DB.prepare("DELETE FROM boards WHERE user_id = ?").bind(id),
     env.DB.prepare("DELETE FROM projects WHERE user_id = ?").bind(id),
     env.DB.prepare("DELETE FROM identities WHERE user_id = ?").bind(id),
     env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(id),
-    env.DB.prepare("DELETE FROM email_tokens WHERE email = ?").bind(user.email),
+    env.DB.prepare("DELETE FROM email_tokens WHERE email = ?").bind(email),
     env.DB.prepare("DELETE FROM users WHERE id = ?").bind(id),
   ]);
-
-  return json({ ok: true }, 200, { "set-cookie": clearedSessionCookie() });
 }

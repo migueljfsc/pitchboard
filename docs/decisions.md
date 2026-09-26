@@ -368,8 +368,9 @@ credential can revoke its access mid-apply.
 it had no server, so no accounts, and one Worker is one thing to reason about.
 
 ## D108 — The operator's view: `/admin`, metadata only
-One read-only page for the site's owner: totals, the accounts, and one account's projects, boards
-and presets. **The gate is `ADMIN_EMAILS`**, a secret so the address stays out of the repository,
+One page for the site's owner: totals, the accounts, and one account's projects, boards and
+presets; its one write is erasing an account (D110). The account menu links to it for an admin,
+from `admin` on `/api/me`. **The gate is `ADMIN_EMAILS`**, a secret so the address stays out of the repository,
 matched against the session's Google-verified email. Anything under `/api/admin/` answers **404**
 to anyone else, signed in or not, so the surface cannot be found by probing. **Metadata only**:
 counts, dates, sizes and scene counts, computed inside D1 so a document never enters the Worker.
@@ -416,7 +417,10 @@ so an account is gone or untouched. The list is the contract; the `ON DELETE CAS
 only a backstop for a table added and forgotten. Published links need nothing extra: a share is
 the board row (D7). The request repeats the account's address, which the UI makes the coach type
 — an irreversible delete that takes other people's links down is not one click away. It exits
-through `/?fresh=1`, like signing out, so the open board is not autosaved back.
+through `/?fresh=1`, like signing out, so the open board is not autosaved back. The operator can
+erase any account from `/admin` (`DELETE /api/admin/users/<id>`, behind the same 404 as the rest
+of it), for a request that arrives by email; it runs the same `eraseAccount`, demands that
+account's address typed, and logs the id only.
 
 ---
 
