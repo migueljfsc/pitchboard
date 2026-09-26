@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.72.0 (2026-09-26)
+
+### Feat
+
+- **admin**: link to /admin from the account menu, and erase an account from it
+
 ## v0.71.0 (2026-09-26)
 
 ### Feat
