@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.70.1 (2026-09-26)
+
+### Fix
+
+- **infra**: Resend's current records for pitchboard.migueljfsc.dev
+
 ## v0.70.0 (2026-09-26)
 
 ### Feat
