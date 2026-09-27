@@ -7,6 +7,7 @@
  */
 
 import type { BoardDoc, RunEnd, RunStart, Scene, Vec2 } from "./types";
+import { toMetres } from "./sports";
 import { BALL_ID } from "./types";
 import { ballRadius, tokenRadius, tokenScaleOf } from "./pitch";
 import {
@@ -170,7 +171,8 @@ export function sceneTimings(doc: BoardDoc): SceneTiming[] {
         ? 0
         : Math.max(
             MIN_FLOW_STEP_MS,
-            (longestMove(doc.scenes[i - 1], scene) / scenePace(doc, i)) * 1000,
+            // The pace is metres a second, and a move is in board units (D113).
+            (toMetres(doc, longestMove(doc.scenes[i - 1], scene)) / scenePace(doc, i)) * 1000,
           ),
     // Nothing rests but the final frame, which is the pause before the loop.
     holdMs: i === last ? doc.flow!.endHoldMs : 0,

@@ -8,6 +8,7 @@
  */
 
 import type { BoardDoc, PitchHalf, SceneCamera, Vec2, Viewport } from "./types";
+import { sportOf } from "./sports";
 import { easeInOutCubic, fitViewport, toPitch, toScreen } from "./geometry";
 import { cameraFor, framingOf, projectPitch, unprojectPitch } from "./projection";
 import type { Resolved } from "./timeline";
@@ -39,7 +40,7 @@ export function screenMapping(
 ): ScreenMapping {
   const framing = framingOf({ half: view.half, rotated: view.rotated, tilt: view.tilt });
   if (framing.tilt) {
-    const cam = cameraFor(doc.pitch, view.half, width, height, deviceScale);
+    const cam = cameraFor(doc.pitch, view.half, width, height, deviceScale, sportOf(doc).headroom);
     return {
       toScreen: (p) => projectPitch(p, cam),
       fromScreen: (s) => unprojectPitch(s, cam),

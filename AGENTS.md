@@ -7,7 +7,7 @@ choice in [`docs/decisions.md`](docs/decisions.md) — cited below as Dn.
 
 ## Mission
 
-A browser tactics board where a coach draws a formation, moves players between scenes along
+A browser tactics board — football and basketball, one engine (D113) — where a coach draws a formation, moves players between scenes along
 curved runs, and exports the result as MP4, GIF, or PNG. Everything renders client-side; there
 is no server-side video pipeline and there will not be one.
 
@@ -25,8 +25,9 @@ Everything else is negotiable. These are not.
    third source of truth. Breaking this breaks export fidelity, and the symptom shows up far
    from the cause.
 
-2. **No pixels in the document.** All coordinates are pitch metres on a 105 × 68 pitch.
-   `Viewport` converts at the edges; `devicePixelRatio` lives in the canvas transform and never
+2. **No pixels in the document.** All coordinates are board units on `doc.pitch`: metres on a
+   football pitch, and every other court scaled to football's 105-unit length, with
+   `sportOf(doc).metresPerUnit` turning a unit back into metres (D113). `Viewport` converts at the edges; `devicePixelRatio` lives in the canvas transform and never
    in `Viewport.scale`. Breaking this shows up as players drifting on window resize or on a
    retina display — and DPR applied twice looks right on a 1× monitor only.
 
@@ -61,7 +62,9 @@ src/board/                the engine — zero React, zero DOM
   types.ts                BoardDoc — single source of truth for the schema
   schema.ts               zod validator, shared with the Worker
   migrate.ts              version dispatch, run before validation on every load
+  sports.ts               every sport's spec — court, goal, headroom, snaps — and units ↔ metres
   pitch.ts                IFAB dimensions table + markings
+  court.ts                the basketball court: floor, FIBA markings, rings from above
   geometry.ts             bezier, arc-length LUT, easing
   timeline.ts             (doc, t) → resolved positions, incl. ball carrier
   links.ts                connector geometry + distances, and when a link shows
@@ -146,6 +149,21 @@ pnpm board ../football-tracks/work/Untitled/tracks.json --scenes  # who has the 
 ## Known traps
 
 Each is one line of what breaks; the reasoning is in the cited decision.
+
+### Sports (D113)
+- **A unit is a metre only on a football pitch.** Anything a person reads — link distances, the
+  ruler, the pass speed, the flow pace — goes through `toMetres`. Everything tuned in units
+  (tokens, lines, snaps, the 3D camera) stays tuned for every court.
+- **Never branch on a sport's name at a call site.** Read the `SportSpec`: `surface`, `goal`,
+  `keeper`, `snaps`, `headroom`. Football's spec is the old constants exactly — change it and every
+  board ever drawn moves.
+- **Anything a sport adds is optional, and absent is football** — on the board, a preset and a
+  setup file alike, so every board and link made before reads the same.
+- **A ring stands INSIDE the court.** It is depth-sorted among the billboards by its backboard,
+  never drawn at the ends as a net is; in 3D a drop on it is tested where it is drawn
+  (`ringAtScreen`), and a goal takes the ball over a player standing under it.
+- **Switching sport never replaces a board saved to the account in place** — its autosave would
+  carry the new sport over it. It starts a fresh board instead (`switchSport`).
 
 ### Geometry and rendering
 - **Arc-length reparameterisation.** Uniform `u` on a bezier surges and stalls through curves;

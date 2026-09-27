@@ -129,14 +129,14 @@ export const framingOf = (view: PitchView): PitchView =>
  * is far closer to square than the 105 x 68 it is drawn from, and sizing an export
  * off the flat aspect would band it with dead surround.
  */
-export function tiltedAspect(contentAcross: number, contentAlong: number): number {
+export function tiltedAspect(contentAcross: number, contentAlong: number, headroom = HEADROOM): number {
   const d = CAMERA_DISTANCE * (contentAlong / 2);
   const near = 1 / (d - (contentAlong / 2) * SIN);
   const far = 1 / (d + (contentAlong / 2) * SIN);
   // The near edge is the widest, so it is what has to fit.
   const rawW = contentAcross * near;
   const rawH = (contentAlong / 2) * GROUND_SQUASH * (near + far);
-  return rawW / (rawH * (1 + HEADROOM));
+  return rawW / (rawH * (1 + headroom));
 }
 
 /**
@@ -153,6 +153,8 @@ export function projectionFor(
   width: number,
   height: number,
   deviceScale: number,
+  /** Room above the far edge, as a fraction of the board's height: a tall goal needs more. */
+  headroom = HEADROOM,
 ): Projection {
   const d = CAMERA_DISTANCE * (contentAlong / 2);
 
@@ -165,8 +167,8 @@ export function projectionFor(
   const rawH = rawYOf(1) - y0;
   const rawW = contentAcross * kOf(1);
 
-  const fit = Math.min(width / rawW, height / (rawH * (1 + HEADROOM)));
-  const top = (height - rawH * fit * (1 + HEADROOM)) / 2 + rawH * fit * HEADROOM;
+  const fit = Math.min(width / rawW, height / (rawH * (1 + headroom)));
+  const top = (height - rawH * fit * (1 + headroom)) / 2 + rawH * fit * headroom;
 
   const rowY = (v: number) => top + (rawYOf(v) - y0) * fit;
   const depthScale = (v: number) => kOf(v) * fit;
@@ -259,6 +261,8 @@ export function cameraFor(
   width: number,
   height: number,
   deviceScale: number,
+  /** The sport's, from `SportSpec.headroom`. */
+  headroom = HEADROOM,
 ): Camera {
   const [x0, x1] = halfRange(half, pitch.length);
   const proj = projectionFor(
@@ -267,6 +271,7 @@ export function cameraFor(
     width,
     height,
     deviceScale,
+    headroom,
   );
   // Tilt implies a vertical board, so the layer underneath is always the rotated map.
   const groundView = fitViewport(proj.sourceW, proj.sourceH, pitch.length, pitch.width, {

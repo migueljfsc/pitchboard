@@ -1,6 +1,7 @@
 import { Eye, EyeOff, UserPlus } from "lucide-react";
 import type { BoardDoc, TeamPattern } from "@/board/types";
-import { FORMATIONS, FORMATION_GROUPS, type Direction } from "@/formations";
+import { formationGroupsFor, formationsFor, type Direction } from "@/formations";
+import { sportOf } from "@/board/sports";
 import { MAX_SQUAD } from "@/board/players";
 import { ColorPicker } from "@/components/ui/ColorPicker";
 import { contrastOn } from "@/lib/color";
@@ -91,9 +92,9 @@ export function TeamControls({
           onChange={(e) => onFormationChange(teamIndex, e.target.value)}
           className="rounded-md border border-ink-600 bg-ink-900 px-2 py-1.5 text-xs text-ink-200 outline-none focus:border-accent"
         >
-          {FORMATION_GROUPS.map((group) => (
+          {formationGroupsFor(doc.sport).map((group) => (
             <optgroup key={group} label={group}>
-              {FORMATIONS.filter((f) => f.group === group).map((f) => (
+              {formationsFor(doc.sport).filter((f) => f.group === group).map((f) => (
                 <option key={f.id} value={f.id}>
                   {f.name}
                 </option>
@@ -159,23 +160,25 @@ export function TeamControls({
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("team.keeperKit")}</span>
-        <ColorPicker
-          size="md"
-          value={team.keeper?.color ?? null}
-          label={t("team.keeper.pick", { team: team.name })}
-          optionLabel={(c) => t("team.keeperColorAria", { team: team.name, color: c })}
-          none={{
-            label: t("team.keeperNone"),
-            title: t("team.keeperNoneAria", { team: team.name }),
-            preview: noKit(team.color),
-          }}
-          onChange={(c) =>
-            patch({ keeper: c ? { ...team.keeper, color: c, textColor: contrastOn(c) } : undefined })
-          }
-        />
-      </div>
+      {sportOf(doc).keeper && (
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("team.keeperKit")}</span>
+          <ColorPicker
+            size="md"
+            value={team.keeper?.color ?? null}
+            label={t("team.keeper.pick", { team: team.name })}
+            optionLabel={(c) => t("team.keeperColorAria", { team: team.name, color: c })}
+            none={{
+              label: t("team.keeperNone"),
+              title: t("team.keeperNoneAria", { team: team.name }),
+              preview: noKit(team.color),
+            }}
+            onChange={(c) =>
+              patch({ keeper: c ? { ...team.keeper, color: c, textColor: contrastOn(c) } : undefined })
+            }
+          />
+        </div>
+      )}
     </div>
   );
 }

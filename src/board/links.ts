@@ -8,6 +8,7 @@
  */
 
 import type { BoardDoc, Link, LinkStyle, Vec2 } from "./types";
+import { toMetres } from "./sports";
 import { positionAt, type Resolved } from "./timeline";
 import { isVisibleIn, repairRange } from "./range";
 import { droppedIds, forgetHighlights } from "./highlights";
@@ -53,7 +54,7 @@ export function linkGeometry(link: Link, r: Resolved, doc: BoardDoc): LinkGeomet
       from: ids[i],
       to: ids[(i + 1) % ids.length],
       mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
-      metres: Math.hypot(b.x - a.x, b.y - a.y),
+      metres: toMetres(doc, Math.hypot(b.x - a.x, b.y - a.y)),
     });
   }
 
@@ -66,7 +67,7 @@ export function perimeter(g: LinkGeometry): number {
 }
 
 /**
- * Enclosed area in square metres, by the shoelace formula. Zero for an open
+ * Enclosed area in square board units, by the shoelace formula. Zero for an open
  * chain, which encloses nothing.
  */
 export function area(g: LinkGeometry): number {

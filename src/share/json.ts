@@ -17,7 +17,7 @@ import type { BoardDoc, Link, LinkStyle, Team } from "@/board/types";
 import { boardDocSchema } from "@/board/schema";
 import { migrate } from "@/board/migrate";
 import { replaceTeamLinks } from "@/board/links";
-import { AWAY, DEFAULT_FORMATION, HOME, createBoardDoc, type TeamSpec } from "@/formations";
+import { createBoardDoc, sidesFor, type TeamSpec } from "@/formations";
 import { contrastOn } from "@/lib/color";
 import { msg, type Message } from "@/i18n/core";
 import { boardFromTracks } from "@/import";
@@ -55,7 +55,7 @@ export function teamToSetup(doc: BoardDoc, index: 0 | 1): SetupTeam {
     color: team.color,
     textColor: team.textColor,
     ...(team.pattern ? { pattern: team.pattern } : {}),
-    formation: team.formation ?? DEFAULT_FORMATION,
+    formation: team.formation ?? sidesFor(doc.sport)[index].formation,
     players: team.players.map((p) =>
       p.label ? { number: p.number, label: p.label } : { number: p.number },
     ),
@@ -78,7 +78,12 @@ export function teamToSetup(doc: BoardDoc, index: 0 | 1): SetupTeam {
  * setup shape has nowhere to put it, and it is trivially redrawn.
  */
 export function toSetupJson(doc: BoardDoc): string {
-  const setup: Setup = { name: doc.name, teams: [teamToSetup(doc, 0), teamToSetup(doc, 1)] };
+  const setup: Setup = {
+    name: doc.name,
+    // Only where it is not football, so a football setup file reads as it always did.
+    ...(doc.sport && doc.sport !== "football" ? { sport: doc.sport } : {}),
+    teams: [teamToSetup(doc, 0), teamToSetup(doc, 1)],
+  };
   return JSON.stringify(setup, null, 2);
 }
 
@@ -117,6 +122,8 @@ export const setupTeamSchema = z.object({
  */
 const setupSchema = z.object({
   name: z.string().min(1).max(120).optional(),
+  /** Absent is football (D113). */
+  sport: z.enum(["football", "basketball"]).optional(),
   teams: z.tuple([setupTeamSchema, setupTeamSchema]),
 });
 
@@ -213,7 +220,8 @@ export function fromJson(text: string): ImportOutcome {
 }
 
 function docFromSetup(setup: Setup): BoardDoc {
-  const bases = [HOME, AWAY];
+  const sport = setup.sport ?? "football";
+  const bases = sidesFor(sport);
 
   const specs = setup.teams.map((t, i): TeamSpec => {
     const base = bases[i];
@@ -231,7 +239,7 @@ function docFromSetup(setup: Setup): BoardDoc {
     };
   }) as [TeamSpec, TeamSpec];
 
-  const doc = createBoardDoc(specs[0], specs[1]);
+  const doc = createBoardDoc(specs[0], specs[1], undefined, {}, sport);
 
   setup.teams.forEach((t, i) => {
     const built = doc.teams[i];

@@ -1,9 +1,11 @@
 /**
  * BoardDoc is the single source of truth for a tactics board.
  *
- * Every coordinate in this file is in PITCH METRES on a 105 x 68 pitch, origin at
- * the top-left corner. Never pixels. `Viewport` converts at the edges; see
- * docs/architecture.md section 2.
+ * Every coordinate in this file is in BOARD UNITS on `doc.pitch`, origin at the
+ * top-left corner. Never pixels. On a football pitch a unit is a metre; every other
+ * court is laid out at football's length, and `sportOf(doc).metresPerUnit` turns a
+ * unit back into metres wherever a person reads one (D113). `Viewport` converts at
+ * the edges; see docs/architecture.md section 2.
  */
 
 export type Vec2 = { x: number; y: number };
@@ -394,9 +396,14 @@ export type Origin = {
   players: Record<string, OriginPlayer>;
 };
 
+/** The game a board is drawn for. Its court, markings, goals, ball and lineups follow it. */
+export type Sport = "football" | "basketball";
+
 export type BoardDoc = {
   version: 1;
   name: string;
+  /** Absent is football, which is every board drawn before there was a choice (D113). */
+  sport?: Sport;
   pitch: { length: number; width: number };
   /**
    * Multiplier on token and ball size, default 1. Lives on the document rather

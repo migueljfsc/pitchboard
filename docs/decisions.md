@@ -451,6 +451,37 @@ its settings per browser (`exportPrefs.ts`), each field validated on its own; th
 are the board's and are not kept. The share tabs are named for what they are: a Snapshot and a
 Live link (D7).
 
+## D113 — One engine, many sports: courts in board units
+A board names its sport (`doc.sport`, absent = football). Everything but the court is shared —
+scenes, runs, the ball, links, drawings, highlights, the 3D view and export — and what differs
+lives in one `SportSpec` per sport (`sports.ts`): the court, what it is laid on, the goal, whether a
+side has a keeper, the markings a label snaps to, and the 3D headroom. Call sites read the spec;
+none branch on a sport's name.
+
+**Every court is stored at football's length, in board units.** About fifty sizes and thresholds —
+token and ball radii, line and arrow widths, handles, text, snap and drag distances, padding, the
+3D camera — were tuned in metres on a 105 m pitch. Keeping literal metres would have meant scaling
+every one of them per sport and missing some; scaling the court instead leaves all of them right
+on any court, and football exactly as it was (`metresPerUnit` 1). What a person reads converts back
+through `toMetres`: link distances, the ruler (ticked every metre), the pass speed, and the flow
+pace, which stays metres a second. A basketball court is 28 × 15 m and 105 × 56.25 units.
+
+Basketball (FIBA) is the first other sport: a planked floor with a painted key, the three-point
+line, free-throw and centre circles, and rings — drawn from above on the flat board and standing in
+3D, where a ring is inside the court and so is depth-sorted among the players by its backboard.
+The 3D view leaves more headroom above the far end for a backboard. Five a side, no keeper's kit,
+hand-laid zones (2-3, 3-2, 1-3-1, 1-2-2, Box-and-1) numbered 1–5 by position. A dragged ball dropped
+within reach of a ring goes through its middle and is marked a shot (D111), ahead of any player
+standing under it.
+
+**Switching sport starts a new board.** An untouched board (`isUntouched`: nothing but its seeded
+names differs from a fresh one) is replaced; one with work asks first. A board linked to the
+account is never replaced in place, since its autosave would carry the new sport over the saved
+one: the switch opens a fresh local board instead. The last sport chosen is what a new board starts
+in, per browser. Squad presets are one library, each tagged with its sport and shown only on its
+own; setup files carry the sport too. Built-in templates, the tour and video import stay football.
+The UI's copy says board, space and goal where it said pitch, grass and net.
+
 ---
 
 ## The importer (`src/import/`)

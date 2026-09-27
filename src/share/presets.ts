@@ -12,9 +12,9 @@
  */
 
 import { z } from "zod";
-import type { BoardDoc } from "@/board/types";
+import type { BoardDoc, Sport } from "@/board/types";
 import { boardDocSchema } from "@/board/schema";
-import { AWAY, HOME, applyFormation, type TeamSpec } from "@/formations";
+import { applyFormation, sidesFor, type TeamSpec } from "@/formations";
 import { replaceTeamLinks } from "@/board/links";
 import {
   SetupError,
@@ -36,12 +36,21 @@ export const presetSchema = setupTeamSchema.extend({
   id: z.string().min(1).max(60),
   /** What the coach called it — "Our first XI". Distinct from the team's name. */
   label: z.string().min(1).max(MAX_PRESET_LABEL),
+  /** The game it is a squad for. Absent is football, which every squad was before (D113). */
+  sport: z.enum(["football", "basketball"]).optional(),
 });
 
 export type SquadPreset = z.infer<typeof presetSchema>;
 export type PresetLibrary = SquadPreset[];
 
 const librarySchema = z.array(presetSchema).max(MAX_PRESETS);
+
+/**
+ * The squads kept for one sport. There is one library, and each sport sees only its
+ * own: a basketball five means nothing on a football pitch.
+ */
+export const presetsFor = (list: PresetLibrary, sport: Sport = "football"): PresetLibrary =>
+  list.filter((p) => (p.sport ?? "football") === sport);
 
 // ------------------------------------------------------------------ storage
 
@@ -144,6 +153,7 @@ export function presetFrom(
   const team = teamToSetup(doc, teamIndex);
   return {
     ...team,
+    ...(doc.sport && doc.sport !== "football" ? { sport: doc.sport } : {}),
     id: freshId(list),
     label: (label ?? team.name ?? "Squad").slice(0, MAX_PRESET_LABEL),
   };
@@ -204,7 +214,7 @@ export function applyPreset(
   teamIndex: 0 | 1,
   preset: SquadPreset,
 ): ApplyOutcome {
-  const base = teamIndex === 0 ? HOME : AWAY;
+  const base = sidesFor(doc.sport)[teamIndex];
   const spec: TeamSpec = {
     ...base,
     name: preset.name ?? base.name,

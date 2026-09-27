@@ -26,6 +26,12 @@ export const en = {
   // --------------------------------------------------------------- top bar
   "bar.name.label": "Board name",
   "bar.name.placeholder": "Untitled board",
+  "bar.sport.label": "Sport",
+  "bar.sport.hint": "The game this board is drawn for — its court, goals, ball and lineups",
+  "sport.football": "Football",
+  "sport.basketball": "Basketball",
+  "sport.football.lower": "football",
+  "sport.basketball.lower": "basketball",
   "bar.save": "Save",
   "bar.save.hint": "Save this board to your account now, rather than waiting for the autosave.",
   "shortcuts.open": "Shortcuts",
@@ -42,8 +48,8 @@ export const en = {
   "shortcuts.noSnap": "Hold while dragging to place freely, without snapping to other players' lines",
   "shortcuts.tab": "Step through the players on the board; Enter renames",
   "shortcuts.zoom": "Zoom the board about the pointer; scroll to pan once zoomed, or drag with the middle button",
-  "shortcuts.nudge": "Move the selection a metre",
-  "shortcuts.nudgeFar": "Hold with an arrow to move five metres instead",
+  "shortcuts.nudge": "Nudge the selection",
+  "shortcuts.nudgeFar": "Hold with an arrow to nudge five times as far",
   "shortcuts.thisScene": "Hold while dragging or nudging to move in this scene alone",
   "shortcuts.undo": "Undo",
   "shortcuts.redo": "Redo",
@@ -51,7 +57,7 @@ export const en = {
   "shortcuts.escape": "Back to the Select tool, and out of Present",
   "shortcuts.help": "Open this list",
   "shortcuts.mouse":
-    "Right-click a player or a shape for its actions. Drop a player onto another to swap their places. Drag the ball onto a player to pass, into the net to shoot, or onto the grass to set it loose. Click a player to select, shift-click to add another, and double-click to rename. Drag on empty grass to marquee a group, or on a link to take its whole unit. The amber handles bend a run or a pass.",
+    "Right-click a player or a shape for its actions. Drop a player onto another to swap their places. Drag the ball onto a player to pass, into the goal to shoot, or onto empty space to set it loose. Click a player to select, shift-click to add another, and double-click to rename. Drag on empty space to marquee a group, or on a link to take its whole unit. The amber handles bend a run or a pass.",
   "present.enter": "Present",
   "present.enter.title": "Fills the window with the board and hides the panels. Esc comes back.",
   "present.exit": "Done",
@@ -98,6 +104,8 @@ export const en = {
     "Outlines where everyone stands in the neighbouring scene, so you can see at a glance who moves and how far.",
   "view.playerSize": "Player size",
   "view.grass": "Grass",
+  "view.floor": "Floor",
+  "view.floor.shadeAria": "Floor shade, darker to lighter",
   "view.grass.shadeAria": "Grass shade, darker to lighter",
   "view.grass.darker": "darker",
   "view.grass.lighter": "lighter",
@@ -105,7 +113,7 @@ export const en = {
   "view.grass.stripes": "Striped",
   "view.grass.natural": "Natural",
   "view.halfHint":
-    "Half a pitch is taller than it is long. Turn the board vertical and it fills the frame.",
+    "Half the board is taller than it is long. Turn the board vertical and it fills the frame.",
 
   // ------------------------------------------------------------------ team
   "team.namePlaceholder": "Team name",
@@ -165,6 +173,9 @@ export const en = {
   "confirm.reset.message":
     "Every scene, run, link, drawing, player name and team setting goes back to a fresh {home} against a {away}. Undo brings the board back.",
   "confirm.reset.action": "Discard changes",
+  "confirm.sport.title": "Start a {sport} board?",
+  "confirm.sport.message": "Switching sport starts a new {sport} board. Any unsaved changes to this one will be discarded.",
+  "confirm.sport.action": "Switch sport",
 
   "confirm.positions.title": "Reset every position?",
   "confirm.positions.message":
@@ -329,7 +340,7 @@ export const en = {
   "menu.trail.show": "Show path through all scenes",
   "menu.trail.hide": "Hide path through all scenes",
   "menu.lineUp": "Straighten the line",
-  "menu.lineUp.hint": "Evens them into a straight line along the way they already run — across the pitch or up it",
+  "menu.lineUp.hint": "Evens them into a straight line along the way they already run — across the board or up it",
   "menu.spaceEvenly": "Space evenly",
   "menu.spaceEvenly.hint": "Evens the gaps between them along the way they already run, keeping the two at the ends where they are",
   "menu.rename": "Rename…",
@@ -364,7 +375,7 @@ export const en = {
 
   // ------------------------------------------------------------- inspector
   "inspect.empty":
-    "Click a player to select, double-click to rename. Shift-click to add, or drag on empty grass to marquee. Arrow keys nudge; hold shift for 5 m. Space plays.",
+    "Click a player to select, double-click to rename. Shift-click to add, or drag on empty space to marquee. Arrow keys nudge; hold shift to go five times as far. Space plays.",
   "inspect.carry": "When I drag or nudge",
   "inspect.carry.scene": "This scene",
   "inspect.carry.scene.hint":
@@ -506,9 +517,9 @@ export const en = {
 
   // ------------------------------------------------------------ draw panel
   "draw.tool.pan": "Pan",
-  "draw.tool.pan.hint": "Move the view — drag empty grass. Offered while the scene is zoomed in. Players are still picked up and moved. (H)",
+  "draw.tool.pan.hint": "Move the view — drag empty space. Offered while the scene is zoomed in. Players are still picked up and moved. (H)",
   "draw.tool.select": "Select",
-  "draw.tool.select.hint": "Select — drag on empty grass to sweep a box around players (V, Esc)",
+  "draw.tool.select.hint": "Select — drag on empty space to sweep a box around players (V, Esc)",
   "draw.tool.arrow": "Arrow",
   "draw.tool.arrow.hint": "Drag an arrow — a run, pass or shot (A)",
   "draw.tool.line": "Line",
@@ -527,7 +538,7 @@ export const en = {
   "draw.fill.filled": "Filled",
   "draw.fill.filled.hint": "Shade the area inside the shape",
   "draw.fill.outline": "Outline",
-  "draw.fill.outline.hint": "Only the edge — clicks inside reach the pitch and the players",
+  "draw.fill.outline.hint": "Only the edge — clicks inside reach the board and the players",
   "draw.tool.ball.hint": "Click to place a ball — for a drill or a set piece. Pin the tool to place several",
   "draw.keep": "Keep",
   "draw.keep.aria": "Keep the tool armed",
@@ -542,7 +553,7 @@ export const en = {
   "draw.dash.wavy": "Dribble",
   "draw.dash.wavy.hint": "Wavy — the dribble convention",
   "draw.hint.select": "{n} drawn. Click one to restyle it, or pick a tool above.",
-  "draw.hint.drawing": "Drag on the pitch to draw. Esc goes back to select.",
+  "draw.hint.drawing": "Drag on the board to draw. Esc goes back to select.",
   "draw.next": "Next shape: {kind}",
   "draw.show": "Show",
   "draw.hide": "Hide",
@@ -590,7 +601,7 @@ export const en = {
 
   // ----------------------------------------------------------- drawn list
   "drawn.empty":
-    "Nothing drawn yet. Pick a tool above and drag on the pitch — arrows, zones, freehand and labels all land here.",
+    "Nothing drawn yet. Pick a tool above and drag on the board — arrows, zones, freehand and labels all land here.",
   "drawn.onScene": "On {scene}",
   "drawn.thisScene": "this scene",
   "drawn.allScenes": "All scenes",
@@ -871,7 +882,7 @@ export const en = {
   "palette.view.flat": "Switch to the flat board",
   "palette.view.3d": "Switch to the 3D view",
   "palette.view.rotate": "Turn the board a quarter",
-  "palette.view.full": "Show the whole pitch",
+  "palette.view.full": "Show the whole board",
   "palette.view.left": "Show the left half",
   "palette.view.right": "Show the right half",
   "palette.ghosts.before.on": "Outline the previous scene",
@@ -926,7 +937,7 @@ export const en = {
     "Pick a shape for each side, then set names, numbers and kits. Save the squad and you can load it on another board.\nChanging formation keeps your squad but drops that side's links. The shape they described is gone.",
   "tour.move.title": "Moving players",
   "tour.move.body":
-    "Drag a player to move them. Click to select, shift-click to add more, or drag across empty grass to box in a group. Arrow keys nudge the selection a metre (five with ⇧). Drop one player on another and they swap places.\nA move carries into later scenes where that player was standing still, so you don't have to repeat it. Hold Alt to change this scene only. Hold {mod} to place a player freely without snapping to a teammate's line.",
+    "Drag a player to move them. Click to select, shift-click to add more, or drag across empty space to box in a group. Arrow keys nudge the selection (five times as far with ⇧). Drop one player on another and they swap places.\nA move carries into later scenes where that player was standing still, so you don't have to repeat it. Hold Alt to change this scene only. Hold {mod} to place a player freely without snapping to a teammate's line.",
   "tour.scenes.title": "Scenes",
   "tour.scenes.body":
     "A scene is a snapshot of where everybody stands. Add one, move some players, and the gap between the two scenes becomes the animation. Step through them with [ and ], and press Space to play.\nTurn on Seamless flow and the whole thing plays as one movement, with no stop at each scene.",
@@ -935,7 +946,7 @@ export const en = {
     "Every move draws a run. Drag its amber handles to bend it.\nSelect a player and this panel sets when they go and how long they take. A wait holds them before they set off. The run style decides how they start and finish, and can send them straight on through the next scene.",
   "tour.ball.title": "The ball and passes",
   "tour.ball.body":
-    "There's no ball until you give it to someone. Right-click a player and choose Give the ball, or select them and press B. It stays at their feet while they dribble.\nTo play it, add a scene and drag the ball where it goes: onto a team-mate to pass, into the net to shoot, onto the grass to set it loose. It meets the receiver in stride. Right-click the ball to lift it off the ground.",
+    "There's no ball until you give it to someone. Right-click a player and choose Give the ball, or select them and press B. It stays at their feet while they dribble.\nTo play it, add a scene and drag the ball where it goes: onto a team-mate to pass, into the goal to shoot, onto empty space to set it loose. It meets the receiver in stride. Right-click the ball to lift it off the ground.",
   "tour.links.title": "Links",
   "tour.links.body":
     "Select two or more players and link them to show a back four or a pressing unit. The link follows its players on every frame, so the shape stretches as they move.\nChain draws an open line in member order. Shape and Filled close it. You can also limit a link to a range of scenes.",
@@ -947,7 +958,7 @@ export const en = {
     "Right-click a player (or use this panel) to highlight them. The rest of the board goes dark around them, and Dim on the timeline sets how dark.\nA highlight belongs to a single scene. Moves carry forward and highlights don't, so the attention lands exactly where you put it.",
   "tour.view.title": "View",
   "tour.view.body":
-    "Turn the pitch, show only half of it, or switch to 3D. You can also change the grass and how big the players are. Ghosts show the previous or next scene faintly underneath.\nHold {mod} and scroll to zoom. Each scene keeps its own zoom, and playback and exports follow it.",
+    "Turn the board, show only half of it, or switch to 3D. You can also change the surface and how big the players are. Ghosts show the previous or next scene faintly underneath.\nHold {mod} and scroll to zoom. Each scene keeps its own zoom, and playback and exports follow it.",
   "tour.present.title": "Present",
   "tour.present.body":
     "Fills the window with the board and hides the panels, for walking a team through the play. Esc takes you back.",

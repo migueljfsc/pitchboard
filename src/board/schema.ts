@@ -166,6 +166,7 @@ const boardDocShape = z.object({
     length: z.number().min(50).max(150),
     width: z.number().min(30).max(100),
   }),
+  sport: z.enum(["football", "basketball"]).optional(),
   tokenScale: z.number().min(0.5).max(2.5).optional(),
   flow: z
     .object({

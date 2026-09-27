@@ -1,5 +1,6 @@
 import { Box, RotateCw } from "lucide-react";
 import type { BoardDoc, Grass, PitchHalf, PitchView } from "@/board/types";
+import { sportOf } from "@/board/sports";
 import { framingOf } from "@/board/projection";
 import { DEFAULT_TOKEN_SCALE, MAX_TOKEN_SCALE, MIN_TOKEN_SCALE, tokenScaleOf } from "@/board/pitch";
 import { cn } from "@/lib/utils";
@@ -134,7 +135,9 @@ export function ViewControls({
         </Row>
       )}
 
-      {doc && onGrassChange && <GrassControls grass={doc.grass} onChange={onGrassChange} />}
+      {doc && onGrassChange && (
+        <GrassControls grass={doc.grass} floor={sportOf(doc).surface === "floor"} onChange={onGrassChange} />
+      )}
 
       {ghosts && onGhostsChange && (
         <Row label={t("view.ghostsShort")} title={t("view.ghosts.hint")}>
@@ -228,9 +231,12 @@ function Segmented<T extends string>({
  */
 function GrassControls({
   grass,
+  floor,
   onChange,
 }: {
   grass: Grass | undefined;
+  /** A court on a wooden floor: the shade still applies, the turf's texture does not. */
+  floor: boolean;
   onChange: (grass: Grass | undefined) => void;
 }) {
   const { t } = useI18n();
@@ -245,29 +251,31 @@ function GrassControls({
   };
   return (
     <>
-      <Row label={t("view.grass")}>
+      <Row label={t(floor ? "view.floor" : "view.grass")}>
         <input
           type="range"
           min={-1}
           max={1}
           step={0.1}
           value={shade}
-          aria-label={t("view.grass.shadeAria")}
+          aria-label={t(floor ? "view.floor.shadeAria" : "view.grass.shadeAria")}
           title={t(shade < 0 ? "view.grass.darker" : shade > 0 ? "view.grass.lighter" : "view.grass.default")}
           onChange={(e) => set({ texture, shade: Math.round(Number(e.target.value) * 10) / 10 })}
           className="h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-ink-600 accent-accent"
         />
       </Row>
-      <Row label="">
-        <Segmented
-          options={[
-            { value: "stripes" as const, label: t("view.grass.stripes") },
-            { value: "natural" as const, label: t("view.grass.natural") },
-          ]}
-          value={texture}
-          onChange={(value) => set({ shade, texture: value })}
-        />
-      </Row>
+      {!floor && (
+        <Row label="">
+          <Segmented
+            options={[
+              { value: "stripes" as const, label: t("view.grass.stripes") },
+              { value: "natural" as const, label: t("view.grass.natural") },
+            ]}
+            value={texture}
+            onChange={(value) => set({ shade, texture: value })}
+          />
+        </Row>
+      )}
     </>
   );
 }

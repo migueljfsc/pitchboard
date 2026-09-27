@@ -52,6 +52,7 @@ import {
   sceneTimings,
   scenePace,
 } from "@/board/timeline";
+import { toMetres } from "@/board/sports";
 import { useI18n } from "@/i18n/context";
 import type { Change } from "@/lib/history";
 import { cn } from "@/lib/utils";
@@ -800,7 +801,7 @@ function PassTiming({
   // How far the pass goes and how hard, so "tension" is a number and not a feel.
   const r = transitionInto(doc, index);
   const ends = !disabled && r ? passEnds(r, doc) : null;
-  const metres = ends ? Math.hypot(ends.end.x - ends.start.x, ends.end.y - ends.start.y) : 0;
+  const metres = ends ? toMetres(doc, Math.hypot(ends.end.x - ends.start.x, ends.end.y - ends.start.y)) : 0;
   const readout =
     ends && metres >= 0.5 && takesMs > 0
       ? t("timeline.pass.speed", {

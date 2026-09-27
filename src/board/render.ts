@@ -18,10 +18,14 @@ import type {
   LinkArrows,
   PitchHalf,
   RenderView,
+  Sport,
   Team,
   TeamPattern,
+  TurfCache,
   Vec2,
 } from "./types";
+import { sportOf, toMetres, type HoopGoal } from "./sports";
+import { RING_COLOR, drawCourt, floorTheme } from "./court";
 import { BALL_ID } from "./types";
 import { TEXT_FONT_FAMILY } from "./glyphs";
 import { lightsAnything } from "./highlights";
@@ -29,7 +33,6 @@ import { keeperOf } from "./players";
 import {
   BALL_RADIUS,
   themeFor,
-  PITCH,
   PITCH_PADDING,
   TEAM_NAME_OFFSET,
   TOKEN_RADIUS,
@@ -116,12 +119,23 @@ function kitOf(team: Team, id: string): { color: string; textColor: string; patt
 /** Steps used to stroke a curved path. Purely cosmetic; the maths is exact. */
 const PATH_STEPS = 24;
 
+/** The surface a board is drawn on: its sport's, shaded as its document asks. */
+export function boardTheme(doc: BoardDoc): PitchTheme {
+  return sportOf(doc).surface === "floor" ? floorTheme(doc) : themeFor(doc);
+}
+
+/** The court and its markings, for the board's sport. `goals` as `drawPitch` takes it. */
+function drawSurface(ctx: Ctx, doc: BoardDoc, theme: PitchTheme, goals: boolean, turf?: TurfCache): void {
+  if (sportOf(doc).surface === "floor") drawCourt(ctx, doc.pitch, theme, goals);
+  else drawPitch(ctx, doc.pitch, theme, goals, turf);
+}
+
 export function drawBoard(
   ctx: Ctx,
   doc: BoardDoc,
   t: number,
   view: RenderView,
-  theme: PitchTheme = themeFor(doc),
+  theme: PitchTheme = boardTheme(doc),
 ): void {
   const frame = frameAt(doc, t);
 
@@ -166,7 +180,7 @@ export function drawBoard(
 
   clipToHalf(ctx, doc, view.half);
 
-  drawPitch(ctx, doc.pitch, theme, true, view.turf);
+  drawSurface(ctx, doc, theme, true, view.turf);
   // The ruler's readouts sit where the names do, and are the one thing read mid-drag.
   if (!(view.interactive && view.ruler)) drawTeamNames(ctx, doc, view.rotated);
 
@@ -224,13 +238,14 @@ export function drawBoard(
       selected: view.selection?.has(BALL_ID) ?? false,
       hovered: view.interactive && view.hover === BALL_ID,
       shadow: true,
+      sport: doc.sport,
     });
   }
 
   for (const ann of marks) {
     if (isZone(ann) || ann.kind === "text") continue;
     glowOf(ann.id);
-    drawMark(ctx, ann, view.rotated, ballRadius(doc));
+    drawMark(ctx, ann, view.rotated, ballRadius(doc), doc.sport);
   }
 
   // Over everything the board shows, under the editor's own chrome — and under the
@@ -252,7 +267,7 @@ export function drawBoard(
     if (highlightAt(ann.id, frame.resolved)) {
       upright(ctx, ann.at, view.rotated, () => drawGlow(ctx, textGlowShape(ann)));
     }
-    drawMark(ctx, ann, view.rotated, ballRadius(doc));
+    drawMark(ctx, ann, view.rotated, ballRadius(doc), doc.sport);
   }
 
   if (view.interactive && view.annotationSelection) {
@@ -403,7 +418,14 @@ function drawTilted(
   // the content rect, so it seats corner to corner with no letterbox — the
   // trapezoid IS the board, and the surround already painted underneath shows
   // everywhere the trapezoid is not.
-  const cam = cameraFor(doc.pitch, view.half, view.width, view.height, Math.hypot(m.a, m.b) || 1);
+  const cam = cameraFor(
+    doc.pitch,
+    view.half,
+    view.width,
+    view.height,
+    Math.hypot(m.a, m.b) || 1,
+    sportOf(doc).headroom,
+  );
   const { proj, groundView } = cam;
 
   const ground = new OffscreenCanvas(proj.sourceW, proj.sourceH);
@@ -415,7 +437,7 @@ function drawTilted(
 
   const marks = annotationsFor(doc, frame, view);
 
-  drawPitch(gctx, doc.pitch, theme, false, view.turf);
+  drawSurface(gctx, doc, theme, false, view.turf);
   drawTeamNames(gctx, doc, true, TEAM_NAME_OFFSET_3D);
   const lit = litShapes(doc, frame, marks);
   const glowOf = litGlow(gctx, doc, frame, marks);
@@ -436,7 +458,7 @@ function drawTilted(
   for (const ann of marks) {
     if (isZone(ann) || isStanding(ann)) continue;
     glowOf(ann.id);
-    drawMark(gctx, ann, true, ballRadius(doc));
+    drawMark(gctx, ann, true, ballRadius(doc), doc.sport);
   }
 
   if (view.interactive) {
@@ -465,9 +487,12 @@ function drawTilted(
   // surround above a half-pitch view.
   ctx.save();
   clipToProjectedHalf(ctx, doc, view.half, cam);
-  drawGoal(ctx, doc, cam, -1, theme);
+  // A net stands behind its goal line, so the two ends are a complete depth sort. A
+  // ring stands inside the court, among the players, and is sorted with them instead.
+  const nets = sportOf(doc).goal.kind === "net";
+  if (nets) drawGoal(ctx, doc, cam, -1, theme);
   drawBillboards(ctx, doc, frame, view, cam, marks);
-  drawGoal(ctx, doc, cam, 1, theme);
+  if (nets) drawGoal(ctx, doc, cam, 1, theme);
 
   // In screen space, over the goals and everything standing: the pools are cut
   // around each highlighted player where he is drawn, sized by his depth.
@@ -588,14 +613,15 @@ function drawGoal(
   dir: 1 | -1,
   theme: PitchTheme,
 ): void {
-  const P = PITCH;
+  const P = sportOf(doc).goal;
+  if (P.kind !== "net") return;
   const line = dir === 1 ? 0 : doc.pitch.length;
-  const back = line - dir * P.goalDepth;
+  const back = line - dir * P.depth;
   const cy = doc.pitch.width / 2;
-  const near = cy - P.goalWidth / 2;
-  const far = cy + P.goalWidth / 2;
-  const high = P.goalHeight;
-  const low = P.goalHeight * NET_DROP;
+  const near = cy - P.width / 2;
+  const far = cy + P.width / 2;
+  const high = P.height;
+  const low = P.height * NET_DROP;
 
   const at = (p: Vec3): Projected => projectPitch(p, cam, p.up);
   const v3 = (x: number, y: number, up: number): Vec3 => ({ x, y, up });
@@ -636,6 +662,95 @@ function drawGoal(
   bar(v3(line, near, 0), v3(line, near, high), theme.line);
   bar(v3(line, far, 0), v3(line, far, high), theme.line);
   bar(v3(line, near, high), v3(line, far, high), theme.line);
+}
+
+/**
+ * A basketball goal standing up off the floor: the post behind the baseline, its arm,
+ * the backboard, the ring and its net. Projected corner by corner, as a net is.
+ */
+function drawHoop(ctx: Ctx, doc: BoardDoc, cam: Camera, dir: 1 | -1, goal: HoopGoal): void {
+  const at = (p: Vec3): Projected => projectPitch(p, cam, p.up);
+  const v3 = (x: number, y: number, up: number): Vec3 => ({ x, y, up });
+  const line = dir === 1 ? 0 : doc.pitch.length;
+  const inward = (d: number) => line + dir * d;
+  const cy = doc.pitch.width / 2;
+  const { board } = goal;
+  const boardX = inward(board.line);
+  const post = inward(-goal.board.line);
+  const armUp = (board.bottom + board.top) / 2;
+
+  const bar = (a: Vec3, b: Vec3, color: string, width: number) => {
+    const pa = at(a);
+    const pb = at(b);
+    ctx.beginPath();
+    ctx.moveTo(pa.x, pa.y);
+    ctx.lineTo(pb.x, pb.y);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(1, (width * (pa.scale + pb.scale)) / 2);
+    ctx.lineCap = "round";
+    ctx.stroke();
+  };
+  const face = (corners: Vec3[], fill: string | null, stroke: string, width: number) => {
+    ctx.beginPath();
+    corners.forEach((c, i) => {
+      const p = at(c);
+      if (i === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+    });
+    ctx.closePath();
+    if (fill) {
+      ctx.fillStyle = fill;
+      ctx.fill();
+    }
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = Math.max(1, width * at(corners[0]).scale);
+    ctx.stroke();
+  };
+
+  // The post and the arm that carries the board out over the court.
+  bar(v3(post, cy, 0), v3(post, cy, armUp), "#4b5563", FRAME_WIDTH * 2);
+  bar(v3(post, cy, armUp), v3(boardX, cy, armUp), "#4b5563", FRAME_WIDTH * 1.5);
+
+  // The backboard, clear, with the target square over the ring.
+  const half = board.width / 2;
+  face(
+    [v3(boardX, cy - half, board.bottom), v3(boardX, cy + half, board.bottom), v3(boardX, cy + half, board.top), v3(boardX, cy - half, board.top)],
+    "rgba(255,255,255,0.22)",
+    "#ffffff",
+    FRAME_WIDTH * 0.6,
+  );
+  const square = goal.radius * 1.3;
+  const squareTop = board.bottom + (board.top - board.bottom) * 0.55;
+  face(
+    [v3(boardX, cy - square, board.bottom), v3(boardX, cy + square, board.bottom), v3(boardX, cy + square, squareTop), v3(boardX, cy - square, squareTop)],
+    null,
+    "#ffffff",
+    FRAME_WIDTH * 0.4,
+  );
+
+  // The net hangs from the ring and narrows below it.
+  const ringX = inward(goal.centre);
+  const around = (r: number, up: number, i: number, n: number): Vec3 => {
+    const a = (i / n) * Math.PI * 2;
+    return v3(ringX + Math.cos(a) * r, cy + Math.sin(a) * r, up);
+  };
+  const strands = 12;
+  const drop = goal.radius * 1.8;
+  for (let i = 0; i < strands; i++) {
+    bar(around(goal.radius, goal.height, i, strands), around(goal.radius * 0.6, goal.height - drop, i, strands), "rgba(255,255,255,0.55)", FRAME_WIDTH * 0.15);
+  }
+
+  // The ring last, over its own net.
+  ctx.beginPath();
+  const segments = 28;
+  for (let i = 0; i <= segments; i++) {
+    const p = at(around(goal.radius, goal.height, i, segments));
+    if (i === 0) ctx.moveTo(p.x, p.y);
+    else ctx.lineTo(p.x, p.y);
+  }
+  ctx.strokeStyle = RING_COLOR;
+  ctx.lineWidth = Math.max(1, FRAME_WIDTH * 0.5 * at(v3(ringX, cy, goal.height)).scale);
+  ctx.stroke();
 }
 
 /**
@@ -803,6 +918,7 @@ function drawBillboards(
           drawBall(ctx, ball, ballR, {
             selected: view.selection?.has(BALL_ID) ?? false,
             hovered: view.interactive && view.hover === BALL_ID,
+            sport: doc.sport,
           }),
         );
       },
@@ -820,12 +936,22 @@ function drawBillboards(
       draw: () =>
         billboard(ctx, ann.at, at, () => {
           drawGroundShadow(ctx, ann.at, drawnR);
-          drawBall(ctx, ann.at, drawnR, { selected: false, hovered: false });
+          drawBall(ctx, ann.at, drawnR, { selected: false, hovered: false, sport: doc.sport });
           if (view.interactive && view.annotationSelection === ann.id) {
             drawAnnotationChrome(ctx, ann, false, drawnR);
           }
         }),
     });
+  }
+
+  // A ring stands among the players, sorted by its backboard: a player under the
+  // basket, between it and the baseline, is in front of the near one and behind the far.
+  const goal = sportOf(doc).goal;
+  if (goal.kind === "hoop") {
+    for (const dir of [1, -1] as const) {
+      const board = { x: dir === 1 ? goal.board.line : doc.pitch.length - goal.board.line, y: doc.pitch.width / 2 };
+      standing.push({ at: projectPitch(board, cam), draw: () => drawHoop(ctx, doc, cam, dir, goal) });
+    }
   }
 
   // Nearest last. A billboard standing on the grass has to cover the one behind
@@ -1278,7 +1404,7 @@ function drawKept(ctx: Ctx, doc: BoardDoc, frame: Frame, kept: Kept, rotated: bo
   const ballR = ballRadius(doc);
   for (const ann of kept.marks) {
     if (isZone(ann)) drawZone(ctx, ann);
-    else if (!(ground && isStanding(ann))) drawMark(ctx, ann, rotated, ballR);
+    else if (!(ground && isStanding(ann))) drawMark(ctx, ann, rotated, ballR, doc.sport);
   }
   if (kept.links.length > 0) drawLinks(ctx, { ...doc, links: kept.links }, frame, rotated, t);
 }
@@ -1742,7 +1868,7 @@ function drawZone(ctx: Ctx, ann: Annotation): void {
 }
 
 /** Arrows, lines, freehand and text — everything drawn over the play. */
-function drawMark(ctx: Ctx, ann: Annotation, rotated: boolean, ballR: number): void {
+function drawMark(ctx: Ctx, ann: Annotation, rotated: boolean, ballR: number, sport?: Sport): void {
   if (ann.kind === "text") {
     drawAnnotationText(ctx, ann, rotated);
     return;
@@ -1751,7 +1877,7 @@ function drawMark(ctx: Ctx, ann: Annotation, rotated: boolean, ballR: number): v
   // not a symbol for one. Never selected or hovered as an entity: its chrome is a
   // shape's.
   if (ann.kind === "ball") {
-    drawBall(ctx, ann.at, ballR, { selected: false, hovered: false, shadow: true });
+    drawBall(ctx, ann.at, ballR, { selected: false, hovered: false, shadow: true, sport });
     return;
   }
 
@@ -2251,6 +2377,8 @@ type TokenState = {
   alpha?: number;
   /** The ball only: a shadow on the grass, where no 3D view is casting one. */
   shadow?: boolean;
+  /** The ball only: which game's ball it is. Absent is a football. */
+  sport?: Sport;
 };
 
 /**
@@ -2454,15 +2582,18 @@ function drawBall(ctx: Ctx, p: Vec2, radius: number, state: TokenState): void {
     p.y,
     radius,
   );
-  lit.addColorStop(0, "#ffffff");
-  lit.addColorStop(0.55, "#f1f2f4");
-  lit.addColorStop(1, "#c3c8d0");
+  const leather = state.sport === "basketball";
+  const [light, mid, rim] = leather ? ["#f7a15a", "#e2702c", "#9c4516"] : ["#ffffff", "#f1f2f4", "#c3c8d0"];
+  lit.addColorStop(0, light);
+  lit.addColorStop(0.55, mid);
+  lit.addColorStop(1, rim);
   ctx.beginPath();
   ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
   ctx.fillStyle = lit;
   ctx.fill();
 
-  drawBallPanels(ctx, p, radius, k);
+  if (leather) drawBallSeams(ctx, p, radius, k);
+  else drawBallPanels(ctx, p, radius, k);
 
   ctx.beginPath();
   ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
@@ -2475,6 +2606,34 @@ function drawBall(ctx: Ctx, p: Vec2, radius: number, state: TokenState): void {
   ctx.ellipse(p.x - radius * 0.36, p.y - radius * 0.42, radius * 0.2, radius * 0.12, -0.6, 0, Math.PI * 2);
   ctx.fillStyle = "rgba(255,255,255,0.75)";
   ctx.fill();
+}
+
+/**
+ * A basketball's seams -- two across it at right angles and the two curves either side --
+ * turning as the ball rolls, by where it is, as the football's panels do.
+ */
+function drawBallSeams(ctx: Ctx, p: Vec2, radius: number, k: number): void {
+  const turn = (p.x * 0.8 + p.y * 0.55) / radius;
+  const r = radius;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.translate(p.x, p.y);
+  ctx.rotate(turn);
+  ctx.beginPath();
+  ctx.moveTo(-r, 0);
+  ctx.lineTo(r, 0);
+  ctx.moveTo(0, -r);
+  ctx.lineTo(0, r);
+  ctx.moveTo(-r * 0.7, -r);
+  ctx.quadraticCurveTo(-r * 0.12, 0, -r * 0.7, r);
+  ctx.moveTo(r * 0.7, -r);
+  ctx.quadraticCurveTo(r * 0.12, 0, r * 0.7, r);
+  ctx.strokeStyle = "rgba(35,16,6,0.85)";
+  ctx.lineWidth = 0.06 * k;
+  ctx.stroke();
+  ctx.restore();
 }
 
 /**
@@ -2597,6 +2756,8 @@ function drawRuler(
   const far = half === "right";
   const out = (d: number) => (far ? L + d : -d);
   const tick = (m: number) => (m % 10 === 0 ? RULER_TICK[2] : m % 5 === 0 ? RULER_TICK[1] : RULER_TICK[0]);
+  // Ticks are a metre apart on any court: a unit is a metre only on a football pitch.
+  const unit = 1 / sportOf(doc).metresPerUnit;
   const label = (text: string, p: Vec2, color: string) =>
     upright(ctx, p, rotated, () => {
       ctx.fillStyle = color;
@@ -2607,13 +2768,13 @@ function drawRuler(
   ctx.strokeStyle = "rgba(255,255,255,0.45)";
   ctx.lineWidth = 0.08;
   ctx.beginPath();
-  for (let m = Math.ceil(x0); m <= Math.floor(x1); m++) {
-    ctx.moveTo(m, -RULER_GAP);
-    ctx.lineTo(m, -RULER_GAP - tick(m));
+  for (let m = Math.ceil(x0 / unit); m <= Math.floor(x1 / unit + 1e-9); m++) {
+    ctx.moveTo(m * unit, -RULER_GAP);
+    ctx.lineTo(m * unit, -RULER_GAP - tick(m));
   }
-  for (let m = 0; m <= Math.floor(W); m++) {
-    ctx.moveTo(out(RULER_GAP), m);
-    ctx.lineTo(out(RULER_GAP + tick(m)), m);
+  for (let m = 0; m <= Math.floor(W / unit + 1e-9); m++) {
+    ctx.moveTo(out(RULER_GAP), m * unit);
+    ctx.lineTo(out(RULER_GAP + tick(m)), m * unit);
   }
   ctx.stroke();
 
@@ -2621,10 +2782,14 @@ function drawRuler(
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   const numbers = RULER_GAP + RULER_TICK[2] + 0.9;
-  for (let m = Math.ceil(x0 / 10) * 10; m <= x1; m += 10) {
-    label(String(m), { x: m, y: -numbers }, "rgba(255,255,255,0.6)");
+  // Every ten metres on a pitch, every five on a court too small to number in tens.
+  const every = unit > 2 ? 5 : 10;
+  for (let m = Math.ceil(x0 / unit / every) * every; m * unit <= x1 + 1e-9; m += every) {
+    label(String(m), { x: m * unit, y: -numbers }, "rgba(255,255,255,0.6)");
   }
-  for (let m = 0; m <= W; m += 10) label(String(m), { x: out(numbers), y: m }, "rgba(255,255,255,0.6)");
+  for (let m = 0; m * unit <= W + 1e-9; m += every) {
+    label(String(m), { x: out(numbers), y: m * unit }, "rgba(255,255,255,0.6)");
+  }
 
   // The middle of the frame on each ruler: a small wedge pointing at the pitch, in the
   // accent once the drawing's centre is on it.
@@ -2664,8 +2829,8 @@ function drawRuler(
   ctx.stroke();
   ctx.font = "700 1.05px Inter, system-ui, -apple-system, sans-serif";
   const accent = "rgba(251,191,36,1)";
-  label(`${at.x.toFixed(1)} m`, { x: at.x, y: -numbers - 1.3 }, accent);
-  label(`${at.y.toFixed(1)} m`, { x: out(numbers + 2.2), y: at.y }, accent);
+  label(`${toMetres(doc, at.x).toFixed(1)} m`, { x: at.x, y: -numbers - 1.3 }, accent);
+  label(`${toMetres(doc, at.y).toFixed(1)} m`, { x: out(numbers + 2.2), y: at.y }, accent);
   ctx.restore();
 }
 

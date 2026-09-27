@@ -13,7 +13,7 @@
 
 import type { Annotation, BoardDoc, Link, PathCurve, PitchHalf, Scene, Vec2 } from "./types";
 import { BALL_ID } from "./types";
-import { PITCH, ballRadius, tokenRadius } from "./pitch";
+import { ballRadius, tokenRadius } from "./pitch";
 import {
   LOFT_APEX,
   ballLift,
@@ -25,6 +25,7 @@ import {
 } from "./timeline";
 import { linkGeometry } from "./links";
 import { ballCurve, canShoot, setCarrier, setShot } from "./scenes";
+import { SPORTS, goalAt, sportOf, type SportSpec } from "./sports";
 import {
   MARK_WIDTH,
   TEXT_BG_PAD,
@@ -538,7 +539,8 @@ export function moveEntities(
   const shifts = new Map<number, Map<string, Vec2>>();
 
   const shift = (index: number, id: string, from: Vec2): void => {
-    const to = id === BALL_ID ? clampBall(add(from, delta), bounds) : clampToPitch(add(from, delta), bounds);
+    const to =
+      id === BALL_ID ? clampBall(add(from, delta), bounds, sportOf(doc).goal) : clampToPitch(add(from, delta), bounds);
     let row = shifts.get(index);
     if (!row) shifts.set(index, (row = new Map()));
     row.set(id, { x: to.x - from.x, y: to.y - from.y });
@@ -729,12 +731,18 @@ function clampToPitch(p: Vec2, bounds: { length: number; width: number }): Vec2 
  * Where the ball may be put: anywhere on the pitch, and into either net — behind the
  * goal line only between the posts, and no deeper than the goal. Once it is in, it
  * stays in: dragged sideways it runs along the net rather than jumping back onto the
- * line, which is where a shot finishing on the line used to leave it.
+ * line, which is where a shot finishing on the line used to leave it. A court whose
+ * goal is a ring keeps the ball on the court: the ring is inside it.
  */
-export function clampBall(p: Vec2, bounds: { length: number; width: number }): Vec2 {
-  const x = clamp(p.x, -PITCH.goalDepth, bounds.length + PITCH.goalDepth);
+export function clampBall(
+  p: Vec2,
+  bounds: { length: number; width: number },
+  goal: SportSpec["goal"] = SPORTS.football.goal,
+): Vec2 {
+  if (goal.kind !== "net") return clampToPitch(p, bounds);
+  const x = clamp(p.x, -goal.depth, bounds.length + goal.depth);
   const inNet = x < 0 || x > bounds.length;
-  const half = PITCH.goalWidth / 2;
+  const half = goal.width / 2;
   const mid = bounds.width / 2;
   return {
     x,
@@ -852,8 +860,9 @@ function labelBox(ann: TextAnnotation, rotated: boolean): { x0: number; x1: numb
  * The lines a dragged label is drawn onto: the pitch's own markings, and the centres and
  * edges of every other label on the scene.
  *
- * Markings along x are the goal lines, the halfway line, both boxes' edges and the penalty
- * spots; along y the touchlines, the middle, and both boxes' sides. The middle of the frame
+ * Markings along x are the goal lines, the halfway line, and the sport's own lines in from
+ * each end (both boxes' edges and the penalty spots); along y the touchlines, the middle,
+ * and the sides of the boxes. The middle of the frame
  * is a line too: on a half view it is the middle of that half, which no marking is (D105).
  */
 export function labelSnapLines(
@@ -865,7 +874,7 @@ export function labelSnapLines(
 ): { xs: number[]; ys: number[] } {
   const L = doc.pitch.length;
   const W = doc.pitch.width;
-  const inset = [PITCH.sixYardDepth, PITCH.penaltySpot, PITCH.penaltyDepth];
+  const { depths: inset, spans } = sportOf(doc).snaps;
   const [x0, x1] = halfRange(half, L);
   const xs = [0, L / 2, L, ...inset, ...inset.map((d) => L - d)];
   if (half !== "full") xs.push((x0 + x1) / 2);
@@ -873,7 +882,7 @@ export function labelSnapLines(
     0,
     W / 2,
     W,
-    ...[PITCH.sixYardWidth, PITCH.penaltyWidth].flatMap((w) => [W / 2 - w / 2, W / 2 + w / 2]),
+    ...spans.flatMap((w) => [W / 2 - w / 2, W / 2 + w / 2]),
   ];
   for (const ann of visibleAt(doc, sceneIndex)) {
     if (ann.kind !== "text" || ann.id === except || !ann.text.trim()) continue;
@@ -999,9 +1008,23 @@ export function ballReceiver(doc: BoardDoc, sceneIndex: number, at: Vec2): strin
   return best;
 }
 
-/** Behind either goal line — which `clampBall` allows only between the posts. */
-export function inNet(doc: BoardDoc, p: Vec2): boolean {
-  return p.x < 0 || p.x > doc.pitch.length;
+/**
+ * The ring a SCREEN point is on, under the camera, as its place on the floor — or null.
+ *
+ * A ring stands off the floor, so the grass under the pointer is nowhere near the one it
+ * is pointing at: it is tested where it is drawn, as a billboard is. A net lies behind
+ * its line on the grass, and needs no test of its own.
+ */
+export function ringAtScreen(doc: BoardDoc, screen: Vec2, cam: Camera): Vec2 | null {
+  const goal = sportOf(doc).goal;
+  if (goal.kind !== "hoop") return null;
+  for (const x of [goal.centre, doc.pitch.length - goal.centre]) {
+    const ring = { x, y: doc.pitch.width / 2 };
+    const at = projectPitch(ring, cam, goal.height);
+    if (!Number.isFinite(at.scale) || at.scale <= 0) continue;
+    if (Math.hypot(screen.x - at.x, screen.y - at.y) <= goal.reach * at.scale) return ring;
+  }
+  return null;
 }
 
 /**
@@ -1009,8 +1032,9 @@ export function inNet(doc: BoardDoc, p: Vec2): boolean {
  * for a pass, a release and a shot (D111).
  *
  * Onto a player, he is given it: a pass or a turnover, as `ballTravelBetween`
- * reads the carrier change. Anywhere else it is set loose there, and into the net
- * that travel is marked a shot. Dropped back on its holder, nothing happened.
+ * reads the carrier change. Anywhere else it is set loose there, and into a goal
+ * (`goalAt`) that travel is marked a shot — through a ring, it is put in the middle
+ * of it. Dropped back on its holder, nothing happened.
  *
  * Always applied to the document the drag STARTED from, so what the pointer passes
  * over on the way leaves nothing behind.
@@ -1029,9 +1053,11 @@ export function playBall(
   const loose = scene.carrier ? setCarrier(doc, sceneIndex, null, carry) : doc;
   const from = loose.scenes[sceneIndex].ballPos;
   if (!from) return doc;
-  const to = clampBall(at, { length: doc.pitch.length, width: doc.pitch.width });
+  const dropped = clampBall(at, { length: doc.pitch.length, width: doc.pitch.width }, sportOf(doc).goal);
+  const scored = goalAt(doc, dropped);
+  const to = scored ?? dropped;
   const next = moveEntities(loose, sceneIndex, [BALL_ID], { x: to.x - from.x, y: to.y - from.y }, carry);
-  return inNet(next, to) && canShoot(next, sceneIndex) ? setShot(next, sceneIndex, true) : next;
+  return scored && canShoot(next, sceneIndex) ? setShot(next, sceneIndex, true) : next;
 }
 
 /**

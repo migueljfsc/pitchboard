@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AnnotationDash, BoardDoc, PitchView, RunEnd, RunStart, Tool } from "@/board/types";
+import type { AnnotationDash, BoardDoc, PitchView, RunEnd, RunStart, Sport, Tool } from "@/board/types";
+import { SPORT_IDS, sportOf } from "@/board/sports";
+import { loadSport, saveSport } from "@/share/sport";
 import { BALL_ID, DEFAULT_PITCH_VIEW, DEFAULT_TOOL, isDrawTool } from "@/board/types";
 import { BoardCanvas } from "@/components/BoardCanvas";
 import { TeamControls } from "@/components/TeamControls";
@@ -75,7 +77,7 @@ import { lineUp, nudgeEntities, spaceEvenly, type Carry } from "@/board/interact
 import { useHistory, type Change } from "@/lib/history";
 import { useAutosave } from "@/lib/useAutosave";
 import { AUTOSAVE_MS, loadBoard, saveBoard } from "@/share/local";
-import { applyPreset, presetFrom, replaceable, type SquadPreset } from "@/share/presets";
+import { applyPreset, presetFrom, presetsFor, replaceable, type SquadPreset } from "@/share/presets";
 import { cn } from "@/lib/utils";
 import { MODIFIER } from "@/lib/platform";
 import { LocaleSwitch } from "@/components/LocaleSwitch";
@@ -129,7 +131,8 @@ import {
 } from "@/board/players";
 import {
   AWAY,
-  FORMATIONS,
+  formationsFor,
+  sidesFor,
   HOME,
   canResetMove,
   changeFormation,
@@ -137,6 +140,7 @@ import {
   removeAllMovement,
   resetMove,
   createBoardDoc,
+  isUntouched,
   resetPositions,
   type Direction,
 } from "@/formations";
@@ -144,6 +148,7 @@ import {
 /** What a confirmation is currently guarding. */
 type Pending =
   | { kind: "reset" }
+  | { kind: "sport"; sport: Sport }
   | { kind: "positions" }
   | { kind: "links" }
   | { kind: "preset"; preset: SquadPreset; replacing: SquadPreset }
@@ -205,8 +210,11 @@ export function Editor({ initialDoc }: Props = {}) {
   // A board is seeded in whatever language it is made in, and keeps those names
   // afterwards. The document is data: it does not change language when the
   // reader does, any more than a team renamed by hand would.
-  const homeSpec = () => ({ ...HOME, name: t("doc.home") });
-  const awaySpec = () => ({ ...AWAY, name: t("doc.away") });
+  const homeSpec = (sport?: Sport) => ({ ...sidesFor(sport)[0], name: t("doc.home") });
+  const awaySpec = (sport?: Sport) => ({ ...sidesFor(sport)[1], name: t("doc.away") });
+  /** A fresh board of `sport`, seeded in the reader's language. */
+  const freshBoard = (sport: Sport) =>
+    createBoardDoc(homeSpec(sport), awaySpec(sport), undefined, seedLabels(), sport);
   const seedLabels = () => ({ board: t("doc.board"), scene: t("doc.scene", { n: 1 }) });
   // The document is the only undoable thing. How you are looking at the board —
   // the framing, the selection, which panel is open — is not an edit, and
@@ -225,7 +233,7 @@ export function Editor({ initialDoc }: Props = {}) {
     // longer validates is discarded by loadBoard, so a bad autosave costs a
     // fresh board rather than a broken one.
   } = useHistory<BoardDoc>(
-    () => initialDoc ?? loadBoard() ?? createBoardDoc(homeSpec(), awaySpec(), undefined, seedLabels()),
+    () => initialDoc ?? loadBoard() ?? freshBoard(loadSport()),
   );
   // While the tour is up the editor draws the tour's board instead, and hands the
   // saved one back untouched when it closes. Only what is drawn swaps: history,
@@ -440,7 +448,7 @@ export function Editor({ initialDoc }: Props = {}) {
 
   // The chosen formation lives on the team, not in this component, so a board
   // that arrives by import still knows its own shape.
-  const formationOf = (i: 0 | 1) => doc.teams[i].formation ?? (i === 0 ? HOME : AWAY).formation;
+  const formationOf = (i: 0 | 1) => doc.teams[i].formation ?? sidesFor(doc.sport)[i].formation;
 
   // Scene 0 has no incoming transition, so there is no run to shape there.
   const editScene = activeScene > 0 ? activeScene : undefined;
@@ -628,7 +636,7 @@ export function Editor({ initialDoc }: Props = {}) {
 
     // The same name in the same shape is the same squad being saved again. A
     // different shape under that name is a separate preset, so it just adds.
-    const replacing = replaceable(library.presets, preset.label, preset.formation);
+    const replacing = replaceable(presetsFor(library.presets, doc.sport), preset.label, preset.formation);
     if (replacing) {
       setPending({ kind: "preset", preset, replacing });
       return;
@@ -763,14 +771,37 @@ export function Editor({ initialDoc }: Props = {}) {
   const reset = () => {
     setDoc(
       createBoardDoc(
-        { ...homeSpec(), formation: formationOf(0) },
-        { ...awaySpec(), formation: formationOf(1) },
+        { ...homeSpec(doc.sport), formation: formationOf(0) },
+        { ...awaySpec(doc.sport), formation: formationOf(1) },
         undefined,
         seedLabels(),
+        doc.sport,
       ),
     );
     clearEditorState();
     notify(t("toast.reset"));
+  };
+
+  /**
+   * Start a board of another sport (D113). An untouched board is simply replaced; one
+   * with work in it asks first. A board saved to the account is never replaced in
+   * place — its autosave would carry the new sport over it — so the new board starts
+   * fresh, away from it, as signing out does.
+   */
+  const switchSport = (sport: Sport, confirmed = false) => {
+    if (sport === sportOf(doc).id) return;
+    if (!confirmed && !isUntouched(doc)) {
+      setPending({ kind: "sport", sport });
+      return;
+    }
+    saveSport(sport);
+    setPending(null);
+    if (cloud.board) {
+      window.location.assign("/?fresh=1");
+      return;
+    }
+    setDoc(freshBoard(sport));
+    clearEditorState();
   };
 
   const dropLinks = () => {
@@ -994,11 +1025,11 @@ export function Editor({ initialDoc }: Props = {}) {
 
   /** The four built-in moves, then the account's own, then saving this one. */
   const templateMenu = (): MenuItem[] => {
-    const items: MenuItem[] = TEMPLATE_IDS.map((id) => ({
-      label: t(`template.${id}`),
-      onSelect: () => applyTemplate(id),
-    }));
-    items.push("divider");
+    // The built-in templates are football's; any sport's own are the account's below.
+    const items: MenuItem[] =
+      sportOf(doc).id === "football"
+        ? [...TEMPLATE_IDS.map((id) => ({ label: t(`template.${id}`), onSelect: () => applyTemplate(id) })), "divider"]
+        : [];
     if (!signedIn) {
       items.push({ label: t("template.user.signIn"), disabled: true, onSelect: () => {} });
       return items;
@@ -1284,7 +1315,7 @@ export function Editor({ initialDoc }: Props = {}) {
     );
 
     for (const i of [0, 1] as const) {
-      for (const f of FORMATIONS) {
+      for (const f of formationsFor(doc.sport)) {
         list.push({
           id: `formation-${i}-${f.id}`,
           group: group.teams,
@@ -1607,6 +1638,21 @@ export function Editor({ initialDoc }: Props = {}) {
           className="w-56 shrink rounded border border-transparent bg-transparent px-2 py-1 text-xs text-ink-200 outline-none transition placeholder:text-ink-400 hover:border-ink-600 focus:border-accent focus:bg-ink-900"
         />
 
+        <select
+          value={sportOf(doc).id}
+          onChange={(e) => switchSport(e.target.value as Sport)}
+          disabled={touring}
+          aria-label={t("bar.sport.label")}
+          title={t("bar.sport.hint")}
+          className="shrink-0 rounded-md border border-ink-600 bg-ink-900 px-2 py-1 text-xs text-ink-200 outline-none transition hover:border-ink-400 focus:border-accent"
+        >
+          {SPORT_IDS.map((id) => (
+            <option key={id} value={id}>
+              {t(`sport.${id}`)}
+            </option>
+          ))}
+        </select>
+
         <span
           aria-live="polite"
           className={cn(
@@ -1908,7 +1954,7 @@ export function Editor({ initialDoc }: Props = {}) {
                     onFormationChange={onFormationChange}
                     direction={directions[i]}
                     onAddPlayer={(index) => setDoc(addPlayer(doc, index))}
-                    presets={library.presets}
+                    presets={presetsFor(library.presets, doc.sport)}
                     presetSource={library.source}
                     onSavePreset={onSavePreset}
                     onApplyPreset={onApplyPreset}
@@ -2031,6 +2077,16 @@ export function Editor({ initialDoc }: Props = {}) {
             message={t("confirm.reset.message", { home: formationOf(0), away: formationOf(1) })}
             confirmLabel={t("confirm.reset.action")}
             onConfirm={reset}
+            onCancel={() => setPending(null)}
+          />
+        )}
+
+        {pending?.kind === "sport" && (
+          <ConfirmDialog
+            title={t("confirm.sport.title", { sport: t(`sport.${pending.sport}.lower`) })}
+            message={t("confirm.sport.message", { sport: t(`sport.${pending.sport}.lower`) })}
+            confirmLabel={t("confirm.sport.action")}
+            onConfirm={() => switchSport(pending.sport, true)}
             onCancel={() => setPending(null)}
           />
         )}

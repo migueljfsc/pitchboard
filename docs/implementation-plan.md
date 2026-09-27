@@ -32,9 +32,12 @@ before any React touches it, and every phase ends at a state you can look at.
 | — | Editor layout, undo notices, the command palette, the tour, the colour picker (D93, D37) |
 | — | Export shapes, captions and transparent PNGs (D6) |
 | — | Video import from the `football-tracks` sibling repo (D52, D71, D75, D81, D87, D88) |
+| — | Sports: one engine, courts in board units, basketball (D113) |
 
 ## Open
 
+- **Handball and field hockey** (D113). Each is a `SportSpec`, a court drawer and a formation
+  catalogue; ice hockey after them.
 - **Save the current shape as a custom formation.** The last item from M1. Formations are
   generated from notation (D11), so this needs somewhere to keep one that is not.
 - Known defects are in [`bugs.md`](./bugs.md). Non-goals are in `AGENTS.md` (D9).

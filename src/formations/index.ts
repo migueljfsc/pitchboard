@@ -18,10 +18,12 @@ import type {
   LinkStyle,
   Player,
   Scene,
+  Sport,
   Team,
   TeamPattern,
   Vec2,
 } from "@/board/types";
+import { SPORTS } from "@/board/sports";
 import { moveEntities, type Carry } from "@/board/interaction";
 import { pruneLinks, replaceTeamLinks } from "@/board/links";
 import { pruneBallFlags } from "@/board/scenes";
@@ -38,6 +40,8 @@ export type FormationLine = {
 
 export type Formation = {
   id: string;
+  /** Which game's catalogue it belongs to. */
+  sport: Sport;
   name: string;
   /** Groups the picker by back-line shape. */
   group: string;
@@ -172,7 +176,7 @@ export function fromNotation(notation: string, group: string): Formation {
     link: linkFor(count),
   }));
 
-  return { id: notation, name: notation, group, lines: [GK, ...lines] };
+  return { id: notation, sport: "football", name: notation, group, lines: [GK, ...lines] };
 }
 
 /** Mirrors the eleven-a-side catalogue offered by lineup-builder.co.uk. */
@@ -199,8 +203,80 @@ export const FORMATION_GROUPS: string[] = NOTATIONS.map(([group]) => group);
 
 export const DEFAULT_FORMATION = "4-3-3";
 
-export function getFormation(id: string): Formation {
-  return FORMATIONS.find((f) => f.id === id) ?? FORMATIONS.find((f) => f.id === DEFAULT_FORMATION)!;
+/**
+ * A formation written out by hand, line by line from its own baseline: too few
+ * players, and no keeper, for a notation to say where each one stands. Numbers are
+ * positions, 1 the point guard to 5 the centre.
+ */
+function laidOut(
+  sport: Sport,
+  id: string,
+  group: string,
+  lines: [label: string, depth: number, spread: number[], numbers: number[]][],
+): Formation {
+  return {
+    id,
+    sport,
+    name: id,
+    group,
+    lines: lines.map(([label, depth, spread, numbers]) => ({
+      label,
+      depth,
+      spread,
+      numbers,
+      link: linkFor(spread.length),
+    })),
+  };
+}
+
+/** Basketball's shapes, each in its own half: a defence set against the ball. */
+const BASKETBALL_FORMATIONS: Formation[] = [
+  laidOut("basketball", "2-3", "Zones", [
+    ["Back 3", 0.1, [0.2, 0.5, 0.8], [3, 5, 4]],
+    ["Front 2", 0.25, [0.33, 0.67], [1, 2]],
+  ]),
+  laidOut("basketball", "3-2", "Zones", [
+    ["Back 2", 0.1, [0.35, 0.65], [4, 5]],
+    ["Front 3", 0.24, [0.2, 0.5, 0.8], [2, 1, 3]],
+  ]),
+  laidOut("basketball", "1-3-1", "Zones", [
+    ["Back 1", 0.07, [0.5], [5]],
+    ["Middle 3", 0.18, [0.2, 0.5, 0.8], [3, 4, 2]],
+    ["Front 1", 0.32, [0.5], [1]],
+  ]),
+  laidOut("basketball", "1-2-2", "Zones", [
+    ["Back 2", 0.1, [0.3, 0.7], [4, 5]],
+    ["Middle 2", 0.22, [0.2, 0.8], [3, 2]],
+    ["Front 1", 0.34, [0.5], [1]],
+  ]),
+  laidOut("basketball", "Box-and-1", "Combination", [
+    ["Back 2", 0.1, [0.33, 0.67], [4, 5]],
+    ["Front 2", 0.22, [0.33, 0.67], [2, 3]],
+    ["Chaser", 0.36, [0.5], [1]],
+  ]),
+];
+
+const CATALOGUE: Record<Sport, Formation[]> = {
+  football: FORMATIONS,
+  basketball: BASKETBALL_FORMATIONS,
+};
+
+/** What each side starts in, per sport: home then away. */
+const SIDE_FORMATIONS: Record<Sport, [string, string]> = {
+  football: [DEFAULT_FORMATION, "4-4-2"],
+  basketball: ["2-3", "1-3-1"],
+};
+
+/** The formations a sport offers, and the groups its picker shows them under. */
+export const formationsFor = (sport: Sport = "football"): Formation[] => CATALOGUE[sport];
+export const formationGroupsFor = (sport: Sport = "football"): string[] => [
+  ...new Set(CATALOGUE[sport].map((f) => f.group)),
+];
+
+/** The formation named, if its sport offers it; that sport's default otherwise. */
+export function getFormation(id: string, sport: Sport = "football"): Formation {
+  const list = CATALOGUE[sport];
+  return list.find((f) => f.id === id) ?? list.find((f) => f.id === SIDE_FORMATIONS[sport][0])!;
 }
 
 /** Which goal a team defends. "left" attacks towards +x. */
@@ -244,8 +320,9 @@ function freeNumber(wanted: number, used: Set<number>): number {
 export function buildTeam(
   spec: TeamSpec,
   pitch: { length: number; width: number },
+  sport: Sport = "football",
 ): BuiltTeam {
-  const formation = getFormation(spec.formation);
+  const formation = getFormation(spec.formation, sport);
   const players: Player[] = [];
   const positions: Record<string, Vec2> = {};
   const links: Link[] = [];
@@ -379,11 +456,24 @@ export const AWAY: TeamSpec = {
   direction: "right",
 };
 
+/**
+ * The two sides a new board of `sport` starts with: home and away as ever, in that
+ * sport's own opening shapes.
+ */
+export function sidesFor(sport: Sport = "football"): [TeamSpec, TeamSpec] {
+  const [home, away] = SIDE_FORMATIONS[sport];
+  return [
+    { ...HOME, formation: home },
+    { ...AWAY, formation: away },
+  ];
+}
+
 /** A complete one-scene board — what the editor opens with. */
 export function createBoardDoc(
   home: TeamSpec = HOME,
   away: TeamSpec = AWAY,
-  pitch = DEFAULT_PITCH,
+  /** The sport's own court when not given. */
+  pitch?: { length: number; width: number },
   /**
    * What a new board and its first scene are called.
    *
@@ -392,14 +482,18 @@ export function createBoardDoc(
    * usable — and testable — with no translator in sight.
    */
   labels: { board?: string; scene?: string } = {},
+  /** Football's boards say nothing about it, so every board drawn before there was a choice reads the same. */
+  sport: Sport = "football",
 ): BoardDoc {
-  const a = buildTeam(home, pitch);
-  const b = buildTeam(away, pitch);
+  const court = pitch ?? SPORTS[sport].pitch;
+  const a = buildTeam(home, court, sport);
+  const b = buildTeam(away, court, sport);
 
   return {
     version: 1,
     name: labels.board ?? "Untitled board",
-    pitch: { ...pitch },
+    ...(sport !== "football" ? { sport } : {}),
+    pitch: { ...court },
     teams: [a.team, b.team],
     scenes: [
       {
@@ -419,11 +513,33 @@ export function createBoardDoc(
 }
 
 /**
+ * Whether a board is still the one its sport opens with: nothing moved, added, drawn
+ * or renamed beyond the names a board is seeded with in the reader's language.
+ *
+ * What decides whether switching sport can simply replace it, or has to ask first.
+ */
+export function isUntouched(doc: BoardDoc): boolean {
+  const [home, away] = sidesFor(doc.sport);
+  const fresh = createBoardDoc(home, away, undefined, {}, doc.sport ?? "football");
+  // The seeded names are the reader's language's, so they are the one thing allowed
+  // to differ: a board made in Portuguese is as untouched as one made in English.
+  const bare = (d: BoardDoc) =>
+    JSON.stringify({
+      ...d,
+      name: "",
+      teams: d.teams.map((t) => ({ ...t, name: "" })),
+      scenes: d.scenes.map((s) => ({ ...s, name: "" })),
+      links: d.links.map((l) => ({ ...l, name: "" })),
+    });
+  return bare(doc) === bare(fresh);
+}
+
+/**
  * Re-apply a formation to one team in place, preserving the other team, the ball
  * and any links belonging to the side that did not change.
  */
 export function applyFormation(doc: BoardDoc, teamIndex: 0 | 1, spec: TeamSpec): BoardDoc {
-  const built = buildTeam(spec, doc.pitch);
+  const built = buildTeam(spec, doc.pitch, doc.sport);
   const other = doc.teams[teamIndex === 0 ? 1 : 0];
   const otherIds = new Set(other.players.map((p) => p.id));
 
@@ -535,10 +651,11 @@ export function formationMarks(doc: BoardDoc): Record<string, Vec2> {
         name: team.name,
         color: team.color,
         textColor: team.textColor,
-        formation: team.formation ?? (i === 0 ? HOME.formation : AWAY.formation),
+        formation: team.formation ?? sidesFor(doc.sport)[i].formation,
         direction: directionOf(i),
       },
       doc.pitch,
+      doc.sport,
     );
 
     // Paired by ORDER, not by id. Renumbering a player keeps their id, so the

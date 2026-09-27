@@ -21,6 +21,12 @@ export const pt: Dictionary = {
   // --------------------------------------------------------------- top bar
   "bar.name.label": "Nome do quadro",
   "bar.name.placeholder": "Quadro sem nome",
+  "bar.sport.label": "Desporto",
+  "bar.sport.hint": "O jogo para que este quadro é desenhado — o campo, as balizas, a bola e os sistemas",
+  "sport.football": "Futebol",
+  "sport.basketball": "Basquetebol",
+  "sport.football.lower": "futebol",
+  "sport.basketball.lower": "basquetebol",
   "bar.save": "Guardar",
   "bar.save.hint": "Guardar já este quadro na sua conta, sem esperar pela gravação automática.",
   "shortcuts.open": "Atalhos",
@@ -37,8 +43,8 @@ export const pt: Dictionary = {
   "shortcuts.tab": "Percorrer os jogadores no quadro; Enter muda o nome",
   "shortcuts.zoom": "Ampliar o quadro em torno do cursor; depois de ampliado, deslize para mover, ou arraste com o botão do meio",
   "shortcuts.scene": "Cena anterior ou seguinte",
-  "shortcuts.nudge": "Mover a seleção um metro",
-  "shortcuts.nudgeFar": "Manter carregado com uma seta para mover cinco metros",
+  "shortcuts.nudge": "Deslocar a seleção",
+  "shortcuts.nudgeFar": "Manter carregado com uma seta para deslocar cinco vezes mais",
   "shortcuts.thisScene": "Manter carregado ao arrastar para mover só nesta cena",
   "shortcuts.undo": "Anular",
   "shortcuts.redo": "Refazer",
@@ -46,7 +52,7 @@ export const pt: Dictionary = {
   "shortcuts.escape": "Voltar à ferramenta Selecionar, e sair da apresentação",
   "shortcuts.help": "Abrir esta lista",
   "shortcuts.mouse":
-    "Clique com o botão direito num jogador ou numa forma para as suas ações. Largue um jogador em cima de outro para trocarem de lugar. Arraste a bola para um jogador para passar, para a baliza para rematar, ou para a relva para a soltar. Clique num jogador para o selecionar, shift-clique para juntar outro e duplo clique para o renomear. Arraste na relva vazia para marcar um grupo, ou numa ligação para levar a unidade inteira. As pegas âmbar curvam uma corrida ou um passe.",
+    "Clique com o botão direito num jogador ou numa forma para as suas ações. Largue um jogador em cima de outro para trocarem de lugar. Arraste a bola para um jogador para passar, para a baliza ou o cesto para rematar, ou para um espaço vazio para a soltar. Clique num jogador para o selecionar, shift-clique para juntar outro e duplo clique para o renomear. Arraste num espaço vazio para marcar um grupo, ou numa ligação para levar a unidade inteira. As pegas âmbar curvam uma corrida ou um passe.",
   "present.enter": "Apresentar",
   "present.enter.title": "Preenche a janela com o quadro e esconde os painéis. Esc regressa.",
   "present.exit": "Concluído",
@@ -93,6 +99,8 @@ export const pt: Dictionary = {
     "Contorna onde cada jogador está na cena vizinha, para ver de relance quem se move e quanto.",
   "view.playerSize": "Tamanho dos jogadores",
   "view.grass": "Relvado",
+  "view.floor": "Piso",
+  "view.floor.shadeAria": "Tom do piso, mais escuro a mais claro",
   "view.grass.shadeAria": "Tom do relvado, de mais escuro a mais claro",
   "view.grass.darker": "mais escuro",
   "view.grass.lighter": "mais claro",
@@ -100,7 +108,7 @@ export const pt: Dictionary = {
   "view.grass.stripes": "Às riscas",
   "view.grass.natural": "Natural",
   "view.halfHint":
-    "Meio campo é mais alto do que comprido. Vire o quadro na vertical e ele preenche o espaço.",
+    "Metade do campo é mais alta do que comprida. Vire o quadro na vertical e ele preenche o espaço.",
 
   // ------------------------------------------------------------------ team
   "team.namePlaceholder": "Nome da equipa",
@@ -160,6 +168,9 @@ export const pt: Dictionary = {
   "confirm.reset.message":
     "Todas as cenas, corridas, ligações, desenhos, nomes de jogadores e definições de equipa voltam a um {home} contra um {away} de raiz. Anular traz o quadro de volta.",
   "confirm.reset.action": "Descartar alterações",
+  "confirm.sport.title": "Começar um quadro de {sport}?",
+  "confirm.sport.message": "Mudar de desporto começa um novo quadro de {sport}. As alterações não guardadas neste serão perdidas.",
+  "confirm.sport.action": "Mudar de desporto",
 
   "confirm.positions.title": "Repor todas as posições?",
   "confirm.positions.message":
@@ -355,7 +366,7 @@ export const pt: Dictionary = {
 
   // ------------------------------------------------------------- inspector
   "inspect.empty":
-    "Clique num jogador para o selecionar, duplo clique para lhe mudar o nome. Shift+clique para juntar, ou arraste sobre a relva vazia para marcar uma área. As setas deslocam; com shift, 5 m. O espaço reproduz.",
+    "Clique num jogador para o selecionar, duplo clique para lhe mudar o nome. Shift+clique para juntar, ou arraste sobre um espaço vazio para marcar uma área. As setas deslocam; com shift, cinco vezes mais. O espaço reproduz.",
   "inspect.carry": "Ao arrastar ou mover",
   "inspect.carry.scene": "Só esta cena",
   "inspect.carry.scene.hint":
@@ -500,9 +511,9 @@ export const pt: Dictionary = {
 
   // ------------------------------------------------------------ draw panel
   "draw.tool.pan": "Mover vista",
-  "draw.tool.pan.hint": "Mover a vista — arraste a relva vazia. Disponível com a cena ampliada. Os jogadores continuam a poder ser arrastados. (H)",
+  "draw.tool.pan.hint": "Mover a vista — arraste um espaço vazio. Disponível com a cena ampliada. Os jogadores continuam a poder ser arrastados. (H)",
   "draw.tool.select": "Selecionar",
-  "draw.tool.select.hint": "Selecionar — arraste na relva vazia para envolver jogadores numa caixa (V, Esc)",
+  "draw.tool.select.hint": "Selecionar — arraste num espaço vazio para envolver jogadores numa caixa (V, Esc)",
   "draw.tool.arrow": "Seta",
   "draw.tool.arrow.hint": "Arraste uma seta — uma corrida, um passe ou um remate (A)",
   "draw.tool.line": "Linha",
@@ -919,7 +930,7 @@ export const pt: Dictionary = {
     "Escolha um sistema para cada lado e defina nomes, números e equipamentos. Guarde o plantel para o usar noutro quadro.\nMudar de sistema mantém o plantel, mas apaga as ligações desse lado. A forma que descreviam já não existe.",
   "tour.move.title": "Mover jogadores",
   "tour.move.body":
-    "Arraste um jogador para o mover. Clique para selecionar, shift-clique para juntar mais, ou arraste na relva vazia para apanhar um grupo. As setas movem a seleção um metro (cinco com ⇧). Largue um jogador sobre outro e trocam de lugar.\nUm movimento passa para as cenas seguintes em que esse jogador estava parado, por isso não tem de o repetir. Mantenha Alt para mudar só esta cena. Mantenha {mod} para o colocar livremente, sem alinhar com a linha de um colega.",
+    "Arraste um jogador para o mover. Clique para selecionar, shift-clique para juntar mais, ou arraste num espaço vazio para apanhar um grupo. As setas deslocam a seleção (cinco vezes mais com ⇧). Largue um jogador sobre outro e trocam de lugar.\nUm movimento passa para as cenas seguintes em que esse jogador estava parado, por isso não tem de o repetir. Mantenha Alt para mudar só esta cena. Mantenha {mod} para o colocar livremente, sem alinhar com a linha de um colega.",
   "tour.scenes.title": "Cenas",
   "tour.scenes.body":
     "Uma cena é um retrato de onde todos estão. Adicione uma, mova alguns jogadores, e o intervalo entre as duas cenas torna-se a animação. Percorra-as com [ e ], e carregue em Espaço para reproduzir.\nCom o Movimento contínuo ligado, tudo corre como um só movimento, sem parar em cada cena.",
@@ -928,7 +939,7 @@ export const pt: Dictionary = {
     "Cada movimento desenha uma corrida. Arraste as pegas cor de âmbar para a curvar.\nSelecione um jogador e este painel define quando parte e quanto demora. Uma espera segura-o antes de arrancar. O estilo de corrida decide como começa e acaba, e pode pô-lo a correr direto pela cena seguinte.",
   "tour.ball.title": "A bola e os passes",
   "tour.ball.body":
-    "Não há bola até a dar a alguém. Clique com o botão direito num jogador e escolha Dar a bola, ou selecione-o e carregue em B. Fica nos pés dele enquanto conduz.\nPara a jogar, adicione uma cena e arraste a bola para onde vai: para um colega para passar, para a baliza para rematar, para a relva para a soltar. Chega ao recetor em movimento. Clique com o botão direito na bola para a levantar do chão.",
+    "Não há bola até a dar a alguém. Clique com o botão direito num jogador e escolha Dar a bola, ou selecione-o e carregue em B. Fica nos pés dele enquanto conduz.\nPara a jogar, adicione uma cena e arraste a bola para onde vai: para um colega para passar, para a baliza ou o cesto para rematar, para um espaço vazio para a soltar. Chega ao recetor em movimento. Clique com o botão direito na bola para a levantar do chão.",
   "tour.links.title": "Ligações",
   "tour.links.body":
     "Selecione dois ou mais jogadores e ligue-os para mostrar uma linha de quatro ou um bloco de pressão. A ligação segue os jogadores a cada fotograma, por isso a forma estica à medida que se movem.\nCadeia desenha uma linha aberta pela ordem dos membros. Forma e Preenchida fecham-na. Também pode limitar uma ligação a um intervalo de cenas.",
@@ -940,7 +951,7 @@ export const pt: Dictionary = {
     "Clique com o botão direito num jogador (ou use este painel) para o destacar. O resto do quadro escurece à volta dele, e Escurecer, na linha temporal, define quanto.\nUm destaque pertence a uma só cena. Os movimentos passam para as cenas seguintes e os destaques não, por isso a atenção cai exatamente onde a pôs.",
   "tour.view.title": "Vista",
   "tour.view.body":
-    "Rode o campo, mostre só metade ou passe para 3D. Também pode mudar a relva e o tamanho dos jogadores. Os fantasmas mostram a cena anterior ou a seguinte, esbatidas por baixo.\nMantenha {mod} e use a roda do rato para fazer zoom. Cada cena guarda o seu zoom, e a reprodução e as exportações seguem-no.",
+    "Rode o campo, mostre só metade ou passe para 3D. Também pode mudar o piso e o tamanho dos jogadores. Os fantasmas mostram a cena anterior ou a seguinte, esbatidas por baixo.\nMantenha {mod} e use a roda do rato para fazer zoom. Cada cena guarda o seu zoom, e a reprodução e as exportações seguem-no.",
   "tour.present.title": "Apresentar",
   "tour.present.body":
     "Enche a janela com o quadro e esconde os painéis, para explicar a jogada a uma equipa. Esc volta atrás.",

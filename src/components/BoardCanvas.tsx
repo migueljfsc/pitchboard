@@ -15,6 +15,7 @@ import { cameraFor, framingOf, unprojectPitch } from "@/board/projection";
 import { drawBoard } from "@/board/render";
 import { ballRadius } from "@/board/pitch";
 import { frameAt, runsThrough } from "@/board/timeline";
+import { goalAt, sportOf } from "@/board/sports";
 import {
   applySelection,
   dragHandle,
@@ -31,6 +32,7 @@ import {
   ballReceiver,
   moveEntities,
   playBall,
+  ringAtScreen,
   snapLabel,
   snapPoint,
   swapPlayers,
@@ -420,6 +422,7 @@ export function BoardCanvas({
       rect.width,
       rect.height,
       window.devicePixelRatio || 1,
+      sportOf(doc).headroom,
     );
   };
 
@@ -444,6 +447,7 @@ export function BoardCanvas({
           rect.width,
           rect.height,
           window.devicePixelRatio || 1,
+          sportOf(doc).headroom,
         );
         return unprojectPitch(at, cam);
       }
@@ -933,13 +937,22 @@ export function BoardCanvas({
       // Onto a player is tested where he is drawn: under the camera that is his
       // billboard, not the grass beneath the pointer. The ball itself, following
       // the pointer, is left out of the test.
+      // A goal is aimed at on purpose, so it takes the ball over a player standing under
+      // the ring. Under the camera a ring is tested where it is drawn, up in the air.
+      const aim = (tilted ? ringAtScreen(drag.from, screenFrom(e), cameraFrom(e)) : null) ?? p;
       const frame = frameAt(drag.from, t);
       const hit = tilted
         ? hitTestTilted(drag.from, { ...frame, ball: null }, screenFrom(e), cameraFrom(e), 0)
         : null;
-      const to = tilted ? (hit?.kind === "token" ? hit.id : null) : ballReceiver(drag.from, sceneIndex, p);
+      const to = goalAt(drag.from, aim)
+        ? null
+        : tilted
+          ? hit?.kind === "token"
+            ? hit.id
+            : null
+          : ballReceiver(drag.from, sceneIndex, p);
       setReceiver(to);
-      onDocChange(playBall(drag.from, sceneIndex, p, to, drag.carry), dragKey());
+      onDocChange(playBall(drag.from, sceneIndex, aim, to, drag.carry), dragKey());
       return;
     }
 

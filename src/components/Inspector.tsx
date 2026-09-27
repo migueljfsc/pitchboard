@@ -13,6 +13,7 @@ import {
 import type { BoardDoc, Player, RunEnd, RunStart } from "@/board/types";
 import { BALL_ID } from "@/board/types";
 import { displayName, keeperOf, shirtClash } from "@/board/players";
+import { sportOf } from "@/board/sports";
 import type { Carry } from "@/board/interaction";
 import {
   entityDelayMs,
@@ -291,7 +292,7 @@ export function Inspector({
               disabled={!hasMovement}
               onClick={onRemoveAllMovement}
             />
-            {!isKeeper && (
+            {!isKeeper && sportOf(doc).keeper && (
               <SmallButton
                 label={t("inspect.makeKeeper")}
                 title={t("inspect.makeKeeper.hint")}
