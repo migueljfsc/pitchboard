@@ -12,7 +12,6 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
   AlignVerticalJustifyCenter,
   AlignVerticalSpaceAround,
-  Check,
   CircleDot,
   CircleOff,
   CircleStop,
@@ -194,8 +193,6 @@ const TOOL_KEYS: Record<string, Tool> = {
   t: "text",
 };
 
-/** How long "Saved" stays beside the board's name after an autosave, in milliseconds. */
-const SAVED_MS = 1800;
 
 type Props = {
   /**
@@ -400,21 +397,8 @@ export function Editor({ initialDoc }: Props = {}) {
   );
 
   // Debounced so a drag, which emits a document per pointermove, does not
-  // serialise the whole board forty times a second on the main thread. A save
-  // that landed says so beside the name for a moment, and then gets out of the way.
-  const [justSaved, setJustSaved] = useState(false);
-  const savedTimer = useRef(0);
-  useEffect(() => () => window.clearTimeout(savedTimer.current), []);
-  useAutosave(
-    savedDoc,
-    (next) => {
-      if (!saveBoard(next)) return;
-      setJustSaved(true);
-      window.clearTimeout(savedTimer.current);
-      savedTimer.current = window.setTimeout(() => setJustSaved(false), SAVED_MS);
-    },
-    AUTOSAVE_MS,
-  );
+  // serialise the whole board forty times a second on the main thread.
+  useAutosave(savedDoc, saveBoard, AUTOSAVE_MS);
 
   // Accounts are optional, so none of this is allowed to gate the editor: signed out, the
   // hook resolves to null and the board behaves exactly as it always has (D39). The account
@@ -1636,7 +1620,7 @@ export function Editor({ initialDoc }: Props = {}) {
           onChange={(e) => setDoc({ ...doc, name: e.target.value }, "board-name")}
           placeholder={t("bar.name.placeholder")}
           aria-label={t("bar.name.label")}
-          className="w-56 shrink rounded border border-transparent bg-transparent px-2 py-1 text-xs text-ink-200 outline-none transition placeholder:text-ink-400 hover:border-ink-600 focus:border-accent focus:bg-ink-900"
+          className="w-56 min-w-24 shrink rounded border border-transparent bg-transparent px-2 py-1 text-xs text-ink-200 outline-none transition placeholder:text-ink-400 hover:border-ink-600 focus:border-accent focus:bg-ink-900"
         />
 
         <SportMenu
@@ -1647,17 +1631,6 @@ export function Editor({ initialDoc }: Props = {}) {
           hint={t("bar.sport.hint")}
           disabled={touring}
         />
-
-        <span
-          aria-live="polite"
-          className={cn(
-            "flex shrink-0 items-center gap-1 text-[11px] text-ink-400 transition-opacity duration-500",
-            justSaved ? "opacity-100" : "opacity-0",
-          )}
-        >
-          <Check size={12} />
-          {t("bar.savedLocally")}
-        </span>
 
         {/* An export carrying on behind the board: how far it has got, and the file
             once it is done. Click to reopen the dialog. */}
@@ -1771,18 +1744,21 @@ export function Editor({ initialDoc }: Props = {}) {
             className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
           >
             <Keyboard size={14} />
-            {t("shortcuts.open")}
+            {/* Labels give way to icons as the window narrows, least-used first, so the bar
+                fits in the longer language too. Each button keeps its name for assistive tech. */}
+            <span className="max-2xl:hidden">{t("shortcuts.open")}</span>
           </button>
 
           <button
             type="button"
             data-tour="tour"
             onClick={openTour}
+            aria-label={t("tour.open")}
             title={t("tour.open.title")}
             className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
           >
             <GraduationCap size={14} />
-            {t("tour.open")}
+            <span className="max-2xl:hidden">{t("tour.open")}</span>
           </button>
 
           <span className="mx-1 h-5 w-px bg-ink-600" />
@@ -1791,21 +1767,23 @@ export function Editor({ initialDoc }: Props = {}) {
             type="button"
             data-tour="present"
             onClick={() => setPresent(true)}
+            aria-label={t("present.enter")}
             title={t("present.enter.title")}
             className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
           >
             <Presentation size={14} />
-            {t("present.enter")}
+            <span className="max-[1400px]:hidden">{t("present.enter")}</span>
           </button>
 
           <button
             type="button"
             onClick={() => setImportOpen(true)}
+            aria-label={t("bar.import")}
             title={t("bar.import.title")}
             className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
           >
             <Upload size={13} />
-            {t("bar.import")}
+            <span className="max-[1400px]:hidden">{t("bar.import")}</span>
           </button>
           <button
             type="button"

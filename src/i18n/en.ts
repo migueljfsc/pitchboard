@@ -925,7 +925,6 @@ export const en = {
   "toast.shapeDeleted": "Deleted the shape",
   "toast.moveReset": "Reset the move into “{scene}”",
   "toast.movementRemoved": "Removed all movement",
-  "bar.savedLocally": "Saved in this browser",
   // ------------------------------------------------------------------ tour
   "tour.open": "Tour",
   "tour.open.title": "A walk through the editor, one card at a time",

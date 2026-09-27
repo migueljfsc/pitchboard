@@ -918,7 +918,6 @@ export const pt: Dictionary = {
   "toast.shapeDeleted": "Forma apagada",
   "toast.moveReset": "Movimento para “{scene}” reposto",
   "toast.movementRemoved": "Todo o movimento removido",
-  "bar.savedLocally": "Guardado neste navegador",
   // ------------------------------------------------------------------ tour
   "tour.open": "Guia",
   "tour.open.title": "Uma volta pelo editor, um cartão de cada vez",

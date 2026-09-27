@@ -78,7 +78,7 @@ export function SportMenu({ value, onChange, nameOf, label, hint, disabled = fal
         aria-label={`${label}: ${nameOf(value)}`}
         aria-haspopup="listbox"
         aria-expanded={open}
-        title={hint}
+        title={`${nameOf(value)} — ${hint}`}
         onClick={() => setOpen((o) => !o)}
         onKeyDown={(e) => {
           if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -89,12 +89,12 @@ export function SportMenu({ value, onChange, nameOf, label, hint, disabled = fal
         }}
         className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-bold uppercase tracking-wide text-white outline-none transition hover:bg-white/5 focus-visible:bg-white/5 focus-visible:ring-1 focus-visible:ring-accent disabled:cursor-default disabled:hover:bg-transparent"
       >
-        <SportIcon sport={value} className="size-[18px] text-ink-200" />
+        <SportIcon sport={value} className="size-[18px] shrink-0 text-ink-200" />
         {nameOf(value)}
         <ChevronDown
           size={14}
           aria-hidden
-          className={cn("text-ink-300 transition-transform", open && "rotate-180")}
+          className={cn("shrink-0 text-ink-300 transition-transform", open && "rotate-180")}
         />
       </button>
 
