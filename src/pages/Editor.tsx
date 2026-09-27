@@ -72,7 +72,7 @@ import { TOUR_STEPS, buildTourBoard, type TourStage } from "@/formations/tour";
 import { ContextMenu, type MenuItem } from "@/components/ContextMenu";
 import type { ContextTarget } from "@/components/BoardCanvas";
 import { describeChange } from "@/board/describe";
-import { TEMPLATE_IDS, buildTemplate, type TemplateId } from "@/formations/templates";
+import { SPORT_TEMPLATES, buildTemplate, sportOfTemplate, type TemplateId } from "@/formations/templates";
 import { clampSidebar, loadLayout, saveLayout, type Layout } from "@/share/layout";
 import { listTemplates, loadTemplate, saveTemplate } from "@/share/templates";
 import type { StoredBoardSummary } from "@/share/api";
@@ -973,8 +973,8 @@ export function Editor({ initialDoc }: Props = {}) {
       buildTemplate(
         id,
         { board: name, scene: (n) => t("doc.scene", { n }), line: lineNamer(t) },
-        homeSpec(),
-        awaySpec(),
+        homeSpec(sportOfTemplate(id)),
+        awaySpec(sportOfTemplate(id)),
       ),
     );
     clearEditorState();
@@ -1015,13 +1015,15 @@ export function Editor({ initialDoc }: Props = {}) {
       .catch(() => pushToast(t("template.user.failed")));
   };
 
-  /** The four built-in moves, then the account's own, then saving this one. */
+  /** This sport's built-in moves, then the account's own, then saving this one. */
   const templateMenu = (): MenuItem[] => {
-    // The built-in templates are football's; any sport's own are the account's below.
-    const items: MenuItem[] =
-      sportOf(doc).id === "football"
-        ? [...TEMPLATE_IDS.map((id) => ({ label: t(`template.${id}`), onSelect: () => applyTemplate(id) })), "divider"]
-        : [];
+    const items: MenuItem[] = [
+      ...SPORT_TEMPLATES[sportOf(doc).id].map((id: TemplateId) => ({
+        label: t(`template.${id}`),
+        onSelect: () => applyTemplate(id),
+      })),
+      "divider",
+    ];
     if (!signedIn) {
       items.push({ label: t("template.user.signIn"), disabled: true, onSelect: () => {} });
       return items;
@@ -1436,7 +1438,7 @@ export function Editor({ initialDoc }: Props = {}) {
       ...(signedIn
         ? [{ id: "template-save", group: group.board, label: t("template.save"), run: saveAsTemplate }]
         : []),
-      ...TEMPLATE_IDS.map((id) => ({
+      ...SPORT_TEMPLATES[sportOf(doc).id].map((id: TemplateId) => ({
         id: `template-${id}`,
         group: group.board,
         label: t("palette.template", { name: t(`template.${id}`) }),

@@ -56,10 +56,15 @@ export function Section({
           className={cn("shrink-0 text-ink-400 transition-transform", !open && "-rotate-90")}
         />
         {icon && <span className="flex shrink-0 items-center text-ink-400">{icon}</span>}
-        <span className="flex-1 text-[11px] font-semibold uppercase tracking-wide text-ink-200">
+        <span className="flex-1 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-ink-200">
           {title}
         </span>
-        {badge && <span className="font-mono text-[11px] text-ink-400">{badge}</span>}
+        {/* One line, shortened if it must: a long lineup name wraps the header otherwise. */}
+        {badge && (
+          <span title={badge} className="min-w-0 truncate whitespace-nowrap font-mono text-[11px] text-ink-400">
+            {badge}
+          </span>
+        )}
       </button>
 
       {open && <div className={flush ? undefined : "px-4 pb-4"}>{children}</div>}

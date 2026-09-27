@@ -546,6 +546,12 @@ engine's default is English. Ids stay the English ones, so they never change wit
 boards already made keep their names (D38). Formation headings and the few worded lineups are shown
 in the reader's language (`formationText.ts`).
 
+**Every sport has its own templates**, three each beside football's four (`SPORT_TEMPLATES`):
+basketball's pick and roll, fast break and baseline inbound; handball's fast break, back-court
+crossing and 7 against 6; hockey's penalty corner, build-up and press; volleyball's serve receive,
+free ball and base defence. Written in the rulebook's metres and converted when built, home always
+attacking the right-hand goal; the menu offers the open board's sport's. The tour stays football.
+
 **The video importer loads when an import is submitted**, not with the page (`TracksReader`): about
 18 KB less on every first load.
 

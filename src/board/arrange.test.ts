@@ -13,7 +13,7 @@ import { describeChange } from "./describe";
 import { addSceneAfter, setCarrier } from "./scenes";
 import { boardDocSchema } from "./schema";
 import { createBoardDoc } from "@/formations";
-import { TEMPLATE_IDS, buildTemplate } from "@/formations/templates";
+import { SPORT_TEMPLATES, TEMPLATE_IDS, buildTemplate } from "@/formations/templates";
 
 const doc = createBoardDoc();
 const BACK = ["home-2", "home-5", "home-6", "home-3"];
@@ -153,5 +153,38 @@ describe("lineUp and spaceEvenly", () => {
     const even = spaceEvenly(bunched, 0, BACK);
     const ys = BACK.map((id) => pos(even, id).y).sort((a, b) => a - b);
     expect(ys[1] - ys[0]).toBeCloseTo(ys[3] - ys[2], 6);
+  });
+});
+
+describe("every sport's templates (D113)", () => {
+  const labels = { board: "Board", scene: (n: number) => `Scene ${n}` };
+  const sports = Object.keys(SPORT_TEMPLATES) as (keyof typeof SPORT_TEMPLATES)[];
+  const all = sports.flatMap((sport) => SPORT_TEMPLATES[sport].map((id) => [sport, id] as const));
+
+  it.each(all)("%s: %s is a valid board of its sport, the ball in play", (sport, id) => {
+    const board = buildTemplate(id, labels);
+    expect(boardDocSchema.safeParse(board).success).toBe(true);
+    expect(board.sport ?? "football").toBe(sport);
+    expect(board.scenes.length).toBeGreaterThan(1);
+    expect(board.scenes.every((s) => s.carrier !== null || s.ballPos !== undefined)).toBe(true);
+  });
+
+  it.each(all)("%s: %s keeps every player on the board", (_sport, id) => {
+    const board = buildTemplate(id, labels);
+    for (const scene of board.scenes) {
+      for (const p of Object.values(scene.positions)) {
+        expect(p.x).toBeGreaterThanOrEqual(0);
+        expect(p.x).toBeLessThanOrEqual(board.pitch.length + 1e-9);
+        expect(p.y).toBeGreaterThanOrEqual(0);
+        expect(p.y).toBeLessThanOrEqual(board.pitch.width + 1e-9);
+      }
+    }
+  });
+
+  it("keeps the shots it is written with: none is pruned as impossible", () => {
+    const shots = all.filter(([, id]) => buildTemplate(id, labels).scenes.some((s) => s.shot)).length;
+    // Football's counter and corner, all three basketball and handball plays, the hockey
+    // penalty corner, and every volleyball one — a spike, or the opponent's that is dug.
+    expect(shots).toBe(12);
   });
 });

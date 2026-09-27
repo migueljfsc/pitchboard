@@ -34,6 +34,7 @@ before any React touches it, and every phase ends at a state you can look at.
 | — | Video import from the `football-tracks` sibling repo (D52, D71, D75, D81, D87, D88) |
 | — | Sports: one engine, courts in board units — basketball, handball, field hockey, volleyball (D113) |
 | — | The library filed by sport: locked sport roots, per-sport templates (D114) |
+| — | Built-in templates for every sport; crash screen, keyboard menus, link previews (D115) |
 
 ## Open
 
