@@ -425,6 +425,32 @@ erase any account from `/admin` (`DELETE /api/admin/users/<id>`, behind the same
 of it), for a request that arrives by email; it runs the same `eraseAccount`, demands that
 account's address typed, and logs the id only.
 
+## D111 — The ball is played by dropping it where it goes
+A shot took six steps: add a scene, give, release, select the ball, drag, toggle Shot. A carried
+ball could not be dragged (D44 derives it from its holder), and nothing read where it ended up.
+**Dragging the ball on its own plays it** (`playBall`): dropped on a player within a token's
+radius he is given it — a pass or a turnover, read as ever from the carrier change; anywhere else
+it is set loose there; into the net that travel is also marked a shot, behind `canShoot`. Only
+the net infers a shot: a ball dropped on the keeper is a save or a clearance, and stays a toggle.
+Dropped back on its holder nothing happens. Every move is played from the document the drag
+STARTED from, so passing over a player on the way leaves no carrier behind, and the whole gesture
+is one undo step. The carry is the drag's, as a handover's is (D44). The ball in a multi-selection
+still moves with the unit. Under the camera the receiver is his billboard, not the grass under
+the pointer. Shot and Loft are also on the ball's right-click menu, and `N`/`B` add a scene and
+give or take the ball. Dragging never adds a scene: a gesture that grows the board by itself
+would be the only one.
+
+## D112 — Select is the default tool; Pan exists only when there is somewhere to pan
+Pan was the default, and at 100% it did exactly what Select does, so the panel offered two
+buttons with one behaviour and Esc went back to the one that could not pan. Select is now the
+default and where Esc lands; Pan is shown, and `H` arms it, only while the scene is zoomed in, and
+an armed Pan reads as Select once the zoom is gone (`activeTool`). Each drawing tool has a letter
+(V A L R O G P T); the drawn ball has none, because `B` gives the match ball. Delete removes the
+selected players as it removes a shape, as one undo step behind a toast. The export dialog keeps
+its settings per browser (`exportPrefs.ts`), each field validated on its own; the caption's words
+are the board's and are not kept. The share tabs are named for what they are: a Snapshot and a
+Live link (D7).
+
 ---
 
 ## The importer (`src/import/`)

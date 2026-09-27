@@ -205,6 +205,8 @@ Each is one line of what breaks; the reasoning is in the cited decision.
 - **Pass endpoints are live** — the receiver's interpolated position, not his final mark.
 - **Giving the ball away carries forward**, and `"all"` reaches no further than `"stationary"`.
 - **A drawn ball is not the match ball** (D20); nothing that reads "the ball" sees it.
+- **A dragged ball is played from the document the drag STARTED from** (D111), or a carrier
+  sticks to every player it passes over. Only the net infers a shot.
 
 ### Editing (D41, D26, D93)
 - **A carry is judged scene-by-scene, never against the edited scene**, or a second nudge

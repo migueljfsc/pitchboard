@@ -475,14 +475,15 @@ export type Viewport = {
  */
 /** The tool a pointer drag is currently bound to. */
 /**
- * What the pointer does on the board. `pan` is the default: players are still picked
- * up and moved, and a drag on empty grass moves the view. `select` makes that drag
- * sweep a selection box instead. Everything else draws a shape.
+ * What the pointer does on the board. `select` is the default: players are picked up
+ * and moved, and a drag on empty grass sweeps a selection box. `pan` makes that drag
+ * move the view instead, and exists only while the scene is zoomed in — at 100% it
+ * reads as `select`. Everything else draws a shape.
  */
 export type Tool = "pan" | "select" | AnnotationKind;
 
 /** The tool the editor starts with and goes back to — after a shape, and on Esc. */
-export const DEFAULT_TOOL: Tool = "pan";
+export const DEFAULT_TOOL: Tool = "select";
 
 /** Does this tool draw a shape, rather than pick things up or move the view? */
 export const isDrawTool = (tool: Tool): tool is AnnotationKind =>

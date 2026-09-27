@@ -7,8 +7,6 @@ import type { ExportJob } from "@/lib/useExportJob";
 import { encodableFormats } from "@/export/capability";
 import { renderPng } from "@/export/image";
 import {
-  DEFAULT_GIF_RESOLUTION,
-  DEFAULT_RESOLUTION,
   MAX_GIF_RESOLUTION,
   EXPORT_SHAPES,
   RESOLUTIONS,
@@ -19,7 +17,6 @@ import {
 } from "@/export/frame";
 import {
   BITRATES,
-  DEFAULT_BITRATE,
   DEFAULT_FPS,
   FPS_OPTIONS,
   type ExportFormat,
@@ -27,6 +24,7 @@ import {
   type VideoFormat,
 } from "@/export/types";
 import { useI18n } from "@/i18n/context";
+import { loadExportPrefs, saveExportPrefs } from "@/share/exportPrefs";
 import type { MessageKey } from "@/i18n/core";
 import { cn, slug } from "@/lib/utils";
 
@@ -91,21 +89,27 @@ export function ExportDialog({ doc, t, pitchView, onClose, exportJob }: Props) {
   // `t` is already taken here — it is the frame a PNG exports — so the
   // translator keeps its full name rather than shadowing the time.
   const i18n = useI18n();
-  const [format, setFormat] = useState<ExportFormat>("mp4");
-  const [json, setJson] = useState(false);
+  // Every setting but the caption's words starts where this browser last left it.
+  const [prefs] = useState(loadExportPrefs);
+  const [format, setFormat] = useState<ExportFormat>(prefs.format);
+  const [json, setJson] = useState(prefs.json);
   // A GIF wants a different size from a video, and one clamped list would mean
   // picking GIF then MP4 again silently exported at GIF's size. Two, so each
   // format keeps the size it was given.
-  const [videoEdge, setVideoEdge] = useState<number>(DEFAULT_RESOLUTION);
-  const [gifEdge, setGifEdge] = useState<number>(DEFAULT_GIF_RESOLUTION);
-  const [fps, setFps] = useState(DEFAULT_FPS.mp4);
-  const [bitrate, setBitrate] = useState<number>(DEFAULT_BITRATE);
-  const [shape, setShape] = useState<ExportShape>("board");
+  const [videoEdge, setVideoEdge] = useState<number>(prefs.videoEdge);
+  const [gifEdge, setGifEdge] = useState<number>(prefs.gifEdge);
+  const [fps, setFps] = useState(prefs.fps);
+  const [bitrate, setBitrate] = useState<number>(prefs.bitrate);
+  const [shape, setShape] = useState<ExportShape>(prefs.shape);
   // A caption is off until asked for, and seeded with the board's name when it is.
-  const [captioned, setCaptioned] = useState(false);
+  const [captioned, setCaptioned] = useState(prefs.captioned);
   const [title, setTitle] = useState(doc.name);
-  const [sceneCaption, setSceneCaption] = useState(true);
-  const [transparent, setTransparent] = useState(false);
+  const [sceneCaption, setSceneCaption] = useState(prefs.sceneCaption);
+  const [transparent, setTransparent] = useState(prefs.transparent);
+
+  useEffect(() => {
+    saveExportPrefs({ format, json, videoEdge, gifEdge, fps, bitrate, shape, captioned, sceneCaption, transparent });
+  }, [format, json, videoEdge, gifEdge, fps, bitrate, shape, captioned, sceneCaption, transparent]);
   // Only this dialog's own format is shown as running here; another format's
   // export, started earlier, is still reported in the header.
   const job = exportJob.running;

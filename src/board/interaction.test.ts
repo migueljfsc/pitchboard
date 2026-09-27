@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applySelection,
+  ballReceiver,
   entitiesInRect,
   hitTest,
   hitTestGroundAnnotation,
@@ -10,12 +11,13 @@ import {
   clampBall,
   moveEntities,
   nudgeEntities,
+  playBall,
   tiltedTextPoint,
 } from "./interaction";
 import { cameraFor, projectPitch } from "./projection";
 import { PITCH, tokenRadius } from "./pitch";
 import { TEXT_BG_PAD, addAnnotation, dragAnnotationHandle, textExtent, textSize } from "./annotations";
-import { addSceneAfter } from "./scenes";
+import { addSceneAfter, ballTravelBetween, setCarrier } from "./scenes";
 import { TOKEN_RADIUS } from "./render";
 import { frameAt } from "./timeline";
 import { createBoardDoc } from "@/formations";
@@ -551,5 +553,65 @@ describe("the ball and the net", () => {
     };
     const next = moveEntities(loose, 0, [BALL_ID], { x: 6, y: 0 });
     expect(next.scenes[0].ballPos).toEqual({ x: 106, y: 34 });
+  });
+});
+
+describe("playing the ball by dropping it (D111)", () => {
+  const HOME_9 = "home-9";
+  const HOME_10 = "home-10";
+  /** Three scenes with home-9 on the ball throughout. */
+  const held = (): BoardDoc => {
+    let doc = createBoardDoc();
+    doc = addSceneAfter(doc, 0);
+    doc = addSceneAfter(doc, 1);
+    return setCarrier(doc, 0, HOME_9, "stationary");
+  };
+
+  it("shoots: a carried ball dropped in the net is set loose there and marked a shot", () => {
+    const next = playBall(held(), 1, { x: 106, y: 34 }, null, "stationary");
+    expect(next.scenes[1].carrier).toBeNull();
+    expect(next.scenes[1].ballPos).toEqual({ x: 106, y: 34 });
+    expect(next.scenes[1].shot).toBe(true);
+    // Carried on, and a ball resting in the net does not shoot again.
+    expect(next.scenes[2].ballPos).toEqual({ x: 106, y: 34 });
+    expect(next.scenes[2].shot).toBeUndefined();
+  });
+
+  it("passes: dropped on a team-mate, he is given it", () => {
+    const next = playBall(held(), 1, { x: 0, y: 0 }, HOME_10, "stationary");
+    expect(next.scenes[1].carrier).toBe(HOME_10);
+    expect(next.scenes[2].carrier).toBe(HOME_10);
+    expect(ballTravelBetween(next, next.scenes[0], next.scenes[1])).toBe("pass");
+  });
+
+  it("releases: dropped on the grass it is loose, and no shot", () => {
+    const next = playBall(held(), 1, { x: 80, y: 20 }, null, "stationary");
+    expect(next.scenes[1].carrier).toBeNull();
+    expect(next.scenes[1].ballPos).toEqual({ x: 80, y: 20 });
+    expect(next.scenes[1].shot).toBeUndefined();
+  });
+
+  it("changes nothing dropped back on its holder", () => {
+    const doc = held();
+    expect(playBall(doc, 1, { x: 0, y: 0 }, HOME_9, "stationary")).toBe(doc);
+  });
+
+  it("is no shot into the net in the first scene — nothing travels into it", () => {
+    const next = playBall(held(), 0, { x: 106, y: 34 }, null);
+    expect(next.scenes[0].ballPos).toEqual({ x: 106, y: 34 });
+    expect(next.scenes[0].shot).toBeUndefined();
+  });
+
+  it("does nothing before anybody has the ball", () => {
+    const doc = createBoardDoc();
+    expect(playBall(doc, 0, { x: 50, y: 30 }, null)).toBe(doc);
+  });
+
+  it("finds the receiver within a token's radius, and no further", () => {
+    const doc = held();
+    const at = doc.scenes[1].positions[HOME_10];
+    const r = tokenRadius(doc);
+    expect(ballReceiver(doc, 1, { x: at.x + r * 0.9, y: at.y })).toBe(HOME_10);
+    expect(ballReceiver(doc, 1, { x: at.x + r * 1.1, y: at.y })).toBeNull();
   });
 });

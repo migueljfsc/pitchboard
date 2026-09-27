@@ -28,7 +28,9 @@ import {
   hitTestTilted,
   hitTestTiltedText,
   hitTestTiltedTextHandle,
+  ballReceiver,
   moveEntities,
+  playBall,
   snapLabel,
   snapPoint,
   swapPlayers,
@@ -148,6 +150,12 @@ type Drag =
       carry: Carry;
       grab?: { id: string; origin: Vec2; start: Vec2; moving?: boolean };
     }
+  /**
+   * The ball on its own, played to wherever it is dropped (D111). `from` is the
+   * board before the drag: every move is played from it, so nothing the pointer
+   * passes over sticks.
+   */
+  | { kind: "ball"; from: BoardDoc; origin: Vec2; carry: Carry; moving?: boolean }
   /** Panning a zoomed board: where the pointer started, and the pan it started from. */
   | { kind: "pan"; origin: Vec2; from: ScreenZoom }
   | { kind: "handle"; hit: HandleHit }
@@ -262,6 +270,8 @@ export function BoardCanvas({
   const [ruler, setRuler] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   /** The player a dragged one would swap with if dropped now. */
   const [swapWith, setSwapWith] = useState<string | null>(null);
+  /** The player a dragged ball would be given to if dropped now. */
+  const [receiver, setReceiver] = useState<string | null>(null);
   const i18n = useI18n();
   // The view is ALWAYS the scenes' cameras: a zoom belongs to the scene it was set
   // on, and changing it while a scene is selected changes that scene's. There is no
@@ -353,7 +363,7 @@ export function BoardCanvas({
       turf: turf.current,
       tilt: framing.tilt,
       selection,
-      hover: swapWith ?? hover,
+      hover: swapWith ?? receiver ?? hover,
       editScene,
       ghosts,
       guides,
@@ -380,6 +390,7 @@ export function BoardCanvas({
     guides,
     ruler,
     swapWith,
+    receiver,
     trail,
     throughCamera,
   ]);
@@ -457,6 +468,18 @@ export function BoardCanvas({
     if (id === BALL_ID) return undefined;
     const start = doc.scenes[annotationScene()]?.positions[id];
     return start ? { id, origin: p, start: { ...start } } : undefined;
+  };
+
+  /**
+   * The drag a grab starts. The ball taken on its own is played, not moved (D111);
+   * with others it moves with the unit. The carry is decided once, at the grab:
+   * reading the modifier per pointermove would let it stop mid-gesture, stranding
+   * the scenes it had already taken along at wherever the cursor happened to be.
+   */
+  const moveOf = (id: string, picked: ReadonlySet<string>, p: Vec2, alone: boolean): Drag => {
+    const along = alone ? "scene" : carry;
+    if (id === BALL_ID && picked.size === 1) return { kind: "ball", from: doc, origin: p, carry: along };
+    return { kind: "move", last: p, carry: along, grab: grabOf(id, p) };
   };
 
   // The wheel: ⌘/Ctrl or a pinch zooms about the pointer; plain scrolling pans a
@@ -700,19 +723,11 @@ export function BoardCanvas({
         onAnnotationSelect?.(null);
         // Dragging one of several selected entities moves the whole unit; grabbing
         // an unselected one selects it first. Same rule as the flat board.
-        if (!selection.has(standing.id)) {
-          onSelectionChange(applySelection(selection, standing, e.shiftKey));
-        }
+        const picked = selection.has(standing.id) ? null : applySelection(selection, standing, e.shiftKey);
+        if (picked) onSelectionChange(picked);
         // A token is drawn where it stands, so the delta between two unprojected
         // points moves it exactly under the cursor (D49).
-        if (onGrass(p)) {
-          setDrag({
-            kind: "move",
-            last: p,
-            carry: e.altKey ? "scene" : carry,
-            grab: grabOf(standing.id, p),
-          });
-        }
+        if (onGrass(p)) setDrag(moveOf(standing.id, picked ?? selection, p, e.altKey));
         return;
       }
 
@@ -756,13 +771,9 @@ export function BoardCanvas({
       onAnnotationSelect?.(null);
       // Dragging one of several selected entities moves the whole unit; grabbing
       // an unselected one selects it first.
-      if (!selection.has(hit.id)) {
-        onSelectionChange(applySelection(selection, hit, e.shiftKey));
-      }
-      // Decided once, at the grab. Reading the modifier per pointermove would
-      // let the carry stop mid-gesture, stranding the scenes it had already
-      // taken along at wherever the cursor happened to be.
-      setDrag({ kind: "move", last: p, carry: e.altKey ? "scene" : carry, grab: grabOf(hit.id, p) });
+      const picked = selection.has(hit.id) ? null : applySelection(selection, hit, e.shiftKey);
+      if (picked) onSelectionChange(picked);
+      setDrag(moveOf(hit.id, picked ?? selection, p, e.altKey));
       return;
     }
 
@@ -910,6 +921,25 @@ export function BoardCanvas({
       if (editScene === undefined) return;
       const curve = dragHandle(doc, editScene, drag.hit, p);
       if (curve) onDocChange(setPath(doc, editScene, drag.hit.id, curve), dragKey());
+      return;
+    }
+
+    if (drag.kind === "ball") {
+      // A click is not a drag: a carried ball clicked must not be released.
+      if (!drag.moving) {
+        if (Math.hypot(p.x - drag.origin.x, p.y - drag.origin.y) < DRAG_START_M) return;
+        setDrag({ ...drag, moving: true });
+      }
+      // Onto a player is tested where he is drawn: under the camera that is his
+      // billboard, not the grass beneath the pointer. The ball itself, following
+      // the pointer, is left out of the test.
+      const frame = frameAt(drag.from, t);
+      const hit = tilted
+        ? hitTestTilted(drag.from, { ...frame, ball: null }, screenFrom(e), cameraFrom(e), 0)
+        : null;
+      const to = tilted ? (hit?.kind === "token" ? hit.id : null) : ballReceiver(drag.from, sceneIndex, p);
+      setReceiver(to);
+      onDocChange(playBall(drag.from, sceneIndex, p, to, drag.carry), dragKey());
       return;
     }
 
@@ -1094,6 +1124,7 @@ export function BoardCanvas({
     setGuides([]);
     setRuler(null);
     setSwapWith(null);
+    setReceiver(null);
     setDrag(null);
     e.currentTarget.releasePointerCapture(e.pointerId);
   };

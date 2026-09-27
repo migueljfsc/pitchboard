@@ -18,12 +18,13 @@ import {
   LOFT_APEX,
   ballLift,
   displayCurve,
+  hasBall,
   transitionInto,
   type Frame,
   type Resolved,
 } from "./timeline";
 import { linkGeometry } from "./links";
-import { ballCurve } from "./scenes";
+import { ballCurve, canShoot, setCarrier, setShot } from "./scenes";
 import {
   MARK_WIDTH,
   TEXT_BG_PAD,
@@ -514,8 +515,8 @@ export type Carry = "scene" | "stationary" | "all";
  * Translate entities by `delta`, clamped so a token cannot be dragged off the
  * surface. Ids with no position in this scene are ignored.
  *
- * A carried ball is derived from its carrier, so dragging it is a no-op — free it
- * first by clearing the carrier.
+ * A carried ball is derived from its carrier, so moving it here is a no-op. A drag
+ * of the ball alone plays it instead (`playBall`).
  */
 export function moveEntities(
   doc: BoardDoc,
@@ -969,6 +970,68 @@ export function swapPlayers(
   let next = moveEntities(doc, sceneIndex, [b], { x: aStarted.x - pb.x, y: aStarted.y - pb.y }, carry);
   next = moveEntities(next, sceneIndex, [a], { x: pb.x - pa.x, y: pb.y - pa.y }, carry);
   return next;
+}
+
+// ------------------------------------------------------------- playing the ball
+
+/**
+ * The player a dragged ball has been dropped onto, if any: the nearest visible
+ * token whose centre is within a token's radius of where it landed.
+ */
+export function ballReceiver(doc: BoardDoc, sceneIndex: number, at: Vec2): string | null {
+  const scene = doc.scenes[sceneIndex];
+  if (!scene) return null;
+  const reach = tokenRadius(doc);
+  let best: string | null = null;
+  let bestD = Infinity;
+  for (const team of doc.teams) {
+    if (team.hidden) continue;
+    for (const player of team.players) {
+      const p = scene.positions[player.id];
+      if (!p) continue;
+      const d = dist(p, at);
+      if (d <= reach && d < bestD) {
+        best = player.id;
+        bestD = d;
+      }
+    }
+  }
+  return best;
+}
+
+/** Behind either goal line — which `clampBall` allows only between the posts. */
+export function inNet(doc: BoardDoc, p: Vec2): boolean {
+  return p.x < 0 || p.x > doc.pitch.length;
+}
+
+/**
+ * Play the ball in scene `sceneIndex` to where a drag dropped it — the one gesture
+ * for a pass, a release and a shot (D111).
+ *
+ * Onto a player, he is given it: a pass or a turnover, as `ballTravelBetween`
+ * reads the carrier change. Anywhere else it is set loose there, and into the net
+ * that travel is marked a shot. Dropped back on its holder, nothing happened.
+ *
+ * Always applied to the document the drag STARTED from, so what the pointer passes
+ * over on the way leaves nothing behind.
+ */
+export function playBall(
+  doc: BoardDoc,
+  sceneIndex: number,
+  at: Vec2,
+  receiver: string | null,
+  carry: Carry = "scene",
+): BoardDoc {
+  const scene = doc.scenes[sceneIndex];
+  if (!scene || !hasBall(scene)) return doc;
+  if (receiver) return setCarrier(doc, sceneIndex, receiver, carry);
+
+  const loose = scene.carrier ? setCarrier(doc, sceneIndex, null, carry) : doc;
+  const from = loose.scenes[sceneIndex].ballPos;
+  if (!from) return doc;
+  const to = clampBall(at, { length: doc.pitch.length, width: doc.pitch.width });
+  const next = moveEntities(loose, sceneIndex, [BALL_ID], { x: to.x - from.x, y: to.y - from.y }, carry);
+  return inNet(next, to) && canShoot(next, sceneIndex) ? setShot(next, sceneIndex, true) : next;
 }
 
 /**

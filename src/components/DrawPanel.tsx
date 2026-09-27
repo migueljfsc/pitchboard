@@ -70,6 +70,8 @@ type Props = {
   focusText?: number;
   /** The scene a highlight is set on — highlights are per scene and never carried (D41). */
   sceneIndex: number;
+  /** Whether the scene is zoomed in, which is the only time Pan is offered. */
+  canPan: boolean;
 };
 
 const TOOLS: { value: Tool; icon: typeof Minus; key: string }[] = [
@@ -112,6 +114,7 @@ export function DrawPanel({
   onDelete,
   focusText,
   sceneIndex,
+  canPan,
 }: Props) {
   const { t } = useI18n();
   const annotations = doc.annotations ?? [];
@@ -232,7 +235,7 @@ export function DrawPanel({
           A label that still does not fit is cut short rather than spilling; the
           button's hint has the full name. */}
       <div className="grid grid-cols-3 gap-1">
-        {TOOLS.map((item) => (
+        {TOOLS.filter((item) => canPan || item.value !== "pan").map((item) => (
           <button
             key={item.value}
             type="button"

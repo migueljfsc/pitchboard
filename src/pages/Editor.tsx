@@ -19,12 +19,14 @@ import {
   EyeOff,
   FastForward,
   Frame,
+  Goal,
   Link2,
   MousePointer2,
   PencilLine,
   Plus,
   Route,
   Shapes,
+  Spline,
   Sparkles,
   Trash2,
   UserMinus,
@@ -98,6 +100,8 @@ import { concealedPlayers } from "@/board/render";
 import { resolveAt, runEndOf } from "@/board/timeline";
 import {
   addSceneAfter,
+  canLoft,
+  canShoot,
   deleteScene,
   duplicateScene,
   isHighlighted,
@@ -107,8 +111,10 @@ import {
   setCarrier,
   setDelay,
   setHighlight,
+  setLoft,
   setPath,
   setRunHidden,
+  setShot,
   setRunStyle,
   setTravel,
   totalSeconds,
@@ -168,6 +174,19 @@ type TourRestore = {
 
 /** One step of `,` and `.` — a frame at 30 fps. */
 const FRAME_S = 1 / 30;
+
+/** The key that arms each tool. The drawn ball has none: B gives the match ball. */
+const TOOL_KEYS: Record<string, Tool> = {
+  v: "select",
+  h: "pan",
+  a: "arrow",
+  l: "line",
+  r: "rect",
+  o: "ellipse",
+  g: "polygon",
+  p: "pen",
+  t: "text",
+};
 
 /** How long "Saved" stays beside the board's name after an autosave, in milliseconds. */
 const SAVED_MS = 1800;
@@ -326,6 +345,10 @@ export function Editor({ initialDoc }: Props = {}) {
   // and deleting a scene all do it. Clamped where it is read rather than synced
   // back into state, so there is no render where the index is out of range.
   const activeScene = Math.min(chosenScene, doc.scenes.length - 1);
+  // Pan is offered only while this scene is zoomed in: at 100% there is nowhere to
+  // move the view, and the tool did exactly what Select does.
+  const zoomed = (doc.scenes[activeScene]?.camera?.zoom ?? 1) > 1;
+  const activeTool: Tool = tool === "pan" && !zoomed ? "select" : tool;
 
   // Pausing settles on the scene the playhead stopped in, however it stopped — the
   // button, Space, the end of the clip. Stopped mid-run, it goes on to where that
@@ -1043,6 +1066,35 @@ export function Editor({ initialDoc }: Props = {}) {
     const scene = doc.scenes[activeScene];
     const items: MenuItem[] = [];
 
+    // The ball's travel into this scene, on the ball itself — the same toggles as
+    // the scene bar, behind the same gates.
+    if (target.id === BALL_ID && scene) {
+      items.push(
+        {
+          label: t(scene.shot ? "menu.shot.off" : "menu.shot.on"),
+          title: t(canShoot(doc, activeScene) ? "timeline.shot.can" : "timeline.shot.cannot"),
+          icon: <Goal size={13} />,
+          disabled: !canShoot(doc, activeScene),
+          onSelect: () => setDoc(setShot(doc, activeScene, !scene.shot)),
+        },
+        {
+          label: t(scene.loft ? "menu.loft.off" : "menu.loft.on"),
+          title: t(canLoft(doc, activeScene) ? "timeline.loft.can" : "timeline.loft.cannot"),
+          icon: <Spline size={13} />,
+          disabled: !canLoft(doc, activeScene),
+          onSelect: () => setDoc(setLoft(doc, activeScene, !scene.loft)),
+        },
+      );
+      if (scene.carrier) {
+        items.push({
+          label: t("inspect.ball.release"),
+          icon: <CircleOff size={13} />,
+          onSelect: () => onCarrierChange(null),
+        });
+      }
+      items.push("divider");
+    }
+
     if (only && scene) {
       const has = scene.carrier === only;
       items.push({
@@ -1413,6 +1465,36 @@ export function Editor({ initialDoc }: Props = {}) {
         return;
       }
 
+      // A letter per tool, the conventional ones where there is a convention.
+      const armed = !e.metaKey && !e.ctrlKey && !e.altKey ? TOOL_KEYS[e.key.toLowerCase()] : undefined;
+      if (armed && !present && (armed !== "pan" || zoomed)) {
+        e.preventDefault();
+        setTool(armed);
+        return;
+      }
+
+      // N adds a scene after this one; B gives the ball to the one selected player,
+      // or takes it back. Plain keys only: a modifier belongs to the browser.
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && (e.key === "n" || e.key === "N")) {
+        e.preventDefault();
+        const next = addSceneAfter(doc, activeScene, t("doc.scene", { n: doc.scenes.length + 1 }));
+        setDoc(next);
+        selectScene(activeScene + 1, next);
+        return;
+      }
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && (e.key === "b" || e.key === "B")) {
+        const scene = doc.scenes[activeScene];
+        const players = [...visible].filter((id) => id !== BALL_ID);
+        if (!scene) return;
+        e.preventDefault();
+        const to =
+          players.length === 1
+            ? scene.carrier === players[0] ? null : players[0]
+            : visible.has(BALL_ID) && scene.carrier ? null : undefined;
+        if (to !== undefined) setDoc(setCarrier(doc, activeScene, to, carry));
+        return;
+      }
+
       // Step through the scenes. The arrows are spoken for by the nudge, and the
       // brackets sit next to each other under the same hand.
       if (e.key === "[" || e.key === "]") {
@@ -1426,6 +1508,19 @@ export function Editor({ initialDoc }: Props = {}) {
       if ((e.key === "Delete" || e.key === "Backspace") && annotation) {
         e.preventDefault();
         deleteShape(annotation);
+        return;
+      }
+      // The selected players go the same way, as one undo step with one toast.
+      if (e.key === "Delete" || e.key === "Backspace") {
+        const players = doc.teams.flatMap((team) => team.players).filter((p) => visible.has(p.id));
+        if (players.length === 0) return;
+        e.preventDefault();
+        setDoc(players.reduce((next, p) => removePlayer(next, p.id), doc));
+        notify(
+          players.length === 1
+            ? t("toast.playerRemoved", { number: players[0].number })
+            : t("toast.playersRemoved", { count: players.length }),
+        );
         return;
       }
 
@@ -1486,6 +1581,8 @@ export function Editor({ initialDoc }: Props = {}) {
     t,
     deleteShape,
     total,
+    visible,
+    zoomed,
   ]);
 
   return (
@@ -2087,7 +2184,7 @@ export function Editor({ initialDoc }: Props = {}) {
               onDocChange={setDoc}
               onEditName={onEditName}
               carry={carry}
-              tool={tool}
+              tool={activeTool}
               onToolChange={setTool}
               drawColor={drawColor}
               drawDash={drawDash}
@@ -2188,7 +2285,8 @@ export function Editor({ initialDoc }: Props = {}) {
                 <DrawPanel
                   doc={doc}
                   onDocChange={setDoc}
-                  tool={tool}
+                  tool={activeTool}
+                  canPan={zoomed}
                   onToolChange={setTool}
                   sticky={sticky}
                   onStickyChange={setSticky}
