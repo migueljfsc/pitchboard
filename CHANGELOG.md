@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.78.0 (2026-09-27)
+
+### Feat
+
+- **editor**: group the top bar into Help and File menus
+
 ## v0.77.1 (2026-09-27)
 
 ### Fix
