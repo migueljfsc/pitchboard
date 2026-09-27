@@ -125,3 +125,84 @@ describe("what travels with a sport", () => {
     expect(presetsFor(list, "basketball").map((p) => p.id)).toEqual(["b"]);
   });
 });
+
+describe("handball and field hockey", () => {
+  const board = (sport: "handball" | "hockey"): BoardDoc => {
+    const [home, away] = sidesFor(sport);
+    return createBoardDoc(home, away, undefined, {}, sport);
+  };
+
+  it("lays every court out at football's length, true to its metres", () => {
+    expect(SPORTS.handball.pitch.length).toBe(105);
+    expect(SPORTS.handball.pitch.width * SPORTS.handball.metresPerUnit).toBeCloseTo(20, 9);
+    expect(SPORTS.hockey.pitch.length * SPORTS.hockey.metresPerUnit).toBeCloseTo(91.4, 9);
+    expect(SPORTS.hockey.pitch.width * SPORTS.hockey.metresPerUnit).toBeCloseTo(55, 9);
+  });
+
+  it("starts seven a side in handball and eleven in hockey, each with a keeper", () => {
+    const hb = board("handball");
+    const fh = board("hockey");
+    expect(boardDocSchema.safeParse(hb).success).toBe(true);
+    expect(boardDocSchema.safeParse(fh).success).toBe(true);
+    expect(hb.teams.map((t) => t.players.length)).toEqual([7, 7]);
+    expect(fh.teams.map((t) => t.players.length)).toEqual([11, 11]);
+    expect(SPORTS.handball.keeper && SPORTS.hockey.keeper).toBe(true);
+  });
+
+  it("bends a handball six round its goal: the wings nearer the line than the middle", () => {
+    const doc = board("handball");
+    const at = (n: number) => doc.scenes[0].positions[`home-${n}`];
+    expect(at(2).x).toBeLessThan(at(4).x);
+    expect(at(7).x).toBeCloseTo(at(2).x, 9);
+    expect(toMetres(doc, at(4).x)).toBeCloseTo(6.8, 6);
+  });
+
+  it("scores a ball dropped in the net, and keeps it between the posts", () => {
+    const doc = board("handball");
+    const goal = SPORTS.handball.goal;
+    if (goal.kind !== "net") throw new Error("handball has nets");
+    const clamped = clampBall({ x: doc.pitch.length + 1, y: 0 }, doc.pitch, goal);
+    expect(Math.abs(clamped.y - doc.pitch.width / 2)).toBeCloseTo(goal.width / 2, 9);
+    expect(goalAt(doc, clamped)).toEqual(clamped);
+  });
+});
+
+describe("volleyball", () => {
+  const board = (): BoardDoc => {
+    const [home, away] = sidesFor("volleyball");
+    return createBoardDoc(home, away, undefined, {}, "volleyball");
+  };
+
+  it("is the court and its free zone: 18 x 9 m of lines inside 24 x 15 m of board", () => {
+    const spec = SPORTS.volleyball;
+    expect(spec.pitch.length * spec.metresPerUnit).toBeCloseTo(24, 9);
+    expect(spec.pitch.width * spec.metresPerUnit).toBeCloseTo(15, 9);
+    expect(spec.court!.length * spec.metresPerUnit).toBeCloseTo(18, 9);
+    expect(spec.court!.x * spec.metresPerUnit).toBeCloseTo(3, 9);
+  });
+
+  it("starts six a side, each in its own half of the net, with no keeper", () => {
+    const doc = board();
+    expect(boardDocSchema.safeParse(doc).success).toBe(true);
+    expect(doc.teams.map((t) => t.players.length)).toEqual([6, 6]);
+    expect(SPORTS.volleyball.keeper).toBe(false);
+    const mid = doc.pitch.length / 2;
+    const [home, away] = doc.teams.map((t) => t.players.map((p) => doc.scenes[0].positions[p.id].x));
+    expect(Math.max(...home)).toBeLessThan(mid);
+    expect(Math.min(...away)).toBeGreaterThan(mid);
+  });
+
+  it("lets a server stand behind the end line, in the free zone", () => {
+    const doc = board();
+    const id = "home-1";
+    const next = moveEntities(doc, 0, [id], { x: -200, y: 0 });
+    expect(next.scenes[0].positions[id].x).toBe(0);
+    expect(next.scenes[0].positions[id].x).toBeLessThan(SPORTS.volleyball.court!.x);
+  });
+
+  it("has no goal: nothing a dropped ball lands on scores", () => {
+    const doc = board();
+    expect(goalAt(doc, { x: -1, y: doc.pitch.width / 2 })).toBeNull();
+    expect(goalAt(doc, { x: doc.pitch.length / 2, y: doc.pitch.width / 2 })).toBeNull();
+  });
+});

@@ -480,7 +480,49 @@ account is never replaced in place, since its autosave would carry the new sport
 one: the switch opens a fresh local board instead. The last sport chosen is what a new board starts
 in, per browser. Squad presets are one library, each tagged with its sport and shown only on its
 own; setup files carry the sport too. Built-in templates, the tour and video import stay football.
+
+Handball (IHF, 40 × 20 m) and field hockey (FIH, 91.4 × 55 m) followed as specs, court drawings and
+catalogues, with nothing new in the engine: their goals are nets, so shots, the drag into the net
+and the standing 3D goal are football's, sized by the spec. Handball is a hall floor with a gold
+goal area, the 6 m line and the dashed 9 m one (clipped at the sidelines, as the rules draw it), the
+7 m and 4 m marks, and seven a side whose defences (6-0, 5-1, 3-2-1, 4-2, 3-3) bend round the goal
+— so a formation line may give each player his own depth. Hockey is blue turf on a green run-off
+with the 23 m lines, the shooting circle and its dashed outer circle, the penalty spot, and eleven
+a side read from notation as football's are. Each sport has its own ball, and the glyph that names
+the ball in the history list and on the ball buttons.
+
+Volleyball (FIVB) has no goal (`goal.kind` "none": nothing scores by itself, and Shot is a
+toggle for a spike) and a net across the middle, which stands in 3D and is depth-sorted among the
+players by the centre line it hangs over. Its board is the 18 × 9 m court AND its 3 m free zone,
+24 × 15 m, with the lines inset (`SportSpec.court`): players are clamped to the board, and a server
+has to be able to stand behind the end line. Six a side with no keeper, numbered by rotation
+position, in a base rotation and two serve-receive shapes. The sport picker is a title rather than a
+field — the sport's icon and bold name, a chevron, a faint wash on hover — opening a panel of line
+icons (`SportMenu`). It is its own listbox, since a native select's options cannot hold an icon, and
+keeps what the select gave: arrows, Enter, Esc, focus back on the button. Keys pressed in it stop
+there, so an arrow does not also nudge the selection. Ice hockey is on the backlog.
 The UI's copy says board, space and goal where it said pitch, grass and net.
+
+## D114 — The library is filed by sport
+Every account has one folder per sport at the root of its library, and nothing else sits there:
+every folder a coach makes goes under a sport, and a board is filed under its own sport and nowhere
+else. The roots are real rows (`projects.sport`, set on them alone) because a board must belong to a
+folder and the coach should be able to save straight into "Basketball". The Worker makes any that
+are missing when projects are listed, so a sport added later reaches every account unasked; a
+partial unique index on `(user_id, sport)` makes that safe under two tabs. A root cannot be
+renamed, moved or deleted (`project_locked`), a folder cannot be made or moved to the root
+(`parent_required`), and nothing crosses sports (`wrong_sport`): creating a board reads the
+document's sport, a move compares it in SQL (`json_extract`, so the document never leaves the
+database), a bulk move with one stray moves none, a folder moves only within its sport, and a save
+may not change a board's sport — switching sport starts a new board (D113). The Worker keeps its own
+copy of the sport list (`worker/lib/sports.ts`), which a test holds to the app's.
+
+The roots are the library's shape rather than the coach's levels, so they count against neither the
+25-folder cap nor the depth cap. Folders made before this moved under Football (migration 0009),
+and "Templates" with them: each sport has its own Templates folder under its root, made the first
+time a template is saved, and the template menu reads the open board's sport's. The library hides a
+root with nothing under it; the save picker shows only the board's own sport, root included. A board
+adopted from the browser on signing in goes straight into its sport's root.
 
 ---
 

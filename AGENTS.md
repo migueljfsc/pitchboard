@@ -7,7 +7,7 @@ choice in [`docs/decisions.md`](docs/decisions.md) — cited below as Dn.
 
 ## Mission
 
-A browser tactics board — football and basketball, one engine (D113) — where a coach draws a formation, moves players between scenes along
+A browser tactics board — football, basketball, handball, field hockey and volleyball, one engine (D113) — where a coach draws a formation, moves players between scenes along
 curved runs, and exports the result as MP4, GIF, or PNG. Everything renders client-side; there
 is no server-side video pipeline and there will not be one.
 
@@ -64,7 +64,11 @@ src/board/                the engine — zero React, zero DOM
   migrate.ts              version dispatch, run before validation on every load
   sports.ts               every sport's spec — court, goal, headroom, snaps — and units ↔ metres
   pitch.ts                IFAB dimensions table + markings
+  surfaces.ts             each sport's court theme and drawing — the renderer never asks which sport
   court.ts                the basketball court: floor, FIBA markings, rings from above
+  handball.ts, hockey.ts, volleyball.ts
+                          the other courts, each in its rulebook's metres
+  markings.ts             shapes more than one court draws: the goal-area D, one path for both ends
   geometry.ts             bezier, arc-length LUT, easing
   timeline.ts             (doc, t) → resolved positions, incl. ball carrier
   links.ts                connector geometry + distances, and when a link shows
@@ -154,11 +158,16 @@ Each is one line of what breaks; the reasoning is in the cited decision.
 - **A unit is a metre only on a football pitch.** Anything a person reads — link distances, the
   ruler, the pass speed, the flow pace — goes through `toMetres`. Everything tuned in units
   (tokens, lines, snaps, the 3D camera) stays tuned for every court.
-- **Never branch on a sport's name at a call site.** Read the `SportSpec`: `surface`, `goal`,
-  `keeper`, `snaps`, `headroom`. Football's spec is the old constants exactly — change it and every
+- **Never branch on a sport's name at a call site.** Read the `SportSpec` — `surface`, `goal`,
+  `keeper`, `snaps`, `headroom`, `ballGlyph` — or a table keyed by sport (`surfaceOf`, the ball's
+  looks, the formation catalogue). A new sport that misses one fails to typecheck, by design. Football's spec is the old constants exactly — change it and every
   board ever drawn moves.
 - **Anything a sport adds is optional, and absent is football** — on the board, a preset and a
   setup file alike, so every board and link made before reads the same.
+- **A board may be more than its court.** Volleyball's is the court and its free zone
+  (`SportSpec.court` is where the lines are), so a server can stand behind the end line; the
+  board's edge, not a line, is what clamps a player. Its net stands across the middle and is
+  sorted among the players by the centre line, as a ring is by its backboard.
 - **A ring stands INSIDE the court.** It is depth-sorted among the billboards by its backboard,
   never drawn at the ends as a net is; in 3D a drop on it is tested where it is drawn
   (`ringAtScreen`), and a goal takes the ball over a player standing under it.
@@ -286,7 +295,7 @@ Each is one line of what breaks; the reasoning is in the cited decision.
 - **Export size follows the board**, both axes even.
 - **Cancelling an export is terminating the worker.**
 
-### Worker (D39, D109, D110)
+### Worker (D39, D109, D110, D114)
 - **Every recursive CTE carries `n < WALK_LIMIT`** — a walk over a cycle does not terminate.
 - **The password KDF runs in the browser.** `deriveKey`'s iterations, salt prefix and email
   normalisation are frozen by a test vector; changing any locks every password account out.
@@ -301,6 +310,10 @@ Each is one line of what breaks; the reasoning is in the cited decision.
   The cascade is a backstop, not the contract.
 - **Never mix a bare `?` with `?N` in one statement** — SQLite binds the wrong value, silently.
 - **Deleting a project deletes its subtree**; the confirmation counts it.
+- **A sport's root is the library's shape** (D114): never renamed, moved or deleted, never counted
+  against the folder or depth caps, and every other folder lives under one. A board is filed
+  under its own sport only — the Worker enforces it in the statement, reading the document's sport
+  with `json_extract`. `worker/lib/sports.ts` mirrors `SPORT_IDS`; a test fails if they drift.
 - **`buildTree` must not trust its rows** — orphans to the root, cycles broken.
 
 ### The importer (D52, D71, D73, D75, D81)

@@ -10,6 +10,7 @@
  */
 
 /** A board's row, without the document — what a list needs and no more. */
+import type { Sport } from "@/board/types";
 import { sharePath } from "./routes";
 
 export interface BoardSummary {
@@ -24,6 +25,8 @@ export interface BoardSummary {
 /** A board's row plus the project it sits in — what the library lists. */
 export interface StoredBoardSummary extends BoardSummary {
   project_id: string;
+  /** Read from the document by the server, so a list can file boards without them (D114). */
+  sport: Sport;
 }
 
 export interface StoredBoard extends BoardSummary {
@@ -37,6 +40,8 @@ export interface Project {
   name: string;
   /** The folder this one sits in, or null at the root (D51). */
   parent_id: string | null;
+  /** Set on a sport's root only, which cannot be renamed, moved or deleted (D114). */
+  sport: Sport | null;
   created_at: number;
   updated_at: number;
   /** This folder's OWN boards. The subtree total is derived on the client. */

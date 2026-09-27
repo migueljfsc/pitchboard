@@ -31,11 +31,13 @@ import {
 } from "lucide-react";
 
 import { PickProject } from "@/components/PickProject";
+import { SportIcon } from "@/components/SportMenu";
+import type { Sport } from "@/board/types";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useI18n } from "@/i18n/context";
 import { cn } from "@/lib/utils";
 import type { CloudBoard } from "@/lib/useCloudBoard";
-import { ancestorIds, buildTree, subtreeIds, visibleRows } from "@/lib/projects";
+import { ancestorIds, buildTree, sportOfProject, subtreeIds, visibleRows } from "@/lib/projects";
 import {
   ApiError,
   type Project,
@@ -74,10 +76,14 @@ const codeOf = (error: unknown) =>
  */
 const MAX_NAME_CHARS = 100;
 
-type Props = { cloud: CloudBoard };
+type Props = {
+  cloud: CloudBoard;
+  /** The open board's sport: where a folder made from "All boards" is filed (D114). */
+  sport: Sport;
+};
 
 /** The top-bar button, and the library it opens. */
-export function BoardsLibrary({ cloud }: Props) {
+export function BoardsLibrary({ cloud, sport }: Props) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
 
@@ -101,7 +107,7 @@ export function BoardsLibrary({ cloud }: Props) {
 
       {/* Unmounted when closed, so every visit starts on a fresh list rather than on
           whatever another device has since changed underneath it. */}
-      {open && <Library cloud={cloud} onClose={() => setOpen(false)} />}
+      {open && <Library cloud={cloud} sport={sport} onClose={() => setOpen(false)} />}
     </>
   );
 }
@@ -114,10 +120,10 @@ type Pending =
 /** What a drag is carrying: rows from the board list, or a folder from the rail. */
 type Dragging = { kind: "boards"; ids: string[] } | { kind: "project"; id: string };
 
-/** Where it would land. The root is a target of its own — it un-nests a folder. */
-type DropTarget = { kind: "project"; id: string } | { kind: "root" } | null;
+/** Where it would land: a folder, or a sport's root. */
+type DropTarget = { kind: "project"; id: string } | null;
 
-function Library({ cloud, onClose }: Props & { onClose: () => void }) {
+function Library({ cloud, sport, onClose }: Props & { onClose: () => void }) {
   const { t, tn } = useI18n();
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [boards, setBoards] = useState<StoredBoardSummary[] | null>(null);
@@ -183,7 +189,20 @@ function Library({ cloud, onClose }: Props & { onClose: () => void }) {
   }, [onClose, pending, picking]);
 
   const tree = useMemo(() => buildTree(projects ?? []), [projects]);
-  const rows = useMemo(() => visibleRows(tree, expanded), [tree, expanded]);
+  /**
+   * A sport's root is shown once something is filed under it (D114). Every account has all
+   * of them, and five empty headings is a list of sports, not a library.
+   */
+  const rows = useMemo(
+    () =>
+      visibleRows(tree, expanded).filter(
+        ({ project, hasChildren }) =>
+          project.sport === null ||
+          hasChildren ||
+          (boards ?? []).some((b) => b.project_id === project.id),
+      ),
+    [tree, expanded, boards],
+  );
 
   /**
    * Selecting a folder shows everything filed under it, not only its own boards.
@@ -216,6 +235,14 @@ function Library({ cloud, onClose }: Props & { onClose: () => void }) {
   };
 
   const activeProject = (projects ?? []).find((p) => p.id === active) ?? null;
+  /** A folder's name as the rail shows it: a sport's root is the sport, in the reader's language. */
+  const labelOf = (project: Project) => (project.sport ? t(`sport.${project.sport}`) : project.name);
+  const sportIn = (id: string) => sportOfProject(projects ?? [], id);
+  /** The one sport a selection belongs to, or null when it spans more than one. */
+  const selectionSport = useMemo(() => {
+    const sports = new Set((boards ?? []).filter((b) => selection.has(b.id)).map((b) => b.sport));
+    return sports.size === 1 ? [...sports][0] : null;
+  }, [boards, selection]);
 
   /**
    * Subfolders a delete would take with it.
@@ -339,18 +366,18 @@ function Library({ cloud, onClose }: Props & { onClose: () => void }) {
   };
 
   /**
-   * File a folder under another, or back at the root.
+   * File a folder under another, within its sport.
    *
    * The cycle and depth guards are the Worker's — it is the only place that can see the whole
    * tree at once, and a client that checked first would still be racing another tab. So this
    * asks, and reports `project_cycle` or `project_too_deep` like any other refusal.
    */
-  const refile = async (id: string, parentId: string | null) => {
+  const refile = async (id: string, parentId: string) => {
     setDropTarget(null);
     try {
       await moveProject(id, parentId);
       // Somewhere to land: a folder dropped into a collapsed one would otherwise vanish.
-      if (parentId !== null) setExpanded((current) => new Set(current).add(parentId));
+      setExpanded((current) => new Set(current).add(parentId));
       await refresh();
     } catch (cause) {
       setError(codeOf(cause));
@@ -365,15 +392,12 @@ function Library({ cloud, onClose }: Props & { onClose: () => void }) {
     if (!carrying || !target) return;
 
     if (carrying.kind === "boards") {
-      // A board belongs to exactly one project, so the root is not a place to put one.
-      if (target.kind === "root") return;
       await move(carrying.ids, target.id);
       return;
     }
 
-    const parentId = target.kind === "root" ? null : target.id;
-    if (parentId === carrying.id) return;
-    await refile(carrying.id, parentId);
+    if (target.id === carrying.id) return;
+    await refile(carrying.id, target.id);
   };
 
   const confirm = async () => {
@@ -417,19 +441,22 @@ function Library({ cloud, onClose }: Props & { onClose: () => void }) {
   };
 
   /**
-   * A new folder lands inside whichever one is open, and at the root from "All boards".
+   * A new folder lands inside whichever one is open, and from "All boards" under the open
+   * board's sport — the root belongs to the sports (D114).
    *
    * Which is what the placeholder says, because it is the one thing here that is modal: the
-   * same typing makes a top-level folder or a subfolder depending on what is selected.
+   * same typing files a folder in different places depending on what is selected.
    */
+  const sportRoot = (projects ?? []).find((p) => p.sport === sport) ?? null;
   const addProject = async () => {
     const name = newName.trim();
-    if (!name) return;
+    const parent = active ?? sportRoot?.id ?? null;
+    if (!name || parent === null) return;
     try {
-      const made = await createProject(name, active);
+      const made = await createProject(name, parent);
       setNewName("");
       // Open the parent, or the folder just made is filed somewhere folded shut.
-      if (active !== null) setExpanded((current) => new Set(current).add(active));
+      setExpanded((current) => new Set(current).add(parent));
       await refresh();
       showProject(made.id);
     } catch (cause) {
@@ -533,26 +560,12 @@ function Library({ cloud, onClose }: Props & { onClose: () => void }) {
           <div className="flex w-52 shrink-0 flex-col border-r border-ink-700">
             <ul className="min-h-0 flex-1 overflow-y-auto p-1.5">
               <li>
-                {/* Also where a folder is dropped to un-nest it: the root is a real place. */}
+                {/* Not a drop target: the root belongs to the sports, and nothing is filed there. */}
                 <button
                   type="button"
                   onClick={() => showProject(null)}
-                  onDragOver={(e) => {
-                    if (dragged.current?.kind !== "project") return;
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = "move";
-                    setDropTarget({ kind: "root" });
-                  }}
-                  onDragLeave={() =>
-                    setDropTarget((c) => (c?.kind === "root" ? null : c))
-                  }
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    void dropOn({ kind: "root" });
-                  }}
                   className={cn(
                     "flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-[11px] transition",
-                    dropTarget?.kind === "root" && "ring-1 ring-accent",
                     active === null
                       ? "bg-accent/15 font-medium text-accent"
                       : "text-ink-300 hover:bg-ink-700/50 hover:text-white",
@@ -577,7 +590,8 @@ function Library({ cloud, onClose }: Props & { onClose: () => void }) {
               {rows.map(({ project, depth, hasChildren }) => (
                 <li key={project.id}>
                   <div
-                    draggable
+                    // A sport's root is the library's shape: it does not move (D114).
+                    draggable={project.sport === null}
                     onDragStart={(e) => startFolderDrag(e, project.id)}
                     onDragEnd={() => {
                       dragged.current = null;
@@ -587,7 +601,16 @@ function Library({ cloud, onClose }: Props & { onClose: () => void }) {
                       // A folder cannot be filed inside itself, so it is not a target for its
                       // own drag. Everything deeper is refused by the Worker, which is the only
                       // place that can see the whole tree.
-                      if (dragged.current?.kind === "project" && dragged.current.id === project.id) {
+                      const carrying = dragged.current;
+                      if (carrying?.kind === "project" && carrying.id === project.id) return;
+                      // Nothing crosses sports (D114): a folder stays under its own, and a board
+                      // only lands where its sport is filed.
+                      const here = sportIn(project.id);
+                      if (carrying?.kind === "project" && sportIn(carrying.id) !== here) return;
+                      if (
+                        carrying?.kind === "boards" &&
+                        (boards ?? []).some((b) => carrying.ids.includes(b.id) && b.sport !== here)
+                      ) {
                         return;
                       }
                       e.preventDefault();
@@ -644,8 +667,19 @@ function Library({ cloud, onClose }: Props & { onClose: () => void }) {
                           : "text-ink-300 hover:text-white",
                       )}
                     >
-                      <FolderOpen size={12} className="shrink-0" />
-                      <span className="truncate">{project.name}</span>
+                      {project.sport ? (
+                        <SportIcon sport={project.sport} className="size-3.5 shrink-0" />
+                      ) : (
+                        <FolderOpen size={12} className="shrink-0" />
+                      )}
+                      <span
+                        className={cn(
+                          "truncate",
+                          project.sport && "font-semibold uppercase tracking-wide",
+                        )}
+                      >
+                        {labelOf(project)}
+                      </span>
                       <span
                         className={cn(
                           "ml-auto shrink-0",
@@ -655,15 +689,17 @@ function Library({ cloud, onClose }: Props & { onClose: () => void }) {
                         {countIn(project.id)}
                       </span>
                     </button>
-                    <IconButton
-                      icon={Trash2}
-                      danger
-                      label={t("boards.delete")}
-                      className="opacity-0 transition group-hover:opacity-100"
-                      onClick={() =>
-                        setPending({ kind: "project", id: project.id, name: project.name })
-                      }
-                    />
+                    {project.sport === null && (
+                      <IconButton
+                        icon={Trash2}
+                        danger
+                        label={t("boards.delete")}
+                        className="opacity-0 transition group-hover:opacity-100"
+                        onClick={() =>
+                          setPending({ kind: "project", id: project.id, name: project.name })
+                        }
+                      />
+                    )}
                   </div>
                 </li>
               ))}
@@ -674,11 +710,9 @@ function Library({ cloud, onClose }: Props & { onClose: () => void }) {
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && void addProject()}
-                placeholder={
-                  activeProject
-                    ? t("boards.newSubproject.placeholder", { name: activeProject.name })
-                    : t("boards.newProject.placeholder")
-                }
+                placeholder={t("boards.newSubproject.placeholder", {
+                  name: activeProject ? labelOf(activeProject) : t(`sport.${sport}`),
+                })}
                 aria-label={t("boards.newProject")}
                 className="min-w-0 flex-1 rounded border border-ink-600 bg-ink-900 px-2 py-1 text-[11px] text-ink-200 outline-none transition placeholder:text-ink-500 focus:border-accent"
               />
@@ -766,13 +800,19 @@ function Library({ cloud, onClose }: Props & { onClose: () => void }) {
                 </span>
                 <div className="ml-auto flex items-center gap-1.5">
                   <div className="relative">
-                    <Small onClick={() => setPicking(!picking)}>
+                    {/* A selection spanning sports has nowhere it can all go (D114). */}
+                    <Small
+                      onClick={() => setPicking(!picking)}
+                      disabled={selectionSport === null}
+                      title={selectionSport === null ? t("library.moveTo.mixed") : undefined}
+                    >
                       <FolderInput size={11} />
                       {t("library.moveTo")}
                     </Small>
-                    {picking && (
+                    {picking && selectionSport !== null && (
                       <PickProject
                         projects={projects ?? []}
+                        sport={selectionSport}
                         onPick={(id) => void move([...selection], id)}
                         onClose={() => setPicking(false)}
                       />
@@ -869,11 +909,13 @@ function Small({
   onClick,
   title,
   danger = false,
+  disabled = false,
   children,
 }: {
   onClick: () => void;
   title?: string;
   danger?: boolean;
+  disabled?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -881,11 +923,12 @@ function Small({
       type="button"
       onClick={onClick}
       title={title}
+      disabled={disabled}
       className={cn(
-        "flex shrink-0 items-center gap-1 rounded border px-1.5 py-1 text-[10px] transition",
+        "flex shrink-0 items-center gap-1 rounded border px-1.5 py-1 text-[10px] transition disabled:opacity-40",
         danger
-          ? "border-ink-600 text-ink-300 hover:border-red-500/60 hover:text-red-300"
-          : "border-ink-600 text-ink-300 hover:border-accent hover:text-white",
+          ? "border-ink-600 text-ink-300 enabled:hover:border-red-500/60 enabled:hover:text-red-300"
+          : "border-ink-600 text-ink-300 enabled:hover:border-accent enabled:hover:text-white",
       )}
     >
       {children}

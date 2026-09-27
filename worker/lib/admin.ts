@@ -46,7 +46,7 @@ interface AdminCtx {
 /** A user's footprint — shared by the list and the drill-down so the two cannot disagree. */
 const USER_COLUMNS = `
   u.id, u.email, u.display_name, u.created_at, u.last_login_at, u.last_seen_at,
-  (SELECT COUNT(*) FROM projects p WHERE p.user_id = u.id) AS projects,
+  (SELECT COUNT(*) FROM projects p WHERE p.user_id = u.id AND p.sport IS NULL) AS projects,
   (SELECT COUNT(*) FROM boards b WHERE b.user_id = u.id) AS boards,
   (SELECT COUNT(*) FROM boards b WHERE b.user_id = u.id AND b.share_slug IS NOT NULL) AS published,
   (SELECT COUNT(*) FROM presets r WHERE r.user_id = u.id) AS presets,
@@ -65,7 +65,7 @@ export async function adminStats({ env, now }: AdminCtx): Promise<Response> {
          (SELECT COUNT(*) FROM users WHERE last_seen_at >= ?1) AS active_1d,
          (SELECT COUNT(*) FROM users WHERE last_seen_at >= ?2) AS active_7d,
          (SELECT COUNT(*) FROM users WHERE last_seen_at >= ?3) AS active_30d,
-         (SELECT COUNT(*) FROM projects) AS projects,
+         (SELECT COUNT(*) FROM projects WHERE sport IS NULL) AS projects,
          (SELECT COUNT(*) FROM boards) AS boards,
          (SELECT COUNT(*) FROM boards WHERE created_at >= ?2) AS boards_created_7d,
          (SELECT COUNT(*) FROM boards WHERE updated_at >= ?2) AS boards_updated_7d,

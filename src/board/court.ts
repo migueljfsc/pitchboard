@@ -5,7 +5,7 @@
  * rulebook's metres under one scale, so each number below reads as `COURT` does.
  */
 
-import { GRASS_SHADE_RANGE, PITCH_PADDING, lighten, type Ctx, type PitchTheme } from "./pitch";
+import { PITCH_PADDING, shaded, type Ctx, type PitchTheme } from "./pitch";
 import type { Grass } from "./types";
 import { COURT, SPORTS } from "./sports";
 
@@ -20,14 +20,7 @@ export const FLOOR_THEME: PitchTheme = {
 };
 
 /** The floor a board is drawn on, shaded as its document asks — the grass slider, on wood (D89). */
-export function floorTheme(doc: { grass?: Grass }): PitchTheme {
-  const shade = Math.min(1, Math.max(-1, doc.grass?.shade ?? 0)) * GRASS_SHADE_RANGE;
-  return {
-    ...FLOOR_THEME,
-    grass: lighten(FLOOR_THEME.grass, shade),
-    grassAlt: lighten(FLOOR_THEME.grassAlt, shade),
-  };
-}
+export const floorTheme = (doc: { grass?: Grass }): PitchTheme => shaded(FLOOR_THEME, doc);
 
 const PAINT = "rgba(120,52,20,0.32)";
 /** The ring's colour, shared with the standing goal in the 3D view. */

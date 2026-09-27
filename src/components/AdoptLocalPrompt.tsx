@@ -22,13 +22,14 @@
  * place (see `usePresets`). It is cleared only if every squad landed.
  */
 
+import type { Sport } from "@/board/types";
 import { useEffect, useState } from "react";
 
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useI18n } from "@/i18n/context";
 import type { CloudBoard } from "@/lib/useCloudBoard";
 import type { PresetsState } from "@/lib/usePresets";
-import { createProject, listProjects } from "@/share/api";
+import { listProjects } from "@/share/api";
 import { loadBoard } from "@/share/local";
 
 /** Pure: a lazy `useState` initializer must not also mutate the address (StrictMode). */
@@ -48,11 +49,14 @@ function forgetWelcome(): void {
 export function AdoptLocalPrompt({
   cloud,
   boardName,
+  sport,
   signedIn,
   presets,
 }: {
   cloud: CloudBoard;
   boardName: string;
+  /** The board's sport, whose folder it is adopted into (D114). */
+  sport: Sport;
   signedIn: boolean;
   presets: PresetsState;
 }) {
@@ -73,12 +77,11 @@ export function AdoptLocalPrompt({
   const adopt = async () => {
     setAsked(false);
     if (offerBoard) {
-      // Newest project, or a first one named in whatever language the app is being read in —
-      // the same rule as a new board's seed labels. It is a document from then on and does not
-      // change when the reader does (D38).
+      // Straight into its sport's folder, which every account has (D114): the one place it is
+      // sure to be allowed, and where the coach will look for it.
       const projects = await listProjects();
-      const target = projects[0] ?? (await createProject(t("adopt.project")));
-      await cloud.saveInto(target.id, boardName);
+      const target = projects.find((p) => p.sport === sport);
+      if (target) await cloud.saveInto(target.id, boardName);
     }
     // Last, and separately: a board that could not be saved is no reason to leave the squads
     // behind, and this reports its own failures through the squad panel.

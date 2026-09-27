@@ -1,6 +1,6 @@
 import { Box, RotateCw } from "lucide-react";
 import type { BoardDoc, Grass, PitchHalf, PitchView } from "@/board/types";
-import { sportOf } from "@/board/sports";
+import { sportOf, type SportSpec } from "@/board/sports";
 import { framingOf } from "@/board/projection";
 import { DEFAULT_TOKEN_SCALE, MAX_TOKEN_SCALE, MIN_TOKEN_SCALE, tokenScaleOf } from "@/board/pitch";
 import { cn } from "@/lib/utils";
@@ -136,7 +136,7 @@ export function ViewControls({
       )}
 
       {doc && onGrassChange && (
-        <GrassControls grass={doc.grass} floor={sportOf(doc).surface === "floor"} onChange={onGrassChange} />
+        <GrassControls grass={doc.grass} surface={sportOf(doc).surface} onChange={onGrassChange} />
       )}
 
       {ghosts && onGhostsChange && (
@@ -231,12 +231,12 @@ function Segmented<T extends string>({
  */
 function GrassControls({
   grass,
-  floor,
+  surface,
   onChange,
 }: {
   grass: Grass | undefined;
-  /** A court on a wooden floor: the shade still applies, the turf's texture does not. */
-  floor: boolean;
+  /** What the court is laid on. Every surface takes the shade; only grass has a texture. */
+  surface: SportSpec["surface"];
   onChange: (grass: Grass | undefined) => void;
 }) {
   const { t } = useI18n();
@@ -251,20 +251,20 @@ function GrassControls({
   };
   return (
     <>
-      <Row label={t(floor ? "view.floor" : "view.grass")}>
+      <Row label={t(`view.${surface}`)}>
         <input
           type="range"
           min={-1}
           max={1}
           step={0.1}
           value={shade}
-          aria-label={t(floor ? "view.floor.shadeAria" : "view.grass.shadeAria")}
+          aria-label={t(`view.${surface}.shadeAria`)}
           title={t(shade < 0 ? "view.grass.darker" : shade > 0 ? "view.grass.lighter" : "view.grass.default")}
           onChange={(e) => set({ texture, shade: Math.round(Number(e.target.value) * 10) / 10 })}
           className="h-1 min-w-0 flex-1 cursor-pointer appearance-none rounded-full bg-ink-600 accent-accent"
         />
       </Row>
-      {!floor && (
+      {surface === "grass" && (
         <Row label="">
           <Segmented
             options={[

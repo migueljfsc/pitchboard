@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AnnotationDash, BoardDoc, PitchView, RunEnd, RunStart, Sport, Tool } from "@/board/types";
-import { SPORT_IDS, sportOf } from "@/board/sports";
+import { sportOf } from "@/board/sports";
+import { SportMenu } from "@/components/SportMenu";
 import { loadSport, saveSport } from "@/share/sport";
 import { BALL_ID, DEFAULT_PITCH_VIEW, DEFAULT_TOOL, isDrawTool } from "@/board/types";
 import { BoardCanvas } from "@/components/BoardCanvas";
@@ -996,7 +997,7 @@ export function Editor({ initialDoc }: Props = {}) {
     setMenu({ kind: "templates", at, above });
     if (!signedIn) return;
     setUserTemplates({ status: "loading" });
-    listTemplates()
+    listTemplates(sportOf(doc).id)
       .then((items) => setUserTemplates({ status: "ready", items }))
       .catch(() => setUserTemplates({ status: "error" }));
   };
@@ -1638,20 +1639,14 @@ export function Editor({ initialDoc }: Props = {}) {
           className="w-56 shrink rounded border border-transparent bg-transparent px-2 py-1 text-xs text-ink-200 outline-none transition placeholder:text-ink-400 hover:border-ink-600 focus:border-accent focus:bg-ink-900"
         />
 
-        <select
+        <SportMenu
           value={sportOf(doc).id}
-          onChange={(e) => switchSport(e.target.value as Sport)}
+          onChange={(sport) => switchSport(sport)}
+          nameOf={(sport) => t(`sport.${sport}`)}
+          label={t("bar.sport.label")}
+          hint={t("bar.sport.hint")}
           disabled={touring}
-          aria-label={t("bar.sport.label")}
-          title={t("bar.sport.hint")}
-          className="shrink-0 rounded-md border border-ink-600 bg-ink-900 px-2 py-1 text-xs text-ink-200 outline-none transition hover:border-ink-400 focus:border-accent"
-        >
-          {SPORT_IDS.map((id) => (
-            <option key={id} value={id}>
-              {t(`sport.${id}`)}
-            </option>
-          ))}
-        </select>
+        />
 
         <span
           aria-live="polite"
@@ -1833,14 +1828,17 @@ export function Editor({ initialDoc }: Props = {}) {
             {t("share.dialog")}
           </button>
 
-          {accountState.account && <SaveBoardButton cloud={cloud} boardName={doc.name} />}
+          {accountState.account && (
+            <SaveBoardButton cloud={cloud} boardName={doc.name} sport={sportOf(doc).id} />
+          )}
 
           <span className="mx-1 h-5 w-px bg-ink-600" />
 
-          {accountState.account && <BoardsLibrary cloud={cloud} />}
+          {accountState.account && <BoardsLibrary cloud={cloud} sport={sportOf(doc).id} />}
           <AdoptLocalPrompt
             cloud={cloud}
             boardName={doc.name}
+            sport={sportOf(doc).id}
             signedIn={accountState.account !== null}
             presets={library}
           />

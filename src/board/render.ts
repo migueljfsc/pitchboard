@@ -24,20 +24,20 @@ import type {
   TurfCache,
   Vec2,
 } from "./types";
-import { sportOf, toMetres, type HoopGoal } from "./sports";
-import { RING_COLOR, drawCourt, floorTheme } from "./court";
+import { sportOf, toMetres, type CentreNet, type HoopGoal } from "./sports";
+import { ANTENNA_COLORS } from "./volleyball";
+import { RING_COLOR } from "./court";
+import { surfaceOf } from "./surfaces";
 import { BALL_ID } from "./types";
 import { TEXT_FONT_FAMILY } from "./glyphs";
 import { lightsAnything } from "./highlights";
 import { keeperOf } from "./players";
 import {
   BALL_RADIUS,
-  themeFor,
   PITCH_PADDING,
   TEAM_NAME_OFFSET,
   TOKEN_RADIUS,
   ballRadius,
-  drawPitch,
   tokenRadius,
   tokenScaleOf,
   type Ctx,
@@ -120,14 +120,11 @@ function kitOf(team: Team, id: string): { color: string; textColor: string; patt
 const PATH_STEPS = 24;
 
 /** The surface a board is drawn on: its sport's, shaded as its document asks. */
-export function boardTheme(doc: BoardDoc): PitchTheme {
-  return sportOf(doc).surface === "floor" ? floorTheme(doc) : themeFor(doc);
-}
+export const boardTheme = (doc: BoardDoc): PitchTheme => surfaceOf(doc).theme(doc);
 
 /** The court and its markings, for the board's sport. `goals` as `drawPitch` takes it. */
 function drawSurface(ctx: Ctx, doc: BoardDoc, theme: PitchTheme, goals: boolean, turf?: TurfCache): void {
-  if (sportOf(doc).surface === "floor") drawCourt(ctx, doc.pitch, theme, goals);
-  else drawPitch(ctx, doc.pitch, theme, goals, turf);
+  surfaceOf(doc).draw(ctx, doc.pitch, theme, goals, turf);
 }
 
 export function drawBoard(
@@ -754,6 +751,47 @@ function drawHoop(ctx: Ctx, doc: BoardDoc, cam: Camera, dir: 1 | -1, goal: HoopG
 }
 
 /**
+ * A net strung across the middle of the court, standing: its posts outside the sidelines,
+ * the mesh between them, the white band along the top, and the antennae over each sideline.
+ */
+function drawCentreNet(ctx: Ctx, doc: BoardDoc, cam: Camera, net: CentreNet): void {
+  const at = (p: Vec3): Projected => projectPitch(p, cam, p.up);
+  const v3 = (x: number, y: number, up: number): Vec3 => ({ x, y, up });
+  const court = sportOf(doc).court ?? { x: 0, y: 0, length: doc.pitch.length, width: doc.pitch.width };
+  const x = doc.pitch.length / 2;
+  const near = court.y - net.postsOut;
+  const far = court.y + court.width + net.postsOut;
+  const low = net.top - net.mesh;
+
+  const bar = (a: Vec3, b: Vec3, color: string, width: number) => {
+    const pa = at(a);
+    const pb = at(b);
+    ctx.beginPath();
+    ctx.moveTo(pa.x, pa.y);
+    ctx.lineTo(pb.x, pb.y);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(1, (width * (pa.scale + pb.scale)) / 2);
+    ctx.lineCap = "round";
+    ctx.stroke();
+  };
+
+  for (const y of [near, far]) bar(v3(x, y, 0), v3(x, y, net.top + net.mesh * 0.1), "#d1d5db", FRAME_WIDTH * 1.4);
+  drawNetPanel(ctx, at, [v3(x, near, low), v3(x, far, low), v3(x, far, net.top), v3(x, near, net.top)]);
+  bar(v3(x, near, net.top), v3(x, far, net.top), "#ffffff", FRAME_WIDTH);
+  bar(v3(x, near, low), v3(x, far, low), "rgba(255,255,255,0.5)", FRAME_WIDTH * 0.4);
+
+  // The antennae, in red and white bands, standing over each sideline.
+  for (const y of [court.y, court.y + court.width]) {
+    const bands = 8;
+    for (let i = 0; i < bands; i++) {
+      const from = low + ((net.mesh + net.antenna) * i) / bands;
+      const to = low + ((net.mesh + net.antenna) * (i + 1)) / bands;
+      bar(v3(x, y, from), v3(x, y, to), ANTENNA_COLORS[i % 2], FRAME_WIDTH * 0.35);
+    }
+  }
+}
+
+/**
  * One flat panel of netting, as a grid between four corners.
  *
  * The corners run round the panel, so `u` follows the first edge and `v` the
@@ -946,6 +984,14 @@ function drawBillboards(
 
   // A ring stands among the players, sorted by its backboard: a player under the
   // basket, between it and the baseline, is in front of the near one and behind the far.
+  // A net across the middle is sorted the same way, by the centre line it hangs over:
+  // the near side's players stand in front of it, the far side's behind.
+  const across = sportOf(doc).centreNet;
+  if (across) {
+    const centre = { x: doc.pitch.length / 2, y: doc.pitch.width / 2 };
+    standing.push({ at: projectPitch(centre, cam), draw: () => drawCentreNet(ctx, doc, cam, across) });
+  }
+
   const goal = sportOf(doc).goal;
   if (goal.kind === "hoop") {
     for (const dir of [1, -1] as const) {
@@ -2582,8 +2628,8 @@ function drawBall(ctx: Ctx, p: Vec2, radius: number, state: TokenState): void {
     p.y,
     radius,
   );
-  const leather = state.sport === "basketball";
-  const [light, mid, rim] = leather ? ["#f7a15a", "#e2702c", "#9c4516"] : ["#ffffff", "#f1f2f4", "#c3c8d0"];
+  const look = BALL_LOOKS[state.sport ?? "football"];
+  const [light, mid, rim] = look.shade;
   lit.addColorStop(0, light);
   lit.addColorStop(0.55, mid);
   lit.addColorStop(1, rim);
@@ -2592,8 +2638,7 @@ function drawBall(ctx: Ctx, p: Vec2, radius: number, state: TokenState): void {
   ctx.fillStyle = lit;
   ctx.fill();
 
-  if (leather) drawBallSeams(ctx, p, radius, k);
-  else drawBallPanels(ctx, p, radius, k);
+  look.detail?.(ctx, p, radius, k);
 
   ctx.beginPath();
   ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
@@ -2606,6 +2651,85 @@ function drawBall(ctx: Ctx, p: Vec2, radius: number, state: TokenState): void {
   ctx.ellipse(p.x - radius * 0.36, p.y - radius * 0.42, radius * 0.2, radius * 0.12, -0.6, 0, Math.PI * 2);
   ctx.fillStyle = "rgba(255,255,255,0.75)";
   ctx.fill();
+}
+
+/**
+ * Each game's ball: its light, body and rim colours, and what is drawn over them. A
+ * hockey ball is hard, smooth and white, and has nothing to draw.
+ */
+const BALL_LOOKS: Record<
+  Sport,
+  { shade: [string, string, string]; detail?: (ctx: Ctx, p: Vec2, radius: number, k: number) => void }
+> = {
+  football: { shade: ["#ffffff", "#f1f2f4", "#c3c8d0"], detail: (ctx, p, r, k) => drawBallPanels(ctx, p, r, k) },
+  basketball: { shade: ["#f7a15a", "#e2702c", "#9c4516"], detail: (ctx, p, r, k) => drawBallSeams(ctx, p, r, k) },
+  handball: { shade: ["#ffffff", "#eef1f5", "#b9c2cd"], detail: (ctx, p, r, k) => drawHandballPanels(ctx, p, r, k) },
+  hockey: { shade: ["#ffffff", "#f3f4f6", "#c7ccd4"] },
+  volleyball: { shade: ["#ffffff", "#f4f1e6", "#c9c3ae"], detail: (ctx, p, r, k) => drawVolleyballPanels(ctx, p, r, k) },
+};
+
+/**
+ * A volleyball's curved panels -- yellow and blue bands on the white -- turning as it
+ * rolls, by where it is.
+ */
+function drawVolleyballPanels(ctx: Ctx, p: Vec2, radius: number, k: number): void {
+  const turn = (p.x * 0.8 + p.y * 0.55) / radius;
+  const r = radius;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.translate(p.x, p.y);
+  ctx.rotate(turn);
+  const band = (from: number, to: number, color: string) => {
+    ctx.beginPath();
+    ctx.moveTo(-r, from);
+    ctx.quadraticCurveTo(0, from - r * 0.5, r, from);
+    ctx.lineTo(r, to);
+    ctx.quadraticCurveTo(0, to - r * 0.5, -r, to);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+  };
+  band(-r * 0.45, -r * 0.05, "#facc15");
+  band(r * 0.25, r * 0.65, "#1d4ed8");
+  ctx.strokeStyle = "rgba(0,0,0,0.3)";
+  ctx.lineWidth = 0.035 * k;
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * A handball's two curved panels in colour on the white, turning as it rolls, by where it
+ * is, as the football's panels do.
+ */
+function drawHandballPanels(ctx: Ctx, p: Vec2, radius: number, k: number): void {
+  const turn = (p.x * 0.8 + p.y * 0.55) / radius;
+  const r = radius;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.translate(p.x, p.y);
+  ctx.rotate(turn);
+  for (const [side, color] of [
+    [1, "#2563eb"],
+    [-1, "#dc2626"],
+  ] as const) {
+    ctx.beginPath();
+    ctx.moveTo(-r, side * r * 0.15);
+    ctx.quadraticCurveTo(0, side * r * 1.1, r, side * r * 0.15);
+    ctx.quadraticCurveTo(0, side * r * 0.55, -r, side * r * 0.15);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+  ctx.strokeStyle = "rgba(0,0,0,0.35)";
+  ctx.lineWidth = 0.04 * k;
+  ctx.beginPath();
+  ctx.moveTo(-r, 0);
+  ctx.lineTo(r, 0);
+  ctx.stroke();
+  ctx.restore();
 }
 
 /**

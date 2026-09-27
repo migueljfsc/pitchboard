@@ -11,6 +11,8 @@
  * is treated as a root; a cycle is broken by visiting each folder once.
  */
 
+import type { Sport } from "@/board/types";
+import { SPORT_IDS } from "@/board/types";
 import type { Project } from "@/share/api";
 
 export type ProjectNode = {
@@ -28,7 +30,8 @@ export type ProjectRow = {
 
 /**
  * The forest, in the order the list arrived — which is `updated_at` descending, so a folder
- * touched most recently sits at the top of whichever level it belongs to.
+ * touched most recently sits at the top of whichever level it belongs to. The sports' roots
+ * are the exception: they stand in the picker's order, whatever was touched last (D114).
  */
 export function buildTree(projects: Project[]): ProjectNode[] {
   const known = new Set(projects.map((p) => p.id));
@@ -59,7 +62,29 @@ export function buildTree(projects: Project[]): ProjectNode[] {
     return { project, depth, children };
   };
 
-  return roots.map((root) => grow(root, 0));
+  const rank = (p: Project) => (p.sport === null ? SPORT_IDS.length : SPORT_IDS.indexOf(p.sport));
+  return [...roots].sort((a, b) => rank(a) - rank(b)).map((root) => grow(root, 0));
+}
+
+/** The sport a folder is filed under: its root's. Null for a folder that reaches none. */
+export function sportOfProject(projects: Project[], id: string): Sport | null {
+  const byId = new Map(projects.map((p) => [p.id, p]));
+  const seen = new Set<string>();
+  let current = byId.get(id);
+  while (current && !seen.has(current.id)) {
+    if (current.sport !== null) return current.sport;
+    seen.add(current.id);
+    current = current.parent_id === null ? undefined : byId.get(current.parent_id);
+  }
+  return null;
+}
+
+/** A sport's root and every folder under it: where a board of that sport may go. */
+export function projectsOf(projects: Project[], sport: Sport): Project[] {
+  const root = projects.find((p) => p.sport === sport);
+  if (!root) return [];
+  const within = subtreeIds(projects, root.id);
+  return projects.filter((p) => within.has(p.id));
 }
 
 /**

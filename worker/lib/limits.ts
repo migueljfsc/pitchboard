@@ -75,5 +75,8 @@ export const MAX_PRESET_LABEL_CHARS = 60;
  *
  * It is enforced in BOTH directions on a move — the new parent's depth plus the height of
  * the subtree being moved — or a deep folder dropped onto a deep parent slips past it.
+ *
+ * Counted beneath the sport's root (D114), which is the library's shape rather than one of the
+ * coach's levels; `MAX_PROJECTS_PER_USER` does not count the roots either.
  */
 export const MAX_PROJECT_DEPTH = 5;

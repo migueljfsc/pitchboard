@@ -13,11 +13,12 @@
 import type { BoardDoc, Scene } from "./types";
 import { BALL_ID } from "./types";
 import { displayName } from "./players";
+import { sportOf } from "./sports";
 import { msg, type Message } from "@/i18n/core";
 
 /** "Home 9", or "Home Silva" where the player has a name. */
 function who(doc: BoardDoc, id: string): string {
-  if (id === BALL_ID) return "⚽";
+  if (id === BALL_ID) return sportOf(doc).ballGlyph;
   const team = doc.teams.find((t) => t.players.some((p) => p.id === id));
   return team ? `${team.name} ${displayName(doc, id)}` : id;
 }

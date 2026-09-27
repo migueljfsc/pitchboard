@@ -26,6 +26,7 @@ import {
   MAX_PROJECT_DEPTH,
 } from "./limits";
 import type { SessionUser } from "./session";
+import { DOC_SPORT_SQL, SPORTS, sportOfDoc } from "./sports";
 
 export interface Ctx {
   env: Env;
@@ -164,9 +165,58 @@ async function withinSubtree(
   return (row?.n ?? 0) > 0;
 }
 
-export async function listProjects({ env, user }: Ctx): Promise<Response> {
+/**
+ * The sport a project is filed under: its own if it is a root, its root's otherwise. `undefined`
+ * when the project is not there or not yours. Climbs, as the depth guard does, and is bounded
+ * the same way.
+ */
+async function sportOfProject(env: Env, userId: string, id: string): Promise<string | null | undefined> {
   const { results } = await env.DB.prepare(
-    `SELECT p.id, p.name, p.parent_id, p.created_at, p.updated_at,
+    `WITH RECURSIVE up(id, parent_id, sport, n) AS (
+       SELECT id, parent_id, sport, 0 FROM projects WHERE id = ?1 AND user_id = ?2
+       UNION ALL
+       SELECT p.id, p.parent_id, p.sport, up.n + 1
+         FROM projects p JOIN up ON p.id = up.parent_id
+        WHERE p.user_id = ?2 AND up.n < ?3
+     )
+     SELECT sport FROM up ORDER BY n`,
+  )
+    .bind(id, userId, WALK_LIMIT)
+    .all<{ sport: string | null }>();
+  if (results.length === 0) return undefined;
+  return results.find((r) => r.sport !== null)?.sport ?? null;
+}
+
+/**
+ * Make every sport's root the account does not have yet (D114).
+ *
+ * Asked on every listing rather than at sign-up, so a sport added to the app later reaches
+ * every account without a migration. The partial unique index on `(user_id, sport)` makes the
+ * insert safe against a second tab doing the same at the same moment.
+ */
+async function ensureRoots(env: Env, userId: string, now: number): Promise<void> {
+  const { results } = await env.DB.prepare(
+    "SELECT sport FROM projects WHERE user_id = ? AND sport IS NOT NULL",
+  )
+    .bind(userId)
+    .all<{ sport: string }>();
+  const have = new Set(results.map((r) => r.sport));
+  const missing = SPORTS.filter((sport) => !have.has(sport));
+  if (missing.length === 0) return;
+  await env.DB.batch(
+    missing.map((sport) =>
+      env.DB.prepare(
+        `INSERT OR IGNORE INTO projects (id, user_id, name, parent_id, sport, created_at, updated_at)
+         VALUES (?, ?, ?, NULL, ?, ?, ?)`,
+      ).bind(newId(), userId, sport, sport, now, now),
+    ),
+  );
+}
+
+export async function listProjects({ env, user, now }: Ctx): Promise<Response> {
+  await ensureRoots(env, user.id, now);
+  const { results } = await env.DB.prepare(
+    `SELECT p.id, p.name, p.parent_id, p.sport, p.created_at, p.updated_at,
             (SELECT count(*) FROM boards b WHERE b.project_id = p.id) AS boards
        FROM projects p
       WHERE p.user_id = ?
@@ -208,13 +258,18 @@ export async function createProject(ctx: Ctx): Promise<Response> {
 
   const parent = await parentFrom(ctx, payload?.parent_id);
   if ("error" in parent) return fail(parent.error, parent.error === "not_found" ? 404 : 400);
+  // The root belongs to the sports (D114): a folder goes under one of them or under a folder.
+  if (parent.id === null) return fail("parent_required", 400);
 
-  if (parent.id !== null) {
-    const depth = await depthOf(ctx.env, ctx.user.id, parent.id);
-    if (depth + 1 > MAX_PROJECT_DEPTH) return fail("project_too_deep", 409);
-  }
+  // The sport's root is not one of the coach's levels, so it is not counted against them.
+  const depth = await depthOf(ctx.env, ctx.user.id, parent.id);
+  if (depth > MAX_PROJECT_DEPTH) return fail("project_too_deep", 409);
 
-  const existing = await count(ctx.env, "SELECT count(*) n FROM projects WHERE user_id = ?", ctx.user.id);
+  const existing = await count(
+    ctx.env,
+    "SELECT count(*) n FROM projects WHERE user_id = ? AND sport IS NULL",
+    ctx.user.id,
+  );
   if (existing >= MAX_PROJECTS_PER_USER) return fail("project_limit_reached", 409);
 
   const id = newId();
@@ -230,6 +285,7 @@ export async function createProject(ctx: Ctx): Promise<Response> {
         id,
         name,
         parent_id: parent.id,
+        sport: null,
         created_at: ctx.now,
         updated_at: ctx.now,
         boards: 0,
@@ -256,24 +312,37 @@ export async function updateProject(ctx: Ctx, id: string): Promise<Response> {
   if (renaming && !name) return fail("invalid_name", 400);
   if (!renaming && !refiling) return fail("invalid_name", 400);
 
+  // A sport's root is the library's shape, not the coach's folder: it keeps its name and place.
+  const root = await count(
+    ctx.env,
+    "SELECT count(*) n FROM projects WHERE id = ? AND user_id = ? AND sport IS NOT NULL",
+    id,
+    ctx.user.id,
+  );
+  if (root > 0) return fail("project_locked", 409);
+
   let parentId: string | null = null;
   if (refiling) {
     const parent = await parentFrom(ctx, payload.parent_id);
     if ("error" in parent) return fail(parent.error, parent.error === "not_found" ? 404 : 400);
     parentId = parent.id;
 
+    if (parentId === null) return fail("parent_required", 400);
     if (parentId === id) return fail("project_cycle", 409);
-    if (parentId !== null) {
-      // A folder cannot be filed under its own descendant: the subtree would be unreachable
-      // from every root, so it would vanish from the rail rather than move.
-      if (await withinSubtree(ctx.env, ctx.user.id, id, parentId)) {
-        return fail("project_cycle", 409);
-      }
-      // Measured with the subtree it is carrying, not just its own new depth.
-      const depth = await depthOf(ctx.env, ctx.user.id, parentId);
-      const height = await heightOf(ctx.env, ctx.user.id, id);
-      if (depth + 1 + height > MAX_PROJECT_DEPTH) return fail("project_too_deep", 409);
+    // A folder carries its boards with it, and they stay under their own sport.
+    const from = await sportOfProject(ctx.env, ctx.user.id, id);
+    if (from === undefined) return fail("not_found", 404);
+    if ((await sportOfProject(ctx.env, ctx.user.id, parentId)) !== from) return fail("wrong_sport", 409);
+    // A folder cannot be filed under its own descendant: the subtree would be unreachable
+    // from every root, so it would vanish from the rail rather than move.
+    if (await withinSubtree(ctx.env, ctx.user.id, id, parentId)) {
+      return fail("project_cycle", 409);
     }
+    // Measured with the subtree it is carrying, not just its own new depth. The sport's root
+    // is not one of the coach's levels, so the parent's depth is counted from beneath it.
+    const depth = await depthOf(ctx.env, ctx.user.id, parentId);
+    const height = await heightOf(ctx.env, ctx.user.id, id);
+    if (depth + height > MAX_PROJECT_DEPTH) return fail("project_too_deep", 409);
   }
 
   // Every placeholder is NUMBERED. Mixing a bare `?` into a statement that also uses `?N`
@@ -301,10 +370,16 @@ export async function updateProject(ctx: Ctx, id: string): Promise<Response> {
  * on the other side has to count the subtree rather than just the folder.
  */
 export async function deleteProject(ctx: Ctx, id: string): Promise<Response> {
-  const result = await ctx.env.DB.prepare("DELETE FROM projects WHERE id = ? AND user_id = ?")
+  // A sport's root is never deleted (D114); the guard is in the statement, not a check before it.
+  const result = await ctx.env.DB.prepare(
+    "DELETE FROM projects WHERE id = ? AND user_id = ? AND sport IS NULL",
+  )
     .bind(id, ctx.user.id)
     .run();
-  if (result.meta.changes === 0) return fail("not_found", 404);
+  if (result.meta.changes === 0) {
+    const root = await count(ctx.env, "SELECT count(*) n FROM projects WHERE id = ? AND user_id = ?", id, ctx.user.id);
+    return root > 0 ? fail("project_locked", 409) : fail("not_found", 404);
+  }
   return json({ ok: true });
 }
 
@@ -340,7 +415,8 @@ export async function listBoards({ env, user }: Ctx, projectId: string): Promise
  */
 export async function listAllBoards({ env, user }: Ctx): Promise<Response> {
   const { results } = await env.DB.prepare(
-    `SELECT id, project_id, name, version, share_slug, created_at, updated_at
+    `SELECT id, project_id, name, version, share_slug, created_at, updated_at,
+            ${DOC_SPORT_SQL} AS sport
        FROM boards WHERE user_id = ?
       ORDER BY updated_at DESC`,
   )
@@ -356,13 +432,13 @@ export async function createBoard(ctx: Ctx, projectId: string): Promise<Response
   if (!name) return fail("invalid_name", 400);
   if (doc === null) return fail("invalid_document", 400);
 
-  const owns = await count(
-    ctx.env,
-    "SELECT count(*) n FROM projects WHERE id = ? AND user_id = ?",
-    projectId,
-    ctx.user.id,
-  );
-  if (owns === 0) return fail("not_found", 404);
+  const sport = sportOfDoc(doc);
+  if (sport === null) return fail("invalid_document", 400);
+
+  // A board is filed under its own sport and nowhere else (D114).
+  const filed = await sportOfProject(ctx.env, ctx.user.id, projectId);
+  if (filed === undefined) return fail("not_found", 404);
+  if (filed !== sport) return fail("wrong_sport", 409);
 
   const existing = await count(
     ctx.env,
@@ -414,21 +490,27 @@ export async function updateBoard(ctx: Ctx, id: string): Promise<Response> {
   const name = payload?.name === undefined ? null : cleanName(payload.name);
   if (payload?.name !== undefined && name === null) return fail("invalid_name", 400);
 
+  // A saved board keeps its sport: switching sport starts a new board (D113), so a save that
+  // changes it is a document that no longer belongs where it is filed.
+  const sport = sportOfDoc(doc);
+  if (sport === null) return fail("invalid_document", 400);
+
   const result = await ctx.env.DB.prepare(
     `UPDATE boards
-        SET doc = ?, name = COALESCE(?, name), version = version + 1, updated_at = ?
-      WHERE id = ? AND user_id = ? AND version = ?`,
+        SET doc = ?1, name = COALESCE(?2, name), version = version + 1, updated_at = ?3
+      WHERE id = ?4 AND user_id = ?5 AND version = ?6 AND ${DOC_SPORT_SQL} = ?7`,
   )
-    .bind(doc, name, ctx.now, id, ctx.user.id, version)
+    .bind(doc, name, ctx.now, id, ctx.user.id, version, sport)
     .run();
 
   if (result.meta.changes === 0) {
     const current = await ctx.env.DB.prepare(
-      "SELECT version FROM boards WHERE id = ? AND user_id = ?",
+      `SELECT version, ${DOC_SPORT_SQL} AS sport FROM boards WHERE id = ? AND user_id = ?`,
     )
       .bind(id, ctx.user.id)
-      .first<{ version: number }>();
+      .first<{ version: number; sport: string }>();
     if (!current) return fail("not_found", 404);
+    if (current.sport !== sport) return fail("wrong_sport", 409);
     return json({ error: "version_conflict", version: current.version }, 409);
   }
 
@@ -451,15 +533,20 @@ export async function moveBoard(ctx: Ctx, id: string): Promise<Response> {
   const projectId = typeof payload?.project_id === "string" ? payload.project_id : null;
   if (!projectId) return fail("invalid_project", 400);
 
+  const sport = await sportOfProject(ctx.env, ctx.user.id, projectId);
+  if (sport === undefined || sport === null) return fail("not_found", 404);
+
   const result = await ctx.env.DB.prepare(
-    `UPDATE boards SET project_id = ?, updated_at = ?
-      WHERE id = ? AND user_id = ?
-        AND EXISTS (SELECT 1 FROM projects WHERE id = ? AND user_id = ?)`,
+    `UPDATE boards SET project_id = ?1, updated_at = ?2
+      WHERE id = ?3 AND user_id = ?4 AND ${DOC_SPORT_SQL} = ?5`,
   )
-    .bind(projectId, ctx.now, id, ctx.user.id, projectId, ctx.user.id)
+    .bind(projectId, ctx.now, id, ctx.user.id, sport)
     .run();
 
-  if (result.meta.changes === 0) return fail("not_found", 404);
+  if (result.meta.changes === 0) {
+    const there = await count(ctx.env, "SELECT count(*) n FROM boards WHERE id = ? AND user_id = ?", id, ctx.user.id);
+    return there > 0 ? fail("wrong_sport", 409) : fail("not_found", 404);
+  }
 
   // Only the destination is touched. The project's timestamp orders the list and something
   // did just land there; the one it left is unchanged in every way a reader can see, since
@@ -535,13 +622,27 @@ export async function moveBoards(ctx: Ctx): Promise<Response> {
   if (!ids) return fail("invalid_selection", 400);
   if (!projectId) return fail("invalid_project", 400);
 
+  const sport = await sportOfProject(ctx.env, ctx.user.id, projectId);
+  if (sport === undefined || sport === null) return fail("not_found", 404);
+
+  // All or nothing: a selection with one board of another sport in it moves none of them,
+  // rather than leaving the rest behind to be noticed later.
+  const strays = await count(
+    ctx.env,
+    `SELECT count(*) n FROM boards
+      WHERE user_id = ? AND ${DOC_SPORT_SQL} != ? AND id IN (${ids.map(() => "?").join(", ")})`,
+    ctx.user.id,
+    sport,
+    ...ids,
+  );
+  if (strays > 0) return fail("wrong_sport", 409);
+
   const results = await ctx.env.DB.batch(
     ids.map((id) =>
       ctx.env.DB.prepare(
-        `UPDATE boards SET project_id = ?, updated_at = ?
-          WHERE id = ? AND user_id = ?
-            AND EXISTS (SELECT 1 FROM projects WHERE id = ? AND user_id = ?)`,
-      ).bind(projectId, ctx.now, id, ctx.user.id, projectId, ctx.user.id),
+        `UPDATE boards SET project_id = ?1, updated_at = ?2
+          WHERE id = ?3 AND user_id = ?4 AND ${DOC_SPORT_SQL} = ?5`,
+      ).bind(projectId, ctx.now, id, ctx.user.id, sport),
     ),
   );
 

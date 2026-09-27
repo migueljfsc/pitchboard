@@ -83,6 +83,10 @@ export type PitchTheme = {
   stripeWidth: number;
   /** The texture of real turf over the stripes: grain, a sheen across each mow, worn goalmouths. */
   natural?: boolean;
+  /** A court's surround inside the padding, where it differs from the court: a run-off, an apron. */
+  apron?: string;
+  /** A painted area on the court: the key, a goal area. */
+  area?: string;
 };
 
 export const DEFAULT_THEME: PitchTheme = {
@@ -103,12 +107,22 @@ export const GRASS_SHADE_RANGE = 0.13;
 
 /** The theme a board is drawn in: the default, with its grass as its document asks (D89). */
 export function themeFor(doc: { grass?: Grass }): PitchTheme {
+  return { ...shaded(DEFAULT_THEME, doc), natural: doc.grass?.texture === "natural" };
+}
+
+/**
+ * A court's theme with the document's shade applied to every surface colour — the grass
+ * slider, on whatever the court is laid on (D89). Only grass has a texture to choose.
+ */
+export function shaded(base: PitchTheme, doc: { grass?: Grass }): PitchTheme {
   const shade = clamp(doc.grass?.shade ?? 0, -1, 1) * GRASS_SHADE_RANGE;
+  const by = (hex: string | undefined) => (hex === undefined ? undefined : lighten(hex, shade));
   return {
-    ...DEFAULT_THEME,
-    grass: lighten(DEFAULT_THEME.grass, shade),
-    grassAlt: lighten(DEFAULT_THEME.grassAlt, shade),
-    natural: doc.grass?.texture === "natural",
+    ...base,
+    grass: lighten(base.grass, shade),
+    grassAlt: lighten(base.grassAlt, shade),
+    ...(base.apron ? { apron: by(base.apron) } : {}),
+    ...(base.area ? { area: by(base.area) } : {}),
   };
 }
 
@@ -411,10 +425,17 @@ function drawGrainOverLines(ctx: Ctx, L: number, W: number, blades: CanvasPatter
 
 /**
  * A goal seen from above: the net as a mesh behind the line, the side and back of its frame,
- * and the two posts -- which is all of a goal a camera looking straight down can see.
+ * and the two posts -- which is all of a goal a camera looking straight down can see. In
+ * board units, sized by the sport's goal.
  */
-function drawGoalFromAbove(ctx: Ctx, goalLine: number, dir: 1 | -1, cy: number): void {
-  const P = PITCH;
+export function drawGoalFromAbove(
+  ctx: Ctx,
+  goalLine: number,
+  dir: 1 | -1,
+  cy: number,
+  goal: { width: number; depth: number } = { width: PITCH.goalWidth, depth: PITCH.goalDepth },
+): void {
+  const P = { goalWidth: goal.width, goalDepth: goal.depth };
   const back = goalLine - dir * P.goalDepth;
   const x0 = Math.min(goalLine, back);
   const y0 = cy - P.goalWidth / 2;

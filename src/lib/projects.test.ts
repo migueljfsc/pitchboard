@@ -1,11 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { allRows, ancestorIds, buildTree, subtreeIds, visibleRows } from "./projects";
+import {
+  allRows,
+  ancestorIds,
+  buildTree,
+  projectsOf,
+  sportOfProject,
+  subtreeIds,
+  visibleRows,
+} from "./projects";
 import type { Project } from "@/share/api";
 
 const project = (id: string, parent_id: string | null = null): Project => ({
   id,
   name: id,
   parent_id,
+  sport: null,
   created_at: 0,
   updated_at: 0,
   boards: 0,
@@ -118,5 +127,32 @@ describe("ancestorIds", () => {
 
   it("terminates on a cycle", () => {
     expect(ancestorIds([project("a", "b"), project("b", "a")], "a")).toEqual(["b"]);
+  });
+});
+
+describe("sports at the root (D114)", () => {
+  const root = (sport: "football" | "basketball"): Project => ({ ...project(sport), sport });
+  const library = [
+    project("drills", "basketball"),
+    root("basketball"),
+    project("season", "football"),
+    project("setpieces", "season"),
+    root("football"),
+  ];
+
+  it("stands the sports first, in the picker's order, whatever was touched last", () => {
+    expect(buildTree(library).map((n) => n.project.id)).toEqual(["football", "basketball"]);
+  });
+
+  it("files a folder under the sport of its root", () => {
+    expect(sportOfProject(library, "setpieces")).toBe("football");
+    expect(sportOfProject(library, "drills")).toBe("basketball");
+    expect(sportOfProject(library, "basketball")).toBe("basketball");
+    expect(sportOfProject([project("loose")], "loose")).toBeNull();
+  });
+
+  it("offers a sport's root and everything under it, and nothing of another sport", () => {
+    expect(projectsOf(library, "football").map((p) => p.id).sort()).toEqual(["football", "season", "setpieces"]);
+    expect(projectsOf(library, "basketball").map((p) => p.id).sort()).toEqual(["basketball", "drills"]);
   });
 });

@@ -32,6 +32,8 @@ export type FormationLine = {
   /** Shown in the seeded link's name, e.g. "Back 4". */
   label: string;
   depth: number;
+  /** Per player, where a line is not straight across — a handball six bends round its goal. */
+  depths?: number[];
   spread: number[];
   numbers: number[];
   /** Omit for lines not worth linking (a lone striker, the keeper). */
@@ -137,7 +139,7 @@ function linkFor(count: number): LinkStyle | undefined {
  * Build a formation from its notation. Zero-count lines (as in the five-a-side
  * "2-0-2") are dropped rather than producing an empty line.
  */
-export function fromNotation(notation: string, group: string): Formation {
+export function fromNotation(notation: string, group: string, sport: Sport = "football"): Formation {
   const counts = notation.split("-").map(Number).filter((n) => n > 0);
   const last = counts.length - 1;
 
@@ -176,7 +178,7 @@ export function fromNotation(notation: string, group: string): Formation {
     link: linkFor(count),
   }));
 
-  return { id: notation, sport: "football", name: notation, group, lines: [GK, ...lines] };
+  return { id: notation, sport, name: notation, group, lines: [GK, ...lines] };
 }
 
 /** Mirrors the eleven-a-side catalogue offered by lineup-builder.co.uk. */
@@ -212,7 +214,8 @@ function laidOut(
   sport: Sport,
   id: string,
   group: string,
-  lines: [label: string, depth: number, spread: number[], numbers: number[]][],
+  /** `depth` is one for the line, or one per player where the line bends. */
+  lines: [label: string, depth: number | number[], spread: number[], numbers: number[]][],
 ): Formation {
   return {
     id,
@@ -221,7 +224,8 @@ function laidOut(
     group,
     lines: lines.map(([label, depth, spread, numbers]) => ({
       label,
-      depth,
+      depth: typeof depth === "number" ? depth : depth[0],
+      ...(typeof depth === "number" ? {} : { depths: depth }),
       spread,
       numbers,
       link: linkFor(spread.length),
@@ -256,15 +260,85 @@ const BASKETBALL_FORMATIONS: Formation[] = [
   ]),
 ];
 
+/**
+ * Handball's defences, around the six-metre line. Depths are metres from the goal line
+ * over the court's 40, spreads metres across over its 20: the line bends round the goal,
+ * so the wings stand nearly on the goal line and the middle out at the six.
+ */
+const HB_KEEPER: [string, number, number[], number[]] = ["Keeper", 0.02, [0.5], [1]];
+const HANDBALL_FORMATIONS: Formation[] = [
+  laidOut("handball", "6-0", "Defence", [
+    HB_KEEPER,
+    ["Back 6", [0.0375, 0.1375, 0.17, 0.17, 0.1375, 0.0375], [0.1, 0.25, 0.415, 0.585, 0.75, 0.9], [2, 3, 4, 5, 6, 7]],
+  ]),
+  laidOut("handball", "5-1", "Defence", [
+    HB_KEEPER,
+    ["Back 5", [0.0375, 0.1375, 0.17, 0.1375, 0.0375], [0.1, 0.25, 0.5, 0.75, 0.9], [2, 3, 4, 6, 7]],
+    ["Front 1", 0.2375, [0.5], [5]],
+  ]),
+  laidOut("handball", "3-2-1", "Defence", [
+    HB_KEEPER,
+    ["Back 3", [0.1575, 0.17, 0.1575], [0.3, 0.5, 0.7], [3, 4, 5]],
+    ["Middle 2", 0.2125, [0.2, 0.8], [2, 7]],
+    ["Front 1", 0.275, [0.5], [6]],
+  ]),
+  laidOut("handball", "4-2", "Defence", [
+    HB_KEEPER,
+    ["Back 4", [0.0875, 0.165, 0.165, 0.0875], [0.15, 0.375, 0.625, 0.85], [2, 3, 5, 7]],
+    ["Front 2", 0.2375, [0.35, 0.65], [4, 6]],
+  ]),
+  laidOut("handball", "3-3", "Defence", [
+    HB_KEEPER,
+    ["Back 3", [0.1575, 0.17, 0.1575], [0.3, 0.5, 0.7], [3, 4, 5]],
+    ["Front 3", 0.2375, [0.2, 0.5, 0.8], [2, 6, 7]],
+  ]),
+];
+
+/** Field hockey is eleven a side with a keeper, and reads its shapes as football does. */
+const HOCKEY_FORMATIONS: Formation[] = (
+  [
+    ["Back four", ["4-3-3", "4-4-2", "4-2-3-1"]],
+    ["Back three", ["3-3-1-3", "3-4-3", "3-3-3-1"]],
+  ] as [string, string[]][]
+).flatMap(([group, ids]) => ids.map((id) => fromNotation(id, group, "hockey")));
+
+/**
+ * Volleyball's shapes, six a side and no keeper. Depths are metres over the board's 24 —
+ * court and free zone, own end line at 3, net at 12 — and spreads metres over its 15.
+ * Numbers are rotation positions: 4-3-2 across the front, 5-6-1 across the back.
+ */
+const VOLLEYBALL_FORMATIONS: Formation[] = [
+  laidOut("volleyball", "Base", "Rotation", [
+    ["Back row", 0.229, [0.3, 0.5, 0.7], [5, 6, 1]],
+    ["Front row", 0.4375, [0.3, 0.5, 0.7], [4, 3, 2]],
+  ]),
+  laidOut("volleyball", "W-receive", "Serve receive", [
+    ["Back W", 0.208, [0.367, 0.633], [5, 6]],
+    ["Front W", 0.354, [0.267, 0.5, 0.733], [4, 3, 2]],
+    ["Setter", 0.471, [0.633], [1]],
+  ]),
+  laidOut("volleyball", "3-receive", "Serve receive", [
+    ["Passers", 0.25, [0.3, 0.5, 0.7], [5, 6, 1]],
+    ["Hitters", 0.458, [0.267, 0.733], [4, 2]],
+    ["Setter", 0.471, [0.6], [3]],
+  ]),
+];
+
 const CATALOGUE: Record<Sport, Formation[]> = {
   football: FORMATIONS,
   basketball: BASKETBALL_FORMATIONS,
+  handball: HANDBALL_FORMATIONS,
+  hockey: HOCKEY_FORMATIONS,
+  volleyball: VOLLEYBALL_FORMATIONS,
 };
 
 /** What each side starts in, per sport: home then away. */
 const SIDE_FORMATIONS: Record<Sport, [string, string]> = {
   football: [DEFAULT_FORMATION, "4-4-2"],
   basketball: ["2-3", "1-3-1"],
+  handball: ["6-0", "5-1"],
+  hockey: ["4-3-3", "3-3-1-3"],
+  volleyball: ["Base", "W-receive"],
 };
 
 /** The formations a sport offers, and the groups its picker shows them under. */
@@ -343,6 +417,7 @@ export function buildTeam(
 
     line.spread.forEach((across, i) => {
       const override = spec.squad?.[slot++];
+      const depth = line.depths?.[i] ?? line.depth;
       const number = freeNumber(override?.number ?? line.numbers[i] ?? i + 1, used);
       used.add(number);
       const id = `${spec.id}-${number}`;
@@ -350,7 +425,7 @@ export function buildTeam(
 
       players.push({ id, number, label: override?.label ?? "" });
       positions[id] = {
-        x: spec.direction === "left" ? line.depth * pitch.length : (1 - line.depth) * pitch.length,
+        x: spec.direction === "left" ? depth * pitch.length : (1 - depth) * pitch.length,
         // Mirror across the width too, so the two sides are not a straight copy
         // and full-backs end up on opposite flanks as they should.
         y: spec.direction === "left" ? across * pitch.width : (1 - across) * pitch.width,

@@ -12,18 +12,23 @@
 
 import { useMemo } from "react";
 
+import type { Sport } from "@/board/types";
+import { SportIcon } from "@/components/SportMenu";
 import { useI18n } from "@/i18n/context";
-import { allRows, buildTree } from "@/lib/projects";
+import { allRows, buildTree, projectsOf } from "@/lib/projects";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/share/api";
 
 export function PickProject({
   projects,
+  sport,
   onPick,
   onClose,
   placement = "up",
 }: {
   projects: Project[];
+  /** Only this sport's root and what is under it: a board is filed under its own (D114). */
+  sport: Sport;
   onPick: (projectId: string) => void;
   onClose: () => void;
   placement?: "up" | "down";
@@ -31,7 +36,7 @@ export function PickProject({
   const { t } = useI18n();
   // Every folder, whatever the library happens to have folded shut: this is a place to put
   // something, and a target you cannot see is a target you cannot pick (D51).
-  const rows = useMemo(() => allRows(buildTree(projects)), [projects]);
+  const rows = useMemo(() => allRows(buildTree(projectsOf(projects, sport))), [projects, sport]);
 
   return (
     <>
@@ -45,7 +50,7 @@ export function PickProject({
         <p className="px-1 py-0.5 text-[10px] uppercase tracking-wide text-ink-500">
           {t("library.pick")}
         </p>
-        {projects.length === 0 ? (
+        {rows.length === 0 ? (
           <p className="px-1 py-0.5 text-[11px] leading-relaxed text-ink-400">
             {t("boards.noProjects")}
           </p>
@@ -56,9 +61,13 @@ export function PickProject({
               type="button"
               onClick={() => onPick(project.id)}
               style={{ paddingLeft: 6 + depth * 12 }}
-              className="truncate rounded py-1 pr-1.5 text-left text-[11px] text-ink-300 transition hover:bg-ink-700 hover:text-white"
+              className={cn(
+                "flex items-center gap-1.5 truncate rounded py-1 pr-1.5 text-left text-[11px] transition hover:bg-ink-700 hover:text-white",
+                project.sport ? "font-semibold uppercase tracking-wide text-ink-100" : "text-ink-300",
+              )}
             >
-              {project.name}
+              {project.sport && <SportIcon sport={project.sport} className="size-3.5 shrink-0" />}
+              <span className="truncate">{project.sport ? t(`sport.${project.sport}`) : project.name}</span>
             </button>
           ))
         )}

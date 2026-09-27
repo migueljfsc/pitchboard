@@ -396,8 +396,11 @@ export type Origin = {
   players: Record<string, OriginPlayer>;
 };
 
+/** Every game a board can be drawn for, in the order a picker offers them. */
+export const SPORT_IDS = ["football", "basketball", "handball", "hockey", "volleyball"] as const;
+
 /** The game a board is drawn for. Its court, markings, goals, ball and lineups follow it. */
-export type Sport = "football" | "basketball";
+export type Sport = (typeof SPORT_IDS)[number];
 
 export type BoardDoc = {
   version: 1;

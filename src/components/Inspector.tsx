@@ -475,7 +475,7 @@ export function Inspector({
                 </Why>
               ) : (
                 <SmallButton
-                  icon={<span aria-hidden>⚽</span>}
+                  icon={<span aria-hidden>{sportOf(doc).ballGlyph}</span>}
                   label={carries ? t("inspect.ball.release") : t("inspect.ball.give")}
                   title={t("inspect.ball.hint")}
                   onClick={() => onCarrierChange(carries ? null : only)}

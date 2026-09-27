@@ -6,7 +6,7 @@
  */
 
 import { z } from "zod";
-import { BALL_ID } from "./types";
+import { BALL_ID, SPORT_IDS } from "./types";
 import {
   MAX_POLYGON,
   MAX_VIA,
@@ -166,7 +166,7 @@ const boardDocShape = z.object({
     length: z.number().min(50).max(150),
     width: z.number().min(30).max(100),
   }),
-  sport: z.enum(["football", "basketball"]).optional(),
+  sport: z.enum(SPORT_IDS).optional(),
   tokenScale: z.number().min(0.5).max(2.5).optional(),
   flow: z
     .object({

@@ -14,6 +14,7 @@
 
 import { z } from "zod";
 import type { BoardDoc, Link, LinkStyle, Team } from "@/board/types";
+import { SPORT_IDS } from "@/board/types";
 import { boardDocSchema } from "@/board/schema";
 import { migrate } from "@/board/migrate";
 import { replaceTeamLinks } from "@/board/links";
@@ -123,7 +124,7 @@ export const setupTeamSchema = z.object({
 const setupSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   /** Absent is football (D113). */
-  sport: z.enum(["football", "basketball"]).optional(),
+  sport: z.enum(SPORT_IDS).optional(),
   teams: z.tuple([setupTeamSchema, setupTeamSchema]),
 });
 

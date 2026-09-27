@@ -11,6 +11,7 @@
  * and it belongs on the button that raises it rather than in a view about stored boards.
  */
 
+import type { Sport } from "@/board/types";
 import { useState } from "react";
 import { Check, Save } from "lucide-react";
 
@@ -20,7 +21,16 @@ import { cn } from "@/lib/utils";
 import type { CloudBoard } from "@/lib/useCloudBoard";
 import { type Project, listProjects } from "@/share/api";
 
-export function SaveBoardButton({ cloud, boardName }: { cloud: CloudBoard; boardName: string }) {
+export function SaveBoardButton({
+  cloud,
+  boardName,
+  sport,
+}: {
+  cloud: CloudBoard;
+  boardName: string;
+  /** Where it can be saved: under its own sport, and nowhere else (D114). */
+  sport: Sport;
+}) {
   const { t } = useI18n();
   const [saved, setSaved] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -76,6 +86,7 @@ export function SaveBoardButton({ cloud, boardName }: { cloud: CloudBoard; board
       {picking && (
         <PickProject
           projects={projects}
+          sport={sport}
           placement="down"
           onPick={(id) => void into(id)}
           onClose={() => setPicking(false)}

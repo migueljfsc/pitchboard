@@ -43,6 +43,16 @@ export type HoopGoal = {
   reach: number;
 };
 
+/** No goal at all: nothing a dropped ball lands in scores (volleyball). */
+export type NoGoal = { kind: "none" };
+
+/**
+ * A net strung across the middle of the court (volleyball), in units: its top off the
+ * floor, the depth of its mesh below that, and how far its posts stand outside each
+ * sideline. Stands in 3D, sorted among the players by the centre line it hangs over.
+ */
+export type CentreNet = { top: number; mesh: number; postsOut: number; antenna: number };
+
 export type SportSpec = {
   id: Sport;
   /** The court as measured, in metres. */
@@ -52,9 +62,21 @@ export type SportSpec = {
   metresPerUnit: number;
   /** Whether a side has a goalkeeper, who can wear a kit of his own. */
   keeper: boolean;
-  /** What the court is laid on, and so what draws it. */
-  surface: "grass" | "floor";
-  goal: NetGoal | HoopGoal;
+  /**
+   * What the court is laid on. Grass takes the turf's texture; a floor and synthetic
+   * turf take only its shade.
+   */
+  surface: "grass" | "floor" | "turf";
+  goal: NetGoal | HoopGoal | NoGoal;
+  /** A net across the middle, where the game has one. */
+  centreNet?: CentreNet;
+  /**
+   * The court's lines, in units, inside the board. Absent is the board itself. Volleyball's
+   * board is the court AND its free zone, so a server can stand behind the end line.
+   */
+  court?: { x: number; y: number; length: number; width: number };
+  /** What names the ball in a list or on a button, where a word would be a language's. */
+  ballGlyph: string;
   /**
    * Room the 3D view leaves above the far end, as a fraction of the board's height:
    * a ring's backboard stands five times as tall as a crossbar.
@@ -103,6 +125,64 @@ const BASKETBALL = scaled(28, 15);
 /** FIBA metres into basketball's units. */
 const bb = (m: number): number => m / BASKETBALL.metresPerUnit;
 
+/** An IHF handball court's markings, in metres. */
+export const HANDBALL_COURT = {
+  lineWidth: 0.05,
+  /** The goal area: quarter circles about each post, joined by a line across the goal. */
+  goalArea: 6,
+  /** The free-throw line, dashed, drawn the same way. */
+  freeThrow: 9,
+  /** The 7-metre line, a metre long, and the keeper's 4-metre restraining line. */
+  sevenMetre: 7,
+  sevenMetreLength: 1,
+  keeperLine: 4,
+  keeperLineLength: 0.15,
+  goalWidth: 3,
+  goalHeight: 2,
+  goalDepth: 1,
+} as const;
+
+const HANDBALL = scaled(40, 20);
+const hb = (m: number): number => m / HANDBALL.metresPerUnit;
+
+/** An FIH field hockey pitch's markings, in metres. */
+export const HOCKEY_FIELD = {
+  lineWidth: 0.075,
+  /** The shooting circle: quarter circles about each post, joined by a line across the goal. */
+  circle: 14.63,
+  /** The dashed circle five metres beyond it. */
+  outerCircle: 19.63,
+  /** The 23-metre line, in from each back line. */
+  quarter: 22.9,
+  penaltySpot: 6.475,
+  goalWidth: 3.66,
+  goalHeight: 2.14,
+  goalDepth: 1.2,
+} as const;
+
+const HOCKEY = scaled(91.4, 55);
+const fh = (m: number): number => m / HOCKEY.metresPerUnit;
+
+/** An FIVB volleyball court's markings, in metres. The board is the court and its free zone. */
+export const VOLLEYBALL_COURT = {
+  length: 18,
+  width: 9,
+  /** Around the court on every side, and inside the board. */
+  freeZone: 3,
+  lineWidth: 0.05,
+  /** The attack line, in from the centre line on each side. */
+  attack: 3,
+  /** The top of the net off the floor (men's), and the depth of its mesh. */
+  netTop: 2.43,
+  netMesh: 1,
+  postsOut: 1,
+  antenna: 0.8,
+} as const;
+
+const V = VOLLEYBALL_COURT;
+const VOLLEYBALL = scaled(V.length + V.freeZone * 2, V.width + V.freeZone * 2);
+const vb = (m: number): number => m / VOLLEYBALL.metresPerUnit;
+
 export const SPORTS: Record<Sport, SportSpec> = {
   football: {
     id: "football",
@@ -110,6 +190,7 @@ export const SPORTS: Record<Sport, SportSpec> = {
     keeper: true,
     surface: "grass",
     goal: { kind: "net", width: PITCH.goalWidth, depth: PITCH.goalDepth, height: PITCH.goalHeight },
+    ballGlyph: "⚽",
     headroom: HEADROOM,
     snaps: {
       depths: [PITCH.sixYardDepth, PITCH.penaltySpot, PITCH.penaltyDepth],
@@ -129,13 +210,64 @@ export const SPORTS: Record<Sport, SportSpec> = {
       board: { line: bb(1.2), width: bb(1.8), bottom: bb(2.9), top: bb(3.95) },
       reach: bb(0.45),
     },
+    ballGlyph: "🏀",
     headroom: 0.08,
     snaps: { depths: [bb(COURT.keyDepth)], spans: [bb(COURT.keyWidth)] },
   },
+  handball: {
+    id: "handball",
+    ...HANDBALL,
+    keeper: true,
+    surface: "floor",
+    goal: {
+      kind: "net",
+      width: hb(HANDBALL_COURT.goalWidth),
+      depth: hb(HANDBALL_COURT.goalDepth),
+      height: hb(HANDBALL_COURT.goalHeight),
+    },
+    ballGlyph: "🤾",
+    headroom: 0.05,
+    snaps: {
+      depths: [HANDBALL_COURT.goalArea, HANDBALL_COURT.sevenMetre, HANDBALL_COURT.freeThrow].map(hb),
+      spans: [hb(HANDBALL_COURT.goalWidth)],
+    },
+  },
+  hockey: {
+    id: "hockey",
+    ...HOCKEY,
+    keeper: true,
+    surface: "turf",
+    goal: {
+      kind: "net",
+      width: fh(HOCKEY_FIELD.goalWidth),
+      depth: fh(HOCKEY_FIELD.goalDepth),
+      height: fh(HOCKEY_FIELD.goalHeight),
+    },
+    ballGlyph: "🏑",
+    headroom: HEADROOM,
+    snaps: {
+      depths: [HOCKEY_FIELD.penaltySpot, HOCKEY_FIELD.circle, HOCKEY_FIELD.quarter].map(fh),
+      spans: [fh(HOCKEY_FIELD.goalWidth)],
+    },
+  },
+  volleyball: {
+    id: "volleyball",
+    ...VOLLEYBALL,
+    keeper: false,
+    surface: "floor",
+    goal: { kind: "none" },
+    centreNet: { top: vb(V.netTop), mesh: vb(V.netMesh), postsOut: vb(V.postsOut), antenna: vb(V.antenna) },
+    court: { x: vb(V.freeZone), y: vb(V.freeZone), length: vb(V.length), width: vb(V.width) },
+    ballGlyph: "🏐",
+    headroom: HEADROOM,
+    snaps: {
+      depths: [V.freeZone, V.freeZone + V.length / 2 - V.attack].map(vb),
+      spans: [vb(V.width)],
+    },
+  },
 };
 
-/** Every sport, in the order a picker offers them. */
-export const SPORT_IDS: readonly Sport[] = ["football", "basketball"];
+export { SPORT_IDS } from "./types";
 
 export const DEFAULT_SPORT: Sport = "football";
 
@@ -155,6 +287,7 @@ export const toMetres = (doc: { sport?: Sport }, units: number): number =>
 export function goalAt(doc: Pick<BoardDoc, "sport" | "pitch">, p: Vec2): Vec2 | null {
   const goal = sportOf(doc).goal;
   const { length, width } = doc.pitch;
+  if (goal.kind === "none") return null;
   if (goal.kind === "net") return p.x < 0 || p.x > length ? p : null;
   for (const x of [goal.centre, length - goal.centre]) {
     const ring = { x, y: width / 2 };

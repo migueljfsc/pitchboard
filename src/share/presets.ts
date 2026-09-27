@@ -13,6 +13,7 @@
 
 import { z } from "zod";
 import type { BoardDoc, Sport } from "@/board/types";
+import { SPORT_IDS } from "@/board/types";
 import { boardDocSchema } from "@/board/schema";
 import { applyFormation, sidesFor, type TeamSpec } from "@/formations";
 import { replaceTeamLinks } from "@/board/links";
@@ -37,7 +38,7 @@ export const presetSchema = setupTeamSchema.extend({
   /** What the coach called it — "Our first XI". Distinct from the team's name. */
   label: z.string().min(1).max(MAX_PRESET_LABEL),
   /** The game it is a squad for. Absent is football, which every squad was before (D113). */
-  sport: z.enum(["football", "basketball"]).optional(),
+  sport: z.enum(SPORT_IDS).optional(),
 });
 
 export type SquadPreset = z.infer<typeof presetSchema>;
