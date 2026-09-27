@@ -7,22 +7,25 @@ https://pitchboard.migueljfsc.dev.
 deploy config, and its paths resolve against itself.
 
 ```
-index.ts           the router — /api/* only
+index.ts           the router — /api/*, and /share/<slug> pages named after their board
 lib/
   session.ts       the cookie, the row it points at, lazy expiry, sliding renewal
   google.ts        OAuth: authorize URL, PKCE, code exchange, claim validation
   users.ts         external identity to account, link rather than duplicate
   auth.ts          email and password: register, verify, sign in, reset (D109)
-  password.ts      the server's half of password hashing — one salted SHA-256
+  password.ts      the server's half of password hashing — an HMAC keyed by PASSWORD_PEPPER
   mail.ts          the verification and reset emails, through Resend
   turnstile.ts     the bot check on the two routes that send mail
   account.ts       deleting an account and everything it owns (D110)
-  boards.ts        projects and boards; ownership is a WHERE clause, never a check
-  shares.ts        publishing to /share/<slug>, and the one public read
+  boards.ts        projects, the tree, and boards; ownership is a WHERE clause, never a check
+  presets.ts       the account's squad presets (D30)
+  sports.ts        the sport roots a library is filed under — mirrors SPORT_IDS (D114)
+  shares.ts        publishing to /share/<slug>, the one public read, and the page it is opened at
   admin.ts         the operator's /admin view — 404 to anyone not in ADMIN_EMAILS
   limits.ts        per-user quotas — D39 wanted them shipping with the feature
   crypto.ts        ids, session tokens, SHA-256
   http.ts          JSON responses, all no-store
+  headers.ts       the security headers and CSP, also written to dist/_headers (D116)
 secrets.d.ts       the secrets wrangler.jsonc cannot hold, merged into Env
 migrations/        D1 schema, forward-only
 ```
@@ -60,6 +63,9 @@ Not in `wrangler.jsonc`, not in OpenTofu, not in state:
 wrangler secret put GOOGLE_CLIENT_ID
 wrangler secret put GOOGLE_CLIENT_SECRET
 wrangler secret put ADMIN_EMAILS          # comma-separated; unset means no admin (D108)
+wrangler secret put RESEND_API_KEY        # sending access only
+wrangler secret put TURNSTILE_SECRET_KEY  # tofu output -raw turnstile_secret_key
+openssl rand -base64 32 | wrangler secret put PASSWORD_PEPPER   # never rotated casually (D109)
 ```
 
 They survive a deploy, so this is a one-time step. Their types live in `secrets.d.ts`, which
@@ -102,5 +108,7 @@ should show the board as it is now — otherwise "share" means "share, then reme
 republish" (0004). Withdrawing is clearing one column; publishing again mints a NEW slug, so a
 withdrawn link stays dead.
 
-`GET /api/shares/:slug` is the only route in the Worker that answers without a session. It
-returns the published document and the board's name, and nothing about who published it.
+`GET /api/shares/:slug` is the only route that reads a board without a session. It returns the
+published document and the board's name, and nothing about who published it. `GET
+/share/<slug>` serves the app's own page with that name in its title and link-preview tags;
+the board itself is still read through the API.

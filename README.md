@@ -3,9 +3,10 @@
 [![ci](https://github.com/migueljfsc/pitchboard/actions/workflows/ci.yml/badge.svg)](https://github.com/migueljfsc/pitchboard/actions/workflows/ci.yml)
 [![deploy](https://github.com/migueljfsc/pitchboard/actions/workflows/deploy-worker.yml/badge.svg)](https://github.com/migueljfsc/pitchboard/actions/workflows/deploy-worker.yml)
 
-An animated football tactics board that runs in the browser. Draw a formation, move players
-between scenes along curved runs, and export the result as **MP4**, **GIF**, or **PNG** —
-all client-side, no server rendering.
+An animated tactics board that runs in the browser — football, futsal, basketball, handball,
+field hockey and volleyball on one engine. Draw a formation, move players between scenes along
+curved runs, and export the result as **MP4**, **GIF**, or **PNG** — all client-side, no server
+rendering.
 
 **Live:** https://pitchboard.migueljfsc.dev — one Cloudflare Worker serving the app and its API,
 deployed by [`deploy-worker.yml`](.github/workflows/deploy-worker.yml) on every push to `main`.
@@ -17,7 +18,8 @@ deployed by [`deploy-worker.yml`](.github/workflows/deploy-worker.yml) on every 
 
 > **Status: usable.** M1–M10 are built — the board, animation, live links, export, sharing,
 > infrastructure, annotations, board handling, seamless playback, and squad presets — along with
-> a 3D view, English and Portuguese, and accounts with saved boards. See
+> six sports, a 3D view, read-only presenting, video import, English and Portuguese, and
+> accounts with a library of saved boards filed by sport. See
 > [`docs/implementation-plan.md`](docs/implementation-plan.md) for the plan and
 > [`docs/bugs.md`](docs/bugs.md) for known defects.
 
@@ -36,14 +38,16 @@ Chain, polygon, or filled per link, with optional live distance labels in metres
 |---|---|
 | **Animation** | Timeline of scenes. An arrow drawn on a player defines the curve it travels to its next-scene position; no arrow means a straight tween. A player can take longer than the scene, or wait before setting off, so one scene can hold a sequence rather than two scenes existing to order it. |
 | **Renderer** | One pure `drawBoard(ctx, doc, t, view)` — plain Canvas2D, no DOM or React. The editor draws it to a visible canvas; the exporter draws the same function to an `OffscreenCanvas` in a Web Worker; the scene strip draws it again at thumbnail size. Preview and export cannot diverge. |
-| **Coordinates** | Pitch metres (105 × 68), never pixels. Resolution-independent rendering, and link distances come for free. |
+| **Coordinates** | Board units, never pixels: metres on a football pitch (105 × 68), every other court scaled to the same 105-unit length and converted back to metres wherever a person reads a distance. |
+| **Sports** | One engine; each sport is a spec — court, goal, keeper, snaps — plus its own court drawer. Nothing branches on a sport's name. |
 | **Ball** | Attaches to a carrying player. A pass is a *carrier change*, not a separate object. |
 | **Editing** | A move carries forward through the later scenes the player was not already running into, so fixing scene 4 of ten does not mean repeating the drag six times. |
 | **Drawing** | Arrows, lines, freehand, zones and text labels, each with a range of scenes it appears on. |
 | **Views** | Full pitch or either half, horizontal or vertical, flat or through one fixed angled camera. |
 | **Export** | `mediabunny` for MP4 (H.264) and WebM (VP9), `gifenc` for GIF. Format chosen by runtime capability check; size follows the board's own aspect rather than a broadcast one. |
 | **Sharing** | A board fits in a compressed URL fragment with no backend, frozen as it was. A board saved to an account can also be published to a short link that follows its edits. |
-| **Storage** | Squad presets and the board in progress autosave to `localStorage`, validated on every read and discarded rather than repaired. Signing in adds projects and saved boards. |
+| **Import** | A `tracks.json` from the sibling [`football-tracks`](../football-tracks) pipeline (broadcast clip → player positions) becomes a board to correct rather than draw. |
+| **Storage** | Signed out, squad presets and the board in progress live in `localStorage`, validated on every read and discarded rather than repaired. Signed in, presets move to the account, and boards are saved in nested projects under one root per sport. |
 
 ## Stack
 
@@ -52,7 +56,7 @@ React 19 + TypeScript (strict) + Vite 8 + Tailwind v4.
 The Worker in [`worker/`](worker/) serves the built app, `/api/*` and the share pages, behind the
 same lint / typecheck / test / build gates CI runs. OpenTofu in
 [`infrastructure/terraform/cloudflare`](infrastructure/terraform/cloudflare) owns the durable
-resources — R2, D1, KV — and deliberately does not own the deploy, which is
+resources — R2, D1, KV, Turnstile, DNS — and deliberately does not own the deploy, which is
 [`deploy-worker.yml`](.github/workflows/deploy-worker.yml). The reasoning is D40 in
 [`docs/decisions.md`](docs/decisions.md).
 
@@ -65,6 +69,7 @@ pnpm test         # vitest — engine only
 pnpm lint
 pnpm typecheck
 pnpm build
+pnpm board <tracks.json>   # a football-tracks file through the real importer
 ```
 
 Node >= 22.12. Package manager: pnpm.

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "version": "0.81.0",
-  "description": "Animated football tactics board with client-side MP4/GIF/PNG export.",
+  "description": "Animated multi-sport tactics board with client-side MP4/GIF/PNG export.",
   "packageManager": "pnpm@11.9.0",
   "engines": {
     "node": ">=22.12.0"

@@ -1,8 +1,9 @@
 # Infrastructure
 
 Provisioning for Pitchboard's Cloudflare account. One stack:
-[`terraform/cloudflare/`](terraform/cloudflare/) owns the R2 bucket, the D1 database and the
-KV namespace, applied by `.github/workflows/terraform.yml`.
+[`terraform/cloudflare/`](terraform/cloudflare/) owns the R2 bucket, the D1 database, the KV
+namespace, the Turnstile widget and the DNS records for mail, applied by
+`.github/workflows/terraform.yml`.
 
 ## Where the Worker is
 

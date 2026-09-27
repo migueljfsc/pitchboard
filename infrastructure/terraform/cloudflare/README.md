@@ -11,12 +11,16 @@ and the bindings it needs are created here and passed through as outputs.
 
 | File | Resource | Status |
 |------|----------|--------|
-| `r2.tf` | R2 media bucket (+ CORS, + public r2.dev domain, + custom domain) | **active** (bucket, CORS, public access); custom domain gated on `domain` |
+| `r2.tf` | R2 media bucket (+ CORS, + public r2.dev domain, + custom domain `pitchboard-media.<domain>`) | **active**; custom domain gated on `domain` |
 | `d1.tf` | D1 database — users, sessions, projects, boards | **active** |
 | `kv.tf` | KV namespace — published board snapshots | **active** |
-| `data.tf` | Zone lookup | gated on `domain` |
+| `data.tf` | Zone lookup | **active**, gated on `domain` |
 | `turnstile.tf` | Turnstile widget — bot check on register and password reset (D109) | **active** |
-| `email.tf` | Resend DNS — DKIM, the `send.` CNAME, DMARC (D109) | gated on `domain` and `resend_dkim_public_key` |
+| `email.tf` | Resend DNS — DKIM, the `send.` CNAME, DMARC (D109) | **active**, gated on `domain` and `resend_dkim_public_key` |
+
+`domain` is `migueljfsc.dev`, shared across personal projects; this stack owns only the
+`pitchboard` and `pitchboard-media` names under it. The Worker's own hostname is a custom domain
+declared in `wrangler.jsonc`, not a record here.
 
 The R2 bucket holds board preview images (OG cards for share links) and exported renders —
 binaries that belong in neither the git repo nor a D1 row. D1 and KV are the two halves of the
@@ -95,14 +99,14 @@ Use rclone or the AWS CLI against the S3-compatible endpoint (see the `r2_s3_end
 with the same R2 token used for state.
 
 The bucket is **public**: `cloudflare_r2_managed_domain` serves it over Cloudflare's managed
-`r2.dev` subdomain, and `tofu output r2_public_url` gives the base URL to read objects back from.
+`r2.dev` subdomain and `cloudflare_r2_custom_domain` over `pitchboard-media.migueljfsc.dev`;
+`tofu output r2_public_url` gives the base URL to read objects back from.
 Two consequences worth holding onto:
 
 - Every object is world-readable to anyone with the URL. R2 has no per-object ACLs, so nothing
   user-private can be written to this bucket.
 - `r2.dev` is rate-limited and bandwidth-throttled, and Cloudflare states it is not intended for
-  production. It is fine for preview images on a portfolio piece; a custom domain is the fix if
-  that ever stops being true.
+  production. The custom domain is the one to hand out; `r2.dev` stays on as a fallback.
 
 ## Cost
 
