@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.77.0 (2026-09-27)
+
+### Feat
+
+- **board**: handball, field hockey and volleyball, a sport picker, and a library filed by sport
+
 ## v0.76.0 (2026-09-27)
 
 ### Feat
