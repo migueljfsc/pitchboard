@@ -20,6 +20,8 @@ export type MenuItem =
       title?: string;
       /** Drawn before the label, so options can be told apart at a glance. */
       icon?: ReactNode;
+      /** Its keyboard shortcut, shown at the end of the row. */
+      hint?: string;
     }
   | "divider";
 
@@ -125,6 +127,9 @@ export function ContextMenu({
               </span>
             )}
             {item.label}
+            {item.hint && (
+              <span className="ml-auto pl-4 font-mono text-[10px] text-ink-500">{item.hint}</span>
+            )}
           </button>
         ),
       )}

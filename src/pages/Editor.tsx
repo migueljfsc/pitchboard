@@ -12,12 +12,15 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
   AlignVerticalJustifyCenter,
   AlignVerticalSpaceAround,
+  ChevronDown,
   CircleDot,
+  CircleHelp,
   CircleOff,
   CircleStop,
   Command as CommandIcon,
   Copy,
   Eye,
+  FileText,
   EyeOff,
   FastForward,
   Frame,
@@ -290,7 +293,7 @@ export function Editor({ initialDoc }: Props = {}) {
   // A floating menu: the board's right-click, the template picker, or the history.
   const [menu, setMenu] = useState<
     | { kind: "board"; target: ContextTarget; at: { x: number; y: number } }
-    | { kind: "templates" | "history"; at: { x: number; y: number }; above?: boolean }
+    | { kind: "templates" | "history" | "help" | "file"; at: { x: number; y: number }; above?: boolean }
     | null
   >(null);
   // The account's own templates, fetched when the template menu opens.
@@ -1188,6 +1191,31 @@ export function Editor({ initialDoc }: Props = {}) {
   };
 
   /** The last changes, newest first, each a step back to just after it. */
+  /** Help, from the top bar: every action by name, the keys, and the tour. */
+  const helpMenu = (): MenuItem[] => [
+    {
+      label: t("palette.open"),
+      title: t("palette.open.title", { keys: `${MODIFIER}K` }),
+      icon: <CommandIcon size={13} />,
+      hint: `${MODIFIER}K`,
+      onSelect: () => setPaletteOpen(true),
+    },
+    {
+      label: t("shortcuts.open"),
+      title: t("shortcuts.open.title"),
+      icon: <Keyboard size={13} />,
+      hint: "?",
+      onSelect: () => setShortcutsOpen(true),
+    },
+    { label: t("tour.open"), title: t("tour.open.title"), icon: <GraduationCap size={13} />, onSelect: openTour },
+  ];
+
+  /** A board in or out as a file. */
+  const fileMenu = (): MenuItem[] => [
+    { label: t("bar.import"), title: t("bar.import.title"), icon: <Upload size={13} />, onSelect: () => setImportOpen(true) },
+    { label: t("bar.export"), title: t("bar.export.title"), icon: <Download size={13} />, onSelect: () => setExportOpen(true) },
+  ];
+
   const historyMenu = (): MenuItem[] => {
     const states = [...historyPast, doc];
     const n = historyPast.length;
@@ -1725,41 +1753,16 @@ export function Editor({ initialDoc }: Props = {}) {
 
           <span className="mx-1 h-5 w-px bg-ink-600" />
 
-          <button
-            type="button"
-            onClick={() => setPaletteOpen(true)}
-            aria-label={t("palette.open")}
-            title={t("palette.open.title", { keys: `${MODIFIER}K` })}
-            className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
-          >
-            <CommandIcon size={13} />
-            <span className="font-mono text-[11px] text-ink-400">{MODIFIER}K</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShortcutsOpen(true)}
-            aria-label={t("shortcuts.open")}
-            title={t("shortcuts.open.title")}
-            className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
-          >
-            <Keyboard size={14} />
-            {/* Labels give way to icons as the window narrows, least-used first, so the bar
-                fits in the longer language too. Each button keeps its name for assistive tech. */}
-            <span className="max-2xl:hidden">{t("shortcuts.open")}</span>
-          </button>
-
-          <button
-            type="button"
-            data-tour="tour"
-            onClick={openTour}
-            aria-label={t("tour.open")}
-            title={t("tour.open.title")}
-            className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
-          >
-            <GraduationCap size={14} />
-            <span className="max-2xl:hidden">{t("tour.open")}</span>
-          </button>
+          {/* The help there is, in one place: finding an action, the keys, and the tour.
+              The tour points here when it says where it can be found again. */}
+          <MenuButton
+            tour="tour"
+            icon={<CircleHelp size={14} />}
+            label={t("bar.help")}
+            hint={t("bar.help.title")}
+            open={menu?.kind === "help"}
+            onOpen={(at) => setMenu(menu?.kind === "help" ? null : { kind: "help", at })}
+          />
 
           <span className="mx-1 h-5 w-px bg-ink-600" />
 
@@ -1772,29 +1775,19 @@ export function Editor({ initialDoc }: Props = {}) {
             className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
           >
             <Presentation size={14} />
-            <span className="max-[1400px]:hidden">{t("present.enter")}</span>
+            {t("present.enter")}
           </button>
 
-          <button
-            type="button"
-            onClick={() => setImportOpen(true)}
-            aria-label={t("bar.import")}
-            title={t("bar.import.title")}
-            className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
-          >
-            <Upload size={13} />
-            <span className="max-[1400px]:hidden">{t("bar.import")}</span>
-          </button>
-          <button
-            type="button"
-            data-tour="export"
-            onClick={() => setExportOpen(true)}
-            title={t("bar.export.title")}
-            className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
-          >
-            <Download size={13} />
-            {t("bar.export")}
-          </button>
+          {/* Getting a board in or out as a file. Present, Share and Save are what a coach
+              reaches for, and stay out on the bar. */}
+          <MenuButton
+            tour="export"
+            icon={<FileText size={14} />}
+            label={t("bar.file")}
+            hint={t("bar.file.title")}
+            open={menu?.kind === "file"}
+            onOpen={(at) => setMenu(menu?.kind === "file" ? null : { kind: "file", at })}
+          />
           <button
             type="button"
             data-tour="share"
@@ -2165,7 +2158,11 @@ export function Editor({ initialDoc }: Props = {}) {
                 ? boardMenu(menu.target)
                 : menu.kind === "history"
                   ? historyMenu()
-                  : templateMenu()
+                  : menu.kind === "help"
+                    ? helpMenu()
+                    : menu.kind === "file"
+                      ? fileMenu()
+                      : templateMenu()
             }
           />
         )}
@@ -2517,6 +2514,50 @@ function SidebarHandle({
       className="relative z-20 -mx-1 w-2 shrink-0 cursor-col-resize transition hover:bg-accent/40"
       data-side={side}
     />
+  );
+}
+
+/**
+ * A top-bar button that opens a menu under itself. Its own mousedown is kept from the open
+ * menu's click-away, so a second press closes the menu rather than closing and reopening it.
+ */
+function MenuButton({
+  icon,
+  label,
+  hint,
+  open,
+  onOpen,
+  tour,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  hint: string;
+  open: boolean;
+  onOpen: (at: { x: number; y: number }) => void;
+  /** What the tour calls it, where the tour points at it. */
+  tour?: string;
+}) {
+  return (
+    <button
+      type="button"
+      data-tour={tour}
+      aria-haspopup="menu"
+      aria-expanded={open}
+      title={hint}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        onOpen({ x: r.left, y: r.bottom + 4 });
+      }}
+      className={cn(
+        "flex items-center gap-1.5 rounded-md border bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white",
+        open ? "border-accent text-white" : "border-ink-600",
+      )}
+    >
+      {icon}
+      {label}
+      <ChevronDown size={12} aria-hidden className={cn("text-ink-400 transition-transform", open && "rotate-180")} />
+    </button>
   );
 }
 

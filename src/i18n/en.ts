@@ -74,6 +74,10 @@ export const en = {
   "bar.export": "Export",
   "bar.export.title":
     "MP4, WebM or GIF of the whole animation, a PNG of the frame on screen, or the board itself as JSON.",
+  "bar.help": "Help",
+  "bar.help.title": "Find any action, the keyboard shortcuts, and the tour",
+  "bar.file": "File",
+  "bar.file.title": "Import a board, or export this one as a video, an image or JSON",
 
   "history.undo": "Undo",
   "history.redo": "Redo",
@@ -940,7 +944,7 @@ export const en = {
   "tour.board.link": "Back four",
   "tour.welcome.title": "Welcome to Pitchboard",
   "tour.welcome.body":
-    "Set out two teams, move them through a few scenes, and Pitchboard animates the play in between. Export it as a video or send it as a link.\nThis takes about a minute. Close it whenever you like. The Tour button at the top brings it back.",
+    "Set out two teams, move them through a few scenes, and Pitchboard animates the play in between. Export it as a video or send it as a link.\nThis takes about a minute. Close it whenever you like. Help, at the top, brings it back.",
   "tour.formations.title": "Teams and formations",
   "tour.formations.body":
     "Pick a shape for each side, then set names, numbers and kits. Save the squad and you can load it on another board.\nChanging formation keeps your squad but drops that side's links. The shape they described is gone.",
@@ -973,13 +977,13 @@ export const en = {
     "Fills the window with the board and hides the panels, for walking a team through the play. Esc takes you back.",
   "tour.export.title": "Export",
   "tour.export.body":
-    "Save the animation as MP4, WebM or GIF, or grab the frame on screen as a PNG. Everything runs in your browser, and you can keep working while it does.",
+    "In the File menu: save the animation as MP4, WebM or GIF, or grab the frame on screen as a PNG. Everything runs in your browser, and you can keep working while it does.",
   "tour.share.title": "Share",
   "tour.share.body":
     "A link carries a copy of the board as it is right now. Whoever opens it can play it and fork their own copy. Changes you make later won't reach them.\nIf you sign in, boards are kept in your account and grouped into projects. You also get a short link that always shows the latest version.",
   "tour.help.title": "When you're stuck",
   "tour.help.body":
-    "{undo} undoes anything. {palette} finds any action by name, and ? lists the shortcuts. Right-click a player or a shape to see what you can do with it.\nThis button brings the tour back.",
+    "{undo} undoes anything. {palette} finds any action by name, and ? lists the shortcuts. Right-click a player or a shape to see what you can do with it.\nThe Help menu brings the tour back.",
   // ---------------------------------------------------------------- strip and kit
   "timeline.tick": "Scene {n} — {name}",
   "timeline.scrollEarlier": "Earlier scenes",

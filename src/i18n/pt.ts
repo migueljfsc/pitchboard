@@ -69,6 +69,10 @@ export const pt: Dictionary = {
   "bar.export": "Exportar",
   "bar.export.title":
     "MP4, WebM ou GIF da animação completa, um PNG do momento no ecrã, ou o próprio quadro em JSON.",
+  "bar.help": "Ajuda",
+  "bar.help.title": "Encontrar qualquer ação, os atalhos de teclado e o guia",
+  "bar.file": "Ficheiro",
+  "bar.file.title": "Importar um quadro, ou exportar este em vídeo, imagem ou JSON",
 
   "history.undo": "Anular",
   "history.redo": "Refazer",
@@ -933,7 +937,7 @@ export const pt: Dictionary = {
   "tour.board.link": "Linha de quatro",
   "tour.welcome.title": "Bem-vindo ao Pitchboard",
   "tour.welcome.body":
-    "Disponha duas equipas, mova-as ao longo de algumas cenas, e o Pitchboard anima a jogada entre elas. Exporte-a em vídeo ou envie-a por link.\nIsto demora cerca de um minuto. Pode fechar quando quiser. O botão Guia, em cima, trá-lo de volta.",
+    "Disponha duas equipas, mova-as ao longo de algumas cenas, e o Pitchboard anima a jogada entre elas. Exporte-a em vídeo ou envie-a por link.\nIsto demora cerca de um minuto. Pode fechar quando quiser. A Ajuda, em cima, trá-lo de volta.",
   "tour.formations.title": "Equipas e sistemas",
   "tour.formations.body":
     "Escolha um sistema para cada lado e defina nomes, números e equipamentos. Guarde o plantel para o usar noutro quadro.\nMudar de sistema mantém o plantel, mas apaga as ligações desse lado. A forma que descreviam já não existe.",
@@ -966,13 +970,13 @@ export const pt: Dictionary = {
     "Enche a janela com o quadro e esconde os painéis, para explicar a jogada a uma equipa. Esc volta atrás.",
   "tour.export.title": "Exportar",
   "tour.export.body":
-    "Guarde a animação em MP4, WebM ou GIF, ou o fotograma no ecrã em PNG. Tudo corre no seu navegador, e pode continuar a trabalhar enquanto isso.",
+    "No menu Ficheiro: guarde a animação em MP4, WebM ou GIF, ou o fotograma no ecrã em PNG. Tudo corre no seu navegador, e pode continuar a trabalhar enquanto isso.",
   "tour.share.title": "Partilhar",
   "tour.share.body":
     "Um link leva uma cópia do quadro tal como está agora. Quem o abrir pode reproduzi-lo e criar a sua própria cópia. As alterações que fizer depois não lhe chegam.\nSe entrar na sua conta, os quadros ficam guardados e organizados em projetos. Tem também um link curto que mostra sempre a versão mais recente.",
   "tour.help.title": "Quando estiver perdido",
   "tour.help.body":
-    "{undo} desfaz qualquer coisa. {palette} encontra qualquer ação pelo nome, e ? lista os atalhos. Clique com o botão direito num jogador ou numa forma para ver o que pode fazer.\nEste botão traz o guia de volta.",
+    "{undo} desfaz qualquer coisa. {palette} encontra qualquer ação pelo nome, e ? lista os atalhos. Clique com o botão direito num jogador ou numa forma para ver o que pode fazer.\nO menu Ajuda traz o guia de volta.",
   // ---------------------------------------------------------------- strip and kit
   "timeline.tick": "Cena {n} — {name}",
   "timeline.scrollEarlier": "Cenas anteriores",

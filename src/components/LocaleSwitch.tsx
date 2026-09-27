@@ -1,43 +1,32 @@
 /**
- * EN | PT.
+ * The language, as one small button: it shows the one in use and switches to the next.
  *
- * Two words and a divider rather than a dropdown: with exactly two languages a
- * select hides half the choice behind a click, and the pair reads as a state you
- * can see at a glance. It grows into a dropdown at three.
+ * With two languages a press can only mean "the other one", so a pair of buttons spent its
+ * width saying what a tooltip can. The tooltip names the language it goes to, in that
+ * language's own words, so someone who cannot read the current one can still find theirs.
  */
 
 import { LOCALES, type Locale } from "@/i18n/core";
 import { useI18n } from "@/i18n/context";
-import { cn } from "@/lib/utils";
 
 /** What each locale calls ITSELF — never translated, by definition. */
 const LABEL: Record<Locale, string> = { en: "EN", pt: "PT" };
+const NAME: Record<Locale, string> = { en: "English", pt: "Português" };
 
 export function LocaleSwitch() {
   const { locale, setLocale, t } = useI18n();
+  const next = LOCALES[(LOCALES.indexOf(locale) + 1) % LOCALES.length];
 
   return (
-    <div
-      role="group"
-      aria-label={t("app.locale")}
-      className="flex shrink-0 items-center rounded-md border border-ink-600 bg-ink-900"
+    <button
+      type="button"
+      lang={next}
+      onClick={() => setLocale(next)}
+      aria-label={`${t("app.locale")}: ${NAME[locale]}. ${NAME[next]}`}
+      title={NAME[next]}
+      className="shrink-0 rounded-md border border-ink-600 bg-ink-900 px-2 py-1 text-[11px] font-medium tracking-wide text-ink-200 transition hover:border-accent hover:text-white"
     >
-      {LOCALES.map((code, i) => (
-        <button
-          key={code}
-          type="button"
-          lang={code}
-          aria-pressed={locale === code}
-          onClick={() => setLocale(code)}
-          className={cn(
-            "px-2 py-1 text-[11px] font-medium tracking-wide transition",
-            i === 0 ? "rounded-l-md" : "rounded-r-md border-l border-ink-600",
-            locale === code ? "text-accent" : "text-ink-400 hover:text-ink-200",
-          )}
-        >
-          {LABEL[code]}
-        </button>
-      ))}
-    </div>
+      {LABEL[locale]}
+    </button>
   );
 }
