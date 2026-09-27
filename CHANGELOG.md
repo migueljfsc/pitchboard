@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.75.0 (2026-09-27)
+
+### Feat
+
+- **editor**: play the ball by dragging it, and smooth the editor's common flows
+
 ## v0.74.0 (2026-09-26)
 
 ### Feat
