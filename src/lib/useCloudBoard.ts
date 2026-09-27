@@ -57,6 +57,11 @@ export interface CloudBoard {
   saveInto: (projectId: string, name: string) => Promise<boolean>;
   /** True when the server took it. A caller that says "Saved" has to know it did. */
   saveNow: () => Promise<boolean>;
+  /**
+   * The open board as a new row beside it, under `name`, and the editor moves to the copy.
+   * The original is saved first, so it keeps everything done to it up to now.
+   */
+  saveCopy: (name: string) => Promise<boolean>;
   /** The open board moved projects. Bookkeeping only — the move already happened. */
   relocate: (projectId: string) => void;
   acceptRemote: () => Promise<void>;
@@ -187,6 +192,26 @@ export function useCloudBoard(
 
   const saveNow = useCallback(() => push(doc), [push, doc]);
 
+  const saveCopy = useCallback(
+    async (name: string): Promise<boolean> => {
+      if (!board || !(await push(doc))) return false;
+      setStatus({ kind: "saving" });
+      try {
+        const copy = { ...doc, name };
+        const row = await createBoard(board.projectId, name, serialiseDoc(copy));
+        setDoc(copy);
+        setBoard({ id: row.id, projectId: board.projectId, version: row.version, name: row.name });
+        goToBoard(row.id);
+        setStatus({ kind: "saved", at: Date.now() });
+        return true;
+      } catch (error) {
+        setStatus({ kind: "error", code: error instanceof ApiError ? error.code : "offline" });
+        return false;
+      }
+    },
+    [board, doc, push, setDoc],
+  );
+
   /**
    * Follow a move that has already landed on the server.
    *
@@ -207,5 +232,5 @@ export function useCloudBoard(
     if (status.kind === "conflict") await push(doc, status.version);
   }, [push, doc, status]);
 
-  return { board, status, open, saveInto, saveNow, relocate, acceptRemote, overwriteRemote };
+  return { board, status, open, saveInto, saveNow, saveCopy, relocate, acceptRemote, overwriteRemote };
 }

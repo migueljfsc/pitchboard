@@ -80,12 +80,14 @@ type Props = {
   cloud: CloudBoard;
   /** The open board's sport: where a folder made from "All boards" is filed (D114). */
   sport: Sport;
+  /** Held by the editor, so the File menu opens the same library. */
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 };
 
 /** The top-bar button, and the library it opens. */
-export function BoardsLibrary({ cloud, sport }: Props) {
+export function BoardsLibrary({ cloud, sport, open, onOpenChange: setOpen }: Props) {
   const { t } = useI18n();
-  const [open, setOpen] = useState(false);
 
   return (
     <>
@@ -123,7 +125,7 @@ type Dragging = { kind: "boards"; ids: string[] } | { kind: "project"; id: strin
 /** Where it would land: a folder, or a sport's root. */
 type DropTarget = { kind: "project"; id: string } | null;
 
-function Library({ cloud, sport, onClose }: Props & { onClose: () => void }) {
+function Library({ cloud, sport, onClose }: Pick<Props, "cloud" | "sport"> & { onClose: () => void }) {
   const { t, tn } = useI18n();
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [boards, setBoards] = useState<StoredBoardSummary[] | null>(null);

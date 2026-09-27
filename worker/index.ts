@@ -48,7 +48,7 @@ import {
 } from "./lib/presets";
 import { deleteAccount } from "./lib/account";
 import { adminDeleteUser, adminStats, adminUser, isAdmin } from "./lib/admin";
-import { fail, json } from "./lib/http";
+import { fail, json, secured } from "./lib/http";
 import { publishBoard, readShare, sharePage, unpublishBoard } from "./lib/shares";
 import { SLUG_LENGTH } from "./lib/limits";
 import {
@@ -76,7 +76,14 @@ function backToApp(origin: string, error?: string): Response {
   return new Response(null, { status: 302, headers });
 }
 
+/** Every response leaves with the security headers, whichever route made it. */
 export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    return secured(await app.fetch(request, env, ctx));
+  },
+};
+
+const app = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 

@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { SPORTS, goalAt, sportOf, toMetres } from "./sports";
+import { FUTSAL_COURT, SPORTS, goalAt, sportOf, toMetres } from "./sports";
 import { clampBall, moveEntities, playBall } from "./interaction";
 import { addSceneAfter, setCarrier } from "./scenes";
 import { boardDocSchema } from "./schema";
 import { linkGeometry } from "./links";
 import { resolveAt, sceneTimings } from "./timeline";
-import { createBoardDoc, isUntouched, sidesFor } from "@/formations";
+import { createBoardDoc, formationsFor, isUntouched, sidesFor } from "@/formations";
 import { fromJson, toSetupJson } from "@/share/json";
 import { boardFromTracks } from "@/import";
 import { presetsFor, type SquadPreset } from "@/share/presets";
 import type { BoardDoc } from "./types";
+import { SPORT_IDS } from "./types";
 
 const basketball = (): BoardDoc => {
   const [home, away] = sidesFor("basketball");
@@ -164,6 +165,60 @@ describe("handball and field hockey", () => {
     if (goal.kind !== "net") throw new Error("handball has nets");
     const clamped = clampBall({ x: doc.pitch.length + 1, y: 0 }, doc.pitch, goal);
     expect(Math.abs(clamped.y - doc.pitch.width / 2)).toBeCloseTo(goal.width / 2, 9);
+    expect(goalAt(doc, clamped)).toEqual(clamped);
+  });
+});
+
+describe("futsal", () => {
+  const board = (): BoardDoc => {
+    const [home, away] = sidesFor("futsal");
+    return createBoardDoc(home, away, undefined, {}, "futsal");
+  };
+
+  it("comes second, after football and before basketball — the menu's and the library's order", () => {
+    expect(SPORT_IDS.slice(0, 3)).toEqual(["football", "futsal", "basketball"]);
+  });
+
+  it("lays a 40 x 20 m court out at football's length", () => {
+    expect(SPORTS.futsal.pitch.length).toBe(105);
+    expect(SPORTS.futsal.pitch.length * SPORTS.futsal.metresPerUnit).toBeCloseTo(40, 9);
+    expect(SPORTS.futsal.pitch.width * SPORTS.futsal.metresPerUnit).toBeCloseTo(20, 9);
+  });
+
+  it("joins its penalty arcs with 3.16 m, the goal and both posts, as Law 1 has it", () => {
+    expect(FUTSAL_COURT.goalWidth + FUTSAL_COURT.postWidth * 2).toBeCloseTo(3.16, 9);
+  });
+
+  it("starts five a side, each with a keeper, in a diamond against a square", () => {
+    const doc = board();
+    expect(boardDocSchema.safeParse(doc).success).toBe(true);
+    expect(doc.teams.map((t) => t.players.length)).toEqual([5, 5]);
+    expect(doc.teams.map((t) => t.formation)).toEqual(["1-2-1", "2-2"]);
+    expect(SPORTS.futsal.keeper).toBe(true);
+  });
+
+  it("offers only five-a-side shapes, keeper first", () => {
+    for (const f of formationsFor("futsal")) {
+      expect(f.lines.flatMap((l) => l.numbers)).toHaveLength(5);
+      expect(f.lines[0].role).toBe("keeper");
+    }
+  });
+
+  it("keeps every side in its own half", () => {
+    const doc = board();
+    for (const [i, team] of doc.teams.entries()) {
+      for (const p of team.players) {
+        const x = toMetres(doc, doc.scenes[0].positions[p.id].x);
+        expect(i === 0 ? x < 20 : x > 20).toBe(true);
+      }
+    }
+  });
+
+  it("scores a ball dropped in the net", () => {
+    const doc = board();
+    const goal = SPORTS.futsal.goal;
+    if (goal.kind !== "net") throw new Error("futsal has nets");
+    const clamped = clampBall({ x: doc.pitch.length + 1, y: doc.pitch.width / 2 }, doc.pitch, goal);
     expect(goalAt(doc, clamped)).toEqual(clamped);
   });
 });

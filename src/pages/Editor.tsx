@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AnnotationDash, BoardDoc, PitchView, RunEnd, RunStart, Sport, Tool } from "@/board/types";
 import { sportOf } from "@/board/sports";
 import { SportMenu } from "@/components/SportMenu";
@@ -21,6 +21,8 @@ import {
   CircleStop,
   Command as CommandIcon,
   Copy,
+  FilePlus,
+  FolderOpen,
   Eye,
   FileText,
   EyeOff,
@@ -41,6 +43,7 @@ import {
   LayoutTemplate,
   Download,
   GraduationCap,
+  X,
   Keyboard,
   Pause,
   Play,
@@ -62,12 +65,14 @@ import { ShortcutsDialog } from "@/components/ShortcutsDialog";
 import { ShareDialog } from "@/components/ShareDialog";
 import { ImportDialog, type ImportKind } from "@/components/ImportDialog";
 import { LinkPanel } from "@/components/LinkPanel";
-import { DrawPanel } from "@/components/DrawPanel";
+import { DrawPanel, DrawToolStrip } from "@/components/DrawPanel";
+import { SceneThumb } from "@/components/SceneThumb";
 import { SpeedButton, Timeline } from "@/components/Timeline";
 import { CommandPalette, type Command } from "@/components/CommandPalette";
 import { Toaster } from "@/components/Toaster";
 import { Tour } from "@/components/Tour";
 import { tourSeen } from "@/share/tour";
+import { dismissStartHint, startHintDismissed } from "@/share/startHint";
 import { TOUR_STEPS, buildTourBoard, type TourStage } from "@/formations/tour";
 import { ContextMenu, type MenuItem } from "@/components/ContextMenu";
 import type { ContextTarget } from "@/components/BoardCanvas";
@@ -185,6 +190,9 @@ type TourRestore = {
 /** One step of `,` and `.` — a frame at 30 fps. */
 const FRAME_S = 1 / 30;
 
+/** What the board shows as selected while presenting: nothing. */
+const NOTHING_SELECTED: ReadonlySet<string> = new Set();
+
 /** The key that arms each tool. The drawn ball has none: B gives the match ball. */
 const TOOL_KEYS: Record<string, Tool> = {
   v: "select",
@@ -273,6 +281,7 @@ export function Editor({ initialDoc }: Props = {}) {
   const [pitchView, setPitchView] = useState<PitchView>(DEFAULT_PITCH_VIEW);
   const [pending, setPending] = useState<Pending | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [selectionOpen, setSelectionOpen] = useState(true);
@@ -614,6 +623,15 @@ export function Editor({ initialDoc }: Props = {}) {
     setHadSelection(r.hadSelection);
     setWasDrawing(r.wasDrawing);
     setWasPlaying(r.wasPlaying);
+  };
+
+  // Where to start, on a board nobody has touched yet — until it is put away for good.
+  const [hintDismissed, setHintDismissed] = useState(startHintDismissed);
+  const untouched = useMemo(() => !hintDismissed && isUntouched(doc), [hintDismissed, doc]);
+  const showStartHint = untouched && !tour && !present;
+  const putHintAway = () => {
+    dismissStartHint();
+    setHintDismissed(true);
   };
 
   // Up on the first visit to the editor, and on request after that.
@@ -1021,6 +1039,7 @@ export function Editor({ initialDoc }: Props = {}) {
       ...SPORT_TEMPLATES[sportOf(doc).id].map((id: TemplateId) => ({
         label: t(`template.${id}`),
         onSelect: () => applyTemplate(id),
+        preview: <TemplatePreview id={id} view={pitchView} />,
       })),
       "divider",
     ];
@@ -1216,8 +1235,39 @@ export function Editor({ initialDoc }: Props = {}) {
     { label: t("tour.open"), title: t("tour.open.title"), icon: <GraduationCap size={13} />, onSelect: openTour },
   ];
 
-  /** A board in or out as a file. */
+  /**
+   * A fresh board. One saved to the account is left as it is — resetting it in place would
+   * autosave the blank over it — so the editor saves it and starts away from it, as
+   * switching sport does. A local board is replaced, behind a confirmation and the Undo.
+   */
+  const newBoard = async () => {
+    if (!cloud.board) {
+      setPending({ kind: "reset" });
+      return;
+    }
+    await cloud.saveNow();
+    window.location.assign("/?fresh=1");
+  };
+
+  const saveCopy = async () => {
+    const name = t("file.copyName", { name: doc.name });
+    notify(t(await cloud.saveCopy(name) ? "toast.copied" : "toast.copyFailed", { name }));
+  };
+
+  /** The board itself: a new one, a saved one, a copy, and in or out as a file. */
   const fileMenu = (): MenuItem[] => [
+    { label: t("file.new"), title: t("file.new.title"), icon: <FilePlus size={13} />, onSelect: () => void newBoard() },
+    {
+      label: t("file.open"),
+      title: t(accountState.account ? "file.open.title" : "file.open.signedOut"),
+      icon: <FolderOpen size={13} />,
+      disabled: !accountState.account,
+      onSelect: () => setLibraryOpen(true),
+    },
+    ...(cloud.board
+      ? [{ label: t("file.copy"), title: t("file.copy.title"), icon: <Copy size={13} />, onSelect: () => void saveCopy() }]
+      : []),
+    "divider",
     { label: t("bar.import"), title: t("bar.import.title"), icon: <Upload size={13} />, onSelect: () => setImportOpen(true) },
     { label: t("bar.export"), title: t("bar.export.title"), icon: <Download size={13} />, onSelect: () => setExportOpen(true) },
   ];
@@ -1453,8 +1503,8 @@ export function Editor({ initialDoc }: Props = {}) {
       {
         id: "reset-board",
         group: group.board,
-        label: t("reset.board"),
-        run: () => setPending({ kind: "reset" }),
+        label: t("file.new"),
+        run: () => void newBoard(),
       },
     );
     return list;
@@ -1466,6 +1516,30 @@ export function Editor({ initialDoc }: Props = {}) {
       // The tour's board is not the one in the history, so nothing behind the tour
       // may be undone while it shows.
       if (tour) return;
+      // Presenting is read-only: the keys play, step and leave, and nothing edits
+      // the board behind the audience. The arrows step scenes, as a clicker does.
+      if (present) {
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+        if (e.key === "Escape") {
+          setPresent(false);
+          return;
+        }
+        if (e.code === "Space") {
+          e.preventDefault();
+          setPlayback(!playing);
+          return;
+        }
+        const scene =
+          e.key === "]" || e.key === "ArrowRight" || e.key === "PageDown"
+            ? activeScene + 1
+            : e.key === "[" || e.key === "ArrowLeft" || e.key === "PageUp"
+              ? activeScene - 1
+              : null;
+        if (scene === null || scene < 0 || scene >= doc.scenes.length) return;
+        e.preventDefault();
+        selectScene(scene);
+        return;
+      }
       // Ahead of the text-field guard: in a field on this page the text IS the
       // document, so undo should mean the board's history, not the input's.
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
@@ -1493,13 +1567,6 @@ export function Editor({ initialDoc }: Props = {}) {
       // playback behind it, and Escape belongs to the dialog.
       if (pending || shareOpen || importOpen || exportOpen || shortcutsOpen || paletteOpen) return;
 
-      // Escape leaves presenting first: there is no tool armed in there, and
-      // getting out is the only thing the key can usefully mean.
-      if (e.key === "Escape" && present) {
-        setPresent(false);
-        return;
-      }
-
       // Escape disarms a drawing tool before anything else looks at the key.
       if (e.key === "Escape") {
         setTool(DEFAULT_TOOL);
@@ -1517,7 +1584,7 @@ export function Editor({ initialDoc }: Props = {}) {
 
       // A letter per tool, the conventional ones where there is a convention.
       const armed = !e.metaKey && !e.ctrlKey && !e.altKey ? TOOL_KEYS[e.key.toLowerCase()] : undefined;
-      if (armed && !present && (armed !== "pan" || zoomed)) {
+      if (armed && (armed !== "pan" || zoomed)) {
         e.preventDefault();
         setTool(armed);
         return;
@@ -1761,14 +1828,17 @@ export function Editor({ initialDoc }: Props = {}) {
 
           {/* The help there is, in one place: finding an action, the keys, and the tour.
               The tour points here when it says where it can be found again. */}
-          <MenuButton
-            tour="tour"
-            icon={<CircleHelp size={14} />}
-            label={t("bar.help")}
-            hint={t("bar.help.title")}
-            open={menu?.kind === "help"}
-            onOpen={(at) => setMenu(menu?.kind === "help" ? null : { kind: "help", at })}
-          />
+          <div className="relative">
+            <MenuButton
+              tour="tour"
+              icon={<CircleHelp size={14} />}
+              label={t("bar.help")}
+              hint={t("bar.help.title")}
+              open={menu?.kind === "help"}
+              onOpen={(at) => setMenu(menu?.kind === "help" ? null : { kind: "help", at })}
+            />
+            {showStartHint && menu?.kind !== "help" && <StartHint onDismiss={putHintAway} />}
+          </div>
 
           <span className="mx-1 h-5 w-px bg-ink-600" />
 
@@ -1811,7 +1881,14 @@ export function Editor({ initialDoc }: Props = {}) {
 
           <span className="mx-1 h-5 w-px bg-ink-600" />
 
-          {accountState.account && <BoardsLibrary cloud={cloud} sport={sportOf(doc).id} />}
+          {accountState.account && (
+            <BoardsLibrary
+              cloud={cloud}
+              sport={sportOf(doc).id}
+              open={libraryOpen}
+              onOpenChange={setLibraryOpen}
+            />
+          )}
           <AdoptLocalPrompt
             cloud={cloud}
             boardName={doc.name}
@@ -2008,6 +2085,7 @@ export function Editor({ initialDoc }: Props = {}) {
               expanded={expandedLink}
               onExpandedChange={setExpandedLink}
               sceneIndex={activeScene}
+              teamLabel={(i) => doc.teams[i].name || formationName(i)}
             />
           </Section>
 
@@ -2024,8 +2102,7 @@ export function Editor({ initialDoc }: Props = {}) {
               <LayoutTemplate size={13} />
               {t("template.open")}
             </button>
-            {/* Two resets, because they answer different questions: one puts the
-                shape back, the other starts again. */}
+            {/* Puts the shape back. Starting again is File → New board. */}
             <button
               type="button"
               onClick={() => setPending({ kind: "positions" })}
@@ -2033,14 +2110,6 @@ export function Editor({ initialDoc }: Props = {}) {
             >
               <Users size={13} />
               {t("reset.positions")}
-            </button>
-            <button
-              type="button"
-              onClick={() => setPending({ kind: "reset" })}
-              className="flex w-full items-center justify-center gap-1.5 rounded-md border border-ink-600 px-2 py-1.5 text-xs text-ink-300 transition hover:border-red-500/60 hover:text-red-400"
-            >
-              <RotateCcw size={13} />
-              {t("reset.board")}
             </button>
           </div>
         </aside>
@@ -2214,7 +2283,7 @@ export function Editor({ initialDoc }: Props = {}) {
               editScene={present ? undefined : editScene}
               ghosts={ghostScenes}
               pitchView={pitchView}
-              selection={visible}
+              selection={present ? NOTHING_SELECTED : visible}
               onSelectionChange={setSelection}
               onDocChange={setDoc}
               onEditName={onEditName}
@@ -2226,13 +2295,13 @@ export function Editor({ initialDoc }: Props = {}) {
               drawFilled={drawFilled}
               drawSides={drawSides}
               sticky={sticky}
-              annotationSelection={annotation}
+              annotationSelection={present ? null : annotation}
               onAnnotationSelect={selectAnnotation}
               onLinkPick={(id) => {
                 setLinksOpen(true);
                 setExpandedLink(id);
               }}
-              trail={trailOn ? selectedPlayers : undefined}
+              trail={trailOn && !present ? selectedPlayers : undefined}
               sceneCamera={playing || present}
               playing={playing}
               onEditStart={(index) => selectScene(index)}
@@ -2282,7 +2351,8 @@ export function Editor({ initialDoc }: Props = {}) {
 
         {/* The coach's drawing: the tools, and everything drawn. Collapsed until a
             tool is armed or a shape picked — an empty rail is 256px of pitch given
-            away for nothing — and closed again once neither is left. */}
+            away for nothing — and closed again once neither is left. Folded, it
+            still shows the tools, so drawing is never a hunt. */}
         {!present && (
         <aside
           data-tour="draw"
@@ -2313,6 +2383,18 @@ export function Editor({ initialDoc }: Props = {}) {
               )
             )}
           </button>
+
+          {/* Opens the rail itself: with a tool already armed, arming another is no change
+              in whether anything is being drawn, which is all that opens it otherwise. */}
+          {!railOpen && (
+            <DrawToolStrip
+              tool={activeTool}
+              onToolChange={(next) => {
+                setTool(next);
+                setRailOpen(true);
+              }}
+            />
+          )}
 
           {railOpen && (
             <div className="border-t border-ink-700">
@@ -2591,5 +2673,52 @@ function HistoryButton({
     >
       {children}
     </button>
+  );
+}
+
+/** Labels no one reads: a preview is too small for names. */
+const PREVIEW_LABELS = { board: "", scene: () => "" };
+
+/**
+ * A template's board, small, in the menu that offers it: the second scene, where the
+ * first runs are drawn, so the move reads as a move and not as two formations.
+ */
+const TemplatePreview = memo(function TemplatePreview({ id, view }: { id: TemplateId; view: PitchView }) {
+  const doc = useMemo(() => buildTemplate(id, PREVIEW_LABELS), [id]);
+  return <SceneThumb doc={doc} index={Math.min(1, doc.scenes.length - 1)} view={view} width={64} height={40} />;
+});
+
+/**
+ * Where to start, on a board nobody has touched: a card hanging from Help, since Help is
+ * where the tour and the keys are found again. Not a dialog — nothing waits on it, and the
+ * board stays live under it. Gone as soon as the board changes, and for good once put away.
+ */
+function StartHint({ onDismiss }: { onDismiss: () => void }) {
+  const { t } = useI18n();
+  return (
+    <div
+      role="note"
+      className="absolute left-1/2 top-full z-40 mt-2.5 w-80 -translate-x-1/2 rounded-md border border-ink-600 bg-ink-800 px-3 py-2.5 text-[11px] leading-relaxed text-ink-200 shadow-xl"
+    >
+      <span
+        aria-hidden
+        className="absolute -top-1.5 left-1/2 size-3 -translate-x-1/2 rotate-45 border-l border-t border-ink-600 bg-ink-800"
+      />
+      <div className="mb-1 flex items-center gap-2">
+        <span className="text-xs font-semibold text-white">{t("hint.start.title")}</span>
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label={t("hint.start.dismiss")}
+          title={t("hint.start.dismiss")}
+          className="ml-auto flex size-5 items-center justify-center rounded text-ink-400 transition hover:text-white"
+        >
+          <X size={13} />
+        </button>
+      </div>
+      <p>{t("hint.start.move")}</p>
+      <p className="mt-1 text-ink-300">{t("hint.start.links")}</p>
+      <p className="mt-1 text-ink-300">{t("hint.start.help")}</p>
+    </div>
   );
 }

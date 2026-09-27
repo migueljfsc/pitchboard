@@ -2662,6 +2662,7 @@ const BALL_LOOKS: Record<
   { shade: [string, string, string]; detail?: (ctx: Ctx, p: Vec2, radius: number, k: number) => void }
 > = {
   football: { shade: ["#ffffff", "#f1f2f4", "#c3c8d0"], detail: (ctx, p, r, k) => drawBallPanels(ctx, p, r, k) },
+  futsal: { shade: ["#fffbe8", "#f7e9a6", "#c9b45a"], detail: (ctx, p, r, k) => drawBallPanels(ctx, p, r, k) },
   basketball: { shade: ["#f7a15a", "#e2702c", "#9c4516"], detail: (ctx, p, r, k) => drawBallSeams(ctx, p, r, k) },
   handball: { shade: ["#ffffff", "#eef1f5", "#b9c2cd"], detail: (ctx, p, r, k) => drawHandballPanels(ctx, p, r, k) },
   hockey: { shade: ["#ffffff", "#f3f4f6", "#c7ccd4"] },

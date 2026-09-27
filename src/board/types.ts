@@ -397,7 +397,7 @@ export type Origin = {
 };
 
 /** Every game a board can be drawn for, in the order a picker offers them. */
-export const SPORT_IDS = ["football", "basketball", "handball", "hockey", "volleyball"] as const;
+export const SPORT_IDS = ["football", "futsal", "basketball", "handball", "hockey", "volleyball"] as const;
 
 /** The game a board is drawn for. Its court, markings, goals, ball and lineups follow it. */
 export type Sport = (typeof SPORT_IDS)[number];

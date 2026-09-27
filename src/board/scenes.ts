@@ -28,6 +28,8 @@ import {
 } from "./timeline";
 import { pruneAnnotations, straightCurve } from "./annotations";
 import { pruneLinkRanges } from "./links";
+import { sceneSpan, type SceneRange } from "./range";
+import { droppedIds, forgetHighlights } from "./highlights";
 import { SAME_PLACE, distance, type Bezier } from "./geometry";
 import type { Carry } from "./interaction";
 import { teamOf } from "./players";
@@ -157,6 +159,36 @@ export function deleteScene(doc: BoardDoc, index: number): BoardDoc {
   // a dangling range on either. Pruning pulls it back rather than discarding the
   // drawing or the unit.
   return pruneLinkRanges(pruneAnnotations(replace(doc, scenes)));
+}
+
+/**
+ * The board cut down to scenes `from` to `to`, inclusive — what exporting part of a move
+ * renders. Clamped to the scenes there are.
+ *
+ * A drawing or link seen on none of the kept scenes goes first. Deleting scenes repairs a
+ * dangling range by WIDENING it, which is right for an edit and wrong here: a drawing made
+ * for scene 1 would turn up across a clip of scenes 3 to 5. What is left is cut as
+ * `deleteScene` cuts, so the first kept scene is a start like any first scene.
+ */
+export function sliceScenes(doc: BoardDoc, from: number, to: number): BoardDoc {
+  const last = doc.scenes.length - 1;
+  const a = Math.max(0, Math.min(from, to, last));
+  const b = Math.min(last, Math.max(from, to, 0));
+  if (a === 0 && b === last) return doc;
+
+  const seen = (range: SceneRange) => {
+    const [start, end] = sceneSpan(doc, range);
+    return start <= b && end >= a;
+  };
+  const links = doc.links.filter(seen);
+  const annotations = doc.annotations?.filter(seen);
+  let next = forgetHighlights(
+    { ...doc, links, ...(annotations ? { annotations } : {}) },
+    [...droppedIds(doc.links, links), ...droppedIds(doc.annotations ?? [], annotations ?? [])],
+  );
+  for (let i = last; i > b; i--) next = deleteScene(next, i);
+  for (let i = a - 1; i >= 0; i--) next = deleteScene(next, i);
+  return next;
 }
 
 export function moveScene(doc: BoardDoc, from: number, to: number): BoardDoc {

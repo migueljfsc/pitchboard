@@ -22,6 +22,8 @@ export type MenuItem =
       icon?: ReactNode;
       /** Its keyboard shortcut, shown at the end of the row. */
       hint?: string;
+      /** A picture of what it gives — a template's board — larger than an icon. */
+      preview?: ReactNode;
     }
   | "divider";
 
@@ -154,6 +156,7 @@ export function ContextMenu({
                 : "text-ink-200 enabled:hover:bg-ink-700 enabled:hover:text-white focus-visible:bg-ink-700 focus-visible:text-white",
             )}
           >
+            {item.preview && <span className="shrink-0 overflow-hidden rounded-sm">{item.preview}</span>}
             {iconed && (
               <span
                 className={cn(

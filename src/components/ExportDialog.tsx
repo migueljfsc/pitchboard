@@ -1,19 +1,24 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Film, ImageIcon, Loader2, X } from "lucide-react";
 import type { BoardDoc, PitchView } from "@/board/types";
 import { JsonPane } from "@/components/JsonPane";
-import { totalSeconds } from "@/board/scenes";
+import { sliceScenes, totalSeconds } from "@/board/scenes";
+import { drawBoard } from "@/board/render";
+import { SceneSelect } from "@/components/ui/SceneSelect";
 import type { ExportJob } from "@/lib/useExportJob";
 import { encodableFormats } from "@/export/capability";
-import { renderPng } from "@/export/image";
+import { renderPng, renderSheet } from "@/export/image";
 import {
   MAX_GIF_RESOLUTION,
   EXPORT_SHAPES,
   RESOLUTIONS,
   exportSize,
+  exportView,
   frameCount,
+  sheetLayout,
   type ExportLook,
   type ExportShape,
+  type Size,
 } from "@/export/frame";
 import {
   BITRATES,
@@ -102,14 +107,20 @@ export function ExportDialog({ doc, t, pitchView, onClose, exportJob }: Props) {
   const [bitrate, setBitrate] = useState<number>(prefs.bitrate);
   const [shape, setShape] = useState<ExportShape>(prefs.shape);
   // A caption is off until asked for, and seeded with the board's name when it is.
-  const [captioned, setCaptioned] = useState(prefs.captioned);
+  const [captioned, setCaptioned] = useState(false);
   const [title, setTitle] = useState(doc.name);
   const [sceneCaption, setSceneCaption] = useState(prefs.sceneCaption);
   const [transparent, setTransparent] = useState(prefs.transparent);
+  // Which scenes: ids, as a range is stored, so reordering in the editor underneath
+  // does not quietly change what is exported. Null is the first scene, or the last.
+  const [fromId, setFromId] = useState<string | null>(null);
+  const [toId, setToId] = useState<string | null>(null);
+  // A PNG is the frame the scrubber is on, or every scene in the range on one sheet.
+  const [sheet, setSheet] = useState(false);
 
   useEffect(() => {
-    saveExportPrefs({ format, json, videoEdge, gifEdge, fps, bitrate, shape, captioned, sceneCaption, transparent });
-  }, [format, json, videoEdge, gifEdge, fps, bitrate, shape, captioned, sceneCaption, transparent]);
+    saveExportPrefs({ format, json, videoEdge, gifEdge, fps, bitrate, shape, sceneCaption, transparent });
+  }, [format, json, videoEdge, gifEdge, fps, bitrate, shape, sceneCaption, transparent]);
   // Only this dialog's own format is shown as running here; another format's
   // export, started earlier, is still reported in the header.
   const job = exportJob.running;
@@ -121,10 +132,23 @@ export function ExportDialog({ doc, t, pitchView, onClose, exportJob }: Props) {
   const longEdge = format === "gif" ? gifEdge : videoEdge;
   const setLongEdge = format === "gif" ? setGifEdge : setVideoEdge;
 
-  const duration = totalSeconds(doc);
+  const indexOf = (id: string | null, fallback: number) => {
+    const i = doc.scenes.findIndex((scene) => scene.id === id);
+    return i < 0 ? fallback : i;
+  };
+  const ends = [indexOf(fromId, 0), indexOf(toId, doc.scenes.length - 1)];
+  const [first, last] = [Math.min(...ends), Math.max(...ends)];
+  const scenes = Array.from({ length: last - first + 1 }, (_, i) => first + i);
+  const clip = useMemo(() => sliceScenes(doc, first, last), [doc, first, last]);
+  const ranged = format !== "png" || sheet;
+
+  const duration = totalSeconds(clip);
   const size = useMemo(
-    () => exportSize(longEdge, doc, pitchView, shape),
-    [longEdge, doc, pitchView, shape],
+    () =>
+      format === "png" && sheet
+        ? sheetLayout(scenes.length, longEdge, doc, pitchView, shape, captioned && title.trim() !== "").size
+        : exportSize(longEdge, doc, pitchView, shape),
+    [format, sheet, scenes.length, longEdge, doc, pitchView, shape, captioned, title],
   );
   const look: ExportLook = {
     caption: captioned ? { title, scene: sceneCaption } : null,
@@ -132,7 +156,7 @@ export function ExportDialog({ doc, t, pitchView, onClose, exportJob }: Props) {
     transparent: format === "png" && transparent,
   };
   const { width, height } = size;
-  const frames = format === "png" ? 1 : frameCount(duration, fps);
+  const frames = format === "png" ? (sheet ? scenes.length : 1) : frameCount(duration, fps);
 
   // Sizes a format can sensibly take. A GIF is a frame of pixels per frame, so
   // the big ones are a trap rather than an option.
@@ -195,10 +219,16 @@ export function ExportDialog({ doc, t, pitchView, onClose, exportJob }: Props) {
     // Each asks where to save before anything renders — the save dialog only opens
     // in direct answer to this click.
     if (format === "png") {
-      void exportJob.startPng(() => renderPng(doc, t, pitchView, longEdge, shape, look), name);
+      void exportJob.startPng(
+        () =>
+          sheet
+            ? renderSheet(doc, scenes, pitchView, longEdge, shape, look)
+            : renderPng(doc, t, pitchView, longEdge, shape, look),
+        name,
+      );
       return;
     }
-    void exportJob.startClip({ doc, pitchView, format, size, fps, bitrate, look }, name);
+    void exportJob.startClip({ doc: clip, pitchView, format, size, fps, bitrate, look }, name);
   };
 
   const cancel = exportJob.cancel;
@@ -209,7 +239,7 @@ export function ExportDialog({ doc, t, pitchView, onClose, exportJob }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 p-4 pt-[6vh]"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) close();
       }}
@@ -218,7 +248,7 @@ export function ExportDialog({ doc, t, pitchView, onClose, exportJob }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="export-title"
-        className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-y-auto rounded-lg border border-ink-600 bg-ink-800 shadow-2xl"
+        className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-y-auto rounded-lg border border-ink-600 bg-ink-800 shadow-2xl"
       >
         <div className="flex items-center gap-3 border-b border-ink-700 px-4 py-3">
           <h2 id="export-title" className="text-sm font-semibold text-white">
@@ -260,7 +290,7 @@ export function ExportDialog({ doc, t, pitchView, onClose, exportJob }: Props) {
               </Choice>
             </div>
             <p className="mt-1.5 text-[11px] leading-relaxed text-ink-300">
-              {i18n.t(json ? "export.blurb.json" : BLURB[format])}
+              {i18n.t(json ? "export.blurb.json" : format === "png" && sheet ? "export.blurb.sheet" : BLURB[format])}
             </p>
             {!json && unavailable && (
               <p className="mt-1.5 text-[11px] leading-relaxed text-amber-300">
@@ -280,6 +310,61 @@ export function ExportDialog({ doc, t, pitchView, onClose, exportJob }: Props) {
 
           {!json && (
             <>
+            <ExportPreview
+              doc={format === "png" ? doc : clip}
+              pitchView={pitchView}
+              size={size}
+              shape={shape}
+              look={look}
+              still={format === "png" && !sheet ? t : null}
+              sheet={format === "png" && sheet ? { scenes, longEdge } : null}
+            />
+
+            {format === "png" && (
+              <Field label={i18n.t("export.png.what")}>
+                <div className="flex flex-wrap gap-1">
+                  {([false, true] as const).map((each) => (
+                    <Choice
+                      key={String(each)}
+                      active={sheet === each}
+                      onClick={() => {
+                        forget();
+                        setSheet(each);
+                      }}
+                    >
+                      {i18n.t(each ? "export.png.sheet" : "export.png.frame")}
+                    </Choice>
+                  ))}
+                </div>
+              </Field>
+            )}
+
+            {ranged && doc.scenes.length > 1 && (
+              <Field label={i18n.t("export.scenes")}>
+                <div className="flex items-center gap-2 text-[11px] text-ink-400">
+                  <SceneSelect
+                    title={i18n.t("export.scenes.from")}
+                    doc={doc}
+                    value={doc.scenes[first].id}
+                    onChange={(id) => {
+                      forget();
+                      setFromId(id);
+                    }}
+                  />
+                  <span>→</span>
+                  <SceneSelect
+                    title={i18n.t("export.scenes.to")}
+                    doc={doc}
+                    value={doc.scenes[last].id}
+                    onChange={(id) => {
+                      forget();
+                      setToId(id);
+                    }}
+                  />
+                </div>
+              </Field>
+            )}
+
             <Field label={i18n.t(format === "png" ? "export.size" : "export.resolution")}>
               <div className="flex flex-wrap gap-1">
                 {sizes.map((r) => (
@@ -313,6 +398,44 @@ export function ExportDialog({ doc, t, pitchView, onClose, exportJob }: Props) {
                 ))}
               </div>
             </Field>
+
+            {format !== "png" && (
+              <Field label={i18n.t("export.frameRate")}>
+                <div className="flex flex-wrap gap-1">
+                  {FPS_OPTIONS[format].map((r) => (
+                    <Choice
+                      key={r}
+                      active={fps === r}
+                      onClick={() => {
+                        forget();
+                        setFps(r);
+                      }}
+                    >
+                      {r} fps
+                    </Choice>
+                  ))}
+                </div>
+              </Field>
+            )}
+
+            {(format === "mp4" || format === "webm") && (
+              <Field label={i18n.t("export.bitrate")}>
+                <div className="flex flex-wrap gap-1">
+                  {BITRATES.map((r) => (
+                    <Choice
+                      key={r}
+                      active={bitrate === r}
+                      onClick={() => {
+                        forget();
+                        setBitrate(r);
+                      }}
+                    >
+                      {r / 1e6} Mb/s
+                    </Choice>
+                  ))}
+                </div>
+              </Field>
+            )}
 
             <Field label={i18n.t("export.look")}>
               <div className="flex flex-col gap-2 text-[11px] text-ink-200">
@@ -371,44 +494,6 @@ export function ExportDialog({ doc, t, pitchView, onClose, exportJob }: Props) {
               </div>
             </Field>
 
-            {format !== "png" && (
-              <Field label={i18n.t("export.frameRate")}>
-                <div className="flex flex-wrap gap-1">
-                  {FPS_OPTIONS[format].map((r) => (
-                    <Choice
-                      key={r}
-                      active={fps === r}
-                      onClick={() => {
-                        forget();
-                        setFps(r);
-                      }}
-                    >
-                      {r} fps
-                    </Choice>
-                  ))}
-                </div>
-              </Field>
-            )}
-
-            {(format === "mp4" || format === "webm") && (
-              <Field label={i18n.t("export.bitrate")}>
-                <div className="flex flex-wrap gap-1">
-                  {BITRATES.map((r) => (
-                    <Choice
-                      key={r}
-                      active={bitrate === r}
-                      onClick={() => {
-                        forget();
-                        setBitrate(r);
-                      }}
-                    >
-                      {r / 1e6} Mb/s
-                    </Choice>
-                  ))}
-                </div>
-              </Field>
-            )}
-
             {/* What is actually about to be produced. The dimensions come from the
                 same exportSize the worker uses, so this is a statement rather than
                 an estimate. */}
@@ -416,8 +501,8 @@ export function ExportDialog({ doc, t, pitchView, onClose, exportJob }: Props) {
               <Stat label={i18n.t("export.size")}>
                 {size.width}×{size.height}
               </Stat>
-              <Stat label={i18n.t(format === "png" ? "export.frame" : "export.frames")}>
-                {format === "png" ? `${t.toFixed(2)}s` : frames}
+              <Stat label={i18n.t(format === "png" ? (sheet ? "export.scenes" : "export.frame") : "export.frames")}>
+                {format === "png" ? (sheet ? frames : `${t.toFixed(2)}s`) : frames}
               </Stat>
               <Stat label={i18n.t("export.length")}>{format === "png" ? "—" : `${duration.toFixed(1)}s`}</Stat>
             </dl>
@@ -548,5 +633,101 @@ function Choice({
     >
       {children}
     </button>
+  );
+}
+
+/** The preview's long side, in CSS pixels. */
+const PREVIEW_EDGE = 460;
+const PREVIEW_MAX_HEIGHT = 200;
+
+/**
+ * What is about to be exported, small: the shape, the caption and the scenes chosen.
+ * A clip plays on a loop, a still holds its frame, a sheet is the sheet. Drawn through
+ * the export's own view, so it agrees with the file by construction.
+ */
+function ExportPreview({
+  doc,
+  pitchView,
+  size,
+  shape,
+  look,
+  still,
+  sheet,
+}: {
+  doc: BoardDoc;
+  pitchView: PitchView;
+  size: Size;
+  shape: ExportShape;
+  look: ExportLook;
+  /** The time a single PNG is taken at; null plays the clip. */
+  still: number | null;
+  sheet: { scenes: number[]; longEdge: number } | null;
+}) {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const [sheetUrl, setSheetUrl] = useState<string | null>(null);
+  const scale = Math.min(PREVIEW_EDGE / size.width, PREVIEW_MAX_HEIGHT / size.height);
+  const cssWidth = Math.round(size.width * scale);
+  const cssHeight = Math.round(size.height * scale);
+  const css = { width: cssWidth, height: cssHeight };
+  // Primitives, not the objects the dialog rebuilds every render — or the preview would
+  // start its loop again on every keystroke.
+  const title = look.caption ? look.caption.title : null;
+  const named = look.caption?.scene ?? false;
+  const transparent = look.transparent ?? false;
+  const scenesKey = sheet?.scenes.join(",") ?? "";
+  const isSheet = sheet !== null;
+
+  useEffect(() => {
+    if (isSheet) return;
+    const el = canvas.current;
+    const ctx = el?.getContext("2d");
+    if (!el || !ctx) return;
+    // DPR lives in the canvas transform, never in the view (invariant 2).
+    const dpr = window.devicePixelRatio || 1;
+    el.width = Math.max(2, Math.round(cssWidth * dpr));
+    el.height = Math.max(2, Math.round(cssHeight * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const caption = title === null ? null : { title, scene: named };
+    const view = exportView(doc, { width: cssWidth, height: cssHeight }, pitchView, { caption, transparent });
+    if (still !== null) {
+      drawBoard(ctx, doc, still, view);
+      return;
+    }
+    const duration = Math.max(totalSeconds(doc), 0.001);
+    const began = performance.now();
+    let frame = 0;
+    const tick = (now: number) => {
+      drawBoard(ctx, doc, ((now - began) / 1000) % duration, view);
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [doc, pitchView, cssWidth, cssHeight, title, named, transparent, still, isSheet]);
+
+  useEffect(() => {
+    if (!isSheet) return;
+    let live = true;
+    let url: string | null = null;
+    const scenes = scenesKey.split(",").map(Number);
+    const caption = title === null ? null : { title, scene: named };
+    void renderSheet(doc, scenes, pitchView, PREVIEW_EDGE * 2, shape, { caption, transparent }).then((blob) => {
+      if (!live) return;
+      url = URL.createObjectURL(blob);
+      setSheetUrl(url);
+    });
+    return () => {
+      live = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [doc, pitchView, shape, title, named, transparent, scenesKey, isSheet]);
+
+  return (
+    <div className="flex justify-center rounded border border-ink-700 bg-ink-900 p-2">
+      {sheet ? (
+        sheetUrl && <img src={sheetUrl} alt="" style={css} className="block" />
+      ) : (
+        <canvas ref={canvas} style={css} className="block" />
+      )}
+    </div>
   );
 }

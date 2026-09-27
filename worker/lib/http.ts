@@ -6,6 +6,8 @@
  * is served to the next person through that colo.
  */
 
+import { SECURITY_HEADERS } from "./headers";
+
 const NO_STORE = { "cache-control": "no-store" } as const;
 
 export function json(body: unknown, status = 200, headers: HeadersInit = {}): Response {
@@ -18,4 +20,11 @@ export function json(body: unknown, status = 200, headers: HeadersInit = {}): Re
  */
 export function fail(code: string, status: number, headers: HeadersInit = {}): Response {
   return json({ error: code }, status, headers);
+}
+
+/** A response with the security headers set, whatever produced it. */
+export function secured(response: Response): Response {
+  const out = new Response(response.body, response);
+  for (const [name, value] of Object.entries(SECURITY_HEADERS)) out.headers.set(name, value);
+  return out;
 }

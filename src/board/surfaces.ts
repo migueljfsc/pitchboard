@@ -7,6 +7,7 @@
 import type { BoardDoc, Grass, Sport, TurfCache } from "./types";
 import { drawPitch, themeFor, type Ctx, type PitchTheme } from "./pitch";
 import { drawCourt, floorTheme } from "./court";
+import { drawFutsalCourt, futsalTheme } from "./futsal";
 import { drawHandballCourt, hallTheme } from "./handball";
 import { drawHockeyPitch, turfTheme } from "./hockey";
 import { drawVolleyballCourt, volleyballTheme } from "./volleyball";
@@ -20,6 +21,7 @@ type Surface = {
 
 const SURFACES: Record<Sport, Surface> = {
   football: { theme: themeFor, draw: drawPitch },
+  futsal: { theme: futsalTheme, draw: drawFutsalCourt },
   basketball: { theme: floorTheme, draw: drawCourt },
   handball: { theme: hallTheme, draw: drawHandballCourt },
   hockey: { theme: turfTheme, draw: drawHockeyPitch },

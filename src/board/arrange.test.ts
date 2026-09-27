@@ -183,8 +183,14 @@ describe("every sport's templates (D113)", () => {
 
   it("keeps the shots it is written with: none is pruned as impossible", () => {
     const shots = all.filter(([, id]) => buildTemplate(id, labels).scenes.some((s) => s.shot)).length;
-    // Football's counter and corner, all three basketball and handball plays, the hockey
-    // penalty corner, and every volleyball one — a spike, or the opponent's that is dug.
-    expect(shots).toBe(12);
+    // Football's counter, corner, kick-off and free kick, all three futsal, basketball and
+    // handball plays, the hockey penalty corner, and every volleyball one — a spike, or the
+    // opponent's that is dug.
+    expect(shots).toBe(17);
+  });
+
+  it("keeps the kick-off's two long balls in the air", () => {
+    const lofts = buildTemplate("kickOff", labels).scenes.filter((s) => s.loft).length;
+    expect(lofts).toBe(2);
   });
 });

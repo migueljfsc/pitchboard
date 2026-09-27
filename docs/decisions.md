@@ -555,6 +555,57 @@ attacking the right-hand goal; the menu offers the open board's sport's. The tou
 **The video importer loads when an import is submitted**, not with the page (`TracksReader`): about
 18 KB less on every first load.
 
+## D116 — A sweep: presenting is read-only, security headers, and the gaps a walk-through found
+**Presenting edits nothing.** The editor's key handler answers Space, Esc, the arrows and the
+brackets while presenting — the arrows step scenes, as a clicker does — and returns before any key
+that edits. It used to fall through, so Delete removed the selected player and N added a scene in
+front of the room, and the selection's halo was drawn over the play.
+
+**Security headers on everything served.** One list (`worker/lib/headers.ts`): a CSP whose only
+third party is Turnstile, `frame-ancestors 'none'` so the sign-in cannot be framed, nosniff, a
+referrer policy, and a permissions policy. The Worker sets them on every response it makes
+(`secured`); the build writes the same list into `_headers` for the asset layer, which serves the
+page without reaching the script. A new third-party origin goes in that list or the page breaks
+in production only.
+
+**Links are filed by side**, in Home and Away tabs named as the formations tabs are, and a Both tab
+while any link spans the two. A seeded link is named for its line alone ("Back 4"); boards seeded
+before keep "Home — Back 4", shown without the side under its own tab.
+
+**Export picks its scenes** — a board cut down to them (`sliceScenes`), which drops a drawing or
+link seen on none of them rather than widening it as deleting a scene does — **and shows what it
+will make**, a looping preview through the export's own view. A PNG can be every chosen scene on
+one sheet, each at rest and named (`renderSheet`). The dialog is anchored at the top, so changing
+format no longer moves the format buttons under the pointer. The caption comes last, after
+every setting of the file itself, and starts off each time rather than as last left.
+
+**The File menu is where a board starts and ends**: New board (a board saved to the account is
+left as it is and a fresh one opened, as switching sport does), Open, Save a copy, Import, Export.
+The drawing tools stay a click away on the folded rail, and picking one opens it — even with
+a tool already armed, which is no change in whether anything is being drawn. Football gains kick-off, free kick and
+throw-in templates, and the template menu shows each as a board. The viewer plays at ½× to 2×,
+presents, steps scenes with the arrows, and downloads through the same export dialog. A board
+nobody has touched says where to start, in a card hanging from Help — where the tour and the keys
+are found again — which is not a dialog and goes with the first change.
+
+## D117 — Futsal, second after football
+Futsal is a sport like the others (D113): a `SportSpec`, a court drawer (`futsal.ts`), formations,
+templates, a ball and an icon, each a table keyed by sport, so nothing branches on its name. It is
+listed second — football, futsal, basketball, then the rest — which is `SPORT_IDS`' order, and so
+the sport menu's and the library's roots'. The Worker's mirror follows; a root is created the
+first time an account lists its projects, so the new one needs no migration (D114).
+
+**The court is FIFA's Law 1 at 40 x 20 m.** The penalty area is handball's shape — quarter circles
+joined across the goal (`traceGoalArc`) — struck at 6 m about the OUTSIDE of each post, so the
+joining line is 3.16 m. The penalty mark at 6 m, the second at 10 m with a mark 5 m either side, a
+3 m centre circle, 25 cm corner arcs, and the substitution zones marked across the bench-side
+touchline 5 and 10 m from halfway. Goals 3 x 2 m.
+
+**Five a side with a keeper**, in 1-2-1, 2-2, 3-1 and 4-0; a new board is a diamond against a
+square. Lines are named as the game names them — the fixo, the wingers, the pivot — and "fixo" and
+"futsal" are the same word in English and Portuguese. Three plays: a 3-1 rotation, the fly
+goalkeeper five against four, and a corner.
+
 ---
 
 ## The importer (`src/import/`)

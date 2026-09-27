@@ -164,6 +164,13 @@ const ICONS: Record<Exclude<Sport, "volleyball">, ReactNode> = {
       <path d="M12 8.3V3.2M15.5 10.8l4.8-1.6M14.2 14.9l3 4.1M9.8 14.9l-3 4.1M8.5 10.8L3.7 9.2" />
     </>
   ),
+  futsal: (
+    <>
+      <circle cx="12" cy="10" r="7" />
+      <path d="M12 7.2l2.7 1.9-1 3.2h-3.4l-1-3.2z" />
+      <path d="M3 21h18" />
+    </>
+  ),
   basketball: (
     <>
       <circle cx="12" cy="12" r="9" />

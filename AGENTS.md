@@ -7,7 +7,7 @@ choice in [`docs/decisions.md`](docs/decisions.md) — cited below as Dn.
 
 ## Mission
 
-A browser tactics board — football, basketball, handball, field hockey and volleyball, one engine (D113) — where a coach draws a formation, moves players between scenes along
+A browser tactics board — football, futsal, basketball, handball, field hockey and volleyball, one engine (D113) — where a coach draws a formation, moves players between scenes along
 curved runs, and exports the result as MP4, GIF, or PNG. Everything renders client-side; there
 is no server-side video pipeline and there will not be one.
 
@@ -66,7 +66,7 @@ src/board/                the engine — zero React, zero DOM
   pitch.ts                IFAB dimensions table + markings
   surfaces.ts             each sport's court theme and drawing — the renderer never asks which sport
   court.ts                the basketball court: floor, FIBA markings, rings from above
-  handball.ts, hockey.ts, volleyball.ts
+  futsal.ts, handball.ts, hockey.ts, volleyball.ts
                           the other courts, each in its rulebook's metres
   markings.ts             shapes more than one court draws: the goal-area D, one path for both ends
   geometry.ts             bezier, arc-length LUT, easing
@@ -105,7 +105,7 @@ worker/                   Cloudflare Worker — the API, and the SPA's static pa
                           every other asset is served ahead of it
   lib/                    session, google, users, auth (email and password), password, account,
                           mail, turnstile, boards (and the project tree), presets,
-                          admin (the operator's /admin view), crypto, http, limits
+                          admin (the operator's /admin view), crypto, http, headers, limits
   migrations/             D1 schema, applied by CI before the script is deployed
 wrangler.jsonc            bindings and asset routing; the ONLY place a binding is declared
 infrastructure/terraform/cloudflare/    OpenTofu — R2, D1, KV, Turnstile, DNS. Durable resources only
@@ -241,6 +241,8 @@ Each is one line of what breaks; the reasoning is in the cited decision.
   captures a scene the first stopped at.
 - **A drag emits a document per `pointermove`** — history needs the merge key.
 - **Anything that deletes or replaces work goes through `notify`**, or the Undo is silently lost.
+- **Presenting edits nothing.** The key handler's `present` branch returns before any editing
+  key; a new shortcut that edits goes below it (D116).
 - **A field that validates per keystroke blocks the value being typed** (7 → 12 passes through 1;
   20 passes through ""). Use `components/ui/NumberField.tsx`; `SizeField` in `DrawPanel.tsx` is
   the one remaining copy.
@@ -311,6 +313,8 @@ Each is one line of what breaks; the reasoning is in the cited decision.
 - **A new table that stores anything about a person joins `deleteAccount`'s list** (D110).
   The cascade is a backstop, not the contract.
 - **Never mix a bare `?` with `?N` in one statement** — SQLite binds the wrong value, silently.
+- **A new third-party origin goes in `SECURITY_HEADERS`** — the CSP there covers the Worker's
+  responses and, through the `_headers` the build writes, every static file (D116).
 - **Deleting a project deletes its subtree**; the confirmation counts it.
 - **A sport's root is the library's shape** (D114): never renamed, moved or deleted, never counted
   against the folder or depth caps, and every other folder lives under one. A board is filed

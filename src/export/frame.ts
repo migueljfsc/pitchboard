@@ -152,3 +152,52 @@ export function sampleIndices(frames: number, samples = PALETTE_SAMPLES): number
   const out = Array.from({ length: n }, (_, i) => Math.round((i * (frames - 1)) / (n - 1)));
   return [...new Set(out)];
 }
+
+/** Columns and rows for a sheet of `count` scenes: one row up to three, then a grid. */
+export function sheetGrid(count: number): { cols: number; rows: number } {
+  const n = Math.max(1, count);
+  const cols = n <= 3 ? n : n === 4 ? 2 : n <= 9 ? 3 : 4;
+  return { cols, rows: Math.ceil(n / cols) };
+}
+
+export type SheetLayout = {
+  size: Size;
+  /** One board's frame; every tile is this size. */
+  tile: Size;
+  /** Height of the band the title sits in, 0 without one. */
+  header: number;
+  /** Top-left corner of each tile, in scene order. */
+  tiles: { x: number; y: number }[];
+};
+
+/**
+ * Every scene of a move on one image, a board per scene — the handout. `longEdge` is the
+ * width a single row of tiles adds up to, so the sizes offered mean roughly what they
+ * mean for a single frame.
+ */
+export function sheetLayout(
+  count: number,
+  longEdge: number,
+  doc: BoardDoc,
+  view: PitchView = DEFAULT_PITCH_VIEW,
+  shape: ExportShape = "board",
+  titled = false,
+): SheetLayout {
+  const { cols, rows } = sheetGrid(count);
+  const tile = exportSize(Math.round(longEdge / cols), doc, view, shape);
+  const gap = even(Math.max(tile.width, tile.height) * 0.02);
+  const header = titled ? even(Math.max(tile.width, tile.height) * 0.1) : 0;
+  const tiles = Array.from({ length: Math.max(1, count) }, (_, i) => ({
+    x: gap + (i % cols) * (tile.width + gap),
+    y: header + gap + Math.floor(i / cols) * (tile.height + gap),
+  }));
+  return {
+    size: {
+      width: cols * tile.width + (cols + 1) * gap,
+      height: header + rows * tile.height + (rows + 1) * gap,
+    },
+    tile,
+    header,
+    tiles,
+  };
+}

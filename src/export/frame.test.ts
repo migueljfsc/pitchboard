@@ -9,6 +9,8 @@ import {
   frameTime,
   gifDelays,
   sampleIndices,
+  sheetGrid,
+  sheetLayout,
 } from "./frame";
 
 const doc = createBoardDoc();
@@ -177,5 +179,43 @@ describe("sampleIndices", () => {
   it("does not repeat a frame on a short clip", () => {
     const picked = sampleIndices(5, 16);
     expect(new Set(picked).size).toBe(picked.length);
+  });
+});
+
+describe("the scene sheet", () => {
+  it("lays up to three scenes in a row, then a grid", () => {
+    expect(sheetGrid(1)).toEqual({ cols: 1, rows: 1 });
+    expect(sheetGrid(3)).toEqual({ cols: 3, rows: 1 });
+    expect(sheetGrid(4)).toEqual({ cols: 2, rows: 2 });
+    expect(sheetGrid(7)).toEqual({ cols: 3, rows: 3 });
+    expect(sheetGrid(12)).toEqual({ cols: 4, rows: 3 });
+  });
+
+  it("puts every tile inside the sheet, none overlapping, in scene order", () => {
+    const doc = createBoardDoc();
+    const { size, tile, tiles } = sheetLayout(5, 1920, doc, undefined, "board", true);
+    expect(tiles).toHaveLength(5);
+    for (const at of tiles) {
+      expect(at.x + tile.width).toBeLessThanOrEqual(size.width);
+      expect(at.y + tile.height).toBeLessThanOrEqual(size.height);
+    }
+    for (let i = 1; i < tiles.length; i++) {
+      const [a, b] = [tiles[i - 1], tiles[i]];
+      expect(b.y > a.y || b.x >= a.x + tile.width).toBe(true);
+    }
+  });
+
+  it("keeps a board's own shape in every tile, and even sides throughout", () => {
+    const doc = createBoardDoc();
+    const { size, tile } = sheetLayout(4, 1920, doc);
+    expect(tile).toEqual(exportSize(960, doc));
+    expect(size.width % 2).toBe(0);
+    expect(size.height % 2).toBe(0);
+  });
+
+  it("makes room for a title only when there is one", () => {
+    const doc = createBoardDoc();
+    expect(sheetLayout(2, 1920, doc).header).toBe(0);
+    expect(sheetLayout(2, 1920, doc, undefined, "board", true).header).toBeGreaterThan(0);
   });
 });

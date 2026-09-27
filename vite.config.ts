@@ -1,9 +1,25 @@
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
+import type { Plugin } from "vite";
+import { headersFile, SECURITY_HEADERS } from "./worker/lib/headers.ts";
+
+/**
+ * Writes `_headers` into the build, so the asset layer sends the Worker's security headers
+ * with every static file — one list, and the page it protects most is a static file.
+ */
+function securityHeaders(): Plugin {
+  return {
+    name: "security-headers",
+    apply: "build",
+    generateBundle() {
+      this.emitFile({ type: "asset", fileName: "_headers", source: headersFile(SECURITY_HEADERS) });
+    },
+  };
+}
 
 export default defineConfig(() => ({
-  plugins: [react()],
+  plugins: [react(), securityHeaders()],
   resolve: {
     alias: { "@": path.resolve(import.meta.dirname, "./src") },
   },

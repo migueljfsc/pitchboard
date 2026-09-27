@@ -22,8 +22,11 @@ import {
   setRunHidden,
   setSceneTiming,
   setShot,
+  sliceScenes,
   totalSeconds,
 } from "./scenes";
+import { addAnnotation, draftAnnotation, isVisibleAt } from "./annotations";
+import { isVisibleIn } from "./range";
 import { boardDocSchema } from "./schema";
 import { createBoardDoc } from "@/formations";
 import { distanceToSegment } from "./geometry";
@@ -111,6 +114,49 @@ describe("deleteScene", () => {
     const next = deleteScene(doc, 0);
     expect(next.scenes).toHaveLength(1);
     expect(valid(next)).toBe(true);
+  });
+});
+
+describe("sliceScenes", () => {
+  const drawnOn = (doc: BoardDoc, from: number, to: number | null) =>
+    addAnnotation(doc, {
+      ...draftAnnotation(doc, "arrow", doc.scenes[from].id, { x: 20, y: 20 }, { x: 40, y: 20 }, { color: "#fff" }),
+      to: to === null ? null : doc.scenes[to].id,
+    });
+
+  it("keeps the scenes asked for, in order, and lasts what they last", () => {
+    const doc = scenes(5);
+    const cut = sliceScenes(doc, 1, 3);
+    expect(cut.scenes.map((s) => s.id)).toEqual(doc.scenes.slice(1, 4).map((s) => s.id));
+    expect(totalSeconds(cut)).toBeCloseTo(totalSeconds(deleteScene(deleteScene(doc, 4), 0)), 9);
+    expect(valid(cut)).toBe(true);
+  });
+
+  it("is the board itself when every scene is kept", () => {
+    const doc = scenes(3);
+    expect(sliceScenes(doc, 0, 2)).toBe(doc);
+  });
+
+  it("drops a drawing seen only on scenes cut away, rather than widening it", () => {
+    const doc = drawnOn(scenes(5), 0, 0);
+    const cut = sliceScenes(doc, 2, 4);
+    expect(cut.annotations ?? []).toHaveLength(0);
+  });
+
+  it("keeps a drawing that runs into the kept scenes, from the first of them", () => {
+    const doc = drawnOn(scenes(5), 1, 3);
+    const cut = sliceScenes(doc, 2, 4);
+    const [ann] = cut.annotations ?? [];
+    expect([0, 1, 2].map((i) => isVisibleAt(cut, ann, i))).toEqual([true, true, false]);
+  });
+
+  it("drops a link ranged only over scenes cut away", () => {
+    const doc = scenes(4);
+    const link = { ...doc.links[0], from: doc.scenes[0].id, to: doc.scenes[1].id };
+    const withRange = { ...doc, links: [link, ...doc.links.slice(1)] };
+    const cut = sliceScenes(withRange, 2, 3);
+    expect(cut.links.find((l) => l.id === link.id)).toBeUndefined();
+    expect(cut.links.every((l) => isVisibleIn(cut, l, 0))).toBe(true);
   });
 });
 

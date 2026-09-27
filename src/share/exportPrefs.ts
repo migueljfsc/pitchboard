@@ -4,7 +4,8 @@
  * A per-browser convenience, through the ordinary storage layer: nothing throws,
  * and every field is validated on its own rather than trusted (D31) — one that is
  * out of range, or no longer offered, falls back to its default and takes nothing
- * else with it. The caption's words are the board's, so they are not kept.
+ * else with it. The caption's words are the board's, so they are not kept, and whether
+ * there is a caption at all is asked afresh each time: it starts off.
  */
 
 import {
@@ -29,7 +30,6 @@ export type ExportPrefs = {
   fps: number;
   bitrate: number;
   shape: ExportShape;
-  captioned: boolean;
   sceneCaption: boolean;
   transparent: boolean;
 };
@@ -42,7 +42,6 @@ export const EXPORT_DEFAULTS: ExportPrefs = {
   fps: DEFAULT_FPS.mp4,
   bitrate: DEFAULT_BITRATE,
   shape: "board",
-  captioned: false,
   sceneCaption: true,
   transparent: false,
 };
@@ -76,7 +75,6 @@ export function loadExportPrefs(store: Store | null = browserStore()): ExportPre
     fps,
     bitrate: oneOf(BITRATES, stored.bitrate) ?? d.bitrate,
     shape: oneOf(EXPORT_SHAPES, stored.shape) ?? d.shape,
-    captioned: flag(stored.captioned) ?? d.captioned,
     sceneCaption: flag(stored.sceneCaption) ?? d.sceneCaption,
     transparent: flag(stored.transparent) ?? d.transparent,
   };

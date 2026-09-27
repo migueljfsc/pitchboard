@@ -22,6 +22,7 @@ import {
   addMembers,
   deleteLink,
   linkColor,
+  linkSide,
   moveLink,
   moveMember,
   removeMember,
@@ -49,7 +50,11 @@ type Props = {
   onExpandedChange: (id: string | null) => void;
   /** The scene a highlight is set on — highlights are per scene and never carried (D41). */
   sceneIndex: number;
+  /** What a side's tab is called — the team's name, as the formations tabs have it. */
+  teamLabel: (side: 0 | 1) => string;
 };
+
+type Side = 0 | 1 | "both";
 
 const STYLES: { value: LinkStyle }[] = [
   { value: "chain" },
@@ -93,6 +98,7 @@ export function LinkPanel({
   expanded,
   onExpandedChange,
   sceneIndex,
+  teamLabel,
 }: Props) {
   // Which row is in the air, and which GAP it would drop into — 0 is above the
   // first row, n below the last. A gap says where the row lands; highlighting a
@@ -102,6 +108,23 @@ export function LinkPanel({
   const { t } = i18n;
   const [dragging, setDragging] = useState<number | null>(null);
   const [dropAt, setDropAt] = useState<number | null>(null);
+
+  // One side's links at a time, as the formations panel shows one team. A link opened
+  // from elsewhere — picked on the board, or just made — brings its side's tab up.
+  const [side, setSide] = useState<Side>(0);
+  const [shownFor, setShownFor] = useState(expanded);
+  if (shownFor !== expanded) {
+    setShownFor(expanded);
+    const open = doc.links.find((l) => l.id === expanded);
+    if (open) setSide(linkSide(doc, open));
+  }
+  const sides: Side[] = doc.links.some((l) => linkSide(doc, l) === "both") ? [0, 1, "both"] : [0, 1];
+  const tab = sides.includes(side) ? side : 0;
+  // Positions in the whole list, in document order, of the links on this tab. Reordering
+  // moves within the tab, and lands at the matching place in the document — which is
+  // draw order.
+  const shown = doc.links.flatMap((l, i) => (linkSide(doc, l) === tab ? [i] : []));
+  const at = (gap: number) => (gap < shown.length ? shown[gap] : shown[shown.length - 1] + 1);
 
   const players = [...selection].filter((id) => id !== "ball");
   const numberOf = (id: string) => {
@@ -141,17 +164,49 @@ export function LinkPanel({
         {players.length < 2 ? t("links.needTwo") : t("links.linkPlayers", { n: players.length })}
       </button>
 
+      <div role="tablist" className="flex gap-1 rounded-md bg-ink-900 p-0.5">
+        {sides.map((s) => {
+          const count = doc.links.filter((l) => linkSide(doc, l) === s).length;
+          return (
+            <button
+              key={s}
+              type="button"
+              role="tab"
+              aria-selected={tab === s}
+              onClick={() => setSide(s)}
+              className={cn(
+                "flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded px-2 py-1 text-[11px] transition",
+                tab === s ? "bg-ink-700 text-white" : "text-ink-400 hover:text-ink-200",
+              )}
+            >
+              {s !== "both" && (
+                <span
+                  className="size-2 shrink-0 rounded-full ring-1 ring-white/20"
+                  style={{ background: doc.teams[s].color }}
+                />
+              )}
+              <span className="truncate">{s === "both" ? t("links.both") : teamLabel(s)}</span>
+              <span className="font-mono text-[10px] text-ink-500">{count}</span>
+            </button>
+          );
+        })}
+      </div>
+
       <div className="flex flex-col gap-1.5">
-        {doc.links.map((link, i) => (
+        {shown.length === 0 && (
+          <p className="text-[11px] leading-relaxed text-ink-500">{t("links.noneOnSide")}</p>
+        )}
+        {shown.map((i) => doc.links[i]).map((link, row) => (
           <LinkRow
             key={link.id}
             doc={doc}
             link={link}
-            index={i}
-            count={doc.links.length}
-            dragging={dragging === i}
-            dropBefore={dropAt === i}
-            dropAfter={dropAt === doc.links.length && i === doc.links.length - 1}
+            name={displayName(link, tab === "both" ? null : doc.teams[tab].id)}
+            index={row}
+            count={shown.length}
+            dragging={dragging === row}
+            dropBefore={dropAt === row}
+            dropAfter={dropAt === shown.length && row === shown.length - 1}
             expanded={expanded === link.id}
             numberOf={numberOf}
             onToggle={() => onExpandedChange(expanded === link.id ? null : link.id)}
@@ -174,14 +229,16 @@ export function LinkPanel({
                 ),
               )
             }
-            onReorder={(to) => onDocChange(moveLink(doc, i, to))}
-            onDragStart={() => setDragging(i)}
+            onReorder={(to) => onDocChange(moveLink(doc, shown[row], shown[to]))}
+            onDragStart={() => setDragging(row)}
             onDragOver={setDropAt}
             onDrop={() => {
               // The gap index counts positions in the list as it stands; once
               // the dragged row is lifted out, everything below it shifts up.
-              if (dragging !== null && dropAt !== null) {
-                onDocChange(moveLink(doc, dragging, dropAt > dragging ? dropAt - 1 : dropAt));
+              if (dragging !== null && dropAt !== null && dropAt !== dragging && dropAt !== dragging + 1) {
+                const from = shown[dragging];
+                const to = at(dropAt);
+                onDocChange(moveLink(doc, from, to > from ? to - 1 : to));
               }
               setDragging(null);
               setDropAt(null);
@@ -198,9 +255,22 @@ export function LinkPanel({
   );
 }
 
+/**
+ * A link's name as its row shows it. Boards made before the panel had tabs seeded
+ * "Home — Back 4", under the name the team had then; a seeded link's id still starts
+ * with its team's, so under that team's tab the side is not said twice.
+ */
+function displayName(link: Link, teamId: string | null): string {
+  const cut = link.name.indexOf(" — ");
+  return teamId && link.id.startsWith(`${teamId}-`) && cut > 0 && cut + 3 < link.name.length
+    ? link.name.slice(cut + 3)
+    : link.name;
+}
+
 function LinkRow({
   doc,
   link,
+  name,
   index,
   count,
   dragging,
@@ -227,6 +297,8 @@ function LinkRow({
 }: {
   doc: BoardDoc;
   link: Link;
+  /** What the row calls the link; the name field still edits `link.name`. */
+  name: string;
   index: number;
   count: number;
   dragging: boolean;
@@ -301,7 +373,7 @@ function LinkRow({
       {dropBefore && <DropLine className="-top-1" />}
       {dropAfter && <DropLine className="-bottom-1" />}
 
-      <div className="flex items-center gap-1 px-1.5 py-1.5">
+      <div className="group flex items-center gap-1 px-1.5 py-1.5">
         {/* Document order is draw order, so this reorders the stack too. */}
         <button
           type="button"
@@ -348,12 +420,13 @@ function LinkRow({
           onClick={onToggle}
           aria-expanded={expanded}
           className="min-w-0 flex-1 truncate text-left text-xs text-ink-200 hover:text-white"
-          title={t("links.edit.title")}
+          title={t("links.row.title", { name: link.name })}
         >
-          {link.name}
+          {name}
         </button>
         <Tiny
           label={t(link.lit ? "links.letDim" : "links.keepLit")}
+          folds
           active={link.lit ?? false}
           onClick={() => onChange({ lit: link.lit ? undefined : true })}
         >
@@ -361,6 +434,7 @@ function LinkRow({
         </Tiny>
         <Tiny
           label={t(lit ? "links.unhighlight" : "links.highlight")}
+          folds
           active={lit}
           onClick={onToggleLit}
         >
@@ -368,6 +442,7 @@ function LinkRow({
         </Tiny>
         <Tiny
           label={t(link.showDistances ? "links.hideDistances" : "links.showDistances")}
+          folds
           active={link.showDistances}
           onClick={() => onChange({ showDistances: !link.showDistances })}
         >
@@ -641,11 +716,14 @@ function Tiny({
   active,
   onClick,
   children,
+  folds,
 }: {
   label: string;
   active?: boolean;
   onClick: () => void;
   children: React.ReactNode;
+  /** Off, it steps aside until the row is pointed at or focused, and the name gets the room. */
+  folds?: boolean;
 }) {
   return (
     <button
@@ -656,6 +734,7 @@ function Tiny({
       className={cn(
         "flex size-5 shrink-0 items-center justify-center rounded transition",
         active ? "text-accent" : "text-ink-400 hover:text-ink-200",
+        folds && !active && "hidden group-hover:flex group-focus-within:flex",
       )}
     >
       {children}

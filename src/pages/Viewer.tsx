@@ -1,8 +1,11 @@
-import { useEffect, useRef, useState } from "react";
-import { Pause, Pencil, Play, Repeat } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Download, Pause, Pencil, Play, Presentation, Repeat, X } from "lucide-react";
 import type { BoardDoc, PitchView } from "@/board/types";
 import { DEFAULT_PITCH_VIEW } from "@/board/types";
 import { BoardCanvas } from "@/components/BoardCanvas";
+import { ExportDialog } from "@/components/ExportDialog";
+import { SpeedButton } from "@/components/Timeline";
+import { useExportJob } from "@/lib/useExportJob";
 import { ViewControls } from "@/components/ViewControls";
 import { sceneStartSeconds, totalSeconds } from "@/board/scenes";
 import { frameAt } from "@/board/timeline";
@@ -37,6 +40,13 @@ export function Viewer({ doc, initialView, onFork }: Props) {
   const [playing, setPlaying] = useState(false);
   const [loop, setLoop] = useState(true);
   const [pitchView, setPitchView] = useState<PitchView>(initialView ?? DEFAULT_PITCH_VIEW);
+  const [speed, setSpeed] = useState(1);
+  // Presenting hides everything but the board and a thin bar, and asks for the whole
+  // screen — a coach showing the move to a room.
+  const [present, setPresent] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  // What a recipient can take away without forking: the same exports the editor makes.
+  const exportJob = useExportJob();
 
   const total = totalSeconds(doc);
   const frame = frameAt(doc, time);
@@ -50,7 +60,7 @@ export function Viewer({ doc, initialView, onFork }: Props) {
     last.current = performance.now();
 
     const tick = (now: number) => {
-      const delta = (now - last.current) / 1000;
+      const delta = ((now - last.current) / 1000) * speed;
       last.current = now;
       setTime((t) => {
         const next = t + delta;
@@ -64,21 +74,57 @@ export function Viewer({ doc, initialView, onFork }: Props) {
 
     raf.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf.current);
-  }, [playing, loop, total]);
+  }, [playing, loop, total, speed]);
 
+  const sceneIndex = frame.resolved.index;
+  const goToScene = useCallback(
+    (index: number) => {
+      if (index < 0 || index >= doc.scenes.length) return;
+      setPlaying(false);
+      setTime(sceneStartSeconds(doc, index));
+    },
+    [doc],
+  );
+
+  const presentOn = (on: boolean) => {
+    setPresent(on);
+    // Fullscreen is a request the browser may refuse; presenting works in the window too.
+    if (on) void document.documentElement.requestFullscreen?.().catch(() => {});
+    else if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+  };
+
+  // Leaving fullscreen with the browser's own Esc ends presenting too.
+  useEffect(() => {
+    const onChange = () => {
+      if (!document.fullscreenElement) setPresent(false);
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+
+  // Space plays, the arrows step scenes, Esc stops presenting. The export dialog owns the
+  // keyboard while it is open.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (exportOpen || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.target instanceof HTMLElement && ["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName)) return;
-      if (e.code !== "Space") return;
-      e.preventDefault();
-      setPlaying((p) => !p);
+      if (e.code === "Space") {
+        e.preventDefault();
+        setPlaying((p) => !p);
+      } else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+        e.preventDefault();
+        goToScene(sceneIndex + (e.key === "ArrowRight" ? 1 : -1));
+      } else if (e.key === "Escape" && present) {
+        setPresent(false);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [exportOpen, goToScene, sceneIndex, present]);
 
   return (
     <div className="flex h-full w-full flex-col bg-ink-900">
+      {!present && (
       <header className="flex shrink-0 items-center gap-3 border-b border-ink-700 bg-ink-800 px-4 py-2.5">
         <div className="min-w-0">
           <h1 className="truncate text-sm font-semibold text-white">{doc.name}</h1>
@@ -90,6 +136,24 @@ export function Viewer({ doc, initialView, onFork }: Props) {
 
         <div className="ml-auto flex items-center gap-2">
           <ViewControls view={pitchView} onChange={setPitchView} showHalves={false} />
+          <button
+            type="button"
+            onClick={() => presentOn(true)}
+            title={t("present.enter.title")}
+            className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
+          >
+            <Presentation size={13} />
+            {t("present.enter")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setExportOpen(true)}
+            title={t("viewer.download.title")}
+            className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
+          >
+            <Download size={13} />
+            {t("viewer.download")}
+          </button>
           <LocaleSwitch />
           <button
             type="button"
@@ -101,12 +165,13 @@ export function Viewer({ doc, initialView, onFork }: Props) {
           </button>
         </div>
       </header>
+      )}
 
       <div className="min-h-0 flex-1">
         <BoardCanvas
           doc={doc}
           t={time}
-          sceneIndex={frame.resolved.index}
+          sceneIndex={sceneIndex}
           pitchView={pitchView}
           interactive={false}
           sceneCamera
@@ -140,6 +205,8 @@ export function Viewer({ doc, initialView, onFork }: Props) {
           <Repeat size={14} />
         </button>
 
+        <SpeedButton speed={speed} onChange={setSpeed} />
+
         <input
           type="range"
           min={0}
@@ -157,21 +224,30 @@ export function Viewer({ doc, initialView, onFork }: Props) {
         <span className="shrink-0 font-mono text-[11px] text-ink-400">
           {time.toFixed(1)}s / {total.toFixed(1)}s
         </span>
+
+        {present && (
+          <button
+            type="button"
+            onClick={() => presentOn(false)}
+            title={t("present.exit.title")}
+            className="flex shrink-0 items-center gap-1.5 rounded-md border border-ink-600 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-ink-400 hover:text-white"
+          >
+            <X size={13} />
+            {t("present.exit")}
+          </button>
+        )}
       </div>
 
-      {doc.scenes.length > 1 && (
+      {!present && doc.scenes.length > 1 && (
         <div className="flex shrink-0 gap-1.5 overflow-x-auto border-t border-ink-700 bg-ink-800 px-4 pb-3">
           {doc.scenes.map((scene, i) => (
             <button
               key={scene.id}
               type="button"
-              onClick={() => {
-                setPlaying(false);
-                setTime(sceneStartSeconds(doc, i));
-              }}
+              onClick={() => goToScene(i)}
               className={cn(
                 "shrink-0 rounded-md border px-3 py-1.5 text-left text-xs transition",
-                frame.resolved.index === i
+                sceneIndex === i
                   ? "border-accent text-white"
                   : "border-ink-600 text-ink-300 hover:border-ink-400 hover:text-white",
               )}
@@ -180,6 +256,16 @@ export function Viewer({ doc, initialView, onFork }: Props) {
             </button>
           ))}
         </div>
+      )}
+
+      {exportOpen && (
+        <ExportDialog
+          doc={doc}
+          t={time}
+          pitchView={pitchView}
+          onClose={() => setExportOpen(false)}
+          exportJob={exportJob}
+        />
       )}
     </div>
   );

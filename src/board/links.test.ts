@@ -7,6 +7,7 @@ import {
   clearLinks,
   createLink,
   linkColor,
+  linkSide,
   linkGeometry,
   moveLink,
   moveMember,
@@ -308,6 +309,44 @@ describe("seeded links from formations", () => {
 
   it("has distances off by default, so the board starts clean", () => {
     for (const l of createBoardDoc().links) expect(l.showDistances).toBe(false);
+  });
+
+  it("names the line only — the side is where the panel files it", () => {
+    const doc = createBoardDoc();
+    for (const l of doc.links) {
+      expect(l.name).not.toContain(doc.teams[0].name);
+      expect(l.name).not.toContain(doc.teams[1].name);
+    }
+  });
+});
+
+describe("linkSide", () => {
+  const over = (members: string[]): Link => ({
+    id: "l1",
+    name: "Test",
+    members,
+    style: "chain",
+    showDistances: false,
+  });
+
+  it("is the team every member plays for", () => {
+    const doc = createBoardDoc();
+    expect(linkSide(doc, over([A, B]))).toBe(0);
+    const [c, d] = doc.teams[1].players;
+    expect(linkSide(doc, over([c.id, d.id]))).toBe(1);
+  });
+
+  it("is both for a link spanning the two sides", () => {
+    const doc = createBoardDoc();
+    expect(linkSide(doc, over([A, doc.teams[1].players[0].id]))).toBe("both");
+  });
+
+  it("files every seeded link under the side it was seeded from", () => {
+    const doc = createBoardDoc();
+    const sides = doc.links.map((l) => linkSide(doc, l));
+    expect(sides).toContain(0);
+    expect(sides).toContain(1);
+    expect(sides).not.toContain("both");
   });
 });
 

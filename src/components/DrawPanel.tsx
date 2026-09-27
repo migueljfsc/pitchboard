@@ -87,6 +87,35 @@ const TOOLS: { value: Tool; icon: typeof Minus; key: string }[] = [
   { value: "ball", icon: CircleDot, key: "ball" },
 ];
 
+/**
+ * The drawing tools as a column of icons, for the rail while it is folded: the tools stay
+ * one click from the board without the rail taking the pitch's width. Arming one opens
+ * the rail, as arming it anywhere does.
+ */
+export function DrawToolStrip({ tool, onToolChange }: { tool: Tool; onToolChange: (tool: Tool) => void }) {
+  const { t } = useI18n();
+  return (
+    <div className="flex flex-col items-center gap-1 border-t border-ink-700 py-2">
+      {TOOLS.filter((item) => isDrawTool(item.value)).map((item) => (
+        <button
+          key={item.value}
+          type="button"
+          title={t(`draw.tool.${item.key}.hint` as MessageKey)}
+          aria-label={t(`draw.tool.${item.key}.hint` as MessageKey)}
+          aria-pressed={tool === item.value}
+          onClick={() => onToolChange(item.value)}
+          className={cn(
+            "flex size-7 items-center justify-center rounded-md transition",
+            tool === item.value ? "bg-ink-700 text-accent" : "text-ink-300 hover:bg-ink-700/60 hover:text-white",
+          )}
+        >
+          <item.icon size={14} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 const DASHES: { value: AnnotationDash; key: string }[] = [
   { value: "solid", key: "solid" },
   { value: "dashed", key: "dashed" },

@@ -15,11 +15,20 @@ import { SPORTS } from "@/board/sports";
 import { createBoardDoc, sidesFor, type LineNamer, type TeamSpec } from "./index";
 
 /** Football's templates: what the tour is built from, and what every board had before sports. */
-export const TEMPLATE_IDS = ["buildUp", "counter", "corner", "press"] as const;
+export const TEMPLATE_IDS = [
+  "buildUp",
+  "counter",
+  "corner",
+  "press",
+  "kickOff",
+  "freeKick",
+  "throwIn",
+] as const;
 
 /** Each sport's own, in the order its menu offers them. Ids are unique across sports. */
 export const SPORT_TEMPLATES = {
   football: TEMPLATE_IDS,
+  futsal: ["futsalRotation", "futsalFlyKeeper", "futsalCorner"],
   basketball: ["pickAndRoll", "fastBreak", "baselineInbound"],
   handball: ["handballFastBreak", "crossing", "sevenOnSix"],
   hockey: ["penaltyCorner", "hockeyBuildUp", "hockeyPress"],
@@ -113,6 +122,134 @@ const STEPS: Record<TemplateId, Step[]> = {
       ball: "away-6",
     },
     { moves: { "home-9": { x: 93, y: 23 }, "home-4": { x: 80, y: 18 }, "away-6": { x: 94, y: 20 } }, ball: "away-6" },
+  ],
+
+  // Tapped back from the spot, switched long to the right wing, crossed and headed in.
+  kickOff: [
+    { moves: { "home-9": { x: 52.5, y: 34 }, "home-10": { x: 50, y: 40 } }, ball: "home-9" },
+    {
+      moves: { "home-8": { x: 44, y: 34 }, "home-7": { x: 58, y: 8 }, "home-11": { x: 58, y: 60 }, "home-9": { x: 58, y: 30 } },
+      ball: "home-8",
+      runOn: ["home-7", "home-11"],
+    },
+    { moves: { "home-7": { x: 72, y: 6 }, "home-11": { x: 72, y: 60 }, "home-9": { x: 70, y: 30 } }, ball: "home-7", loft: true },
+    {
+      moves: { "home-7": { x: 84, y: 7 }, "home-9": { x: 94, y: 33 }, "away-3": { x: 86, y: 12 }, "away-6": { x: 95, y: 30 } },
+      ball: "home-9",
+      loft: true,
+    },
+    { ball: { x: 104.6, y: 33 }, shot: true },
+  ],
+  // Just outside the box: a four-man wall 9.15 m off the ball, a dummy run over it, and
+  // the shot curled round to the keeper's left.
+  freeKick: [
+    {
+      moves: {
+        "home-10": { x: 80.5, y: 41 },
+        "home-7": { x: 80.8, y: 38.6 },
+        "home-9": { x: 93, y: 31 },
+        "home-11": { x: 92, y: 45 },
+        "home-5": { x: 90, y: 27 },
+        "home-8": { x: 78, y: 30 },
+        "away-1": { x: 104, y: 32.5 },
+        "away-7": { x: 90.4, y: 36 },
+        "away-8": { x: 90.7, y: 37.1 },
+        "away-10": { x: 91, y: 38.3 },
+        "away-9": { x: 91.3, y: 39.4 },
+        "away-5": { x: 97, y: 40 },
+        "away-6": { x: 97, y: 33 },
+        "away-2": { x: 95, y: 46 },
+        "away-3": { x: 96, y: 27 },
+        "away-11": { x: 86, y: 29 },
+        "away-4": { x: 88, y: 47 },
+      },
+      ball: "home-10",
+    },
+    { moves: { "home-7": { x: 84.5, y: 37.5 } }, ball: "home-10" },
+    { ball: { x: 104.6, y: 31.4 }, shot: true },
+  ],
+  // A throw to the winger checking back, laid inside, and the full-back away down the line.
+  throwIn: [
+    {
+      moves: {
+        "home-2": { x: 62, y: 0.4 },
+        "home-7": { x: 68, y: 8 },
+        "home-4": { x: 57, y: 9 },
+        "home-8": { x: 63, y: 16 },
+        "away-11": { x: 67, y: 10 },
+        "away-7": { x: 61, y: 13 },
+        "away-3": { x: 76, y: 9 },
+      },
+      ball: "home-2",
+    },
+    { moves: { "home-7": { x: 63.5, y: 4.5 }, "away-11": { x: 65, y: 6.5 } }, ball: "home-7" },
+    { moves: { "home-2": { x: 70, y: 2 }, "home-4": { x: 58, y: 8 } }, ball: "home-4", runOn: ["home-2"] },
+    { moves: { "home-2": { x: 80, y: 3.5 }, "away-3": { x: 78, y: 7 } }, ball: "home-2" },
+  ],
+
+  // --- futsal: a 40 x 20 m court, the goal home attacks between y 8.5 and 11.5 at x 40 ---
+  // Against a 2-2, the fixo plays it wide and follows his pass; the pivot sets it back for
+  // him arriving, and a winger drops to cover the space he left.
+  futsalRotation: [
+    {
+      moves: {
+        "home-2": { x: 15, y: 10 },
+        "home-3": { x: 19, y: 2.5 },
+        "home-4": { x: 19, y: 17.5 },
+        "home-5": { x: 32, y: 10 },
+        "away-4": { x: 24, y: 13 },
+        "away-5": { x: 24, y: 7 },
+        "away-2": { x: 30, y: 13 },
+        "away-3": { x: 30, y: 7 },
+      },
+      ball: "home-2",
+    },
+    { moves: { "home-2": { x: 22, y: 6 }, "home-4": { x: 16, y: 12 } }, ball: "home-3", runOn: ["home-2"] },
+    { moves: { "home-2": { x: 29, y: 4 }, "home-5": { x: 31, y: 9 }, "away-3": { x: 29.5, y: 6 } }, ball: "home-5" },
+    { moves: { "home-2": { x: 33, y: 5 }, "home-3": { x: 22, y: 5 } }, ball: "home-2" },
+    { ball: { x: 40.5, y: 9.2 }, shot: true },
+  ],
+  // The keeper comes out as a fifth court player; the ball goes round the box until the far
+  // pivot is free at the post.
+  futsalFlyKeeper: [
+    {
+      moves: {
+        "home-1": { x: 19, y: 10 },
+        "home-3": { x: 23, y: 3 },
+        "home-4": { x: 23, y: 17 },
+        "home-2": { x: 32, y: 7 },
+        "home-5": { x: 32, y: 13 },
+        "away-4": { x: 26, y: 13 },
+        "away-5": { x: 26, y: 7 },
+        "away-2": { x: 34.5, y: 12.5 },
+        "away-3": { x: 34.5, y: 7.5 },
+      },
+      ball: "home-1",
+    },
+    { moves: { "away-5": { x: 26, y: 5 }, "away-4": { x: 25, y: 9 } }, ball: "home-3" },
+    { moves: { "home-2": { x: 31, y: 5 }, "away-3": { x: 33.5, y: 6 } }, ball: "home-2" },
+    { moves: { "home-5": { x: 35.5, y: 12.5 }, "away-2": { x: 37, y: 11.5 } }, ball: "home-5" },
+    { ball: { x: 40.5, y: 10.5 }, shot: true },
+  ],
+  // From the right-hand corner, played back to the fixo arriving at the edge of the area
+  // while the pivot screens, and struck low.
+  futsalCorner: [
+    {
+      moves: {
+        "home-3": { x: 39.8, y: 0.3 },
+        "home-2": { x: 28, y: 9 },
+        "home-4": { x: 33, y: 6 },
+        "home-5": { x: 34, y: 12 },
+        "away-1": { x: 39.2, y: 10 },
+        "away-2": { x: 36, y: 12.5 },
+        "away-3": { x: 36, y: 7 },
+        "away-4": { x: 33, y: 9.5 },
+        "away-5": { x: 35.5, y: 4 },
+      },
+      ball: "home-3",
+    },
+    { moves: { "home-2": { x: 31, y: 8 }, "home-5": { x: 35, y: 11 } }, ball: "home-2" },
+    { ball: { x: 40.5, y: 9.3 }, shot: true },
   ],
 
   // --- basketball: a 28 x 15 m court, the ring home attacks at (26.4, 7.5) ---

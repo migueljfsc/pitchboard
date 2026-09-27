@@ -101,6 +101,18 @@ export function linkColor(doc: BoardDoc, link: Link): string {
   return owner ?? NEUTRAL_LINK_COLOR;
 }
 
+/**
+ * Which side a link belongs to: the team all its members play for, or "both" when it
+ * spans the two — a marking pair, say. Ownership by membership, as `replaceTeamLinks`
+ * and `linkColor` read it.
+ */
+export function linkSide(doc: BoardDoc, link: Link): 0 | 1 | "both" {
+  const on = ([0, 1] as const).filter((i) =>
+    doc.teams[i].players.some((p) => link.members.includes(p.id)),
+  );
+  return on.length === 1 ? on[0] : "both";
+}
+
 /** For a link with no team of its own. White reads on grass at any kit colour. */
 export const NEUTRAL_LINK_COLOR = "#ffffff";
 

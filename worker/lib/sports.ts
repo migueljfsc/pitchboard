@@ -6,7 +6,7 @@
  * the roots every account's library is filed under.
  */
 
-export const SPORTS = ["football", "basketball", "handball", "hockey", "volleyball"] as const;
+export const SPORTS = ["football", "futsal", "basketball", "handball", "hockey", "volleyball"] as const;
 
 export type Sport = (typeof SPORTS)[number];
 

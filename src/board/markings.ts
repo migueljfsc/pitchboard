@@ -21,8 +21,9 @@ export function atEachEnd(ctx: Ctx, length: number, draw: (dir: 1 | -1) => void)
 }
 
 /**
- * The goal area of handball and the shooting circle of hockey: a quarter circle of
- * `radius` about each post, joined by a straight line across the front of the goal.
+ * The goal area of handball, the penalty area of futsal and the shooting circle of hockey:
+ * a quarter circle of `radius` about each post, joined by a straight line across the front
+ * of the goal.
  * Traced from the goal line on one side round to the goal line on the other, so it can
  * be stroked as a line or closed along the goal line and filled.
  */

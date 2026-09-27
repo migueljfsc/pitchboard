@@ -125,6 +125,32 @@ const BASKETBALL = scaled(28, 15);
 /** FIBA metres into basketball's units. */
 const bb = (m: number): number => m / BASKETBALL.metresPerUnit;
 
+/** A FIFA futsal court's markings, in metres (Futsal Laws of the Game, Law 1). */
+export const FUTSAL_COURT = {
+  lineWidth: 0.08,
+  centreCircle: 3,
+  /**
+   * The penalty area: quarter circles of 6 m about the OUTSIDE of each post, joined by a
+   * 3.16 m line — the goal's 3 m and both posts.
+   */
+  penaltyArea: 6,
+  postWidth: 0.08,
+  penaltyMark: 6,
+  secondPenaltyMark: 10,
+  /** The two marks either side of the second penalty mark. */
+  secondMarkSide: 5,
+  markRadius: 0.1,
+  cornerArc: 0.25,
+  /** The substitution zones: 5 m long, starting 5 m from the halfway line, on the bench side. */
+  substitution: { from: 5, to: 10, tick: 0.4 },
+  goalWidth: 3,
+  goalHeight: 2,
+  goalDepth: 1,
+} as const;
+
+const FUTSAL = scaled(40, 20);
+const fs = (m: number): number => m / FUTSAL.metresPerUnit;
+
 /** An IHF handball court's markings, in metres. */
 export const HANDBALL_COURT = {
   lineWidth: 0.05,
@@ -195,6 +221,24 @@ export const SPORTS: Record<Sport, SportSpec> = {
     snaps: {
       depths: [PITCH.sixYardDepth, PITCH.penaltySpot, PITCH.penaltyDepth],
       spans: [PITCH.sixYardWidth, PITCH.penaltyWidth],
+    },
+  },
+  futsal: {
+    id: "futsal",
+    ...FUTSAL,
+    keeper: true,
+    surface: "floor",
+    goal: {
+      kind: "net",
+      width: fs(FUTSAL_COURT.goalWidth),
+      depth: fs(FUTSAL_COURT.goalDepth),
+      height: fs(FUTSAL_COURT.goalHeight),
+    },
+    ballGlyph: "⚽",
+    headroom: 0.05,
+    snaps: {
+      depths: [FUTSAL_COURT.penaltyArea, FUTSAL_COURT.secondPenaltyMark].map(fs),
+      spans: [fs(FUTSAL_COURT.goalWidth)],
     },
   },
   basketball: {

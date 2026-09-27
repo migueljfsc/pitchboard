@@ -474,7 +474,7 @@ describe("seeded link names follow the board's language (D38)", () => {
     const named = createBoardDoc(HOME, AWAY, undefined, { line: (l) => `${l.role}:${l.spread.length}` });
     const english = createBoardDoc();
     expect(named.links.map((l) => l.id)).toEqual(english.links.map((l) => l.id));
-    expect(named.links[0].name).toBe(`${HOME.name} — back:4`);
-    expect(english.links[0].name).toBe(`${HOME.name} — Back 4`);
+    expect(named.links[0].name).toBe("back:4");
+    expect(english.links[0].name).toBe("Back 4");
   });
 });

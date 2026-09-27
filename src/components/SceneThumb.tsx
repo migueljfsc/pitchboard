@@ -41,9 +41,12 @@ type Props = {
   /** Scene to draw, at rest. */
   index: number;
   view: PitchView;
+  /** The tile, in CSS pixels, where it is not the strip's. */
+  width?: number;
+  height?: number;
 };
 
-function Thumb({ doc, index, view }: Props) {
+function Thumb({ doc, index, view, width = THUMB_WIDTH, height = THUMB_HEIGHT }: Props) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -53,14 +56,14 @@ function Thumb({ doc, index, view }: Props) {
 
     // DPR lives here and only here — never in Viewport.scale.
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.round(THUMB_WIDTH * dpr);
-    canvas.height = Math.round(THUMB_HEIGHT * dpr);
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     // The angled camera is unreadable at this size and wants an OffscreenCanvas
     // per redraw. A thumbnail follows the crop and the rotation and stops there.
     const flat: PitchView = { ...view, tilt: false };
-    const size = { width: THUMB_WIDTH, height: THUMB_HEIGHT };
+    const size = { width, height };
 
     // `sceneStartSeconds` is the instant the scene comes to rest, so what is drawn
     // is its stored positions rather than anything interpolated — in flow mode too,
@@ -70,12 +73,12 @@ function Thumb({ doc, index, view }: Props) {
       ...exportView(doc, size, flat),
       turf: TURF,
     });
-  }, [doc, index, view]);
+  }, [doc, index, view, width, height]);
 
   return (
     <canvas
       ref={ref}
-      style={{ width: THUMB_WIDTH, height: THUMB_HEIGHT }}
+      style={{ width, height }}
       className="block rounded-sm"
       aria-hidden="true"
     />
@@ -95,6 +98,8 @@ function Thumb({ doc, index, view }: Props) {
 const same = (a: Props, b: Props): boolean =>
   a.index === b.index &&
   a.view === b.view &&
+  a.width === b.width &&
+  a.height === b.height &&
   a.doc.scenes.length === b.doc.scenes.length &&
   a.doc.scenes[a.index] === b.doc.scenes[b.index] &&
   a.doc.teams === b.doc.teams &&

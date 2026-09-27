@@ -46,6 +46,10 @@ export type LineRole =
   | "chaser"
   | "handball.line"
   | "handball.point"
+  | "futsal.fixo"
+  | "futsal.wings"
+  | "futsal.pivot"
+  | "futsal.line"
   | "row.back"
   | "row.front"
   | "w.back"
@@ -176,6 +180,10 @@ const ENGLISH: Record<LineRole, (n: number) => string> = {
   chaser: () => "Chaser",
   "handball.line": (n) => `Back ${n}`,
   "handball.point": () => "Front 1",
+  "futsal.fixo": () => "Fixo",
+  "futsal.wings": () => "Wingers",
+  "futsal.pivot": () => "Pivot",
+  "futsal.line": (n) => `Line of ${n}`,
   "row.back": () => "Back row",
   "row.front": () => "Front row",
   "w.back": () => "Back W",
@@ -355,6 +363,35 @@ const HANDBALL_FORMATIONS: Formation[] = [
   ]),
 ];
 
+/**
+ * Futsal's systems, five a side with a keeper, named as the game names them: the fixo at
+ * the back, the wingers, the pivot up front. Depths are metres from the goal line over the
+ * court's 40, spreads metres across over its 20.
+ */
+const FS_KEEPER: [LineRole, number, number[], number[]] = ["keeper", 0.03, [0.5], [1]];
+const FUTSAL_FORMATIONS: Formation[] = [
+  laidOut("futsal", "1-2-1", "Systems", [
+    FS_KEEPER,
+    ["futsal.fixo", 0.2, [0.5], [2]],
+    ["futsal.wings", 0.32, [0.15, 0.85], [3, 4]],
+    ["futsal.pivot", 0.46, [0.5], [5]],
+  ]),
+  laidOut("futsal", "2-2", "Systems", [
+    FS_KEEPER,
+    ["court.back", 0.22, [0.3, 0.7], [2, 3]],
+    ["court.front", 0.42, [0.3, 0.7], [4, 5]],
+  ]),
+  laidOut("futsal", "3-1", "Systems", [
+    FS_KEEPER,
+    ["court.back", 0.25, [0.15, 0.5, 0.85], [3, 2, 4]],
+    ["futsal.pivot", 0.45, [0.5], [5]],
+  ]),
+  laidOut("futsal", "4-0", "Systems", [
+    FS_KEEPER,
+    ["futsal.line", 0.35, [0.12, 0.37, 0.63, 0.88], [3, 2, 5, 4]],
+  ]),
+];
+
 /** Field hockey is eleven a side with a keeper, and reads its shapes as football does. */
 const HOCKEY_FORMATIONS: Formation[] = (
   [
@@ -387,6 +424,7 @@ const VOLLEYBALL_FORMATIONS: Formation[] = [
 
 const CATALOGUE: Record<Sport, Formation[]> = {
   football: FORMATIONS,
+  futsal: FUTSAL_FORMATIONS,
   basketball: BASKETBALL_FORMATIONS,
   handball: HANDBALL_FORMATIONS,
   hockey: HOCKEY_FORMATIONS,
@@ -396,6 +434,7 @@ const CATALOGUE: Record<Sport, Formation[]> = {
 /** What each side starts in, per sport: home then away. */
 const SIDE_FORMATIONS: Record<Sport, [string, string]> = {
   football: [DEFAULT_FORMATION, "4-4-2"],
+  futsal: ["1-2-1", "2-2"],
   basketball: ["2-3", "1-3-1"],
   handball: ["6-0", "5-1"],
   hockey: ["4-3-3", "3-3-1-3"],
@@ -499,7 +538,8 @@ export function buildTeam(
     if (line.link && ids.length >= 2) {
       links.push({
         id: `${spec.id}-${slug(line.label)}`,
-        name: `${spec.name} — ${lineName(line)}`,
+        // The line alone: the links panel files each link under its side already.
+        name: lineName(line),
         members: ids,
         style: line.link,
         // No colour: a seeded link follows the kit it was seeded from.
