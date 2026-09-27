@@ -18,10 +18,17 @@ import { SPORT_IDS } from "@/board/types";
 import { boardDocSchema } from "@/board/schema";
 import { migrate } from "@/board/migrate";
 import { replaceTeamLinks } from "@/board/links";
-import { createBoardDoc, sidesFor, type TeamSpec } from "@/formations";
+import { createBoardDoc, sidesFor, type LineNamer, type TeamSpec } from "@/formations";
 import { contrastOn } from "@/lib/color";
 import { msg, type Message } from "@/i18n/core";
-import { boardFromTracks } from "@/import";
+import type { boardFromTracks } from "@/import";
+
+/**
+ * What reads a tracks file into a board. Handed in rather than imported: the importer is the
+ * largest thing the editor could load and almost nobody opens it, so the dialog fetches it
+ * when an import is submitted and keeps it out of the bundle every visitor downloads.
+ */
+export type TracksReader = typeof boardFromTracks;
 
 /**
  * Cap on an imported file, well above any real board and well below anything
@@ -170,7 +177,12 @@ function isTracksFile(raw: unknown): boolean {
   return Array.isArray(o.tracks) && typeof o.source === "object" && o.source !== null;
 }
 
-export function fromJson(text: string): ImportOutcome {
+export function fromJson(
+  text: string,
+  readTracks: TracksReader,
+  /** What a setup's seeded links are called, in the reader's language. */
+  lineName?: LineNamer,
+): ImportOutcome {
   if (text.length > MAX_IMPORT_CHARS) {
     return { ok: false, error: msg("import.tooLarge", { kb: MAX_IMPORT_CHARS / 1000 }) };
   }
@@ -186,7 +198,7 @@ export function fromJson(text: string): ImportOutcome {
   // board branch or it arrives as a broken board and the errors describe the wrong
   // thing entirely. `source` and `tracks` are what a board never has.
   if (isTracksFile(raw)) {
-    const imported = boardFromTracks(raw);
+    const imported = readTracks(raw);
     return imported.ok
       ? { ok: true, kind: "tracks", doc: imported.doc }
       : { ok: false, error: imported.error };
@@ -211,7 +223,7 @@ export function fromJson(text: string): ImportOutcome {
   if (!parsed.success) return { ok: false, error: invalid(parsed.error) };
 
   try {
-    return { ok: true, kind: "setup", doc: docFromSetup(parsed.data) };
+    return { ok: true, kind: "setup", doc: docFromSetup(parsed.data, lineName) };
   } catch (e) {
     return {
       ok: false,
@@ -220,7 +232,7 @@ export function fromJson(text: string): ImportOutcome {
   }
 }
 
-function docFromSetup(setup: Setup): BoardDoc {
+function docFromSetup(setup: Setup, lineName?: LineNamer): BoardDoc {
   const sport = setup.sport ?? "football";
   const bases = sidesFor(sport);
 
@@ -240,7 +252,7 @@ function docFromSetup(setup: Setup): BoardDoc {
     };
   }) as [TeamSpec, TeamSpec];
 
-  const doc = createBoardDoc(specs[0], specs[1], undefined, {}, sport);
+  const doc = createBoardDoc(specs[0], specs[1], undefined, { line: lineName }, sport);
 
   setup.teams.forEach((t, i) => {
     const built = doc.teams[i];

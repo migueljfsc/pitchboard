@@ -2,6 +2,7 @@ import { Eye, EyeOff, UserPlus } from "lucide-react";
 import type { BoardDoc, TeamPattern } from "@/board/types";
 import { formationGroupsFor, formationsFor, type Direction } from "@/formations";
 import { sportOf } from "@/board/sports";
+import { formationLabel, groupLabel } from "@/lib/formationText";
 import { MAX_SQUAD } from "@/board/players";
 import { ColorPicker } from "@/components/ui/ColorPicker";
 import { contrastOn } from "@/lib/color";
@@ -93,10 +94,10 @@ export function TeamControls({
           className="rounded-md border border-ink-600 bg-ink-900 px-2 py-1.5 text-xs text-ink-200 outline-none focus:border-accent"
         >
           {formationGroupsFor(doc.sport).map((group) => (
-            <optgroup key={group} label={group}>
+            <optgroup key={group} label={groupLabel(t, group)}>
               {formationsFor(doc.sport).filter((f) => f.group === group).map((f) => (
                 <option key={f.id} value={f.id}>
-                  {f.name}
+                  {formationLabel(t, f.id)}
                 </option>
               ))}
             </optgroup>

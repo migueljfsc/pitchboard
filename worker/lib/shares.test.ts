@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { newSlug } from "./shares";
+import { escapeHtml, newSlug } from "./shares";
 import { SLUG_ALPHABET, SLUG_LENGTH } from "./limits";
 
 describe("newSlug", () => {
@@ -35,5 +35,11 @@ describe("newSlug", () => {
     // A modulo bias would put the low half ~10% above the high half; 25% of the mean is well
     // inside sampling noise at this sample size and well outside that.
     for (const n of values) expect(Math.abs(n - mean)).toBeLessThan(mean * 0.25);
+  });
+});
+
+describe("escapeHtml", () => {
+  it("keeps a board's name from breaking out of the tag it is written into", () => {
+    expect(escapeHtml('A "B" <script>&')).toBe("A &quot;B&quot; &lt;script&gt;&amp;");
   });
 });

@@ -80,6 +80,48 @@ export async function unpublishBoard(ctx: Ctx, id: string): Promise<Response> {
 }
 
 /**
+ * Text for an HTML attribute or element. The board's name is whatever its owner typed, and
+ * it lands inside `content="…"` on a public page.
+ */
+export function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/**
+ * A published board's page: the app's own page, with the board's name in its title and
+ * link-preview tags, so a link pasted into a chat says what it is. The app reads the board
+ * itself from `/api/share/<slug>` as ever; this changes only what the page is called.
+ * A link that is withdrawn or gone gets the page unchanged, which the app then explains.
+ */
+export async function sharePage(request: Request, env: Env, slug: string): Promise<Response> {
+  const page = await env.ASSETS.fetch(new Request(new URL("/", request.url), request));
+  const board = await env.DB.prepare("SELECT name FROM boards WHERE share_slug = ?")
+    .bind(slug)
+    .first<{ name: string }>();
+  if (!board) return page;
+
+  const title = escapeHtml(`${board.name} — Pitchboard`);
+  const retitle = {
+    element(el: Element) {
+      el.setAttribute("content", title);
+    },
+  };
+  return new HTMLRewriter()
+    .on("title", {
+      element(el) {
+        el.setInnerContent(title, { html: true });
+      },
+    })
+    .on('meta[property="og:title"]', retitle)
+    .on('meta[name="twitter:title"]', retitle)
+    .transform(page);
+}
+
+/**
  * The public read, and the ONLY route in the Worker that answers without a session. It returns
  * the board as it is right now and nothing about who owns it — no user id, no board id, no
  * project. A withdrawn link, or one whose board has been deleted, is a 404 like any other,

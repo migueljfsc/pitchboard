@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MAX_IMPORT_CHARS, SETUP_EXAMPLE, fromJson, toJson, toSetupJson } from "./json";
+import { boardFromTracks } from "@/import";
 import { boardDocSchema } from "@/board/schema";
 import { addSceneAfter, setCarrier } from "@/board/scenes";
 import { createLink } from "@/board/links";
@@ -9,7 +10,7 @@ import { say } from "@/i18n/core";
 import { en } from "@/i18n/en";
 
 const ok = (text: string): BoardDoc => {
-  const outcome = fromJson(text);
+  const outcome = fromJson(text, boardFromTracks);
   if (!outcome.ok) throw new Error(outcome.error.key);
   return outcome.doc;
 };
@@ -22,7 +23,7 @@ const ok = (text: string): BoardDoc => {
  * key was handed the variables it names.
  */
 const failure = (text: string): string => {
-  const outcome = fromJson(text);
+  const outcome = fromJson(text, boardFromTracks);
   if (outcome.ok) throw new Error("expected a rejection");
   return say(en, outcome.error);
 };
@@ -227,14 +228,14 @@ describe("tracks files", () => {
   it("are told apart from a board even though both declare version 1", () => {
     // The collision that matters: routed to the board branch a tracks file fails the
     // board schema, and the errors describe teams and scenes it was never going to have.
-    const outcome = fromJson(JSON.stringify(tracksFile()));
+    const outcome = fromJson(JSON.stringify(tracksFile()), boardFromTracks);
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
     expect(outcome.kind).toBe("tracks");
   });
 
   it("arrive as a board with players on both sides", () => {
-    const outcome = fromJson(JSON.stringify(tracksFile()));
+    const outcome = fromJson(JSON.stringify(tracksFile()), boardFromTracks);
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
     expect(outcome.doc.teams[0].players.length).toBeGreaterThan(0);
@@ -244,7 +245,7 @@ describe("tracks files", () => {
 
   it("report their own failure, not the board schema's", () => {
     const empty = { ...tracksFile(), tracks: [] };
-    const outcome = fromJson(JSON.stringify(empty));
+    const outcome = fromJson(JSON.stringify(empty), boardFromTracks);
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
     expect(outcome.error.key).toBe("import.tracks.empty");

@@ -47,6 +47,15 @@ export function saveBoard(doc: BoardDoc, store: Store | null = browserStore()): 
   return write(store, BOARD_KEY, doc);
 }
 
+/**
+ * The stored board exactly as it is, validated or not — what the crash screen offers to
+ * download. A board that fails to load is still the coach's work, and a copy of it is
+ * worth more than a correct refusal.
+ */
+export function storedBoardText(store: Store | null = browserStore()): string | null {
+  return read(store, BOARD_KEY, (raw) => JSON.stringify(raw, null, 2));
+}
+
 export function clearBoard(store: Store | null = browserStore()): void {
   remove(store, BOARD_KEY);
 }

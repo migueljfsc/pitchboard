@@ -49,7 +49,7 @@ import {
 import { deleteAccount } from "./lib/account";
 import { adminDeleteUser, adminStats, adminUser, isAdmin } from "./lib/admin";
 import { fail, json } from "./lib/http";
-import { publishBoard, readShare, unpublishBoard } from "./lib/shares";
+import { publishBoard, readShare, sharePage, unpublishBoard } from "./lib/shares";
 import { SLUG_LENGTH } from "./lib/limits";
 import {
   clearedSessionCookie,
@@ -81,8 +81,11 @@ export default {
     const url = new URL(request.url);
 
     if (!url.pathname.startsWith("/api/")) {
-      // Only reachable if the asset layer defers to the script; the SPA is hash-routed,
-      // so every real path is "/" and this is a backstop rather than a route table.
+      // A published board's page, named after the board (run_worker_first sends /share/* here).
+      const share = SHARE_PAGE.exec(url.pathname);
+      if (share && request.method === "GET") return sharePage(request, env, share[1]);
+      // Otherwise only reachable if the asset layer defers to the script; this is a backstop
+      // rather than a route table.
       return env.ASSETS.fetch(request);
     }
 
@@ -223,6 +226,9 @@ const SLUG = `([2-9bcdfghjkmnpqrstvwxz]{${SLUG_LENGTH}})`;
  * route: reading a published board. Everything else answers 401 to a stranger.
  */
 const SHARE_ROUTE = new RegExp(`^/api/shares/${SLUG}$`);
+
+/** The page a published board is opened at. Mirrors `SHARE_PATH` in `src/share/routes.ts`. */
+const SHARE_PAGE = new RegExp(`^/share/${SLUG}$`);
 
 async function publicRoute(env: Env, request: Request, url: URL): Promise<Response | null> {
   const match = SHARE_ROUTE.exec(url.pathname);

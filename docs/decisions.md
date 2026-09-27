@@ -524,6 +524,31 @@ time a template is saved, and the template menu reads the open board's sport's. 
 root with nothing under it; the save picker shows only the board's own sport, root included. A board
 adopted from the browser on signing in goes straight into its sport's root.
 
+## D115 — A sweep: the crash screen, keyboard menus, link previews, and names in the board's language
+**A crash is a screen, not a white page.** One error boundary over the app. The board is safe in
+the browser, so the screen says so, offers the stored board as a file — raw, validated or not,
+since a board that fails to load is still the coach's work — and only then a fresh start.
+
+**Every menu works from the keyboard.** `ContextMenu` (history, Help, File, right-click) takes
+focus when it opens, moves with the arrows, closes on Esc and Tab, and hands focus back only where
+nothing else took it — an item that opens the palette leaves the palette focused. Keys pressed in
+it stop there, so an arrow does not also nudge the selection.
+
+**Links unfurl.** `index.html` carries a description and link-preview tags. A published board's
+`/share/<slug>` is now the one page path the Worker answers (`run_worker_first`): it serves the
+app's page with the board's name in the title and preview tags (`sharePage`), escaped, since the
+name is the owner's typing on a public page. `#d=` links cannot be read by any server and keep the
+app's own title. There is no preview image yet.
+
+**What the board writes, it writes in the board's language.** A formation line has a role, not a
+word; the link seeded along it is named in the language the board is made in (`LineNamer`), and the
+engine's default is English. Ids stay the English ones, so they never change with the language, and
+boards already made keep their names (D38). Formation headings and the few worded lineups are shown
+in the reader's language (`formationText.ts`).
+
+**The video importer loads when an import is submitted**, not with the page (`TracksReader`): about
+18 KB less on every first load.
+
 ---
 
 ## The importer (`src/import/`)

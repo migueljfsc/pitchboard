@@ -101,7 +101,8 @@ src/pages/                Editor, Viewer — read-only playback of a shared boar
 src/components/           React chrome; ui/ holds shadcn-style primitives
 scripts/board.ts          `pnpm board <tracks.json>` — a tracks file through the real importer
 worker/                   Cloudflare Worker — the API, and the SPA's static passthrough
-  index.ts                the router; /api/* only, assets are served ahead of it
+  index.ts                the router: /api/*, and /share/<slug> pages named after their board;
+                          every other asset is served ahead of it
   lib/                    session, google, users, auth (email and password), password, account,
                           mail, turnstile, boards (and the project tree), presets,
                           admin (the operator's /admin view), crypto, http, limits
@@ -284,7 +285,8 @@ Each is one line of what breaks; the reasoning is in the cited decision.
 - **A hash change does not reload the page**; listen for `hashchange`, and `replaceState` fires no
   event at all.
 - **The share link's framing rides beside the payload** in `v=`, never inside `BoardDoc`.
-- **A pure module must not return prose** — it returns a `Message`.
+- **A pure module must not return prose** — it returns a `Message`. Text the engine writes INTO a
+  document (a seeded link's name) takes a namer from the caller (`LineNamer`), English by default.
 - **Never assemble a sentence from fragments** — a whole key with a placeholder.
 - **`pt.ts` must answer every key `en.ts` declares**; `i18n.test.ts` checks placeholders match.
 - **A document does not change language when the reader does.**

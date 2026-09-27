@@ -39,6 +39,42 @@ export function ContextMenu({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+
+  // Focus goes into the menu when it opens and back where it came from when it closes, so it
+  // works from the keyboard as the sport picker does: arrows to move, Enter to choose.
+  // Where focus was, read while rendering — before the effect below has moved it, however
+  // many times that effect runs.
+  const [before] = useState(() => document.activeElement as HTMLElement | null);
+  useEffect(() => {
+    ref.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+    return () => {
+      // Only where nothing else took it: an item that opens a dialog — the palette, the
+      // shortcuts — hands focus to that dialog, and it must not be taken back.
+      const lost = !document.activeElement || document.activeElement === document.body;
+      if (lost && before && document.contains(before)) before.focus();
+    };
+  }, [before]);
+
+  const onKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Tab") {
+      onClose();
+      return;
+    }
+    // Every other key belongs to the menu while it is open: the editor's shortcuts listen on
+    // the window, and an arrow here must not also nudge the selection.
+    e.stopPropagation();
+    const buttons = [...(ref.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? [])];
+    if (buttons.length === 0) return;
+    const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    const go = (i: number) => {
+      e.preventDefault();
+      buttons[(i + buttons.length) % buttons.length].focus();
+    };
+    if (e.key === "ArrowDown") go(at + 1);
+    else if (e.key === "ArrowUp") go(at < 0 ? buttons.length - 1 : at - 1);
+    else if (e.key === "Home") go(0);
+    else if (e.key === "End") go(buttons.length - 1);
+  };
   const [place, setPlace] = useState(at);
 
   // Nudged back on screen once its size is known: a menu opened near the right or
@@ -91,6 +127,7 @@ export function ContextMenu({
     <div
       ref={ref}
       role="menu"
+      onKeyDown={onKey}
       onContextMenu={(e) => e.preventDefault()}
       className="fixed z-50 min-w-48 overflow-hidden rounded-md border border-ink-600 bg-ink-800 py-1 shadow-2xl"
       style={{ left: place.x, top: place.y }}
@@ -104,16 +141,17 @@ export function ContextMenu({
             type="button"
             role="menuitem"
             disabled={item.disabled}
+            tabIndex={-1}
             title={item.title}
             onClick={() => {
               onClose();
               item.onSelect();
             }}
             className={cn(
-              "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition disabled:opacity-40",
+              "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs outline-none transition disabled:opacity-40",
               item.danger
-                ? "text-red-300 enabled:hover:bg-red-500/15"
-                : "text-ink-200 enabled:hover:bg-ink-700 enabled:hover:text-white",
+                ? "text-red-300 enabled:hover:bg-red-500/15 focus-visible:bg-red-500/15"
+                : "text-ink-200 enabled:hover:bg-ink-700 enabled:hover:text-white focus-visible:bg-ink-700 focus-visible:text-white",
             )}
           >
             {iconed && (

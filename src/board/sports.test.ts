@@ -7,6 +7,7 @@ import { linkGeometry } from "./links";
 import { resolveAt, sceneTimings } from "./timeline";
 import { createBoardDoc, isUntouched, sidesFor } from "@/formations";
 import { fromJson, toSetupJson } from "@/share/json";
+import { boardFromTracks } from "@/import";
 import { presetsFor, type SquadPreset } from "@/share/presets";
 import type { BoardDoc } from "./types";
 
@@ -114,7 +115,7 @@ describe("what a person reads is metres", () => {
 
 describe("what travels with a sport", () => {
   it("keeps a setup file's sport", () => {
-    const out = fromJson(toSetupJson(basketball()));
+    const out = fromJson(toSetupJson(basketball()), boardFromTracks);
     expect(out.ok && out.doc.sport).toBe("basketball");
   });
 

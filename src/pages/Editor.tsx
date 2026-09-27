@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AnnotationDash, BoardDoc, PitchView, RunEnd, RunStart, Sport, Tool } from "@/board/types";
 import { sportOf } from "@/board/sports";
 import { SportMenu } from "@/components/SportMenu";
+import { lineNamer } from "@/lib/lineNames";
+import { formationLabel } from "@/lib/formationText";
 import { loadSport, saveSport } from "@/share/sport";
 import { BALL_ID, DEFAULT_PITCH_VIEW, DEFAULT_TOOL, isDrawTool } from "@/board/types";
 import { BoardCanvas } from "@/components/BoardCanvas";
@@ -216,7 +218,7 @@ export function Editor({ initialDoc }: Props = {}) {
   /** A fresh board of `sport`, seeded in the reader's language. */
   const freshBoard = (sport: Sport) =>
     createBoardDoc(homeSpec(sport), awaySpec(sport), undefined, seedLabels(), sport);
-  const seedLabels = () => ({ board: t("doc.board"), scene: t("doc.scene", { n: 1 }) });
+  const seedLabels = () => ({ board: t("doc.board"), scene: t("doc.scene", { n: 1 }), line: lineNamer(t) });
   // The document is the only undoable thing. How you are looking at the board —
   // the framing, the selection, which panel is open — is not an edit, and
   // rewinding it would be its own kind of surprise.
@@ -437,6 +439,8 @@ export function Editor({ initialDoc }: Props = {}) {
   // The chosen formation lives on the team, not in this component, so a board
   // that arrives by import still knows its own shape.
   const formationOf = (i: 0 | 1) => doc.teams[i].formation ?? sidesFor(doc.sport)[i].formation;
+  /** The same, as the reader reads it. */
+  const formationName = (i: 0 | 1) => formationLabel(t, formationOf(i));
 
   // Scene 0 has no incoming transition, so there is no run to shape there.
   const editScene = activeScene > 0 ? activeScene : undefined;
@@ -643,7 +647,7 @@ export function Editor({ initialDoc }: Props = {}) {
   const onApplyPreset = (teamIndex: 0 | 1, id: string) => {
     const preset = library.presets.find((p) => p.id === id);
     if (!preset) return;
-    const outcome = applyPreset(doc, teamIndex, preset);
+    const outcome = applyPreset(doc, teamIndex, preset, lineNamer(t));
     if (!outcome.ok) {
       setPresetError(outcome.error);
       return;
@@ -656,7 +660,7 @@ export function Editor({ initialDoc }: Props = {}) {
   };
 
   const onFormationChange = (teamIndex: 0 | 1, formation: string) => {
-    setDoc(changeFormation(doc, teamIndex, formation));
+    setDoc(changeFormation(doc, teamIndex, formation, lineNamer(t)));
     // The side has been rebuilt, so anything selected on it is stale.
     setSelection(new Set());
   };
@@ -968,7 +972,7 @@ export function Editor({ initialDoc }: Props = {}) {
     setDoc(
       buildTemplate(
         id,
-        { board: name, scene: (n) => t("doc.scene", { n }) },
+        { board: name, scene: (n) => t("doc.scene", { n }), line: lineNamer(t) },
         homeSpec(),
         awaySpec(),
       ),
@@ -1332,7 +1336,7 @@ export function Editor({ initialDoc }: Props = {}) {
         list.push({
           id: `formation-${i}-${f.id}`,
           group: group.teams,
-          label: t("palette.formation", { team: teamName(i), formation: f.name }),
+          label: t("palette.formation", { team: teamName(i), formation: formationLabel(t, f.id) }),
           run: () => onFormationChange(i, f.id),
         });
       }
@@ -1884,7 +1888,7 @@ export function Editor({ initialDoc }: Props = {}) {
             title={t("section.formations")}
             icon={<Users size={13} />}
             tour="formations"
-            badge={`${formationOf(0)} v ${formationOf(1)}`}
+            badge={`${formationName(0)} v ${formationName(1)}`}
             open={formationsOpen}
             onOpenChange={(open) => {
               setFormationsOpen(open);
@@ -1909,7 +1913,7 @@ export function Editor({ initialDoc }: Props = {}) {
                       className="size-2 shrink-0 rounded-full ring-1 ring-white/20"
                       style={{ background: doc.teams[i].color }}
                     />
-                    <span className="truncate">{doc.teams[i].name || formationOf(i)}</span>
+                    <span className="truncate">{doc.teams[i].name || formationName(i)}</span>
                   </button>
                 ))}
               </div>
@@ -2043,7 +2047,7 @@ export function Editor({ initialDoc }: Props = {}) {
         {pending?.kind === "reset" && (
           <ConfirmDialog
             title={t("confirm.reset.title")}
-            message={t("confirm.reset.message", { home: formationOf(0), away: formationOf(1) })}
+            message={t("confirm.reset.message", { home: formationName(0), away: formationName(1) })}
             confirmLabel={t("confirm.reset.action")}
             onConfirm={reset}
             onCancel={() => setPending(null)}
@@ -2083,7 +2087,7 @@ export function Editor({ initialDoc }: Props = {}) {
         {pending?.kind === "preset" && (
           <ConfirmDialog
             title={t("confirm.preset.title", { label: pending.replacing.label })}
-            message={t("confirm.preset.message", { formation: pending.replacing.formation ?? "" })}
+            message={t("confirm.preset.message", { formation: formationLabel(t, pending.replacing.formation ?? "") })}
             confirmLabel={t("confirm.preset.action")}
             onConfirm={() => replacePreset(pending.preset, pending.replacing)}
             onCancel={() => setPending(null)}

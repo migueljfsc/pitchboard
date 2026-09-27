@@ -21,14 +21,15 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { Check, FileUp, X } from "lucide-react";
+import { Check, FileUp, Info, X } from "lucide-react";
 
 import type { BoardDoc } from "@/board/types";
 import { Action } from "@/components/ui/DialogControls";
 import { useI18n } from "@/i18n/context";
-import type { Message } from "@/i18n/core";
+import { msg, type Message } from "@/i18n/core";
 import { cn } from "@/lib/utils";
-import { SETUP_EXAMPLE, fromJson, type ImportOutcome } from "@/share/json";
+import { lineNamer } from "@/lib/lineNames";
+import { SETUP_EXAMPLE, fromJson, type ImportOutcome, type TracksReader } from "@/share/json";
 
 /** Which of the three shapes a file turned out to be. */
 export type ImportKind = Extract<ImportOutcome, { ok: true }>["kind"];
@@ -72,8 +73,17 @@ export function ImportDialog({ onImport, onClose, blocked }: Props) {
     setSource({ kind: "file", name: file.name, bytes: file.size, text: await file.text() });
   };
 
-  const submit = () => {
-    const outcome = fromJson(source.text);
+  const submit = async () => {
+    // Fetched here, on the one path that can need it; a page that went offline since it
+    // loaded cannot, and says so rather than doing nothing.
+    let reader: TracksReader;
+    try {
+      reader = (await import("@/import")).boardFromTracks;
+    } catch {
+      setError(msg("import.failed"));
+      return;
+    }
+    const outcome = fromJson(source.text, reader, lineNamer(t));
     if (!outcome.ok) {
       setError(outcome.error);
       return;
@@ -109,18 +119,37 @@ export function ImportDialog({ onImport, onClose, blocked }: Props) {
         </div>
 
         <div className="flex min-h-0 flex-col gap-3 p-4">
-          <p className="text-[11px] leading-relaxed text-ink-300">{t("import.kinds")}</p>
-
-          <ul className="flex flex-col gap-2 rounded border border-ink-700 bg-ink-900 px-3 py-2.5">
-            {(["board", "setup", "tracks"] as const).map((kind) => (
-              <li key={kind}>
-                <p className="text-[11px] font-medium text-ink-100">{t(`import.kind.${kind}`)}</p>
-                <p className="text-[11px] leading-relaxed text-ink-400">
-                  {t(`import.kind.${kind}.hint`)}
-                </p>
-              </li>
-            ))}
-          </ul>
+          {/* One line, and the detail behind an ⓘ: which kind a file is comes from the file
+              itself, so the explanation is for whoever wonders, not a step to read first. */}
+          <div className="flex items-center gap-1.5">
+            <p className="text-[11px] text-ink-300">{t("import.kinds.short")}</p>
+            <span className="group relative">
+              <button
+                type="button"
+                aria-label={t("import.kinds.more")}
+                aria-describedby="import-kinds"
+                className="flex rounded-full text-ink-400 outline-none transition hover:text-white focus-visible:text-white focus-visible:ring-1 focus-visible:ring-accent"
+              >
+                <Info size={13} />
+              </button>
+              <div
+                id="import-kinds"
+                role="tooltip"
+                className="invisible absolute top-full left-1/2 z-10 mt-1.5 w-80 -translate-x-1/2 rounded-md border border-ink-600 bg-ink-900 p-3 opacity-0 shadow-xl transition group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100"
+              >
+                <ul className="flex flex-col gap-2">
+                  {(["board", "setup", "tracks"] as const).map((kind) => (
+                    <li key={kind}>
+                      <p className="text-[11px] font-medium text-ink-100">{t(`import.kind.${kind}`)}</p>
+                      <p className="text-[11px] leading-relaxed text-ink-400">
+                        {t(`import.kind.${kind}.hint`)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </span>
+          </div>
 
           {/* The drop target stays a drop target once a file is in it: opening the wrong
               one and dragging the right one over is the ordinary correction. */}
@@ -180,17 +209,21 @@ export function ImportDialog({ onImport, onClose, blocked }: Props) {
 
           {source.kind === "typed" && (
             <>
-              <p className="text-[11px] leading-relaxed text-ink-300">{t("import.paste")}</p>
+              <p className="text-[11px] text-ink-300" title={t("import.paste.hint")}>
+                {t("import.paste")}
+              </p>
               <textarea
                 value={source.text}
                 onChange={(e) => {
                   setSource({ kind: "typed", text: e.target.value });
                   setError(null);
                 }}
-                placeholder={SETUP_EXAMPLE}
+                // A hint, not the example: the button below puts the whole example in, and a
+                // page of grey JSON read as something already pasted.
+                placeholder='{ "teams": [ … ] }'
                 aria-label={t("import.label")}
                 className="min-h-0 flex-1 resize-none rounded border border-ink-600 bg-ink-900 p-2 font-mono text-[11px] leading-relaxed text-ink-200 outline-none transition placeholder:text-ink-500 focus:border-accent"
-                rows={12}
+                rows={source.text ? 12 : 4}
               />
             </>
           )}
@@ -210,7 +243,7 @@ export function ImportDialog({ onImport, onClose, blocked }: Props) {
                 {t("import.useExample")}
               </Action>
             )}
-            <Action onClick={submit} icon={Check} primary disabled={!source.text.trim()}>
+            <Action onClick={() => void submit()} icon={Check} primary disabled={!source.text.trim()}>
               {t("import.replaceBoard")}
             </Action>
           </div>

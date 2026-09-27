@@ -15,7 +15,7 @@ import { z } from "zod";
 import type { BoardDoc, Sport } from "@/board/types";
 import { SPORT_IDS } from "@/board/types";
 import { boardDocSchema } from "@/board/schema";
-import { applyFormation, sidesFor, type TeamSpec } from "@/formations";
+import { applyFormation, sidesFor, type LineNamer, type TeamSpec } from "@/formations";
 import { replaceTeamLinks } from "@/board/links";
 import {
   SetupError,
@@ -214,6 +214,8 @@ export function applyPreset(
   doc: BoardDoc,
   teamIndex: 0 | 1,
   preset: SquadPreset,
+  /** What links the preset does not bring are called, in the board's language. */
+  lineName?: LineNamer,
 ): ApplyOutcome {
   const base = sidesFor(doc.sport)[teamIndex];
   const spec: TeamSpec = {
@@ -227,7 +229,7 @@ export function applyPreset(
   };
 
   try {
-    let next = applyFormation(doc, teamIndex, spec);
+    let next = applyFormation(doc, teamIndex, spec, lineName);
     const built = next.teams[teamIndex];
 
     // Only reachable from a hand-edited library — the app never saves one — but

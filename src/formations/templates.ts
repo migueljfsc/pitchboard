@@ -11,7 +11,7 @@
 
 import type { BoardDoc, RunStyle, Scene, Vec2 } from "@/board/types";
 import { pruneBallFlags } from "@/board/scenes";
-import { AWAY, HOME, createBoardDoc, type TeamSpec } from "./index";
+import { AWAY, HOME, createBoardDoc, type LineNamer, type TeamSpec } from "./index";
 
 export const TEMPLATE_IDS = ["buildUp", "counter", "corner", "press"] as const;
 export type TemplateId = (typeof TEMPLATE_IDS)[number];
@@ -101,11 +101,15 @@ const STEPS: Record<TemplateId, Step[]> = {
  */
 export function buildTemplate(
   id: TemplateId,
-  labels: { board: string; scene: (n: number) => string },
+  labels: { board: string; scene: (n: number) => string; line?: LineNamer },
   home: TeamSpec = HOME,
   away: TeamSpec = AWAY,
 ): BoardDoc {
-  const base = createBoardDoc(home, away, undefined, { board: labels.board, scene: labels.scene(1) });
+  const base = createBoardDoc(home, away, undefined, {
+    board: labels.board,
+    scene: labels.scene(1),
+    line: labels.line,
+  });
   const first = base.scenes[0];
   let positions = { ...first.positions };
 

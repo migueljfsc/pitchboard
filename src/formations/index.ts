@@ -28,9 +28,42 @@ import { moveEntities, type Carry } from "@/board/interaction";
 import { pruneLinks, replaceTeamLinks } from "@/board/links";
 import { pruneBallFlags } from "@/board/scenes";
 
+/**
+ * What a line of a formation is, which is what names the link seeded along it. A role and
+ * not a word: the engine speaks no language, and the name is written into the document in
+ * whatever language the board is made in (see `LineNamer`).
+ */
+export type LineRole =
+  | "keeper"
+  | "back"
+  | "holding"
+  | "midfield"
+  | "attacking"
+  | "front"
+  | "court.back"
+  | "court.middle"
+  | "court.front"
+  | "chaser"
+  | "handball.line"
+  | "handball.point"
+  | "row.back"
+  | "row.front"
+  | "w.back"
+  | "w.front"
+  | "setter"
+  | "passers"
+  | "hitters";
+
+/** A line's name in the board's language. Given the line, so it can count its players. */
+export type LineNamer = (line: FormationLine) => string;
+
 export type FormationLine = {
-  /** Shown in the seeded link's name, e.g. "Back 4". */
+  /**
+   * The line's English name, e.g. "Back 4" — what a seeded link is called where no language
+   * is given, and what its id is made from, so an id never changes with the language.
+   */
   label: string;
+  role: LineRole;
   depth: number;
   /** Per player, where a line is not straight across — a handball six bends round its goal. */
   depths?: number[];
@@ -56,7 +89,7 @@ export const DEPTH_MAX = 0.45;
 /** Half-width of the widest line, as a fraction of the pitch. */
 const SPAN = 0.35;
 
-const GK: FormationLine = { label: "Keeper", depth: 0.05, spread: [0.5], numbers: [1] };
+const GK: FormationLine = { label: "Keeper", role: "keeper", depth: 0.05, spread: [0.5], numbers: [1] };
 
 /**
  * How wide a line sits.
@@ -121,13 +154,39 @@ const FRONT_NUMBERS: Record<number, number[]> = {
  */
 const MIDFIELD_POOL = [4, 8, 6, 10, 7, 11, 2, 3, 5, 14, 16, 17, 18];
 
-function nameFor(index: number, lastIndex: number, count: number): string {
-  if (index === 0) return `Back ${count}`;
-  if (index === lastIndex) return `Front ${count}`;
+function roleFor(index: number, lastIndex: number): LineRole {
+  if (index === 0) return "back";
+  if (index === lastIndex) return "front";
   const interior = lastIndex - 1;
-  if (interior === 1) return `Midfield ${count}`;
-  return index === 1 ? `Holding ${count}` : index === lastIndex - 1 ? `Attacking ${count}` : `Midfield ${count}`;
+  if (interior === 1) return "midfield";
+  return index === 1 ? "holding" : index === lastIndex - 1 ? "attacking" : "midfield";
 }
+
+/** Every role's English name: the default where a board is made with no language given. */
+const ENGLISH: Record<LineRole, (n: number) => string> = {
+  keeper: () => "Keeper",
+  back: (n) => `Back ${n}`,
+  holding: (n) => `Holding ${n}`,
+  midfield: (n) => `Midfield ${n}`,
+  attacking: (n) => `Attacking ${n}`,
+  front: (n) => `Front ${n}`,
+  "court.back": (n) => `Back ${n}`,
+  "court.middle": (n) => `Middle ${n}`,
+  "court.front": (n) => `Front ${n}`,
+  chaser: () => "Chaser",
+  "handball.line": (n) => `Back ${n}`,
+  "handball.point": () => "Front 1",
+  "row.back": () => "Back row",
+  "row.front": () => "Front row",
+  "w.back": () => "Back W",
+  "w.front": () => "Front W",
+  setter: () => "Setter",
+  passers: () => "Passers",
+  hitters: () => "Hitters",
+};
+
+/** A line's English name — the default `LineNamer`. */
+export const englishLine: LineNamer = (line) => line.label;
 
 function linkFor(count: number): LinkStyle | undefined {
   // Every seeded line is a chain, matching what createLink defaults to. Closing
@@ -171,7 +230,8 @@ export function fromNotation(notation: string, group: string, sport: Sport = "fo
   for (let i = 1; i < last; i++) numbersByLine[i] = take([], counts[i]);
 
   const lines: FormationLine[] = counts.map((count, i) => ({
-    label: nameFor(i, last, count),
+    label: ENGLISH[roleFor(i, last)](count),
+    role: roleFor(i, last),
     depth: last === 0 ? (DEPTH_MIN + DEPTH_MAX) / 2 : DEPTH_MIN + ((DEPTH_MAX - DEPTH_MIN) * i) / last,
     spread: spreadFor(count, widthFactor(count, i, last, counts[last])),
     numbers: numbersByLine[i],
@@ -215,15 +275,16 @@ function laidOut(
   id: string,
   group: string,
   /** `depth` is one for the line, or one per player where the line bends. */
-  lines: [label: string, depth: number | number[], spread: number[], numbers: number[]][],
+  lines: [role: LineRole, depth: number | number[], spread: number[], numbers: number[]][],
 ): Formation {
   return {
     id,
     sport,
     name: id,
     group,
-    lines: lines.map(([label, depth, spread, numbers]) => ({
-      label,
+    lines: lines.map(([role, depth, spread, numbers]) => ({
+      label: ENGLISH[role](spread.length),
+      role,
       depth: typeof depth === "number" ? depth : depth[0],
       ...(typeof depth === "number" ? {} : { depths: depth }),
       spread,
@@ -236,27 +297,27 @@ function laidOut(
 /** Basketball's shapes, each in its own half: a defence set against the ball. */
 const BASKETBALL_FORMATIONS: Formation[] = [
   laidOut("basketball", "2-3", "Zones", [
-    ["Back 3", 0.1, [0.2, 0.5, 0.8], [3, 5, 4]],
-    ["Front 2", 0.25, [0.33, 0.67], [1, 2]],
+    ["court.back", 0.1, [0.2, 0.5, 0.8], [3, 5, 4]],
+    ["court.front", 0.25, [0.33, 0.67], [1, 2]],
   ]),
   laidOut("basketball", "3-2", "Zones", [
-    ["Back 2", 0.1, [0.35, 0.65], [4, 5]],
-    ["Front 3", 0.24, [0.2, 0.5, 0.8], [2, 1, 3]],
+    ["court.back", 0.1, [0.35, 0.65], [4, 5]],
+    ["court.front", 0.24, [0.2, 0.5, 0.8], [2, 1, 3]],
   ]),
   laidOut("basketball", "1-3-1", "Zones", [
-    ["Back 1", 0.07, [0.5], [5]],
-    ["Middle 3", 0.18, [0.2, 0.5, 0.8], [3, 4, 2]],
-    ["Front 1", 0.32, [0.5], [1]],
+    ["court.back", 0.07, [0.5], [5]],
+    ["court.middle", 0.18, [0.2, 0.5, 0.8], [3, 4, 2]],
+    ["court.front", 0.32, [0.5], [1]],
   ]),
   laidOut("basketball", "1-2-2", "Zones", [
-    ["Back 2", 0.1, [0.3, 0.7], [4, 5]],
-    ["Middle 2", 0.22, [0.2, 0.8], [3, 2]],
-    ["Front 1", 0.34, [0.5], [1]],
+    ["court.back", 0.1, [0.3, 0.7], [4, 5]],
+    ["court.middle", 0.22, [0.2, 0.8], [3, 2]],
+    ["court.front", 0.34, [0.5], [1]],
   ]),
   laidOut("basketball", "Box-and-1", "Combination", [
-    ["Back 2", 0.1, [0.33, 0.67], [4, 5]],
-    ["Front 2", 0.22, [0.33, 0.67], [2, 3]],
-    ["Chaser", 0.36, [0.5], [1]],
+    ["court.back", 0.1, [0.33, 0.67], [4, 5]],
+    ["court.front", 0.22, [0.33, 0.67], [2, 3]],
+    ["chaser", 0.36, [0.5], [1]],
   ]),
 ];
 
@@ -265,32 +326,32 @@ const BASKETBALL_FORMATIONS: Formation[] = [
  * over the court's 40, spreads metres across over its 20: the line bends round the goal,
  * so the wings stand nearly on the goal line and the middle out at the six.
  */
-const HB_KEEPER: [string, number, number[], number[]] = ["Keeper", 0.02, [0.5], [1]];
+const HB_KEEPER: [LineRole, number, number[], number[]] = ["keeper", 0.02, [0.5], [1]];
 const HANDBALL_FORMATIONS: Formation[] = [
   laidOut("handball", "6-0", "Defence", [
     HB_KEEPER,
-    ["Back 6", [0.0375, 0.1375, 0.17, 0.17, 0.1375, 0.0375], [0.1, 0.25, 0.415, 0.585, 0.75, 0.9], [2, 3, 4, 5, 6, 7]],
+    ["handball.line", [0.0375, 0.1375, 0.17, 0.17, 0.1375, 0.0375], [0.1, 0.25, 0.415, 0.585, 0.75, 0.9], [2, 3, 4, 5, 6, 7]],
   ]),
   laidOut("handball", "5-1", "Defence", [
     HB_KEEPER,
-    ["Back 5", [0.0375, 0.1375, 0.17, 0.1375, 0.0375], [0.1, 0.25, 0.5, 0.75, 0.9], [2, 3, 4, 6, 7]],
-    ["Front 1", 0.2375, [0.5], [5]],
+    ["handball.line", [0.0375, 0.1375, 0.17, 0.1375, 0.0375], [0.1, 0.25, 0.5, 0.75, 0.9], [2, 3, 4, 6, 7]],
+    ["handball.point", 0.2375, [0.5], [5]],
   ]),
   laidOut("handball", "3-2-1", "Defence", [
     HB_KEEPER,
-    ["Back 3", [0.1575, 0.17, 0.1575], [0.3, 0.5, 0.7], [3, 4, 5]],
-    ["Middle 2", 0.2125, [0.2, 0.8], [2, 7]],
-    ["Front 1", 0.275, [0.5], [6]],
+    ["handball.line", [0.1575, 0.17, 0.1575], [0.3, 0.5, 0.7], [3, 4, 5]],
+    ["court.middle", 0.2125, [0.2, 0.8], [2, 7]],
+    ["handball.point", 0.275, [0.5], [6]],
   ]),
   laidOut("handball", "4-2", "Defence", [
     HB_KEEPER,
-    ["Back 4", [0.0875, 0.165, 0.165, 0.0875], [0.15, 0.375, 0.625, 0.85], [2, 3, 5, 7]],
-    ["Front 2", 0.2375, [0.35, 0.65], [4, 6]],
+    ["handball.line", [0.0875, 0.165, 0.165, 0.0875], [0.15, 0.375, 0.625, 0.85], [2, 3, 5, 7]],
+    ["court.front", 0.2375, [0.35, 0.65], [4, 6]],
   ]),
   laidOut("handball", "3-3", "Defence", [
     HB_KEEPER,
-    ["Back 3", [0.1575, 0.17, 0.1575], [0.3, 0.5, 0.7], [3, 4, 5]],
-    ["Front 3", 0.2375, [0.2, 0.5, 0.8], [2, 6, 7]],
+    ["handball.line", [0.1575, 0.17, 0.1575], [0.3, 0.5, 0.7], [3, 4, 5]],
+    ["court.front", 0.2375, [0.2, 0.5, 0.8], [2, 6, 7]],
   ]),
 ];
 
@@ -309,18 +370,18 @@ const HOCKEY_FORMATIONS: Formation[] = (
  */
 const VOLLEYBALL_FORMATIONS: Formation[] = [
   laidOut("volleyball", "Base", "Rotation", [
-    ["Back row", 0.229, [0.3, 0.5, 0.7], [5, 6, 1]],
-    ["Front row", 0.4375, [0.3, 0.5, 0.7], [4, 3, 2]],
+    ["row.back", 0.229, [0.3, 0.5, 0.7], [5, 6, 1]],
+    ["row.front", 0.4375, [0.3, 0.5, 0.7], [4, 3, 2]],
   ]),
   laidOut("volleyball", "W-receive", "Serve receive", [
-    ["Back W", 0.208, [0.367, 0.633], [5, 6]],
-    ["Front W", 0.354, [0.267, 0.5, 0.733], [4, 3, 2]],
-    ["Setter", 0.471, [0.633], [1]],
+    ["w.back", 0.208, [0.367, 0.633], [5, 6]],
+    ["w.front", 0.354, [0.267, 0.5, 0.733], [4, 3, 2]],
+    ["setter", 0.471, [0.633], [1]],
   ]),
   laidOut("volleyball", "3-receive", "Serve receive", [
-    ["Passers", 0.25, [0.3, 0.5, 0.7], [5, 6, 1]],
-    ["Hitters", 0.458, [0.267, 0.733], [4, 2]],
-    ["Setter", 0.471, [0.6], [3]],
+    ["passers", 0.25, [0.3, 0.5, 0.7], [5, 6, 1]],
+    ["hitters", 0.458, [0.267, 0.733], [4, 2]],
+    ["setter", 0.471, [0.6], [3]],
   ]),
 ];
 
@@ -395,6 +456,8 @@ export function buildTeam(
   spec: TeamSpec,
   pitch: { length: number; width: number },
   sport: Sport = "football",
+  /** What the seeded links are called: in the board's language, English when not given. */
+  lineName: LineNamer = englishLine,
 ): BuiltTeam {
   const formation = getFormation(spec.formation, sport);
   const players: Player[] = [];
@@ -436,7 +499,7 @@ export function buildTeam(
     if (line.link && ids.length >= 2) {
       links.push({
         id: `${spec.id}-${slug(line.label)}`,
-        name: `${spec.name} — ${line.label}`,
+        name: `${spec.name} — ${lineName(line)}`,
         members: ids,
         style: line.link,
         // No colour: a seeded link follows the kit it was seeded from.
@@ -556,13 +619,13 @@ export function createBoardDoc(
    * Portuguese. English when nobody says otherwise, which keeps the engine
    * usable — and testable — with no translator in sight.
    */
-  labels: { board?: string; scene?: string } = {},
+  labels: { board?: string; scene?: string; line?: LineNamer } = {},
   /** Football's boards say nothing about it, so every board drawn before there was a choice reads the same. */
   sport: Sport = "football",
 ): BoardDoc {
   const court = pitch ?? SPORTS[sport].pitch;
-  const a = buildTeam(home, court, sport);
-  const b = buildTeam(away, court, sport);
+  const a = buildTeam(home, court, sport, labels.line);
+  const b = buildTeam(away, court, sport, labels.line);
 
   return {
     version: 1,
@@ -613,8 +676,13 @@ export function isUntouched(doc: BoardDoc): boolean {
  * Re-apply a formation to one team in place, preserving the other team, the ball
  * and any links belonging to the side that did not change.
  */
-export function applyFormation(doc: BoardDoc, teamIndex: 0 | 1, spec: TeamSpec): BoardDoc {
-  const built = buildTeam(spec, doc.pitch, doc.sport);
+export function applyFormation(
+  doc: BoardDoc,
+  teamIndex: 0 | 1,
+  spec: TeamSpec,
+  lineName: LineNamer = englishLine,
+): BoardDoc {
+  const built = buildTeam(spec, doc.pitch, doc.sport, lineName);
   const other = doc.teams[teamIndex === 0 ? 1 : 0];
   const otherIds = new Set(other.players.map((p) => p.id));
 
@@ -668,17 +736,27 @@ export function applyFormation(doc: BoardDoc, teamIndex: 0 | 1, spec: TeamSpec):
  * lets a preset bring a squad of its own. This is the editor's intent, named so
  * it can be tested without a component.
  */
-export function changeFormation(doc: BoardDoc, teamIndex: 0 | 1, formation: string): BoardDoc {
+export function changeFormation(
+  doc: BoardDoc,
+  teamIndex: 0 | 1,
+  formation: string,
+  lineName: LineNamer = englishLine,
+): BoardDoc {
   const team = doc.teams[teamIndex];
-  return applyFormation(doc, teamIndex, {
-    ...(teamIndex === 0 ? HOME : AWAY),
-    name: team.name,
-    color: team.color,
-    textColor: team.textColor,
-    pattern: team.pattern,
-    formation,
-    squad: team.players.map((p) => ({ number: p.number, label: p.label })),
-  });
+  return applyFormation(
+    doc,
+    teamIndex,
+    {
+      ...(teamIndex === 0 ? HOME : AWAY),
+      name: team.name,
+      color: team.color,
+      textColor: team.textColor,
+      pattern: team.pattern,
+      formation,
+      squad: team.players.map((p) => ({ number: p.number, label: p.label })),
+    },
+    lineName,
+  );
 }
 
 /** Which goal a side defends, by index. teams[0] attacks +x throughout. */

@@ -1,3 +1,4 @@
+import { formationLabel } from "@/lib/formationText";
 import { useEffect, useRef, useState } from "react";
 import { BookmarkPlus, Check, Pencil, Trash2, X } from "lucide-react";
 import type { BoardDoc } from "@/board/types";
@@ -132,7 +133,7 @@ export function SquadPresets({
             </option>
             {presets.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.label} — {p.formation}
+                {p.label} — {p.formation && formationLabel(t, p.formation)}
               </option>
             ))}
           </select>
@@ -162,7 +163,9 @@ export function SquadPresets({
                 aria-label={t("preset.rename", { label: p.label })}
                 onCommit={(label) => onRename(p.id, label)}
               />
-              <span className="shrink-0 font-mono text-[10px] text-ink-400">{p.formation}</span>
+              <span className="shrink-0 font-mono text-[10px] text-ink-400">
+                {p.formation && formationLabel(t, p.formation)}
+              </span>
               <IconButton onClick={() => onDelete(p.id)} label={t("preset.delete", { label: p.label })} small>
                 <Trash2 size={11} />
               </IconButton>

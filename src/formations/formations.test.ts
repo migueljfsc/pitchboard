@@ -468,3 +468,13 @@ describe("changing formation", () => {
     expect(doc.teams[1].pattern).toBeUndefined();
   });
 });
+
+describe("seeded link names follow the board's language (D38)", () => {
+  it("names each line through the namer given, and keeps the ids English", () => {
+    const named = createBoardDoc(HOME, AWAY, undefined, { line: (l) => `${l.role}:${l.spread.length}` });
+    const english = createBoardDoc();
+    expect(named.links.map((l) => l.id)).toEqual(english.links.map((l) => l.id));
+    expect(named.links[0].name).toBe(`${HOME.name} — back:4`);
+    expect(english.links[0].name).toBe(`${HOME.name} — Back 4`);
+  });
+});
