@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.82.0 (2026-09-28)
+
+### Feat
+
+- **admin**: refresh the usage stats without reloading the page
+
 ## v0.81.1 (2026-09-27)
 
 ### Fix
