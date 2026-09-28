@@ -37,6 +37,17 @@ const WEEKS = 12;
 export function Admin() {
   const [stats, setStats] = useState<AdminStats | "denied" | "signed-out" | "failed" | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [refresh, setRefresh] = useState<"idle" | "loading" | "failed">("idle");
+
+  const reload = () => {
+    setRefresh("loading");
+    fetchAdminStats()
+      .then((result) => {
+        setStats(result);
+        setRefresh("idle");
+      })
+      .catch(() => setRefresh("failed"));
+  };
 
   useEffect(() => {
     let live = true;
@@ -79,7 +90,7 @@ export function Admin() {
         {selected ? (
           <UserDetail id={selected} onBack={() => setSelected(null)} />
         ) : (
-          <Overview stats={stats} onSelect={setSelected} />
+          <Overview stats={stats} onSelect={setSelected} refresh={refresh} onRefresh={reload} />
         )}
       </div>
     </div>
@@ -105,7 +116,17 @@ function recency(users: AdminStats["users"]): number[] {
 
 const RECENCY_LABELS = ["Today", "This week", "This month", "3 months", "Older", "Never"];
 
-function Overview({ stats, onSelect }: { stats: AdminStats; onSelect: (id: string) => void }) {
+function Overview({
+  stats,
+  onSelect,
+  refresh,
+  onRefresh,
+}: {
+  stats: AdminStats;
+  onSelect: (id: string) => void;
+  refresh: "idle" | "loading" | "failed";
+  onRefresh: () => void;
+}) {
   const { totals, users, series, methods } = stats;
   const charts = useMemo(() => {
     const signups = fillDays(series.signups, series.since, series.days);
@@ -134,9 +155,19 @@ function Overview({ stats, onSelect }: { stats: AdminStats; onSelect: (id: strin
     <>
       <header className="mb-6 flex items-baseline justify-between">
         <h1 className="text-lg font-semibold text-ink-200">Pitchboard · usage</h1>
-        <a href="/" className="text-xs text-ink-400 hover:text-ink-200">
-          Back to the board
-        </a>
+        <div className="flex items-baseline gap-4">
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={refresh === "loading"}
+            className={`text-xs transition disabled:opacity-50 ${refresh === "failed" ? "text-red-300 hover:text-red-200" : "text-ink-400 hover:text-ink-200"}`}
+          >
+            {refresh === "loading" ? "Refreshing…" : refresh === "failed" ? "Refresh failed · retry" : "Refresh"}
+          </button>
+          <a href="/" className="text-xs text-ink-400 hover:text-ink-200">
+            Back to the board
+          </a>
+        </div>
       </header>
 
       <Tiles
