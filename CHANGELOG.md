@@ -3,6 +3,16 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.84.0 (2026-09-30)
+
+### Feat
+
+- **admin**: top bar, loading skeletons and animated tiles and charts
+
+### Fix
+
+- **ui**: render dialogs outside the top bar so sign-in is not clipped
+
 ## v0.83.0 (2026-09-30)
 
 ### Feat
