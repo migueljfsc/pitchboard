@@ -30,6 +30,7 @@ import { useI18n } from "@/i18n/context";
 import type { CloudBoard } from "@/lib/useCloudBoard";
 import { ApiError, publishBoard, shareUrl as boardShareUrl, unpublishBoard } from "@/share/api";
 import { URL_BUDGET, encodeBoard, shareUrl, withinBudget, withoutHash } from "@/share/urlcodec";
+import { Modal } from "@/components/ui/Modal";
 
 type Method = "board" | "link";
 
@@ -138,142 +139,134 @@ export function ShareDialog({ doc, view, cloud, signedIn, onClose, blocked }: Pr
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+    <Modal
+      onClose={onClose}
+      labelledBy="share-title"
+      className="flex max-h-[85vh] max-w-2xl flex-col overflow-y-auto"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="share-title"
-        className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-y-auto rounded-lg border border-ink-600 bg-ink-800 shadow-2xl"
-      >
-        <div className="flex items-center gap-3 border-b border-ink-700 px-4 py-3">
-          <h2 id="share-title" className="text-sm font-semibold text-white">
-            {t("share.dialog.title")}
-          </h2>
-          <div className="flex gap-1">
-            <Toggle active={method === "board"} onClick={() => setMethod("board")}>
-              {t("share.method.board")}
-            </Toggle>
-            <Toggle active={method === "link"} onClick={() => setMethod("link")}>
-              {t("share.method.link")}
-            </Toggle>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t("share.close")}
-            className="ml-auto flex size-6 items-center justify-center rounded text-ink-400 transition hover:text-white"
-          >
-            <X size={15} />
-          </button>
+      <div className="flex items-center gap-3 border-b border-ink-700 px-4 py-3">
+        <h2 id="share-title" className="text-sm font-semibold text-white">
+          {t("share.dialog.title")}
+        </h2>
+        <div className="flex gap-1">
+          <Toggle active={method === "board"} onClick={() => setMethod("board")}>
+            {t("share.method.board")}
+          </Toggle>
+          <Toggle active={method === "link"} onClick={() => setMethod("link")}>
+            {t("share.method.link")}
+          </Toggle>
         </div>
-
-        {method === "board" && (
-          <div className="flex flex-col gap-3 p-4">
-            <p className="text-[11px] leading-relaxed text-ink-300">{t("share.board.blurb")}</p>
-
-            {/* The two things that have to be true before there is anything to point at. */}
-            {!signedIn ? (
-              <p className="text-[11px] leading-relaxed text-amber-200">
-                {t("share.board.needsAccount")}
-              </p>
-            ) : !cloud.board ? (
-              <p className="text-[11px] leading-relaxed text-amber-200">
-                {t("share.board.needsSaving")}
-              </p>
-            ) : (
-              <>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Action
-                    onClick={() => void copyBoardLink()}
-                    icon={boardCopied ? Check : Link2}
-                    primary
-                  >
-                    {t(boardCopied ? "share.board.copied" : "share.board.copy")}
-                  </Action>
-                  {slug && (
-                    <Action onClick={() => void withdraw()} icon={X}>
-                      {t("share.board.withdraw")}
-                    </Action>
-                  )}
-                </div>
-
-                {slug && (
-                  <input
-                    readOnly
-                    value={boardShareUrl(slug)}
-                    onFocus={(e) => e.currentTarget.select()}
-                    aria-label={t("share.board.copy")}
-                    className="rounded border border-ink-600 bg-ink-900 px-2 py-1.5 font-mono text-[11px] text-ink-300 outline-none"
-                  />
-                )}
-
-                {boardError && (
-                  <p role="alert" className="text-[11px] text-red-300">
-                    {t(`boards.error.${boardError}` as "boards.error.unknown")}
-                  </p>
-                )}
-              </>
-            )}
-          </div>
-        )}
-
-        {method === "link" && (
-          <div className="flex flex-col gap-3 p-4">
-            <p className="text-[11px] leading-relaxed text-ink-300">{t("share.link.blurb")}</p>
-
-            <div className="flex items-center gap-2">
-              <Action onClick={() => void copyLink()} icon={link.kind === "copied" ? Check : Link2} primary>
-                {t(link.kind === "copied" ? "share.copied" : "share.copy")}
-              </Action>
-              {link.kind === "copied" && (
-                <span className="text-[11px] text-ink-400">
-                  {t("share.length", { chars: link.chars, budget: URL_BUDGET })}
-                </span>
-              )}
-            </div>
-
-            {link.kind === "long" && (
-              <div className="flex flex-col gap-1.5 rounded border border-amber-500/50 bg-amber-500/10 p-2">
-                <p className="flex items-center gap-1.5 text-[11px] text-amber-200">
-                  <TriangleAlert size={12} className="shrink-0" />
-                  {t("share.long", { chars: link.chars })}
-                </p>
-                <p className="text-[11px] leading-relaxed text-amber-200/80">
-                  {t("share.long.title")}
-                </p>
-                <Action onClick={() => void put(link.url, link.chars)} icon={Copy}>
-                  {t("share.anyway")}
-                </Action>
-              </div>
-            )}
-
-            {link.kind === "failed" && (
-              <p role="alert" className="text-[11px] text-red-300">
-                {t("share.failed")}
-              </p>
-            )}
-
-            {link.kind === "manual" && (
-              <div className="flex flex-col gap-1.5">
-                <p className="text-[11px] text-amber-200">{t("share.manual")}</p>
-                <textarea
-                  readOnly
-                  value={link.url}
-                  onFocus={(e) => e.currentTarget.select()}
-                  aria-label={t("share.copy")}
-                  className="resize-none rounded border border-ink-600 bg-ink-900 p-2 font-mono text-[11px] text-ink-300 outline-none"
-                  rows={3}
-                />
-              </div>
-            )}
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={t("share.close")}
+          className="ml-auto flex size-6 items-center justify-center rounded text-ink-400 transition hover:text-white"
+        >
+          <X size={15} />
+        </button>
       </div>
-    </div>
+
+      {method === "board" && (
+        <div className="flex flex-col gap-3 p-4">
+          <p className="text-[11px] leading-relaxed text-ink-300">{t("share.board.blurb")}</p>
+
+          {/* The two things that have to be true before there is anything to point at. */}
+          {!signedIn ? (
+            <p className="text-[11px] leading-relaxed text-amber-200">
+              {t("share.board.needsAccount")}
+            </p>
+          ) : !cloud.board ? (
+            <p className="text-[11px] leading-relaxed text-amber-200">
+              {t("share.board.needsSaving")}
+            </p>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <Action
+                  onClick={() => void copyBoardLink()}
+                  icon={boardCopied ? Check : Link2}
+                  primary
+                >
+                  {t(boardCopied ? "share.board.copied" : "share.board.copy")}
+                </Action>
+                {slug && (
+                  <Action onClick={() => void withdraw()} icon={X}>
+                    {t("share.board.withdraw")}
+                  </Action>
+                )}
+              </div>
+
+              {slug && (
+                <input
+                  readOnly
+                  value={boardShareUrl(slug)}
+                  onFocus={(e) => e.currentTarget.select()}
+                  aria-label={t("share.board.copy")}
+                  className="rounded border border-ink-600 bg-ink-900 px-2 py-1.5 font-mono text-[11px] text-ink-300 outline-none"
+                />
+              )}
+
+              {boardError && (
+                <p role="alert" className="text-[11px] text-red-300">
+                  {t(`boards.error.${boardError}` as "boards.error.unknown")}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {method === "link" && (
+        <div className="flex flex-col gap-3 p-4">
+          <p className="text-[11px] leading-relaxed text-ink-300">{t("share.link.blurb")}</p>
+
+          <div className="flex items-center gap-2">
+            <Action onClick={() => void copyLink()} icon={link.kind === "copied" ? Check : Link2} primary>
+              {t(link.kind === "copied" ? "share.copied" : "share.copy")}
+            </Action>
+            {link.kind === "copied" && (
+              <span className="text-[11px] text-ink-400">
+                {t("share.length", { chars: link.chars, budget: URL_BUDGET })}
+              </span>
+            )}
+          </div>
+
+          {link.kind === "long" && (
+            <div className="flex flex-col gap-1.5 rounded border border-amber-500/50 bg-amber-500/10 p-2">
+              <p className="flex items-center gap-1.5 text-[11px] text-amber-200">
+                <TriangleAlert size={12} className="shrink-0" />
+                {t("share.long", { chars: link.chars })}
+              </p>
+              <p className="text-[11px] leading-relaxed text-amber-200/80">
+                {t("share.long.title")}
+              </p>
+              <Action onClick={() => void put(link.url, link.chars)} icon={Copy}>
+                {t("share.anyway")}
+              </Action>
+            </div>
+          )}
+
+          {link.kind === "failed" && (
+            <p role="alert" className="text-[11px] text-red-300">
+              {t("share.failed")}
+            </p>
+          )}
+
+          {link.kind === "manual" && (
+            <div className="flex flex-col gap-1.5">
+              <p className="text-[11px] text-amber-200">{t("share.manual")}</p>
+              <textarea
+                readOnly
+                value={link.url}
+                onFocus={(e) => e.currentTarget.select()}
+                aria-label={t("share.copy")}
+                className="resize-none rounded border border-ink-600 bg-ink-900 p-2 font-mono text-[11px] text-ink-300 outline-none"
+                rows={3}
+              />
+            </div>
+          )}
+        </div>
+      )}
+    </Modal>
   );
 }

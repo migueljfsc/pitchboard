@@ -522,6 +522,12 @@ export type RenderView = Viewport & {
    */
   tilt?: boolean;
   selection?: ReadonlySet<string>;
+  /**
+   * Editor only: how far the selection ring has settled since the selection last grew, 0 to
+   * 1. The caller owns the clock and animates it; absent is settled, which is all an export
+   * ever sees.
+   */
+  focusIn?: number;
   hover?: string | null;
   /** Editor only: draw and handle-edit the run into this scene, wherever the
    *  scrubber currently sits. Ignored on export. */

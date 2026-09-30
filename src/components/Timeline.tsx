@@ -17,7 +17,9 @@ import {
 } from "lucide-react";
 import type { BoardDoc, PitchView } from "@/board/types";
 import { BALL_ID } from "@/board/types";
+import { AnimatePresence, motion } from "motion/react";
 import { SceneThumb, THUMB_WIDTH } from "@/components/SceneThumb";
+import { leave, spring } from "@/lib/motion";
 import { NumberField } from "@/components/ui/NumberField";
 import {
   addSceneAfter,
@@ -106,6 +108,8 @@ export function Timeline({
   // the moment playback starts — starting play drops the selection back to
   // scene 1 so no editing overlay hangs over the animation.
   const live = resolveAt(doc, time);
+  /** Scene cards re-measure for their glide only when the order changes, not every frame of playback. */
+  const order = doc.scenes.map((s) => s.id).join(" ");
   const liveRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -168,9 +172,23 @@ export function Timeline({
           type="button"
           onClick={() => onPlayingChange(!playing)}
           aria-label={t(playing ? "viewer.pause" : "viewer.play")}
-          className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-ink-900 transition hover:brightness-110"
+          className={cn(
+            "flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent text-ink-900 transition hover:brightness-110",
+            playing && "shadow-[0_0_0_4px_rgb(251_191_36/0.18),0_0_18px_rgb(251_191_36/0.35)]",
+          )}
         >
-          {playing ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" className="ml-0.5" />}
+          <AnimatePresence mode="popLayout" initial={false}>
+            <motion.span
+              key={playing ? "pause" : "play"}
+              initial={{ scale: 0.3, opacity: 0, rotate: -90 }}
+              animate={{ scale: 1, opacity: 1, rotate: 0 }}
+              exit={{ scale: 0.3, opacity: 0, rotate: 90 }}
+              transition={spring}
+              className="flex"
+            >
+              {playing ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" className="ml-0.5" />}
+            </motion.span>
+          </AnimatePresence>
         </button>
 
         <button
@@ -235,7 +253,8 @@ export function Timeline({
               onPlayingChange(false);
               onTimeChange(Number(e.target.value));
             }}
-            className="block h-1 w-full cursor-pointer appearance-none rounded-full bg-ink-600 accent-accent"
+            className="scrubber block w-full"
+            style={{ "--fill": `${total > 0 ? (Math.min(time, total) / total) * 100 : 0}%` } as React.CSSProperties}
             aria-label={t("timeline.scrub")}
           />
           {total > 0 && (
@@ -271,14 +290,26 @@ export function Timeline({
         onScroll={measure}
         className="flex items-stretch gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]"
       >
+        <AnimatePresence initial={false}>
         {doc.scenes.map((s, i) => {
           const isLive = i === live.index;
           // Filling while travelling in, full once the scene is held.
           const progress = !isLive ? 0 : live.moving ? live.u * 100 : 100;
 
           return (
-            <button
+            // Its own element for the animation: `motion.button` would take over the
+            // native drag the strip reorders with.
+            <motion.div
               key={s.id}
+              layout="position"
+              layoutDependency={order}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9, transition: leave }}
+              transition={spring}
+              className="flex shrink-0"
+            >
+            <button
               ref={(el) => {
                 if (isLive) liveRef.current = el;
                 if (i === activeScene) activeRef.current = el;
@@ -312,10 +343,10 @@ export function Timeline({
               }}
               style={thumbs ? { width: THUMB_WIDTH + 20 } : undefined}
               className={cn(
-                "relative flex min-w-28 shrink-0 flex-col items-start gap-0.5 rounded-md border px-2.5 py-1.5 text-left transition",
+                "relative flex min-w-28 shrink-0 flex-col items-start gap-0.5 rounded-lg border px-2.5 py-1.5 text-left transition duration-200 hover:-translate-y-0.5",
                 i === activeScene
-                  ? "border-accent bg-ink-700"
-                  : "border-ink-600 hover:border-ink-400",
+                  ? "border-accent bg-ink-700 shadow-[0_8px_24px_-12px_rgb(251_191_36/0.45)]"
+                  : "border-ink-600 hover:border-ink-400 hover:shadow-[0_8px_20px_-12px_rgb(0_0_0/0.8)]",
                 // The playhead is its own signal, so a scene can be selected,
                 // playing, or both without the two states blurring together.
                 isLive && i !== activeScene && "border-accent/50 bg-accent/5",
@@ -331,7 +362,7 @@ export function Timeline({
               )}
             >
               {thumbs && (
-                <span className="relative block">
+                <span className="relative block overflow-hidden rounded">
                   <SceneThumb doc={doc} index={i} view={view} />
                   <span
                     className={cn(
@@ -372,8 +403,10 @@ export function Timeline({
                 />
               </span>
             </button>
+            </motion.div>
           );
         })}
+        </AnimatePresence>
 
         <button
           type="button"
@@ -545,6 +578,7 @@ export function Timeline({
             </IconButton>
             <IconButton
               label={t("timeline.deleteScene")}
+              danger
               disabled={doc.scenes.length <= 1}
               onClick={() => onDeleteScene(activeScene)}
             >
@@ -856,7 +890,7 @@ function PassTiming({
   );
 }
 
-/** Diameter of the scrubber's thumb, in CSS pixels — the browser default. */
+/** Diameter of the scrubber's thumb, in CSS pixels — set by `.scrubber` in index.css. */
 const SCRUB_THUMB = 16;
 
 /** A fade over one end of the scene strip, with a button that scrolls it. */
@@ -895,11 +929,14 @@ function IconButton({
   label,
   onClick,
   disabled,
+  danger,
   children,
 }: {
   label: string;
   onClick: () => void;
   disabled?: boolean;
+  /** Destroys something: red on hover, as the menus' destructive items are. */
+  danger?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -909,7 +946,12 @@ function IconButton({
       title={label}
       onClick={onClick}
       disabled={disabled}
-      className="flex size-7 items-center justify-center rounded-md border border-ink-600 text-ink-400 transition enabled:hover:border-accent enabled:hover:text-accent disabled:opacity-45"
+      className={cn(
+        "flex size-7 items-center justify-center rounded-md border border-ink-600 text-ink-400 transition disabled:opacity-45",
+        danger
+          ? "enabled:hover:border-red-500/70 enabled:hover:bg-red-500/10 enabled:hover:text-red-400"
+          : "enabled:hover:border-accent enabled:hover:text-accent",
+      )}
     >
       {children}
     </button>

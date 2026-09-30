@@ -32,6 +32,7 @@ import { useI18n } from "@/i18n/context";
 import { loadExportPrefs, saveExportPrefs } from "@/share/exportPrefs";
 import type { MessageKey } from "@/i18n/core";
 import { cn, slug } from "@/lib/utils";
+import { Modal } from "@/components/ui/Modal";
 
 type Props = {
   doc: BoardDoc;
@@ -238,354 +239,347 @@ export function ExportDialog({ doc, t, pitchView, onClose, exportJob }: Props) {
   const close = onClose;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 p-4 pt-[6vh]"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) close();
-      }}
+    <Modal
+      onClose={close}
+      align="top"
+      labelledBy="export-title"
+      className="flex max-h-[90vh] max-w-lg flex-col overflow-y-auto"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="export-title"
-        className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-y-auto rounded-lg border border-ink-600 bg-ink-800 shadow-2xl"
-      >
-        <div className="flex items-center gap-3 border-b border-ink-700 px-4 py-3">
-          <h2 id="export-title" className="text-sm font-semibold text-white">
-            {i18n.t("export.title")}
-          </h2>
-          <button
-            type="button"
-            onClick={close}
-            aria-label={i18n.t("export.close")}
-            className="ml-auto flex size-6 items-center justify-center rounded text-ink-400 transition hover:text-white"
-          >
-            <X size={15} />
-          </button>
-        </div>
+      <div className="flex items-center gap-3 border-b border-ink-700 px-4 py-3">
+        <h2 id="export-title" className="text-sm font-semibold text-white">
+          {i18n.t("export.title")}
+        </h2>
+        <button
+          type="button"
+          onClick={close}
+          aria-label={i18n.t("export.close")}
+          className="ml-auto flex size-6 items-center justify-center rounded text-ink-400 transition hover:text-white"
+        >
+          <X size={15} />
+        </button>
+      </div>
 
-        <div className="flex flex-col gap-4 p-4">
-          <Field label={i18n.t("export.format")}>
-            <div className="flex flex-wrap gap-1">
-              {(["mp4", "webm", "gif", "png"] as const).map((f) => (
-                <Choice
-                  key={f}
-                  active={!json && format === f}
-                  onClick={() => {
-                    setJson(false);
-                    chooseFormat(f);
-                  }}
-                >
-                  {LABEL[f]}
-                </Choice>
-              ))}
+      <div className="flex flex-col gap-4 p-4">
+        <Field label={i18n.t("export.format")}>
+          <div className="flex flex-wrap gap-1">
+            {(["mp4", "webm", "gif", "png"] as const).map((f) => (
               <Choice
-                active={json}
+                key={f}
+                active={!json && format === f}
                 onClick={() => {
-                  forget();
-                  setJson(true);
+                  setJson(false);
+                  chooseFormat(f);
                 }}
               >
-                JSON
+                {LABEL[f]}
               </Choice>
-            </div>
-            <p className="mt-1.5 text-[11px] leading-relaxed text-ink-300">
-              {i18n.t(json ? "export.blurb.json" : format === "png" && sheet ? "export.blurb.sheet" : BLURB[format])}
+            ))}
+            <Choice
+              active={json}
+              onClick={() => {
+                forget();
+                setJson(true);
+              }}
+            >
+              JSON
+            </Choice>
+          </div>
+          <p className="mt-1.5 text-[11px] leading-relaxed text-ink-300">
+            {i18n.t(json ? "export.blurb.json" : format === "png" && sheet ? "export.blurb.sheet" : BLURB[format])}
+          </p>
+          {!json && unavailable && (
+            <p className="mt-1.5 text-[11px] leading-relaxed text-amber-300">
+              {i18n.t("export.unavailable", {
+                format: LABEL[format],
+                width: size.width,
+                height: size.height,
+              })}
+              {encodable && encodable.length > 0
+                ? i18n.t("export.unavailable.try", { alternative: LABEL[encodable[0]] })
+                : i18n.t("export.unavailable.smaller")}
             </p>
-            {!json && unavailable && (
-              <p className="mt-1.5 text-[11px] leading-relaxed text-amber-300">
-                {i18n.t("export.unavailable", {
-                  format: LABEL[format],
-                  width: size.width,
-                  height: size.height,
-                })}
-                {encodable && encodable.length > 0
-                  ? i18n.t("export.unavailable.try", { alternative: LABEL[encodable[0]] })
-                  : i18n.t("export.unavailable.smaller")}
-              </p>
-            )}
+          )}
+        </Field>
+
+        {json && <JsonPane doc={doc} />}
+
+        {!json && (
+          <>
+          <ExportPreview
+            doc={format === "png" ? doc : clip}
+            pitchView={pitchView}
+            size={size}
+            shape={shape}
+            look={look}
+            still={format === "png" && !sheet ? t : null}
+            sheet={format === "png" && sheet ? { scenes, longEdge } : null}
+          />
+
+          {format === "png" && (
+            <Field label={i18n.t("export.png.what")}>
+              <div className="flex flex-wrap gap-1">
+                {([false, true] as const).map((each) => (
+                  <Choice
+                    key={String(each)}
+                    active={sheet === each}
+                    onClick={() => {
+                      forget();
+                      setSheet(each);
+                    }}
+                  >
+                    {i18n.t(each ? "export.png.sheet" : "export.png.frame")}
+                  </Choice>
+                ))}
+              </div>
+            </Field>
+          )}
+
+          {ranged && doc.scenes.length > 1 && (
+            <Field label={i18n.t("export.scenes")}>
+              <div className="flex items-center gap-2 text-[11px] text-ink-400">
+                <SceneSelect
+                  title={i18n.t("export.scenes.from")}
+                  doc={doc}
+                  value={doc.scenes[first].id}
+                  onChange={(id) => {
+                    forget();
+                    setFromId(id);
+                  }}
+                />
+                <span>→</span>
+                <SceneSelect
+                  title={i18n.t("export.scenes.to")}
+                  doc={doc}
+                  value={doc.scenes[last].id}
+                  onChange={(id) => {
+                    forget();
+                    setToId(id);
+                  }}
+                />
+              </div>
+            </Field>
+          )}
+
+          <Field label={i18n.t(format === "png" ? "export.size" : "export.resolution")}>
+            <div className="flex flex-wrap gap-1">
+              {sizes.map((r) => (
+                <Choice
+                  key={r}
+                  active={longEdge === r}
+                  onClick={() => {
+                    forget();
+                    setLongEdge(r);
+                  }}
+                >
+                  {r}
+                </Choice>
+              ))}
+            </div>
           </Field>
 
-          {json && <JsonPane doc={doc} />}
+          <Field label={i18n.t("export.shape")}>
+            <div className="flex flex-wrap gap-1">
+              {EXPORT_SHAPES.map((s) => (
+                <Choice
+                  key={s}
+                  active={shape === s}
+                  onClick={() => {
+                    forget();
+                    setShape(s);
+                  }}
+                >
+                  {i18n.t(SHAPE[s])}
+                </Choice>
+              ))}
+            </div>
+          </Field>
 
-          {!json && (
-            <>
-            <ExportPreview
-              doc={format === "png" ? doc : clip}
-              pitchView={pitchView}
-              size={size}
-              shape={shape}
-              look={look}
-              still={format === "png" && !sheet ? t : null}
-              sheet={format === "png" && sheet ? { scenes, longEdge } : null}
-            />
-
-            {format === "png" && (
-              <Field label={i18n.t("export.png.what")}>
-                <div className="flex flex-wrap gap-1">
-                  {([false, true] as const).map((each) => (
-                    <Choice
-                      key={String(each)}
-                      active={sheet === each}
-                      onClick={() => {
-                        forget();
-                        setSheet(each);
-                      }}
-                    >
-                      {i18n.t(each ? "export.png.sheet" : "export.png.frame")}
-                    </Choice>
-                  ))}
-                </div>
-              </Field>
-            )}
-
-            {ranged && doc.scenes.length > 1 && (
-              <Field label={i18n.t("export.scenes")}>
-                <div className="flex items-center gap-2 text-[11px] text-ink-400">
-                  <SceneSelect
-                    title={i18n.t("export.scenes.from")}
-                    doc={doc}
-                    value={doc.scenes[first].id}
-                    onChange={(id) => {
-                      forget();
-                      setFromId(id);
-                    }}
-                  />
-                  <span>→</span>
-                  <SceneSelect
-                    title={i18n.t("export.scenes.to")}
-                    doc={doc}
-                    value={doc.scenes[last].id}
-                    onChange={(id) => {
-                      forget();
-                      setToId(id);
-                    }}
-                  />
-                </div>
-              </Field>
-            )}
-
-            <Field label={i18n.t(format === "png" ? "export.size" : "export.resolution")}>
+          {format !== "png" && (
+            <Field label={i18n.t("export.frameRate")}>
               <div className="flex flex-wrap gap-1">
-                {sizes.map((r) => (
+                {FPS_OPTIONS[format].map((r) => (
                   <Choice
                     key={r}
-                    active={longEdge === r}
+                    active={fps === r}
                     onClick={() => {
                       forget();
-                      setLongEdge(r);
+                      setFps(r);
                     }}
                   >
-                    {r}
+                    {r} fps
                   </Choice>
                 ))}
               </div>
             </Field>
+          )}
 
-            <Field label={i18n.t("export.shape")}>
+          {(format === "mp4" || format === "webm") && (
+            <Field label={i18n.t("export.bitrate")}>
               <div className="flex flex-wrap gap-1">
-                {EXPORT_SHAPES.map((s) => (
+                {BITRATES.map((r) => (
                   <Choice
-                    key={s}
-                    active={shape === s}
+                    key={r}
+                    active={bitrate === r}
                     onClick={() => {
                       forget();
-                      setShape(s);
+                      setBitrate(r);
                     }}
                   >
-                    {i18n.t(SHAPE[s])}
+                    {r / 1e6} Mb/s
                   </Choice>
                 ))}
               </div>
             </Field>
+          )}
 
-            {format !== "png" && (
-              <Field label={i18n.t("export.frameRate")}>
-                <div className="flex flex-wrap gap-1">
-                  {FPS_OPTIONS[format].map((r) => (
-                    <Choice
-                      key={r}
-                      active={fps === r}
-                      onClick={() => {
-                        forget();
-                        setFps(r);
-                      }}
-                    >
-                      {r} fps
-                    </Choice>
-                  ))}
-                </div>
-              </Field>
-            )}
-
-            {(format === "mp4" || format === "webm") && (
-              <Field label={i18n.t("export.bitrate")}>
-                <div className="flex flex-wrap gap-1">
-                  {BITRATES.map((r) => (
-                    <Choice
-                      key={r}
-                      active={bitrate === r}
-                      onClick={() => {
-                        forget();
-                        setBitrate(r);
-                      }}
-                    >
-                      {r / 1e6} Mb/s
-                    </Choice>
-                  ))}
-                </div>
-              </Field>
-            )}
-
-            <Field label={i18n.t("export.look")}>
-              <div className="flex flex-col gap-2 text-[11px] text-ink-200">
-                <label className="flex items-center gap-2">
+          <Field label={i18n.t("export.look")}>
+            <div className="flex flex-col gap-2 text-[11px] text-ink-200">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={captioned}
+                  onChange={(e) => {
+                    forget();
+                    setCaptioned(e.target.checked);
+                  }}
+                  className="accent-accent"
+                />
+                {i18n.t("export.caption")}
+              </label>
+              {captioned && (
+                <div className="flex flex-col gap-2 pl-5">
                   <input
-                    type="checkbox"
-                    checked={captioned}
+                    value={title}
                     onChange={(e) => {
                       forget();
-                      setCaptioned(e.target.checked);
+                      setTitle(e.target.value);
                     }}
-                    className="accent-accent"
+                    placeholder={i18n.t("export.caption.placeholder")}
+                    aria-label={i18n.t("export.caption.title")}
+                    className="rounded-md border border-ink-600 bg-ink-900 px-2 py-1 text-xs text-ink-200 outline-none focus:border-accent"
                   />
-                  {i18n.t("export.caption")}
-                </label>
-                {captioned && (
-                  <div className="flex flex-col gap-2 pl-5">
-                    <input
-                      value={title}
-                      onChange={(e) => {
-                        forget();
-                        setTitle(e.target.value);
-                      }}
-                      placeholder={i18n.t("export.caption.placeholder")}
-                      aria-label={i18n.t("export.caption.title")}
-                      className="rounded-md border border-ink-600 bg-ink-900 px-2 py-1 text-xs text-ink-200 outline-none focus:border-accent"
-                    />
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={sceneCaption}
-                        onChange={(e) => {
-                          forget();
-                          setSceneCaption(e.target.checked);
-                        }}
-                        className="accent-accent"
-                      />
-                      {i18n.t("export.caption.scene")}
-                    </label>
-                  </div>
-                )}
-                {format === "png" && (
                   <label className="flex items-center gap-2">
                     <input
                       type="checkbox"
-                      checked={transparent}
+                      checked={sceneCaption}
                       onChange={(e) => {
                         forget();
-                        setTransparent(e.target.checked);
+                        setSceneCaption(e.target.checked);
                       }}
                       className="accent-accent"
                     />
-                    {i18n.t("export.transparent")}
+                    {i18n.t("export.caption.scene")}
                   </label>
-                )}
-              </div>
-            </Field>
-
-            {/* What is actually about to be produced. The dimensions come from the
-                same exportSize the worker uses, so this is a statement rather than
-                an estimate. */}
-            <dl className="grid grid-cols-3 gap-x-3 gap-y-1.5 rounded border border-ink-700 bg-ink-900 px-3 py-2.5 font-mono text-[11px]">
-              <Stat label={i18n.t("export.size")}>
-                {size.width}×{size.height}
-              </Stat>
-              <Stat label={i18n.t(format === "png" ? (sheet ? "export.scenes" : "export.frame") : "export.frames")}>
-                {format === "png" ? (sheet ? frames : `${t.toFixed(2)}s`) : frames}
-              </Stat>
-              <Stat label={i18n.t("export.length")}>{format === "png" ? "—" : `${duration.toFixed(1)}s`}</Stat>
-            </dl>
-
-            {error && (
-              <p
-                role="alert"
-                className="rounded border border-red-500/50 bg-red-500/10 px-2 py-1.5 text-[11px] leading-relaxed text-red-300"
-              >
-                {error}
-              </p>
-            )}
-
-            {saved && !job && (
-              <div className="flex flex-wrap items-center gap-2 rounded border border-ink-600 bg-ink-900 px-2 py-1.5 text-[11px] text-ink-300">
-                <span className="font-mono">{saved}</span>
-                <button
-                  type="button"
-                  onClick={exportJob.downloadAgain}
-                  className="ml-auto text-accent transition hover:brightness-110"
-                >
-                  {i18n.t("export.again")}
-                </button>
-              </div>
-            )}
-
-            {job ? (
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2 text-[11px] text-ink-300">
-                  <Loader2 size={13} className="animate-spin text-accent" />
-                  <span>{i18n.t(PHASE[job.phase])}</span>
-                  {format !== "png" && (
-                    <span className="ml-auto font-mono">{Math.round(job.fraction * 100)}%</span>
-                  )}
                 </div>
-                {format !== "png" && (
-                  <div className="h-1.5 overflow-hidden rounded-full bg-ink-700">
-                    <div
-                      className="h-full rounded-full bg-accent"
-                      style={{ width: `${Math.max(2, job.fraction * 100)}%` }}
-                    />
-                  </div>
-                )}
-                <div className="flex items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={close}
-                    title={i18n.t("export.background.hint")}
-                    className="rounded-md border border-ink-600 px-3 py-1.5 text-xs text-ink-200 transition hover:border-ink-400 hover:text-white"
-                  >
-                    {i18n.t("export.background")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={cancel}
-                    disabled={job.format === "png"}
-                    className="rounded-md border border-ink-600 px-3 py-1.5 text-xs text-ink-200 transition enabled:hover:border-ink-400 enabled:hover:text-white disabled:opacity-45"
-                  >
-                    {i18n.t("export.cancel")}
-                  </button>
-                </div>
-              </div>
-            ) : (
+              )}
+              {format === "png" && (
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={transparent}
+                    onChange={(e) => {
+                      forget();
+                      setTransparent(e.target.checked);
+                    }}
+                    className="accent-accent"
+                  />
+                  {i18n.t("export.transparent")}
+                </label>
+              )}
+            </div>
+          </Field>
+
+          {/* What is actually about to be produced. The dimensions come from the
+              same exportSize the worker uses, so this is a statement rather than
+              an estimate. */}
+          <dl className="grid grid-cols-3 gap-x-3 gap-y-1.5 rounded border border-ink-700 bg-ink-900 px-3 py-2.5 font-mono text-[11px]">
+            <Stat label={i18n.t("export.size")}>
+              {size.width}×{size.height}
+            </Stat>
+            <Stat label={i18n.t(format === "png" ? (sheet ? "export.scenes" : "export.frame") : "export.frames")}>
+              {format === "png" ? (sheet ? frames : `${t.toFixed(2)}s`) : frames}
+            </Stat>
+            <Stat label={i18n.t("export.length")}>{format === "png" ? "—" : `${duration.toFixed(1)}s`}</Stat>
+          </dl>
+
+          {error && (
+            <p
+              role="alert"
+              className="rounded border border-red-500/50 bg-red-500/10 px-2 py-1.5 text-[11px] leading-relaxed text-red-300"
+            >
+              {error}
+            </p>
+          )}
+
+          {saved && !job && (
+            <div className="flex flex-wrap items-center gap-2 rounded border border-ink-600 bg-ink-900 px-2 py-1.5 text-[11px] text-ink-300">
+              <span className="font-mono">{saved}</span>
               <button
                 type="button"
-                onClick={start}
-                disabled={unavailable}
-                className="flex items-center justify-center gap-1.5 rounded-md bg-accent px-3 py-2 text-xs font-medium text-ink-900 transition enabled:hover:brightness-110 disabled:opacity-45"
+                onClick={exportJob.downloadAgain}
+                className="ml-auto text-accent transition hover:brightness-110"
               >
-                {format === "png" ? <ImageIcon size={13} /> : <Film size={13} />}
-                {i18n.t("export.run", { format: LABEL[format] })}
+                {i18n.t("export.again")}
               </button>
-            )}
-            {!job && (
-              <p className="-mt-2 text-center text-[11px] text-ink-400">
-                {i18n.t(CAN_PICK_FOLDER ? "export.where.pick" : "export.where.downloads")}
-              </p>
-            )}
-            </>
+            </div>
           )}
-        </div>
+
+          {job ? (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-[11px] text-ink-300">
+                <Loader2 size={13} className="animate-spin text-accent" />
+                <span>{i18n.t(PHASE[job.phase])}</span>
+                {format !== "png" && (
+                  <span className="ml-auto font-mono">{Math.round(job.fraction * 100)}%</span>
+                )}
+              </div>
+              {format !== "png" && (
+                <div className="h-1.5 overflow-hidden rounded-full bg-ink-700">
+                  <div
+                    className="h-full rounded-full bg-accent"
+                    style={{ width: `${Math.max(2, job.fraction * 100)}%` }}
+                  />
+                </div>
+              )}
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={close}
+                  title={i18n.t("export.background.hint")}
+                  className="rounded-md border border-ink-600 px-3 py-1.5 text-xs text-ink-200 transition hover:border-ink-400 hover:text-white"
+                >
+                  {i18n.t("export.background")}
+                </button>
+                <button
+                  type="button"
+                  onClick={cancel}
+                  disabled={job.format === "png"}
+                  className="rounded-md border border-ink-600 px-3 py-1.5 text-xs text-ink-200 transition enabled:hover:border-ink-400 enabled:hover:text-white disabled:opacity-45"
+                >
+                  {i18n.t("export.cancel")}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={start}
+              disabled={unavailable}
+              className="flex items-center justify-center gap-1.5 rounded-md bg-accent px-3 py-2 text-xs font-medium text-ink-900 transition enabled:hover:brightness-110 disabled:opacity-45"
+            >
+              {format === "png" ? <ImageIcon size={13} /> : <Film size={13} />}
+              {i18n.t("export.run", { format: LABEL[format] })}
+            </button>
+          )}
+          {!job && (
+            <p className="-mt-2 text-center text-[11px] text-ink-400">
+              {i18n.t(CAN_PICK_FOLDER ? "export.where.pick" : "export.where.downloads")}
+            </p>
+          )}
+          </>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 }
 

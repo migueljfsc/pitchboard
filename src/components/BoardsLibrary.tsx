@@ -33,7 +33,10 @@ import {
 import { PickProject } from "@/components/PickProject";
 import { SportIcon } from "@/components/SportMenu";
 import type { Sport } from "@/board/types";
+import { AnimatePresence } from "motion/react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Modal } from "@/components/ui/Modal";
+import { BAR_BUTTON } from "@/components/ui/bar";
 import { useI18n } from "@/i18n/context";
 import { cn } from "@/lib/utils";
 import type { CloudBoard } from "@/lib/useCloudBoard";
@@ -51,6 +54,7 @@ import {
   moveBoards,
   moveProject,
 } from "@/share/api";
+import { APP_PATH } from "@/share/routes";
 
 /** Codes the Worker emits for these routes; anything else reads as the generic line. */
 const KNOWN = new Set([
@@ -96,7 +100,7 @@ export function BoardsLibrary({ cloud, sport, open, onOpenChange: setOpen }: Pro
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         title={t("boards.title.hint")}
-        className="flex shrink-0 items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
+        className={cn(BAR_BUTTON, "shrink-0")}
       >
         <FolderOpen size={13} />
         {t("boards.title")}
@@ -109,7 +113,9 @@ export function BoardsLibrary({ cloud, sport, open, onOpenChange: setOpen }: Pro
 
       {/* Unmounted when closed, so every visit starts on a fresh list rather than on
           whatever another device has since changed underneath it. */}
-      {open && <Library cloud={cloud} sport={sport} onClose={() => setOpen(false)} />}
+      <AnimatePresence>
+          {open && <Library cloud={cloud} sport={sport} onClose={() => setOpen(false)} />}
+      </AnimatePresence>
     </>
   );
 }
@@ -416,7 +422,7 @@ function Library({ cloud, sport, onClose }: Pick<Props, "cloud" | "sport"> & { o
         // Deleting the board being edited leaves the address pointing at nothing, so the page
         // goes back to a plain editor rather than pretending the row is still there.
         if (cloud.board && pending.ids.includes(cloud.board.id)) {
-          window.location.assign("/");
+          window.location.assign(APP_PATH);
           return;
         }
         setSelection(new Set());
@@ -430,7 +436,7 @@ function Library({ cloud, sport, onClose }: Pick<Props, "cloud" | "sport"> & { o
         // took the board with it, and leaving the editor pointing at a row that is gone
         // fails on its next autosave rather than here, where it can be explained.
         if (cloud.board && going.has(cloud.board.projectId)) {
-          window.location.assign("/");
+          window.location.assign(APP_PATH);
           return;
         }
         // Likewise the selection: a folder inside the one deleted is not somewhere to stand.
@@ -491,17 +497,11 @@ function Library({ cloud, sport, onClose }: Pick<Props, "cloud" | "sport"> & { o
   const failure = error ?? (cloud.status.kind === "error" ? cloud.status.code : null);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="library-title"
-        className="flex h-[80vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-ink-600 bg-ink-800 shadow-2xl"
+    <>
+      <Modal
+        onClose={onClose}
+        labelledBy="library-title"
+        className="flex h-[80vh] max-w-5xl flex-col overflow-hidden"
       >
         {/* Header: what this is, and how to find something in it. */}
         <div className="flex shrink-0 items-center gap-3 border-b border-ink-700 px-4 py-3">
@@ -744,7 +744,14 @@ function Library({ cloud, sport, onClose }: Pick<Props, "cloud" | "sport"> & { o
 
             <ul className="min-h-0 flex-1 overflow-y-auto p-1.5">
               {boards === null ? (
-                <li className="px-2 py-1 text-[11px] text-ink-400">{t("boards.loading")}</li>
+                <li role="status" aria-label={t("boards.loading")} className="flex flex-col gap-2 px-2 py-1.5">
+                  {[70, 55, 82, 48, 64].map((w) => (
+                    <span key={w} className="flex items-center gap-3">
+                      <span className="skeleton h-3" style={{ width: `${w}%` }} />
+                      <span className="skeleton ml-auto h-3 w-16" />
+                    </span>
+                  ))}
+                </li>
               ) : visible.length === 0 ? (
                 <li className="px-2 py-1 text-[11px] leading-relaxed text-ink-400">
                   {query.trim() ? t("library.noMatches", { query: query.trim() }) : t("library.empty")}
@@ -836,8 +843,9 @@ function Library({ cloud, sport, onClose }: Pick<Props, "cloud" | "sport"> & { o
             )}
           </div>
         </div>
-      </div>
+      </Modal>
 
+      <AnimatePresence>
       {pending && (
         <ConfirmDialog
           title={
@@ -867,7 +875,8 @@ function Library({ cloud, sport, onClose }: Pick<Props, "cloud" | "sport"> & { o
           onCancel={() => setPending(null)}
         />
       )}
-    </div>
+      </AnimatePresence>
+    </>
   );
 }
 

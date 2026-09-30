@@ -1,4 +1,6 @@
 import { X } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { leave, spring } from "@/lib/motion";
 import type { Toast } from "@/lib/useToasts";
 import { useI18n } from "@/i18n/context";
 
@@ -16,7 +18,6 @@ export function Toaster({
   onDismiss: (id: number) => void;
 }) {
   const { t } = useI18n();
-  if (toasts.length === 0) return null;
 
   return (
     <div
@@ -24,10 +25,16 @@ export function Toaster({
       aria-live="polite"
       className="pointer-events-none absolute inset-x-0 top-3 z-20 flex flex-col items-center gap-1.5 px-4"
     >
+      <AnimatePresence initial={false}>
       {toasts.map((toast) => (
-        <div
+        <motion.div
           key={toast.id}
-          className="pointer-events-auto flex max-w-md items-center gap-3 rounded-md border border-ink-600 bg-ink-800/95 px-3 py-2 text-xs text-ink-200 shadow-lg backdrop-blur"
+          layout
+          initial={{ opacity: 0, y: -12, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.96, transition: leave }}
+          transition={spring}
+          className="pointer-events-auto flex max-w-md items-center gap-3 rounded-lg border border-ink-600 bg-ink-800/95 px-3 py-2 text-xs text-ink-200 shadow-xl shadow-black/40 backdrop-blur"
         >
           <span className="min-w-0 flex-1">{toast.text}</span>
           {toast.action && (
@@ -50,8 +57,9 @@ export function Toaster({
           >
             <X size={13} />
           </button>
-        </div>
+        </motion.div>
       ))}
+      </AnimatePresence>
     </div>
   );
 }

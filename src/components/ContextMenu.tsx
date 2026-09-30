@@ -7,6 +7,8 @@
  */
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { motion } from "motion/react";
+import { DURATION, EASE_OUT, leave } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 export type MenuItem =
@@ -84,7 +86,9 @@ export function ContextMenu({
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const { width, height } = el.getBoundingClientRect();
+    // Layout size, not the painted one: the menu opens slightly scaled down.
+    const width = el.offsetWidth;
+    const height = el.offsetHeight;
     setPlace({
       x: Math.min(at.x, window.innerWidth - width - 8),
       y: above ? Math.max(8, at.y - height) : Math.min(at.y, window.innerHeight - height - 8),
@@ -126,13 +130,16 @@ export function ContextMenu({
   const iconed = shown.some((item) => item !== "divider" && item.icon);
 
   return (
-    <div
+    <motion.div
       ref={ref}
       role="menu"
       onKeyDown={onKey}
       onContextMenu={(e) => e.preventDefault()}
-      className="fixed z-50 min-w-48 overflow-hidden rounded-md border border-ink-600 bg-ink-800 py-1 shadow-2xl"
-      style={{ left: place.x, top: place.y }}
+      initial={{ opacity: 0, scale: 0.96, y: above ? 4 : -4 }}
+      animate={{ opacity: 1, scale: 1, y: 0, transition: { duration: DURATION.fast, ease: EASE_OUT } }}
+      exit={{ opacity: 0, transition: leave, pointerEvents: "none" }}
+      className="fixed z-50 min-w-48 overflow-hidden rounded-lg border border-ink-600 bg-ink-800/95 py-1 shadow-2xl shadow-black/50 backdrop-blur"
+      style={{ left: place.x, top: place.y, transformOrigin: above ? "bottom left" : "top left" }}
     >
       {shown.map((item, i) =>
         item === "divider" ? (
@@ -174,6 +181,6 @@ export function ContextMenu({
           </button>
         ),
       )}
-    </div>
+    </motion.div>
   );
 }

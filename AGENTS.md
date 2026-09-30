@@ -96,7 +96,8 @@ src/i18n/                 EN and PT; en.ts is the source of truth for the keys
   core.ts                 pure runtime — the engine imports only `Message` from here
 src/fonts.ts              registers the label face, for the page and the export worker
 src/App.tsx               picks Viewer or Editor from the hash; no router
-src/pages/                Editor, Viewer — read-only playback of a shared board, with fork —
+src/pages/                Landing — the front door at `/` for visitors (D118) — Editor at `/app`,
+                          Viewer — read-only playback of a shared board, with fork —
                           and Admin, the operator's usage view (D108)
 src/components/           React chrome; ui/ holds shadcn-style primitives
 scripts/board.ts          `pnpm board <tracks.json>` — a tracks file through the real importer
@@ -292,6 +293,16 @@ Each is one line of what breaks; the reasoning is in the cited decision.
 - **Never assemble a sentence from fragments** — a whole key with a placeholder.
 - **`pt.ts` must answer every key `en.ts` declares**; `i18n.test.ts` checks placeholders match.
 - **A document does not change language when the reader does.**
+
+### Motion and the landing page (D118)
+- **Motion speaks `lib/motion.ts`** — three durations, two eases, mirrored by the CSS tokens. A
+  dialog is `ui/Modal`; it only animates OUT inside an `AnimatePresence`, with a key.
+- **Animation never reaches `drawBoard` through a clock.** A canvas animation is a number in
+  `RenderView` that the caller drives and an export leaves absent (`focusIn`).
+- **`requestAnimationFrame` stops in a background tab.** Anything that must end in a state
+  (the selection ring, a cross-fade) has a timeout or a layout read to land it without frames.
+- **`/` is the landing page, `/app` the editor.** A link the editor must act on carries a
+  parameter `wantsApp` knows, or the landing page swallows it.
 
 ### Export (D6)
 - **Quantise the GIF palette once**, from sampled frames; **delays are differences of rounded

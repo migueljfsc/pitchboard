@@ -1,10 +1,12 @@
 /**
  * What a path can mean.
  *
- * Three, and they are the only reason this app knows about paths at all — it is still not a
+ * Five, and they are the only reason this app knows about paths at all — it is still not a
  * router (D33's "no router" holds; a path is one more thing the address can be, read once,
  * because changing one is a page load rather than an event).
  *
+ *   /              the landing page, for a visitor who is not signed in.
+ *   /app           the editor, on the board in progress.
  *   /board/<id>    a saved board, opened for editing. Needs an account.
  *   /share/<slug>  a published board, opened read-only. Needs nothing.
  *   /admin         the operator's usage view (D108). The Worker decides who sees data.
@@ -15,6 +17,22 @@
 
 const BOARD_PATH = /^\/board\/([A-Za-z0-9_-]{22})$/;
 const SHARE_PATH = /^\/share\/([2-9bcdfghjkmnpqrstvwxz]{8})$/;
+
+export const APP_PATH = "/app";
+
+export const isLandingPath = (pathname = window.location.pathname): boolean => pathname === "/";
+
+/**
+ * Query parameters that mean the editor has something to do: a sign-in just finished, a link
+ * from an email, a fresh board. The Worker and older emails send them to `/`, so the landing
+ * page steps aside for them rather than dropping them.
+ */
+const APP_PARAMS = ["fresh", "welcome", "verify", "reset", "auth_error"];
+
+export const wantsApp = (search = window.location.search): boolean => {
+  const params = new URLSearchParams(search);
+  return APP_PARAMS.some((name) => params.has(name));
+};
 
 export const isAdminPath = (pathname = window.location.pathname): boolean =>
   pathname === "/admin" || pathname === "/admin/";

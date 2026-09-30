@@ -606,6 +606,25 @@ square. Lines are named as the game names them — the fixo, the wingers, the pi
 "futsal" are the same word in English and Portuguese. Three plays: a 3-1 rotation, the fly
 goalkeeper five against four, and a corner.
 
+## D118 — A front door, and motion with a vocabulary
+**`/` is a landing page for visitors; the editor moved to `/app`.** A first visit used to drop
+into an editor with nothing saying what it was for. The landing page plays real boards through
+`LiveBoard` — `drawBoard` on a loop, surround left transparent — so it demonstrates rather than
+describes. Signed-in visitors never see it: `main.tsx` sends them on before React mounts, read
+from a `signed-in` hint `useAccount` keeps (`share/signedIn.ts`; a wrong hint costs one page).
+Anything the editor has to act on — `?welcome`, `?verify`, `?reset`, `?auth_error`, `?fresh` —
+also goes straight through (`wantsApp`), so an email sent before the move still works. `#d=`
+links open wherever they point, `/` included. Signing out still lands on `/?fresh=1`, which now
+means the landing page; a fresh board from inside the editor is `/app?fresh=1`.
+
+**Motion goes through `motion` and three speeds.** `lib/motion.ts` and the `--duration-*` /
+`--ease-*` tokens are the whole vocabulary: things arrive on an ease-out and leave faster than
+they came. Every dialog is `ui/Modal`, animated in and — inside `AnimatePresence` — out, and
+`MotionConfig reducedMotion="user"` plus one CSS rule honour reduced motion everywhere.
+Animation never reaches the document or an export. The one piece inside the canvas, a new
+selection's ring settling in, is `RenderView.focusIn`: a number the caller animates and the
+renderer draws, absent (settled) on every export, so `drawBoard` stays pure.
+
 ---
 
 ## The importer (`src/import/`)

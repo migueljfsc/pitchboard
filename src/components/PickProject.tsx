@@ -43,7 +43,7 @@ export function PickProject({
       <div className="fixed inset-0 z-40" onMouseDown={onClose} />
       <div
         className={cn(
-          "absolute right-0 z-50 flex max-h-56 w-52 flex-col gap-0.5 overflow-y-auto rounded border border-ink-600 bg-ink-800 p-1 shadow-lg shadow-black/40",
+          "absolute animate-pop-in origin-top right-0 z-50 flex max-h-56 w-52 flex-col gap-0.5 overflow-y-auto rounded border border-ink-600 bg-ink-800 p-1 shadow-lg shadow-black/40",
           placement === "up" ? "bottom-full mb-1" : "top-full mt-1",
         )}
       >

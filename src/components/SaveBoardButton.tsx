@@ -20,6 +20,9 @@ import { useI18n } from "@/i18n/context";
 import { cn } from "@/lib/utils";
 import type { CloudBoard } from "@/lib/useCloudBoard";
 import { type Project, listProjects } from "@/share/api";
+import { AnimatePresence, motion } from "motion/react";
+import { BAR_BUTTON } from "@/components/ui/bar";
+import { spring } from "@/lib/motion";
 
 export function SaveBoardButton({
   cloud,
@@ -72,14 +75,20 @@ export function SaveBoardButton({
         onClick={() => void press()}
         disabled={busy}
         title={t(cloud.board ? "bar.save.hint" : "library.saveTo")}
-        className={cn(
-          "flex items-center gap-1.5 rounded-md border bg-ink-900 px-2.5 py-1.5 text-xs transition disabled:opacity-50",
-          saved
-            ? "border-accent text-accent"
-            : "border-ink-600 text-ink-200 hover:border-accent hover:text-white",
-        )}
+        className={cn(BAR_BUTTON, "disabled:opacity-50", saved && "text-accent hover:text-accent")}
       >
-        {saved ? <Check size={13} /> : <Save size={13} />}
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.span
+            key={saved ? "saved" : "save"}
+            initial={{ scale: 0.4, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.4, opacity: 0 }}
+            transition={spring}
+            className="flex"
+          >
+            {saved ? <Check size={13} /> : <Save size={13} />}
+          </motion.span>
+        </AnimatePresence>
         {t(busy ? "boards.status.saving" : saved ? "boards.status.saved" : "bar.save")}
       </button>
 

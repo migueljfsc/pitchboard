@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useI18n } from "@/i18n/context";
+import { Modal } from "@/components/ui/Modal";
 
 type Props = {
   title: string;
@@ -33,48 +34,39 @@ export function ConfirmDialog({ title, message, confirmLabel, onConfirm, onCance
   }, [onCancel]);
 
   return (
-    <div
-      // Above every other modal: a confirmation is always the more urgent of
-      // the two, and it can be raised from inside one.
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
-      // Only a click on the backdrop itself dismisses — not one that started
-      // inside the panel and drifted out.
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onCancel();
-      }}
+    // Above every other modal: a confirmation is always the more urgent of the two, and it
+    // can be raised from inside one.
+    <Modal
+      onClose={onCancel}
+      layer={60}
+      labelledBy="confirm-title"
+      describedBy="confirm-message"
+      className="max-w-sm p-5"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="confirm-title"
-        aria-describedby="confirm-message"
-        className="w-full max-w-sm rounded-lg border border-ink-600 bg-ink-800 p-5 shadow-2xl"
-      >
-        <h2 id="confirm-title" className="text-sm font-semibold text-white">
-          {title}
-        </h2>
-        <p id="confirm-message" className="mt-2 text-xs leading-relaxed text-ink-300">
-          {message}
-        </p>
+      <h2 id="confirm-title" className="text-sm font-semibold text-white">
+        {title}
+      </h2>
+      <p id="confirm-message" className="mt-2 text-xs leading-relaxed text-ink-300">
+        {message}
+      </p>
 
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-md border border-ink-600 px-3 py-1.5 text-xs text-ink-200 transition hover:border-ink-400 hover:text-white"
-          >
-            {t("confirm.cancel")}
-          </button>
-          <button
-            ref={confirmRef}
-            type="button"
-            onClick={onConfirm}
-            className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-red-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
-          >
-            {confirmLabel}
-          </button>
-        </div>
+      <div className="mt-5 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-md border border-ink-600 px-3 py-1.5 text-xs text-ink-200 transition hover:border-ink-400 hover:text-white"
+        >
+          {t("confirm.cancel")}
+        </button>
+        <button
+          ref={confirmRef}
+          type="button"
+          onClick={onConfirm}
+          className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-red-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+        >
+          {confirmLabel}
+        </button>
       </div>
-    </div>
+    </Modal>
   );
 }

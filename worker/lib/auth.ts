@@ -173,7 +173,7 @@ export async function register(ctx: AuthCtx): Promise<Response> {
   if (!(await passesTurnstile(ctx.env, body.turnstile, ip))) return fail("captcha_failed", 400);
 
   const token = await issueToken(ctx, "verify", email, await hashKey(body.key, ctx.env.PASSWORD_PEPPER));
-  mail(ctx, email, "verify", body.lang, `${ctx.origin}/?verify=${token}`);
+  mail(ctx, email, "verify", body.lang, `${ctx.origin}/app?verify=${token}`);
   return json({ ok: true });
 }
 
@@ -234,7 +234,7 @@ export async function requestReset(ctx: AuthCtx): Promise<Response> {
       const user = await env.DB.prepare("SELECT 1 FROM users WHERE email = ?").bind(email).first();
       if (!user) return;
       const token = await issueToken(ctx, "reset", email, null);
-      const link = `${origin}/?reset=${token}&email=${encodeURIComponent(email)}`;
+      const link = `${origin}/app?reset=${token}&email=${encodeURIComponent(email)}`;
       await sendMail(env, email, composeMail("reset", mailLang(body.lang), link));
     })().catch((cause: unknown) => {
       console.error("mail", "reset", cause instanceof Error ? cause.message : cause);

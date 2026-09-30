@@ -336,6 +336,38 @@ describe("drawBoard", () => {
   });
 });
 
+describe("the selection ring settling in", () => {
+  const doc = createBoardDoc();
+  const selection = new Set([doc.teams[0].players[0].id]);
+
+  it("draws exactly the resting ring once settled, so an absent focusIn is no change", () => {
+    const rest = createRecordingCtx();
+    const settled = createRecordingCtx();
+    drawBoard(rest.ctx, doc, 0, view({ selection }));
+    drawBoard(settled.ctx, doc, 0, view({ selection, focusIn: 1 }));
+    expect(settled.log).toEqual(rest.log);
+  });
+
+  it("starts wider and fainter, and is deterministic for a given phase", () => {
+    const rest = createRecordingCtx();
+    const start = createRecordingCtx();
+    const again = createRecordingCtx();
+    drawBoard(rest.ctx, doc, 0, view({ selection }));
+    drawBoard(start.ctx, doc, 0, view({ selection, focusIn: 0 }));
+    drawBoard(again.ctx, doc, 0, view({ selection, focusIn: 0 }));
+    expect(start.log).not.toEqual(rest.log);
+    expect(start.log).toEqual(again.log);
+  });
+
+  it("leaves a board with nothing selected alone", () => {
+    const rest = createRecordingCtx();
+    const start = createRecordingCtx();
+    drawBoard(rest.ctx, doc, 0, view());
+    drawBoard(start.ctx, doc, 0, view({ focusIn: 0 }));
+    expect(start.log).toEqual(rest.log);
+  });
+});
+
 describe("team names", () => {
   const nameCalls = (r: ReturnType<typeof createRecordingCtx>, name: string) =>
     r.log.filter((l) => l.startsWith(`fillText(${JSON.stringify(name)},`));

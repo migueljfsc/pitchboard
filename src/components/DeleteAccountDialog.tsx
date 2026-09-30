@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useI18n } from "@/i18n/context";
+import { Modal } from "@/components/ui/Modal";
 
 export function DeleteAccountDialog({
   email,
@@ -58,17 +59,15 @@ export function DeleteAccountDialog({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget && !busy) onCancel();
+    <Modal
+      onClose={() => {
+        if (!busy) onCancel();
       }}
+      layer={60}
+      labelledBy="delete-account-title"
+      className="max-w-sm p-5"
     >
       <form
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="delete-account-title"
-        className="w-full max-w-sm rounded-lg border border-ink-600 bg-ink-800 p-5 shadow-2xl"
         onSubmit={(e) => {
           e.preventDefault();
           void submit();
@@ -126,6 +125,6 @@ export function DeleteAccountDialog({
           </button>
         </div>
       </form>
-    </div>
+    </Modal>
   );
 }

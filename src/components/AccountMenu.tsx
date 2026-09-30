@@ -20,9 +20,11 @@
 import { useEffect, useRef, useState } from "react";
 import { LogOut, Shield, Trash2, UserRound } from "lucide-react";
 
+import { AnimatePresence } from "motion/react";
 import { DeleteAccountDialog } from "@/components/DeleteAccountDialog";
 import { SignInDialog } from "@/components/SignInDialog";
 import { useI18n } from "@/i18n/context";
+import { BAR_BUTTON, BAR_BUTTON_OPEN } from "@/components/ui/bar";
 import type { MessageKey } from "@/i18n/core";
 import { enterSignedIn, errorKey } from "@/lib/signIn";
 import { cn } from "@/lib/utils";
@@ -131,22 +133,24 @@ export function AccountMenu({ account, loading, signOut }: AccountState) {
           onClick={() => setOpen((v) => !v)}
           aria-haspopup="dialog"
           title={t("account.signIn.why")}
-          className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
+          className={BAR_BUTTON}
         >
           <UserRound size={13} />
           {t("account.signIn")}
         </button>
 
-        {open && (
-          <SignInDialog
-            initialMode={reset ? "reset" : "signIn"}
-            reset={reset}
-            onClose={() => setOpen(false)}
-          />
-        )}
+        <AnimatePresence>
+          {open && (
+            <SignInDialog
+              initialMode={reset ? "reset" : "signIn"}
+              reset={reset}
+              onClose={() => setOpen(false)}
+            />
+          )}
+        </AnimatePresence>
 
         {!open && verifying && (
-          <div className="absolute right-0 top-full z-40 mt-1.5 w-72 rounded-md border border-ink-600 bg-ink-800 p-2 shadow-lg shadow-black/40">
+          <div className="absolute animate-pop-in origin-top right-0 top-full z-40 mt-1.5 w-72 rounded-md border border-ink-600 bg-ink-800 p-2 shadow-lg shadow-black/40">
             <p role="status" className="text-[11px] leading-relaxed text-ink-200">
               {t("account.password.verifying")}
             </p>
@@ -154,7 +158,7 @@ export function AccountMenu({ account, loading, signOut }: AccountState) {
         )}
 
         {!open && (authError || linkError) && (
-          <div className="absolute right-0 top-full z-40 mt-1.5 flex w-72 flex-col gap-1.5 rounded-md border border-ink-600 bg-ink-800 p-2 shadow-lg shadow-black/40">
+          <div className="absolute animate-pop-in origin-top right-0 top-full z-40 mt-1.5 flex w-72 flex-col gap-1.5 rounded-md border border-ink-600 bg-ink-800 p-2 shadow-lg shadow-black/40">
             <p role="alert" className="text-[11px] leading-relaxed text-amber-200">
               {linkError ? t(linkError) : t(`account.error.${authError}` as "account.error.unknown")}
             </p>
@@ -184,10 +188,7 @@ export function AccountMenu({ account, loading, signOut }: AccountState) {
         aria-haspopup="menu"
         aria-expanded={open}
         title={t("account.menu")}
-        className={cn(
-          "flex max-w-[11rem] items-center gap-1.5 rounded-md border bg-ink-900 px-2.5 py-1.5 text-xs transition",
-          open ? "border-accent text-white" : "border-ink-600 text-ink-200 hover:border-accent hover:text-white",
-        )}
+        className={cn(BAR_BUTTON, "max-w-[11rem]", open && BAR_BUTTON_OPEN)}
       >
         <UserRound size={13} className="shrink-0" />
         <span className="truncate">{label}</span>
@@ -196,7 +197,7 @@ export function AccountMenu({ account, loading, signOut }: AccountState) {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-40 mt-1.5 flex w-64 flex-col gap-1.5 rounded-md border border-ink-600 bg-ink-800 p-2 shadow-lg shadow-black/40"
+          className="absolute animate-pop-in origin-top right-0 top-full z-40 mt-1.5 flex w-64 flex-col gap-1.5 rounded-md border border-ink-600 bg-ink-800 p-2 shadow-lg shadow-black/40"
         >
           <div className="px-1 pb-1">
             <p className="text-[10px] uppercase tracking-wide text-ink-400">
@@ -247,25 +248,27 @@ export function AccountMenu({ account, loading, signOut }: AccountState) {
         </div>
       )}
 
-      {deleting && (
-        <DeleteAccountDialog
-          email={account.email}
-          title={t("account.delete.title")}
-          message={t("account.delete.message")}
-          onDelete={async (typed) => {
-            try {
-              await deleteAccount(typed);
-            } catch (error) {
-              // Already gone, from another tab: the outcome the coach asked for.
-              if (!(error instanceof ApiError && error.status === 401)) throw error;
-            }
-            // The same exit as signing out, so the open board — possibly one that no longer
-            // exists — is not autosaved back into this browser.
-            window.location.assign("/?fresh=1");
-          }}
-          onCancel={() => setDeleting(false)}
-        />
-      )}
+      <AnimatePresence>
+        {deleting && (
+          <DeleteAccountDialog
+            email={account.email}
+            title={t("account.delete.title")}
+            message={t("account.delete.message")}
+            onDelete={async (typed) => {
+              try {
+                await deleteAccount(typed);
+              } catch (error) {
+                // Already gone, from another tab: the outcome the coach asked for.
+                if (!(error instanceof ApiError && error.status === 401)) throw error;
+              }
+              // The same exit as signing out, so the open board — possibly one that no longer
+              // exists — is not autosaved back into this browser.
+              window.location.assign("/?fresh=1");
+            }}
+            onCancel={() => setDeleting(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

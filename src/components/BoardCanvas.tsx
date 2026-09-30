@@ -233,10 +233,12 @@ export function BoardCanvas({
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fadeRef = useRef<HTMLCanvasElement>(null);
-  const wasTilted = useRef(tilted);
+  /** What a cross-fade is between: flat or angled, and which sport's court. */
+  const look = `${tilted}:${sportOf(doc).id}`;
+  const lastLook = useRef(look);
 
   /**
-   * Cross-fade between the flat board and the angled one.
+   * Cross-fade between the flat board and the angled one, and from one court to another.
    *
    * A layout effect, so it runs after the toggle has committed but before the draw
    * effect below repaints the canvas: the last frame of the old view is copied onto
@@ -244,8 +246,8 @@ export function BoardCanvas({
    * only — nothing here reaches `drawBoard`, and an export never sees it.
    */
   useLayoutEffect(() => {
-    if (wasTilted.current === tilted) return;
-    wasTilted.current = tilted;
+    if (lastLook.current === look) return;
+    lastLook.current = look;
     const from = canvasRef.current;
     const fade = fadeRef.current;
     const ctx = fade?.getContext("2d");
@@ -262,7 +264,7 @@ export function BoardCanvas({
     void fade.offsetWidth;
     fade.style.transition = `opacity ${TILT_FADE_MS}ms ease-out`;
     fade.style.opacity = "0";
-  }, [tilted]);
+  }, [look]);
   const turf = useRef<TurfCache>(new Map());
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [hover, setHover] = useState<string | null>(null);
@@ -325,6 +327,38 @@ export function BoardCanvas({
   const [grip, setGrip] = useState<"grab" | "resize" | null>(null);
   const [drag, setDrag] = useState<Drag>(null);
 
+  /**
+   * The selection ring settling in, `RenderView.focusIn`. Restarted whenever the selection
+   * gains somebody — adjusted during render, React's pattern for state that follows a prop —
+   * and run by the effect below. Shrinking a selection has nothing new to point at.
+   */
+  const [seen, setSeen] = useState(selection);
+  const [focusIn, setFocusIn] = useState(1);
+  const [focusRun, setFocusRun] = useState(0);
+  if (seen !== selection) {
+    setSeen(selection);
+    if (live && [...selection].some((id) => !seen.has(id))) {
+      setFocusIn(0);
+      setFocusRun(focusRun + 1);
+    }
+  }
+
+  useEffect(() => {
+    if (focusRun === 0) return;
+    const start = performance.now();
+    let frame = requestAnimationFrame(function step(now) {
+      const u = Math.min(1, (now - start) / FOCUS_IN_MS);
+      setFocusIn(u);
+      if (u < 1) frame = requestAnimationFrame(step);
+    });
+    // Frames do not come in a background tab; the ring must not be left mid-flight.
+    const settle = window.setTimeout(() => setFocusIn(1), FOCUS_IN_MS + 100);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.clearTimeout(settle);
+    };
+  }, [focusRun]);
+
   // Track the element's CSS size; the viewport is derived from it, never stored.
   useEffect(() => {
     const el = wrapRef.current;
@@ -365,6 +399,7 @@ export function BoardCanvas({
       turf: turf.current,
       tilt: framing.tilt,
       selection,
+      focusIn,
       hover: swapWith ?? receiver ?? hover,
       editScene,
       ghosts,
@@ -381,6 +416,7 @@ export function BoardCanvas({
     t,
     size,
     selection,
+    focusIn,
     hover,
     drag,
     editScene,
@@ -1378,6 +1414,9 @@ function ZoomField({
 
 /** Both layers a drawn shape can lie in. */
 const LAYERS = ["mark", "zone"] as const;
+
+/** How long a new selection's ring takes to settle, in milliseconds. */
+const FOCUS_IN_MS = 220;
 
 /** How long the flat and 3D views take to cross-fade, in milliseconds. */
 const TILT_FADE_MS = 320;

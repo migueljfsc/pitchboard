@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { boardPath, readBoardId, readShareSlug, sharePath } from "./routes";
+import { boardPath, isLandingPath, readBoardId, readShareSlug, sharePath, wantsApp } from "./routes";
 
 describe("readBoardId", () => {
   it("reads a board id", () => {
@@ -40,5 +40,25 @@ describe("readShareSlug", () => {
   it("does not collide with a board path", () => {
     expect(readShareSlug("/board/9Q82CqPzAqBcX7DPgeeo3A")).toBeNull();
     expect(readBoardId("/share/3g839hk7")).toBeNull();
+  });
+});
+
+describe("the landing page", () => {
+  it("is the bare root only", () => {
+    expect(isLandingPath("/")).toBe(true);
+    expect(isLandingPath("/app")).toBe(false);
+    expect(isLandingPath("/board/9Q82CqPzAqBcX7DPgeeo3A")).toBe(false);
+  });
+
+  // A sign-in, an emailed link and a sign-out all land on `/` with a parameter the editor
+  // reads; the landing page swallowing one would lose a password reset.
+  it("steps aside for anything the editor has to act on", () => {
+    expect(wantsApp("?welcome=1")).toBe(true);
+    expect(wantsApp("?verify=abc")).toBe(true);
+    expect(wantsApp("?reset=abc&email=a%40b.c")).toBe(true);
+    expect(wantsApp("?auth_error=invalid_state")).toBe(true);
+    expect(wantsApp("?fresh=1")).toBe(true);
+    expect(wantsApp("")).toBe(false);
+    expect(wantsApp("?utm_source=x")).toBe(false);
   });
 });

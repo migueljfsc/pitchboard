@@ -123,9 +123,12 @@ export function Tour({
       if (!rootRef.current?.contains(e.target as Node)) measure();
     };
     measure();
+    // A section the step opened grows through `motion`, which fires no transitionend.
+    const late = window.setTimeout(measure, 350);
     window.addEventListener("resize", measure);
     window.addEventListener("transitionend", settled, true);
     return () => {
+      window.clearTimeout(late);
       window.removeEventListener("resize", measure);
       window.removeEventListener("transitionend", settled, true);
     };

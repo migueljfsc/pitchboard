@@ -5,8 +5,11 @@ import { Viewer } from "@/pages/Viewer";
 import { decodeBoard, readHash, readView, withoutHash, type DecodeOutcome } from "@/share/urlcodec";
 import { fetchShare } from "@/share/api";
 import { parseStoredDoc } from "@/share/cloud";
-import { isAdminPath, readShareSlug } from "@/share/routes";
+import { APP_PATH, isAdminPath, isLandingPath, readShareSlug } from "@/share/routes";
+import { Landing } from "@/pages/Landing";
 import { useI18n } from "@/i18n/context";
+import { LogoMark } from "@/components/Logo";
+import { cn } from "@/lib/utils";
 
 /** Loaded only on /admin, so no visitor downloads the operator's page. */
 const Admin = lazy(() => import("@/pages/Admin").then((m) => ({ default: m.Admin })));
@@ -84,16 +87,20 @@ export function App() {
     };
   }, [slug]);
 
-  /** Leave the share path behind, so a fork lands in a plain editor at the root. */
+  /** Leave the share path behind, so a fork lands in a plain editor. */
   const clearPath = () => {
-    window.history.replaceState(null, "", "/");
+    window.history.replaceState(null, "", APP_PATH);
     setSlug(null);
     setShared(null);
   };
 
   /** Drop the payload from the address, and from this component's view of it. */
   const clearHash = () => {
-    window.history.replaceState(null, "", withoutHash(window.location.href));
+    // A link to the root was a board at the root; leaving it is going to the editor, not
+    // back to the landing page.
+    const url = new URL(withoutHash(window.location.href));
+    if (isLandingPath(url.pathname)) url.pathname = APP_PATH;
+    window.history.replaceState(null, "", url.toString());
     // replaceState fires no hashchange, so the listener above will not see this.
     setHash("");
   };
@@ -169,14 +176,17 @@ export function App() {
     );
   }
 
+  if (isLandingPath() && !forked) return <Landing />;
+
   return <Editor initialDoc={forked ?? undefined} />;
 }
 
 function Splash({ children, tone }: { children: React.ReactNode; tone?: "bad" }) {
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center bg-ink-900 p-8 text-center">
+    <div className="flex h-full w-full flex-col items-center justify-center gap-5 bg-ink-900 p-8 text-center">
+      <LogoMark className={cn("size-10", tone !== "bad" && "animate-pulse")} />
       <div
-        className={`max-w-md text-sm leading-relaxed ${tone === "bad" ? "text-red-300" : "text-ink-300"}`}
+        className={`max-w-md animate-fade-up text-sm leading-relaxed ${tone === "bad" ? "text-red-300" : "text-ink-300"}`}
       >
         {children}
       </div>

@@ -88,6 +88,7 @@ import {
   halfRange,
   cubicAt,
   cubicTangent,
+  easeOutQuad,
   reparameterise,
   viewMatrix,
   type Bezier,
@@ -218,6 +219,7 @@ export function drawBoard(
       const kit = kitOf(team, player.id);
       drawToken(ctx, p, player.number, player.label, kit.color, kit.textColor, {
         selected: view.selection?.has(player.id) ?? false,
+        focusIn: view.focusIn,
         hovered: view.interactive && view.hover === player.id,
         rotated: view.rotated,
         scale,
@@ -233,6 +235,7 @@ export function drawBoard(
     const lift = ballLift(frame.resolved, doc);
     drawBall(ctx, frame.ball, ballRadius(doc) * (1 + LOFT_GROWTH * lift), {
       selected: view.selection?.has(BALL_ID) ?? false,
+      focusIn: view.focusIn,
       hovered: view.interactive && view.hover === BALL_ID,
       shadow: true,
       sport: doc.sport,
@@ -928,6 +931,7 @@ function drawBillboards(
             const kit = kitOf(team, player.id);
             drawToken(ctx, p, player.number, player.label, kit.color, kit.textColor, {
               selected: view.selection?.has(player.id) ?? false,
+              focusIn: view.focusIn,
               hovered: view.interactive && view.hover === player.id,
               rotated: false,
               scale,
@@ -955,6 +959,7 @@ function drawBillboards(
         billboard(ctx, ball, air, () =>
           drawBall(ctx, ball, ballR, {
             selected: view.selection?.has(BALL_ID) ?? false,
+            focusIn: view.focusIn,
             hovered: view.interactive && view.hover === BALL_ID,
             sport: doc.sport,
           }),
@@ -2414,6 +2419,8 @@ export const HANDLE_RADIUS = 0.55;
 type TokenState = {
   selected: boolean;
   hovered: boolean;
+  /** How far a new selection's ring has settled, 0 to 1 — `RenderView.focusIn`. */
+  focusIn?: number;
   rotated?: boolean;
   scale?: number;
   /** Kit pattern. Document data rather than view state, but it rides here to
@@ -2587,11 +2594,13 @@ function drawFocusRing(
   state: TokenState,
 ): void {
   if (!state.selected && !state.hovered) return;
-  const ring = radius + gap;
+  // A new selection's ring closes in from a little wider and brightens as it lands.
+  const settle = state.selected ? easeOutQuad(clamp(state.focusIn ?? 1, 0, 1)) : 1;
+  const ring = radius + gap + (1 - settle) * FOCUS_SPREAD * k;
 
   if (state.selected) {
     const glow = ctx.createRadialGradient(p.x, p.y, radius, p.x, p.y, ring + 1.1 * k);
-    glow.addColorStop(0, "rgba(251,191,36,0.5)");
+    glow.addColorStop(0, `rgba(251,191,36,${0.5 * settle})`);
     glow.addColorStop(1, "rgba(251,191,36,0)");
     ctx.beginPath();
     ctx.arc(p.x, p.y, ring + 1.1 * k, 0, Math.PI * 2);
@@ -2601,10 +2610,17 @@ function drawFocusRing(
 
   ctx.beginPath();
   ctx.arc(p.x, p.y, ring, 0, Math.PI * 2);
-  ctx.strokeStyle = state.selected ? "#fbbf24" : "rgba(255,255,255,0.8)";
+  ctx.strokeStyle = !state.selected
+    ? "rgba(255,255,255,0.8)"
+    : settle < 1
+      ? `rgba(251,191,36,${settle})`
+      : "#fbbf24";
   ctx.lineWidth = (state.selected ? 0.28 : 0.2) * k;
   ctx.stroke();
 }
+
+/** How much wider than its rest a new selection's ring starts, in token radii. */
+const FOCUS_SPREAD = 0.9;
 
 function drawBall(ctx: Ctx, p: Vec2, radius: number, state: TokenState): void {
   const k = radius / BALL_RADIUS;

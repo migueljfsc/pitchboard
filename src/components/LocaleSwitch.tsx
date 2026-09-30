@@ -24,7 +24,7 @@ export function LocaleSwitch() {
       onClick={() => setLocale(next)}
       aria-label={`${t("app.locale")}: ${NAME[locale]}. ${NAME[next]}`}
       title={NAME[next]}
-      className="shrink-0 rounded-md border border-ink-600 bg-ink-900 px-2 py-1 text-[11px] font-medium tracking-wide text-ink-200 transition hover:border-accent hover:text-white"
+      className="shrink-0 rounded-lg px-2 py-1 font-mono text-[11px] font-medium tracking-wide text-ink-300 transition hover:bg-white/[0.06] hover:text-white"
     >
       {LABEL[locale]}
     </button>

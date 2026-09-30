@@ -103,7 +103,7 @@ export function SportMenu({ value, onChange, nameOf, label, hint, disabled = fal
           role="listbox"
           aria-label={label}
           onKeyDown={onListKey}
-          className="absolute top-full left-0 z-50 mt-1.5 min-w-60 rounded-lg border border-white/5 bg-ink-900 p-1.5 shadow-2xl"
+          className="absolute animate-pop-in origin-top top-full left-0 z-50 mt-1.5 min-w-60 rounded-lg border border-white/5 bg-ink-900 p-1.5 shadow-2xl"
         >
           {SPORT_IDS.map((sport, i) => {
             const chosen = sport === value;

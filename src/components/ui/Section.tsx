@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { enter, leave } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -53,7 +55,7 @@ export function Section({
       >
         <ChevronDown
           size={13}
-          className={cn("shrink-0 text-ink-400 transition-transform", !open && "-rotate-90")}
+          className={cn("shrink-0 text-ink-400 transition-transform duration-200 ease-(--ease-out)", !open && "-rotate-90")}
         />
         {icon && <span className="flex shrink-0 items-center text-ink-400">{icon}</span>}
         <span className="flex-1 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-ink-200">
@@ -67,7 +69,18 @@ export function Section({
         )}
       </button>
 
-      {open && <div className={flush ? undefined : "px-4 pb-4"}>{children}</div>}
+      {/* Clipped only while it moves: a popover inside an open section must be free to overhang it. */}
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0, overflow: "hidden" }}
+            animate={{ height: "auto", opacity: 1, transition: enter, transitionEnd: { overflow: "visible" } }}
+            exit={{ height: 0, opacity: 0, overflow: "hidden", transition: leave }}
+          >
+            <div className={flush ? undefined : "px-4 pb-4"}>{children}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 }

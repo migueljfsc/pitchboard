@@ -1,7 +1,11 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence } from "motion/react";
 import type { AnnotationDash, BoardDoc, PitchView, RunEnd, RunStart, Sport, Tool } from "@/board/types";
 import { sportOf } from "@/board/sports";
 import { SportMenu } from "@/components/SportMenu";
+import { Wordmark } from "@/components/Logo";
+import { TabHighlight } from "@/components/ui/TabHighlight";
+import { BAR_BUTTON, BAR_BUTTON_OPEN, BAR_DIVIDER } from "@/components/ui/bar";
 import { lineNamer } from "@/lib/lineNames";
 import { formationLabel } from "@/lib/formationText";
 import { loadSport, saveSport } from "@/share/sport";
@@ -154,6 +158,7 @@ import {
   resetPositions,
   type Direction,
 } from "@/formations";
+import { APP_PATH } from "@/share/routes";
 
 /** What a confirmation is currently guarding. */
 type Pending =
@@ -807,7 +812,7 @@ export function Editor({ initialDoc }: Props = {}) {
     saveSport(sport);
     setPending(null);
     if (cloud.board) {
-      window.location.assign("/?fresh=1");
+      window.location.assign(`${APP_PATH}?fresh=1`);
       return;
     }
     setDoc(freshBoard(sport));
@@ -1246,7 +1251,7 @@ export function Editor({ initialDoc }: Props = {}) {
       return;
     }
     await cloud.saveNow();
-    window.location.assign("/?fresh=1");
+    window.location.assign(`${APP_PATH}?fresh=1`);
   };
 
   const saveCopy = async () => {
@@ -1712,9 +1717,13 @@ export function Editor({ initialDoc }: Props = {}) {
           Gone while presenting, along with both rails: what is left is the board
           and the means to play it. */}
       {!present && (
-      <header className="relative flex shrink-0 items-center gap-2 border-b border-ink-700 bg-ink-800 px-4 py-2">
+      <header className="relative z-30 flex shrink-0 items-center gap-2 border-b border-ink-700 bg-ink-800/90 px-4 py-2 shadow-[0_1px_0_rgb(255_255_255/0.03)_inset] backdrop-blur">
 
-        <h1 className="shrink-0 text-sm font-semibold tracking-tight text-white">{t("app.name")}</h1>
+        <h1 className="shrink-0">
+          <a href="/" title={t("app.name")} className="rounded-lg">
+            <Wordmark name={t("app.name")} />
+          </a>
+        </h1>
 
         <input
           value={doc.name}
@@ -1795,7 +1804,8 @@ export function Editor({ initialDoc }: Props = {}) {
           </div>
         )}
 
-        <div className="ml-auto flex shrink-0 items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <div className="flex items-center rounded-lg border border-ink-700 bg-ink-900/60 p-0.5">
           <HistoryButton
             label={t("history.undo")}
             hint={t("history.undo.hint", { keys: `${MODIFIER}Z` })}
@@ -1823,8 +1833,9 @@ export function Editor({ initialDoc }: Props = {}) {
           >
             <History size={14} />
           </HistoryButton>
+          </div>
 
-          <span className="mx-1 h-5 w-px bg-ink-600" />
+          <span className={BAR_DIVIDER} />
 
           {/* The help there is, in one place: finding an action, the keys, and the tour.
               The tour points here when it says where it can be found again. */}
@@ -1840,7 +1851,7 @@ export function Editor({ initialDoc }: Props = {}) {
             {showStartHint && menu?.kind !== "help" && <StartHint onDismiss={putHintAway} />}
           </div>
 
-          <span className="mx-1 h-5 w-px bg-ink-600" />
+          <span className={BAR_DIVIDER} />
 
           <button
             type="button"
@@ -1848,7 +1859,7 @@ export function Editor({ initialDoc }: Props = {}) {
             onClick={() => setPresent(true)}
             aria-label={t("present.enter")}
             title={t("present.enter.title")}
-            className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
+            className={BAR_BUTTON}
           >
             <Presentation size={14} />
             {t("present.enter")}
@@ -1869,7 +1880,7 @@ export function Editor({ initialDoc }: Props = {}) {
             data-tour="share"
             onClick={() => setShareOpen(true)}
             title={t("share.dialog.title")}
-            className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
+            className={BAR_BUTTON}
           >
             <Share2 size={13} />
             {t("share.dialog")}
@@ -1879,7 +1890,7 @@ export function Editor({ initialDoc }: Props = {}) {
             <SaveBoardButton cloud={cloud} boardName={doc.name} sport={sportOf(doc).id} />
           )}
 
-          <span className="mx-1 h-5 w-px bg-ink-600" />
+          <span className={BAR_DIVIDER} />
 
           {accountState.account && (
             <BoardsLibrary
@@ -1911,7 +1922,7 @@ export function Editor({ initialDoc }: Props = {}) {
             }}
           />
 
-          <span className="mx-1 h-5 w-px bg-ink-600" />
+          <span className={BAR_DIVIDER} />
 
           {/* The last control in the row. It is the only one about the app rather than the
               board, and it should not move when signing in adds two more. */}
@@ -1921,7 +1932,7 @@ export function Editor({ initialDoc }: Props = {}) {
               it must never be mistaken for, or crowd, a feature. A plain link in the app's
               accent rather than Buy Me a Coffee's embed script — a script tag in React never
               runs, and theirs would send every visitor's IP to a third party. */}
-          <span className="mx-1 h-5 w-px bg-ink-600" />
+          <span className={BAR_DIVIDER} />
           <a
             href="https://buymeacoffee.com/migueljfsc"
             target="_blank"
@@ -1984,10 +1995,11 @@ export function Editor({ initialDoc }: Props = {}) {
                     aria-selected={teamTab === i}
                     onClick={() => setTeamTab(i)}
                     className={cn(
-                      "flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded px-2 py-1 text-[11px] transition",
-                      teamTab === i ? "bg-ink-700 text-white" : "text-ink-400 hover:text-ink-200",
+                      "relative isolate flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded px-2 py-1 text-[11px] transition",
+                      teamTab === i ? "text-white" : "text-ink-400 hover:text-ink-200",
                     )}
                   >
+                    {teamTab === i && <TabHighlight id="team-tab" />}
                     <span
                       className="size-2 shrink-0 rounded-full ring-1 ring-white/20"
                       style={{ background: doc.teams[i].color }}
@@ -2115,146 +2127,160 @@ export function Editor({ initialDoc }: Props = {}) {
         </aside>
         )}
 
-        {pending?.kind === "reset" && (
-          <ConfirmDialog
-            title={t("confirm.reset.title")}
-            message={t("confirm.reset.message", { home: formationName(0), away: formationName(1) })}
-            confirmLabel={t("confirm.reset.action")}
-            onConfirm={reset}
-            onCancel={() => setPending(null)}
-          />
-        )}
+        <AnimatePresence>
+          {pending?.kind === "reset" && (
+            <ConfirmDialog
+              key="reset"
+              title={t("confirm.reset.title")}
+              message={t("confirm.reset.message", { home: formationName(0), away: formationName(1) })}
+              confirmLabel={t("confirm.reset.action")}
+              onConfirm={reset}
+              onCancel={() => setPending(null)}
+            />
+          )}
 
-        {pending?.kind === "sport" && (
-          <ConfirmDialog
-            title={t("confirm.sport.title", { sport: t(`sport.${pending.sport}.lower`) })}
-            message={t("confirm.sport.message", { sport: t(`sport.${pending.sport}.lower`) })}
-            confirmLabel={t("confirm.sport.action")}
-            onConfirm={() => switchSport(pending.sport, true)}
-            onCancel={() => setPending(null)}
-          />
-        )}
+          {pending?.kind === "sport" && (
+            <ConfirmDialog
+              key="sport"
+              title={t("confirm.sport.title", { sport: t(`sport.${pending.sport}.lower`) })}
+              message={t("confirm.sport.message", { sport: t(`sport.${pending.sport}.lower`) })}
+              confirmLabel={t("confirm.sport.action")}
+              onConfirm={() => switchSport(pending.sport, true)}
+              onCancel={() => setPending(null)}
+            />
+          )}
 
-        {pending?.kind === "positions" && (
-          <ConfirmDialog
-            title={t("confirm.positions.title")}
-            message={t("confirm.positions.message")}
-            confirmLabel={t("confirm.positions.action")}
-            onConfirm={restoreShape}
-            onCancel={() => setPending(null)}
-          />
-        )}
+          {pending?.kind === "positions" && (
+            <ConfirmDialog
+              key="positions"
+              title={t("confirm.positions.title")}
+              message={t("confirm.positions.message")}
+              confirmLabel={t("confirm.positions.action")}
+              onConfirm={restoreShape}
+              onCancel={() => setPending(null)}
+            />
+          )}
 
-        {pending?.kind === "links" && (
-          <ConfirmDialog
-            title={tn("confirm.links.title", doc.links.length)}
-            message={t("confirm.links.message")}
-            confirmLabel={t("confirm.links.action")}
-            onConfirm={dropLinks}
-            onCancel={() => setPending(null)}
-          />
-        )}
+          {pending?.kind === "links" && (
+            <ConfirmDialog
+              key="links"
+              title={tn("confirm.links.title", doc.links.length)}
+              message={t("confirm.links.message")}
+              confirmLabel={t("confirm.links.action")}
+              onConfirm={dropLinks}
+              onCancel={() => setPending(null)}
+            />
+          )}
 
-        {pending?.kind === "preset" && (
-          <ConfirmDialog
-            title={t("confirm.preset.title", { label: pending.replacing.label })}
-            message={t("confirm.preset.message", { formation: formationLabel(t, pending.replacing.formation ?? "") })}
-            confirmLabel={t("confirm.preset.action")}
-            onConfirm={() => replacePreset(pending.preset, pending.replacing)}
-            onCancel={() => setPending(null)}
-          />
-        )}
+          {pending?.kind === "preset" && (
+            <ConfirmDialog
+              key="preset"
+              title={t("confirm.preset.title", { label: pending.replacing.label })}
+              message={t("confirm.preset.message", { formation: formationLabel(t, pending.replacing.formation ?? "") })}
+              confirmLabel={t("confirm.preset.action")}
+              onConfirm={() => replacePreset(pending.preset, pending.replacing)}
+              onCancel={() => setPending(null)}
+            />
+          )}
 
-        {pending?.kind === "import" && (
-          <ConfirmDialog
-            title={t("confirm.import.title")}
-            message={
-              // Whole keys per shape rather than a shared sentence with a word swapped
-              // in: what a setup costs you is not what a board does.
-              pending.source === "tracks"
-                ? tn("confirm.import.message.tracks", pending.doc.scenes.length, {
-                    name: pending.doc.name,
-                  })
-                : t(`confirm.import.message.${pending.source}`, { name: pending.doc.name })
-            }
-            confirmLabel={t("confirm.import.action")}
-            onConfirm={() => importDoc(pending.doc)}
-            onCancel={() => setPending(null)}
-          />
-        )}
+          {pending?.kind === "import" && (
+            <ConfirmDialog
+              key="import"
+              title={t("confirm.import.title")}
+              message={
+                // Whole keys per shape rather than a shared sentence with a word swapped
+                // in: what a setup costs you is not what a board does.
+                pending.source === "tracks"
+                  ? tn("confirm.import.message.tracks", pending.doc.scenes.length, {
+                      name: pending.doc.name,
+                    })
+                  : t(`confirm.import.message.${pending.source}`, { name: pending.doc.name })
+              }
+              confirmLabel={t("confirm.import.action")}
+              onConfirm={() => importDoc(pending.doc)}
+              onCancel={() => setPending(null)}
+            />
+          )}
 
-        {shareOpen && (
-          <ShareDialog
-            doc={doc}
-            view={pitchView}
-            cloud={cloud}
-            signedIn={accountState.account !== null}
-            onClose={() => setShareOpen(false)}
-            blocked={pending !== null}
-          />
-        )}
+          {shareOpen && (
+            <ShareDialog
+              key="share"
+              doc={doc}
+              view={pitchView}
+              cloud={cloud}
+              signedIn={accountState.account !== null}
+              onClose={() => setShareOpen(false)}
+              blocked={pending !== null}
+            />
+          )}
 
-        {importOpen && (
-          <ImportDialog
-            onImport={(next, source) => setPending({ kind: "import", doc: next, source })}
-            onClose={() => setImportOpen(false)}
-            blocked={pending !== null}
-          />
-        )}
+          {importOpen && (
+            <ImportDialog
+              key="import-dialog"
+              onImport={(next, source) => setPending({ kind: "import", doc: next, source })}
+              onClose={() => setImportOpen(false)}
+              blocked={pending !== null}
+            />
+          )}
 
-        {shortcutsOpen && (
-          <ShortcutsDialog
-            onClose={() => setShortcutsOpen(false)}
-            onTour={() => {
-              setShortcutsOpen(false);
-              openTour();
-            }}
-          />
-        )}
+          {shortcutsOpen && (
+            <ShortcutsDialog
+              key="shortcuts"
+              onClose={() => setShortcutsOpen(false)}
+              onTour={() => {
+                setShortcutsOpen(false);
+                openTour();
+              }}
+            />
+          )}
 
-        {tour && !present && (
-          <Tour
-            step={tour.step}
-            onStep={(step) => {
-              setTour({ ...tour, step });
-              stageTour(step);
-            }}
-            onClose={closeTour}
-          />
-        )}
+          {tour && !present && (
+            <Tour
+              key="tour"
+              step={tour.step}
+              onStep={(step) => {
+                setTour({ ...tour, step });
+                stageTour(step);
+              }}
+              onClose={closeTour}
+            />
+          )}
 
-        {menu && (
-          <ContextMenu
-            at={menu.at}
-            above={menu.kind !== "board" && menu.above}
-            onClose={() => setMenu(null)}
-            items={
-              menu.kind === "board"
-                ? boardMenu(menu.target)
-                : menu.kind === "history"
-                  ? historyMenu()
-                  : menu.kind === "help"
-                    ? helpMenu()
-                    : menu.kind === "file"
-                      ? fileMenu()
-                      : templateMenu()
-            }
-          />
-        )}
+          {menu && (
+            <ContextMenu
+              key="menu"
+              at={menu.at}
+              above={menu.kind !== "board" && menu.above}
+              onClose={() => setMenu(null)}
+              items={
+                menu.kind === "board"
+                  ? boardMenu(menu.target)
+                  : menu.kind === "history"
+                    ? historyMenu()
+                    : menu.kind === "help"
+                      ? helpMenu()
+                      : menu.kind === "file"
+                        ? fileMenu()
+                        : templateMenu()
+              }
+            />
+          )}
 
-        {paletteOpen && (
-          <CommandPalette commands={commands()} onClose={() => setPaletteOpen(false)} />
-        )}
+          {paletteOpen && (
+            <CommandPalette key="palette" commands={commands()} onClose={() => setPaletteOpen(false)} />
+          )}
 
-        {exportOpen && (
-          <ExportDialog
-            doc={doc}
-            t={time}
-            pitchView={pitchView}
-            onClose={() => setExportOpen(false)}
-            exportJob={exportJob}
-          />
-        )}
+          {exportOpen && (
+            <ExportDialog
+              key="export"
+              doc={doc}
+              t={time}
+              pitchView={pitchView}
+              onClose={() => setExportOpen(false)}
+              exportJob={exportJob}
+            />
+          )}
+        </AnimatePresence>
 
         {!present && (
           <SidebarHandle
@@ -2637,10 +2663,7 @@ function MenuButton({
         const r = e.currentTarget.getBoundingClientRect();
         onOpen({ x: r.left, y: r.bottom + 4 });
       }}
-      className={cn(
-        "flex items-center gap-1.5 rounded-md border bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white",
-        open ? "border-accent text-white" : "border-ink-600",
-      )}
+      className={cn(BAR_BUTTON, open && BAR_BUTTON_OPEN)}
     >
       {icon}
       {label}
@@ -2669,7 +2692,7 @@ function HistoryButton({
       title={hint}
       disabled={disabled}
       onClick={onClick}
-      className="flex size-7 shrink-0 items-center justify-center rounded-md border border-ink-600 text-ink-300 transition enabled:hover:border-accent enabled:hover:text-white disabled:opacity-35"
+      className="flex size-7 shrink-0 items-center justify-center rounded-md text-ink-300 transition enabled:hover:bg-white/[0.07] enabled:hover:text-white disabled:opacity-35"
     >
       {children}
     </button>

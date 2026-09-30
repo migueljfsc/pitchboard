@@ -30,6 +30,7 @@ import { msg, type Message } from "@/i18n/core";
 import { cn } from "@/lib/utils";
 import { lineNamer } from "@/lib/lineNames";
 import { SETUP_EXAMPLE, fromJson, type ImportOutcome, type TracksReader } from "@/share/json";
+import { Modal } from "@/components/ui/Modal";
 
 /** Which of the three shapes a file turned out to be. */
 export type ImportKind = Extract<ImportOutcome, { ok: true }>["kind"];
@@ -92,164 +93,156 @@ export function ImportDialog({ onImport, onClose, blocked }: Props) {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+    <Modal
+      onClose={onClose}
+      labelledBy="import-title"
+      className="flex max-h-[85vh] max-w-2xl flex-col overflow-y-auto"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="import-title"
-        className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-y-auto rounded-lg border border-ink-600 bg-ink-800 shadow-2xl"
-      >
-        <div className="flex items-center gap-3 border-b border-ink-700 px-4 py-3">
-          <h2 id="import-title" className="text-sm font-semibold text-white">
-            {t("import.dialog.title")}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t("import.close")}
-            className="ml-auto flex size-6 items-center justify-center rounded text-ink-400 transition hover:text-white"
-          >
-            <X size={15} />
-          </button>
+      <div className="flex items-center gap-3 border-b border-ink-700 px-4 py-3">
+        <h2 id="import-title" className="text-sm font-semibold text-white">
+          {t("import.dialog.title")}
+        </h2>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={t("import.close")}
+          className="ml-auto flex size-6 items-center justify-center rounded text-ink-400 transition hover:text-white"
+        >
+          <X size={15} />
+        </button>
+      </div>
+
+      <div className="flex min-h-0 flex-col gap-3 p-4">
+        {/* One line, and the detail behind an ⓘ: which kind a file is comes from the file
+            itself, so the explanation is for whoever wonders, not a step to read first. */}
+        <div className="flex items-center gap-1.5">
+          <p className="text-[11px] text-ink-300">{t("import.kinds.short")}</p>
+          <span className="group relative">
+            <button
+              type="button"
+              aria-label={t("import.kinds.more")}
+              aria-describedby="import-kinds"
+              className="flex rounded-full text-ink-400 outline-none transition hover:text-white focus-visible:text-white focus-visible:ring-1 focus-visible:ring-accent"
+            >
+              <Info size={13} />
+            </button>
+            <div
+              id="import-kinds"
+              role="tooltip"
+              className="invisible absolute top-full left-1/2 z-10 mt-1.5 w-80 -translate-x-1/2 rounded-md border border-ink-600 bg-ink-900 p-3 opacity-0 shadow-xl transition group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100"
+            >
+              <ul className="flex flex-col gap-2">
+                {(["board", "setup", "tracks"] as const).map((kind) => (
+                  <li key={kind}>
+                    <p className="text-[11px] font-medium text-ink-100">{t(`import.kind.${kind}`)}</p>
+                    <p className="text-[11px] leading-relaxed text-ink-400">
+                      {t(`import.kind.${kind}.hint`)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </span>
         </div>
 
-        <div className="flex min-h-0 flex-col gap-3 p-4">
-          {/* One line, and the detail behind an ⓘ: which kind a file is comes from the file
-              itself, so the explanation is for whoever wonders, not a step to read first. */}
-          <div className="flex items-center gap-1.5">
-            <p className="text-[11px] text-ink-300">{t("import.kinds.short")}</p>
-            <span className="group relative">
+        {/* The drop target stays a drop target once a file is in it: opening the wrong
+            one and dragging the right one over is the ordinary correction. */}
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={(e) => {
+            // A drag crossing a child fires dragleave on the parent. Only a pointer that
+            // has actually left the box counts, or the highlight flickers on every icon.
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            void load(e.dataTransfer.files[0]);
+          }}
+          className={cn(
+            "flex flex-col items-center gap-2 rounded border border-dashed px-4 py-5 text-center transition",
+            dragging ? "border-accent bg-accent/10" : "border-ink-600",
+          )}
+        >
+          {source.kind === "file" ? (
+            <div className="flex w-full flex-wrap items-center gap-2">
+              <span className="truncate font-mono text-[11px] text-ink-200">{source.name}</span>
+              <span className="font-mono text-[11px] text-ink-400">{megabytes(source.bytes)}</span>
               <button
                 type="button"
-                aria-label={t("import.kinds.more")}
-                aria-describedby="import-kinds"
-                className="flex rounded-full text-ink-400 outline-none transition hover:text-white focus-visible:text-white focus-visible:ring-1 focus-visible:ring-accent"
-              >
-                <Info size={13} />
-              </button>
-              <div
-                id="import-kinds"
-                role="tooltip"
-                className="invisible absolute top-full left-1/2 z-10 mt-1.5 w-80 -translate-x-1/2 rounded-md border border-ink-600 bg-ink-900 p-3 opacity-0 shadow-xl transition group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100"
-              >
-                <ul className="flex flex-col gap-2">
-                  {(["board", "setup", "tracks"] as const).map((kind) => (
-                    <li key={kind}>
-                      <p className="text-[11px] font-medium text-ink-100">{t(`import.kind.${kind}`)}</p>
-                      <p className="text-[11px] leading-relaxed text-ink-400">
-                        {t(`import.kind.${kind}.hint`)}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </span>
-          </div>
-
-          {/* The drop target stays a drop target once a file is in it: opening the wrong
-              one and dragging the right one over is the ordinary correction. */}
-          <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragging(true);
-            }}
-            onDragLeave={(e) => {
-              // A drag crossing a child fires dragleave on the parent. Only a pointer that
-              // has actually left the box counts, or the highlight flickers on every icon.
-              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDragging(false);
-              void load(e.dataTransfer.files[0]);
-            }}
-            className={cn(
-              "flex flex-col items-center gap-2 rounded border border-dashed px-4 py-5 text-center transition",
-              dragging ? "border-accent bg-accent/10" : "border-ink-600",
-            )}
-          >
-            {source.kind === "file" ? (
-              <div className="flex w-full flex-wrap items-center gap-2">
-                <span className="truncate font-mono text-[11px] text-ink-200">{source.name}</span>
-                <span className="font-mono text-[11px] text-ink-400">{megabytes(source.bytes)}</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSource({ kind: "typed", text: "" });
-                    setError(null);
-                  }}
-                  className="ml-auto text-[11px] text-accent transition hover:brightness-110"
-                >
-                  {t("import.file.clear")}
-                </button>
-              </div>
-            ) : (
-              <>
-                <p className="text-[11px] text-ink-300">
-                  {t(dragging ? "import.dropping" : "import.drop")}
-                </p>
-                <Action onClick={() => fileRef.current?.click()} icon={FileUp}>
-                  {t("import.loadFile")}
-                </Action>
-              </>
-            )}
-            <input
-              ref={fileRef}
-              type="file"
-              accept="application/json,.json"
-              className="hidden"
-              onChange={(e) => void load(e.target.files?.[0])}
-            />
-          </div>
-
-          {source.kind === "typed" && (
-            <>
-              <p className="text-[11px] text-ink-300" title={t("import.paste.hint")}>
-                {t("import.paste")}
-              </p>
-              <textarea
-                value={source.text}
-                onChange={(e) => {
-                  setSource({ kind: "typed", text: e.target.value });
+                onClick={() => {
+                  setSource({ kind: "typed", text: "" });
                   setError(null);
                 }}
-                // A hint, not the example: the button below puts the whole example in, and a
-                // page of grey JSON read as something already pasted.
-                placeholder='{ "teams": [ … ] }'
-                aria-label={t("import.label")}
-                className="min-h-0 flex-1 resize-none rounded border border-ink-600 bg-ink-900 p-2 font-mono text-[11px] leading-relaxed text-ink-200 outline-none transition placeholder:text-ink-500 focus:border-accent"
-                rows={source.text ? 12 : 4}
-              />
+                className="ml-auto text-[11px] text-accent transition hover:brightness-110"
+              >
+                {t("import.file.clear")}
+              </button>
+            </div>
+          ) : (
+            <>
+              <p className="text-[11px] text-ink-300">
+                {t(dragging ? "import.dropping" : "import.drop")}
+              </p>
+              <Action onClick={() => fileRef.current?.click()} icon={FileUp}>
+                {t("import.loadFile")}
+              </Action>
             </>
           )}
+          <input
+            ref={fileRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={(e) => void load(e.target.files?.[0])}
+          />
+        </div>
 
-          {error && (
-            <p
-              role="alert"
-              className="rounded border border-red-500/50 bg-red-500/10 px-2 py-1.5 text-[11px] text-red-300"
-            >
-              {tm(error)}
+        {source.kind === "typed" && (
+          <>
+            <p className="text-[11px] text-ink-300" title={t("import.paste.hint")}>
+              {t("import.paste")}
             </p>
-          )}
+            <textarea
+              value={source.text}
+              onChange={(e) => {
+                setSource({ kind: "typed", text: e.target.value });
+                setError(null);
+              }}
+              // A hint, not the example: the button below puts the whole example in, and a
+              // page of grey JSON read as something already pasted.
+              placeholder='{ "teams": [ … ] }'
+              aria-label={t("import.label")}
+              className="min-h-0 flex-1 resize-none rounded border border-ink-600 bg-ink-900 p-2 font-mono text-[11px] leading-relaxed text-ink-200 outline-none transition placeholder:text-ink-500 focus:border-accent"
+              rows={source.text ? 12 : 4}
+            />
+          </>
+        )}
 
-          <div className="flex justify-end gap-2">
-            {source.kind === "typed" && (
-              <Action onClick={() => setSource({ kind: "typed", text: SETUP_EXAMPLE })} icon={FileUp}>
-                {t("import.useExample")}
-              </Action>
-            )}
-            <Action onClick={() => void submit()} icon={Check} primary disabled={!source.text.trim()}>
-              {t("import.replaceBoard")}
+        {error && (
+          <p
+            role="alert"
+            className="rounded border border-red-500/50 bg-red-500/10 px-2 py-1.5 text-[11px] text-red-300"
+          >
+            {tm(error)}
+          </p>
+        )}
+
+        <div className="flex justify-end gap-2">
+          {source.kind === "typed" && (
+            <Action onClick={() => setSource({ kind: "typed", text: SETUP_EXAMPLE })} icon={FileUp}>
+              {t("import.useExample")}
             </Action>
-          </div>
+          )}
+          <Action onClick={() => void submit()} icon={Check} primary disabled={!source.text.trim()}>
+            {t("import.replaceBoard")}
+          </Action>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 

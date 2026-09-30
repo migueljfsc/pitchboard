@@ -13,6 +13,7 @@ import { GraduationCap, X } from "lucide-react";
 import { MODIFIER } from "@/lib/platform";
 import { useI18n } from "@/i18n/context";
 import type { MessageKey } from "@/i18n/core";
+import { Modal } from "@/components/ui/Modal";
 
 type Row = { keys: string[]; label: MessageKey };
 type Group = { title: MessageKey; rows: Row[] };
@@ -67,81 +68,73 @@ export function ShortcutsDialog({ onClose, onTour }: { onClose: () => void; onTo
   }, [onClose]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+    <Modal
+      onClose={onClose}
+      labelledBy="shortcuts-title"
+      className="flex max-h-[85vh] max-w-md flex-col overflow-y-auto"
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="shortcuts-title"
-        className="flex max-h-[85vh] w-full max-w-md flex-col overflow-y-auto rounded-lg border border-ink-600 bg-ink-800 shadow-2xl"
-      >
-        <div className="flex items-center gap-3 border-b border-ink-700 px-4 py-3">
-          <h2 id="shortcuts-title" className="text-sm font-semibold text-white">
-            {t("shortcuts.title")}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t("shortcuts.close")}
-            className="ml-auto flex size-6 items-center justify-center rounded text-ink-400 transition hover:text-white"
-          >
-            <X size={15} />
-          </button>
-        </div>
+      <div className="flex items-center gap-3 border-b border-ink-700 px-4 py-3">
+        <h2 id="shortcuts-title" className="text-sm font-semibold text-white">
+          {t("shortcuts.title")}
+        </h2>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={t("shortcuts.close")}
+          className="ml-auto flex size-6 items-center justify-center rounded text-ink-400 transition hover:text-white"
+        >
+          <X size={15} />
+        </button>
+      </div>
 
-        <div className="flex flex-col gap-4 px-4 py-4">
-          <button
-            type="button"
-            onClick={onTour}
-            className="flex items-center gap-1.5 self-start text-xs text-accent transition hover:brightness-110"
-          >
-            <GraduationCap size={13} />
-            {t("tour.fromShortcuts")}
-          </button>
+      <div className="flex flex-col gap-4 px-4 py-4">
+        <button
+          type="button"
+          onClick={onTour}
+          className="flex items-center gap-1.5 self-start text-xs text-accent transition hover:brightness-110"
+        >
+          <GraduationCap size={13} />
+          {t("tour.fromShortcuts")}
+        </button>
 
-          {GROUPS.map((group) => (
-            <div key={group.title} className="flex flex-col gap-1.5">
-              <span className="text-[11px] uppercase tracking-wide text-ink-400">
-                {t(group.title)}
-              </span>
-              {group.rows.map((row) => (
-                <div key={row.label} className="flex items-baseline gap-3">
-                  <span className="flex w-28 shrink-0 flex-wrap gap-1">
-                    {row.keys.map((key, i) =>
-                      key === "+" ? (
-                        <span key={i} className="text-[11px] text-ink-500">
-                          +
-                        </span>
-                      ) : (
-                        <kbd
-                          key={i}
-                          className="rounded border border-ink-600 bg-ink-900 px-1.5 py-0.5 font-mono text-[11px] text-ink-200"
-                        >
-                          {key}
-                        </kbd>
-                      ),
-                    )}
-                  </span>
-                  <span className="min-w-0 flex-1 text-xs leading-relaxed text-ink-300">
-                    {t(row.label)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ))}
-
-          <div className="flex flex-col gap-1.5 border-t border-ink-700 pt-3">
+        {GROUPS.map((group) => (
+          <div key={group.title} className="flex flex-col gap-1.5">
             <span className="text-[11px] uppercase tracking-wide text-ink-400">
-              {t("shortcuts.group.mouse")}
+              {t(group.title)}
             </span>
-            <p className="text-xs leading-relaxed text-ink-300">{t("shortcuts.mouse")}</p>
+            {group.rows.map((row) => (
+              <div key={row.label} className="flex items-baseline gap-3">
+                <span className="flex w-28 shrink-0 flex-wrap gap-1">
+                  {row.keys.map((key, i) =>
+                    key === "+" ? (
+                      <span key={i} className="text-[11px] text-ink-500">
+                        +
+                      </span>
+                    ) : (
+                      <kbd
+                        key={i}
+                        className="rounded border border-ink-600 bg-ink-900 px-1.5 py-0.5 font-mono text-[11px] text-ink-200"
+                      >
+                        {key}
+                      </kbd>
+                    ),
+                  )}
+                </span>
+                <span className="min-w-0 flex-1 text-xs leading-relaxed text-ink-300">
+                  {t(row.label)}
+                </span>
+              </div>
+            ))}
           </div>
+        ))}
+
+        <div className="flex flex-col gap-1.5 border-t border-ink-700 pt-3">
+          <span className="text-[11px] uppercase tracking-wide text-ink-400">
+            {t("shortcuts.group.mouse")}
+          </span>
+          <p className="text-xs leading-relaxed text-ink-300">{t("shortcuts.mouse")}</p>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

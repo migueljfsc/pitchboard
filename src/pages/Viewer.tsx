@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence } from "motion/react";
 import { Download, Pause, Pencil, Play, Presentation, Repeat, X } from "lucide-react";
 import type { BoardDoc, PitchView } from "@/board/types";
 import { DEFAULT_PITCH_VIEW } from "@/board/types";
@@ -258,15 +259,17 @@ export function Viewer({ doc, initialView, onFork }: Props) {
         </div>
       )}
 
-      {exportOpen && (
-        <ExportDialog
-          doc={doc}
-          t={time}
-          pitchView={pitchView}
-          onClose={() => setExportOpen(false)}
-          exportJob={exportJob}
-        />
-      )}
+      <AnimatePresence>
+        {exportOpen && (
+          <ExportDialog
+            doc={doc}
+            t={time}
+            pitchView={pitchView}
+            onClose={() => setExportOpen(false)}
+            exportJob={exportJob}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

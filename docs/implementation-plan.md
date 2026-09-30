@@ -37,6 +37,7 @@ before any React touches it, and every phase ends at a state you can look at.
 | — | Built-in templates for every sport; crash screen, keyboard menus, link previews (D115) |
 | — | Futsal, second in every list after football: FIFA's 40 x 20 m court, five a side, four systems, three plays (D117) |
 | — | Read-only presenting, security headers, links by side, scene-range export with preview and scene sheets, File menu, set-piece templates, viewer present and download (D116) |
+| — | A landing page at `/` playing live boards, the editor at `/app`, and a motion system: animated dialogs, menus, sections, timeline and toasts, a settling selection ring (D118) |
 
 ## Open
 

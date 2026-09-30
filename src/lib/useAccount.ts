@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { type Account, fetchAccount, signOut as signOutRequest } from "@/share/api";
+import { rememberSignedIn } from "@/share/signedIn";
 
 export interface AccountState {
   account: Account | null;
@@ -32,6 +33,7 @@ export function useAccount(): AccountState {
     // shows a name, to show the same name a moment later, is a flicker and nothing else.
     void fetchAccount()
       .then((next) => {
+        rememberSignedIn(next !== null);
         if (live) setAccount(next);
       })
       .catch(() => {
@@ -51,6 +53,7 @@ export function useAccount(): AccountState {
     // Cleared locally first. The request cannot fail in a way that should leave the menu
     // claiming someone is still signed in, and the cookie is gone either way.
     setAccount(null);
+    rememberSignedIn(false);
     try {
       await signOutRequest();
     } catch {

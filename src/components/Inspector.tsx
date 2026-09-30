@@ -29,6 +29,7 @@ import { Stepper } from "@/components/ui/Stepper";
 import { ColorPicker } from "@/components/ui/ColorPicker";
 import { useI18n } from "@/i18n/context";
 import type { Message } from "@/i18n/core";
+import { TabHighlight } from "@/components/ui/TabHighlight";
 
 const RUN_STARTS = [
   { value: "gradual", key: "inspect.runStart.gradual" },
@@ -256,10 +257,11 @@ export function Inspector({
               title={t(`inspect.tab.${value}.hint`)}
               onClick={() => setTab(value)}
               className={cn(
-                "flex-1 rounded px-2 py-1 text-[11px] transition",
-                showing === value ? "bg-ink-700 text-white" : "text-ink-400 hover:text-ink-200",
+                "relative isolate flex-1 rounded px-2 py-1 text-[11px] transition",
+                showing === value ? "text-white" : "text-ink-400 hover:text-ink-200",
               )}
             >
+              {showing === value && <TabHighlight id="inspect-tab" />}
               {t(`inspect.tab.${value}`)}
             </button>
           ))}

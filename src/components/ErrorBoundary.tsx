@@ -10,6 +10,7 @@
 import { Component, type ReactNode } from "react";
 import { useI18n } from "@/i18n/context";
 import { storedBoardText } from "@/share/local";
+import { APP_PATH } from "@/share/routes";
 
 type State = { failed: boolean };
 
@@ -63,7 +64,7 @@ function Crashed() {
           <button
             type="button"
             title={t("crash.fresh.hint")}
-            onClick={() => window.location.assign("/?fresh=1")}
+            onClick={() => window.location.assign(`${APP_PATH}?fresh=1`)}
             className={button}
           >
             {t("crash.fresh")}

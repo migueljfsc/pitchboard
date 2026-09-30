@@ -69,7 +69,7 @@ import { login, register, requestReset, resetPassword, verifyEmail, type AuthCtx
  * the SPA reads it and the hash — which carries shared boards (D33) — is left alone.
  */
 function backToApp(origin: string, error?: string): Response {
-  const url = error ? `${origin}/?auth_error=${encodeURIComponent(error)}` : `${origin}/`;
+  const url = error ? `${origin}/app?auth_error=${encodeURIComponent(error)}` : `${origin}/app`;
   const headers = new Headers({ location: url, "cache-control": "no-store" });
   headers.append("set-cookie", clearedOauthCookie());
   headers.append("set-cookie", clearedNextCookie());

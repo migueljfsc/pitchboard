@@ -37,6 +37,7 @@ import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n/context";
 import type { I18n } from "@/i18n/context";
 import type { MessageKey } from "@/i18n/core";
+import { TabHighlight } from "@/components/ui/TabHighlight";
 
 type Props = {
   doc: BoardDoc;
@@ -175,10 +176,11 @@ export function LinkPanel({
               aria-selected={tab === s}
               onClick={() => setSide(s)}
               className={cn(
-                "flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded px-2 py-1 text-[11px] transition",
-                tab === s ? "bg-ink-700 text-white" : "text-ink-400 hover:text-ink-200",
+                "relative isolate flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded px-2 py-1 text-[11px] transition",
+                tab === s ? "text-white" : "text-ink-400 hover:text-ink-200",
               )}
             >
+              {tab === s && <TabHighlight id="link-tab" />}
               {s !== "both" && (
                 <span
                   className="size-2 shrink-0 rounded-full ring-1 ring-white/20"
