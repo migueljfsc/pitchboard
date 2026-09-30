@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   ArrowRight,
@@ -155,9 +155,8 @@ function Hero({ doc }: { doc: BoardDoc }) {
           {t("landing.hero.eyebrow")}
         </motion.span>
 
-        <h1 className="mt-6 text-4xl font-semibold leading-[1.05] tracking-tight text-white sm:text-5xl lg:text-6xl">
+        <h1 className="mt-6 text-4xl font-semibold leading-[1.08] tracking-tight text-white sm:text-5xl">
           <Words text={t("landing.hero.title")} delay={0.08} />
-          <br />
           <Words
             text={t("landing.hero.title2")}
             delay={0.3}
@@ -222,21 +221,27 @@ function Hero({ doc }: { doc: BoardDoc }) {
 /** A line of the headline, a word at a time. */
 function Words({ text, delay, className }: { text: string; delay: number; className?: string }) {
   return (
-    <span className={cn("inline-block", className)}>
+    // A line of its own, balanced on its own: a wrapped headline splits evenly rather than
+    // leaving its last word alone.
+    <span className={cn("block text-balance", className)}>
+      {/* The space sits between the words rather than inside one, so a line that wraps
+          starts flush instead of with the space it broke on. */}
       {text.split(" ").map((word, i) => (
-        <motion.span
-          key={`${word}-${i}`}
-          initial={{ opacity: 0, y: "0.35em", filter: "blur(6px)" }}
-          animate={{
-            opacity: 1,
-            y: 0,
-            filter: "blur(0px)",
-            transition: { duration: 0.5, ease: EASE_OUT, delay: delay + i * 0.07 },
-          }}
-          className="inline-block whitespace-pre"
-        >
-          {i > 0 ? ` ${word}` : word}
-        </motion.span>
+        <Fragment key={`${word}-${i}`}>
+          {i > 0 && " "}
+          <motion.span
+            initial={{ opacity: 0, y: "0.35em", filter: "blur(6px)" }}
+            animate={{
+              opacity: 1,
+              y: 0,
+              filter: "blur(0px)",
+              transition: { duration: 0.5, ease: EASE_OUT, delay: delay + i * 0.07 },
+            }}
+            className="inline-block"
+          >
+            {word}
+          </motion.span>
+        </Fragment>
       ))}
     </span>
   );
