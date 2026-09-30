@@ -303,6 +303,10 @@ Each is one line of what breaks; the reasoning is in the cited decision.
   (the selection ring, a cross-fade) has a timeout or a layout read to land it without frames.
 - **`/` is the landing page, `/app` the editor.** A link the editor must act on carries a
   parameter `wantsApp` knows, or the landing page swallows it.
+- **The logo links to `HOME_PATH`, never a bare `/`** — `/` sends a signed-in visitor on to
+  the editor, so a logo pointing there never reaches the landing page.
+- **A gradient on animated words is painted per word.** Clipped from their parent, Chrome can
+  leave a word that is still animating unpainted until something forces a repaint.
 
 ### Export (D6)
 - **Quantise the GIF palette once**, from sampled frames; **delays are differences of rounded

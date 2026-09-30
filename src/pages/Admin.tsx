@@ -16,7 +16,7 @@ import {
   type AdminUserDetail,
   type AdminUserSummary,
 } from "@/share/api";
-import { APP_PATH, sharePath } from "@/share/routes";
+import { APP_PATH, HOME_PATH, sharePath } from "@/share/routes";
 import { ChartCard, ColumnChart, LineChart, Sparkline, StackedBar } from "./AdminCharts";
 import {
   AMBER,
@@ -139,7 +139,7 @@ function Shell({
     <div ref={scroller} className="h-full overflow-y-auto bg-ink-900">
       <nav className="sticky top-0 z-30 border-b border-ink-700 bg-ink-900/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2.5">
-          <a href="/" title="Pitchboard" className="rounded-lg">
+          <a href={HOME_PATH} title="Pitchboard" className="rounded-lg">
             <Wordmark name="Pitchboard" />
           </a>
           <span className="rounded-full border border-accent/25 bg-accent/[0.07] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-accent">
@@ -490,7 +490,7 @@ function projectPath(projects: AdminUserDetail["projects"], id: string): string 
 function Notice({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-5 bg-ink-900 p-8 text-center text-sm text-ink-300">
-      <a href="/" title="Pitchboard">
+      <a href={HOME_PATH} title="Pitchboard">
         <LogoMark className="size-10" />
       </a>
       <div className="animate-fade-up">{children}</div>

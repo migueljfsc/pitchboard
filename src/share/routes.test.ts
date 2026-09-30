@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { boardPath, isLandingPath, readBoardId, readShareSlug, sharePath, wantsApp } from "./routes";
+import { HOME_PATH, boardPath, isLandingPath, readBoardId, readShareSlug, sharePath, wantsApp, wantsHome } from "./routes";
 
 describe("readBoardId", () => {
   it("reads a board id", () => {
@@ -60,5 +60,18 @@ describe("the landing page", () => {
     expect(wantsApp("?fresh=1")).toBe(true);
     expect(wantsApp("")).toBe(false);
     expect(wantsApp("?utm_source=x")).toBe(false);
+  });
+});
+
+describe("asking for the landing page by name", () => {
+  // The logo's link: signed in or not, it means the front door, not the editor.
+  it("is what the logo links to", () => {
+    expect(wantsHome(HOME_PATH.slice(1))).toBe(true);
+    expect(wantsApp(HOME_PATH.slice(1))).toBe(false);
+  });
+
+  it("is not the bare root", () => {
+    expect(wantsHome("")).toBe(false);
+    expect(wantsHome("?welcome=1")).toBe(false);
   });
 });

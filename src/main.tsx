@@ -6,7 +6,7 @@ import { App } from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { I18nProvider } from "./i18n/react";
 import { clearBoard } from "./share/local";
-import { APP_PATH, isLandingPath, wantsApp } from "./share/routes";
+import { APP_PATH, HOME_STATE, cameHome, isLandingPath, wantsApp, wantsHome } from "./share/routes";
 import { wasSignedIn } from "./share/signedIn";
 import { readHash } from "./share/urlcodec";
 import { loadBoardFonts } from "./fonts";
@@ -28,7 +28,15 @@ if (new URLSearchParams(window.location.search).get("fresh") === "1") {
 // The landing page is for visitors. Somebody signed in, or arriving with something for the
 // editor to do, goes straight past it — before React mounts, so the landing never flashes.
 // A `#d=` link at the root is a shared board, and the App opens it wherever it is.
-if (isLandingPath() && !readHash(window.location.hash) && (wantsApp() || wasSignedIn())) {
+// The logo asks for the landing page by name, and gets it whoever is signed in.
+if (isLandingPath() && wantsHome()) {
+  window.history.replaceState(HOME_STATE, "", `/${window.location.hash}`);
+} else if (
+  isLandingPath() &&
+  !cameHome() &&
+  !readHash(window.location.hash) &&
+  (wantsApp() || wasSignedIn())
+) {
   const { search, hash } = window.location;
   window.history.replaceState(null, "", `${APP_PATH}${search}${hash}`);
 }

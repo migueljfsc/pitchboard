@@ -34,6 +34,21 @@ export const wantsApp = (search = window.location.search): boolean => {
   return APP_PARAMS.some((name) => params.has(name));
 };
 
+/**
+ * The landing page asked for by name — the logo, from anywhere in the app. A signed-in visitor
+ * who arrives at `/` goes straight to the editor; one who clicks the logo meant to leave it.
+ */
+export const HOME_PATH = "/?home";
+
+export const wantsHome = (search = window.location.search): boolean =>
+  new URLSearchParams(search).has("home");
+
+/** Set on the history entry once `?home` is tidied away, so a reload stays on the landing page. */
+export const HOME_STATE = { home: true } as const;
+
+export const cameHome = (): boolean =>
+  (window.history.state as { home?: boolean } | null)?.home === true;
+
 export const isAdminPath = (pathname = window.location.pathname): boolean =>
   pathname === "/admin" || pathname === "/admin/";
 

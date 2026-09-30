@@ -614,7 +614,8 @@ describes. Signed-in visitors never see it: `main.tsx` sends them on before Reac
 from a `signed-in` hint `useAccount` keeps (`share/signedIn.ts`; a wrong hint costs one page).
 Anything the editor has to act on — `?welcome`, `?verify`, `?reset`, `?auth_error`, `?fresh` —
 also goes straight through (`wantsApp`), so an email sent before the move still works. `#d=`
-links open wherever they point, `/` included. Signing out still lands on `/?fresh=1`, which now
+links open wherever they point, `/` included. The logo links to `/?home`, which shows the landing page to anyone: arriving
+at `/` skips it when signed in, but clicking the logo is asking for it (`wantsHome`). Signing out still lands on `/?fresh=1`, which now
 means the landing page; a fresh board from inside the editor is `/app?fresh=1`.
 
 **Motion goes through `motion` and three speeds.** `lib/motion.ts` and the `--duration-*` /

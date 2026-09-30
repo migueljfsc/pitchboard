@@ -158,7 +158,7 @@ import {
   resetPositions,
   type Direction,
 } from "@/formations";
-import { APP_PATH } from "@/share/routes";
+import { APP_PATH, HOME_PATH } from "@/share/routes";
 
 /** What a confirmation is currently guarding. */
 type Pending =
@@ -1720,7 +1720,7 @@ export function Editor({ initialDoc }: Props = {}) {
       <header className="relative z-30 flex shrink-0 items-center gap-2 border-b border-ink-700 bg-ink-800 px-4 py-2 shadow-[0_1px_0_rgb(255_255_255/0.03)_inset]">
 
         <h1 className="shrink-0">
-          <a href="/" title={t("app.name")} className="rounded-lg">
+          <a href={HOME_PATH} title={t("app.name")} className="rounded-lg">
             <Wordmark name={t("app.name")} />
           </a>
         </h1>

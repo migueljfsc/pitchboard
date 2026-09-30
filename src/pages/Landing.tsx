@@ -28,7 +28,7 @@ import { BAR_BUTTON, BAR_DIVIDER, BAR_PRIMARY } from "@/components/ui/bar";
 import { useI18n } from "@/i18n/context";
 import { useAccount } from "@/lib/useAccount";
 import { DURATION, EASE_OUT, enter } from "@/lib/motion";
-import { APP_PATH } from "@/share/routes";
+import { APP_PATH, HOME_PATH, cameHome } from "@/share/routes";
 import { cn } from "@/lib/utils";
 
 const TILTED: PitchView = { half: "full", rotated: true, tilt: true };
@@ -59,7 +59,7 @@ export function Landing() {
   const { account } = useAccount();
 
   useEffect(() => {
-    if (account) window.location.replace(APP_PATH);
+    if (account && !cameHome()) window.location.replace(APP_PATH);
   }, [account]);
 
   const boards = useBoards();
@@ -70,7 +70,7 @@ export function Landing() {
 
       <nav className="sticky top-0 z-30 border-b border-white/[0.04] bg-ink-900/70 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-3 sm:px-6">
-          <a href="/" className="rounded-lg">
+          <a href={HOME_PATH} className="rounded-lg">
             <Wordmark name={t("app.name")} />
           </a>
           <div className="ml-6 hidden items-center gap-1 md:flex">
@@ -160,7 +160,7 @@ function Hero({ doc }: { doc: BoardDoc }) {
           <Words
             text={t("landing.hero.title2")}
             delay={0.3}
-            className="bg-gradient-to-r from-accent via-amber-200 to-accent bg-clip-text text-transparent"
+            wordClassName="bg-gradient-to-r from-accent via-amber-200 to-accent bg-clip-text text-transparent"
           />
         </h1>
 
@@ -219,11 +219,11 @@ function Hero({ doc }: { doc: BoardDoc }) {
 }
 
 /** A line of the headline, a word at a time. */
-function Words({ text, delay, className }: { text: string; delay: number; className?: string }) {
+function Words({ text, delay, wordClassName }: { text: string; delay: number; wordClassName?: string }) {
   return (
     // A line of its own, balanced on its own: a wrapped headline splits evenly rather than
     // leaving its last word alone.
-    <span className={cn("block text-balance", className)}>
+    <span className="block text-balance">
       {/* The space sits between the words rather than inside one, so a line that wraps
           starts flush instead of with the space it broke on. */}
       {text.split(" ").map((word, i) => (
@@ -237,7 +237,9 @@ function Words({ text, delay, className }: { text: string; delay: number; classN
               filter: "blur(0px)",
               transition: { duration: 0.5, ease: EASE_OUT, delay: delay + i * 0.07 },
             }}
-            className="inline-block"
+            // Any gradient is painted by the word itself: clipped from the line instead, Chrome
+            // can leave a word that is still animating unpainted until something redraws it.
+            className={cn("inline-block", wordClassName)}
           >
             {word}
           </motion.span>
