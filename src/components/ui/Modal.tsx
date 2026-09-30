@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { motion } from "motion/react";
 import { enter, leave } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -23,6 +24,10 @@ type Props = {
  *
  * Only a mousedown on the backdrop itself dismisses — not a press that started inside the
  * panel and drifted out, which is how a text selection in a field ends.
+ *
+ * Rendered into `<body>`: a dialog is often opened from inside the top bar, and any ancestor
+ * with a transform, filter or backdrop-filter would otherwise become the box `fixed` is
+ * measured from, pinning the dialog inside it.
  */
 export function Modal({
   onClose,
@@ -34,7 +39,7 @@ export function Modal({
   label,
   children,
 }: Props) {
-  return (
+  return createPortal(
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1, transition: enter }}
@@ -64,6 +69,7 @@ export function Modal({
       >
         {children}
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.body,
   );
 }

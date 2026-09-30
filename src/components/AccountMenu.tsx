@@ -110,7 +110,10 @@ export function AccountMenu({ account, loading, signOut }: AccountState) {
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent) => {
-      if (!root.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Element;
+      // The sign-in dialog is portalled to <body>, outside this root, but is still this menu's.
+      if (root.current?.contains(target) || target.closest?.('[role="dialog"]')) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     document.addEventListener("pointerdown", onDown);

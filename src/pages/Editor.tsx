@@ -1717,7 +1717,7 @@ export function Editor({ initialDoc }: Props = {}) {
           Gone while presenting, along with both rails: what is left is the board
           and the means to play it. */}
       {!present && (
-      <header className="relative z-30 flex shrink-0 items-center gap-2 border-b border-ink-700 bg-ink-800/90 px-4 py-2 shadow-[0_1px_0_rgb(255_255_255/0.03)_inset] backdrop-blur">
+      <header className="relative z-30 flex shrink-0 items-center gap-2 border-b border-ink-700 bg-ink-800 px-4 py-2 shadow-[0_1px_0_rgb(255_255_255/0.03)_inset]">
 
         <h1 className="shrink-0">
           <a href="/" title={t("app.name")} className="rounded-lg">
