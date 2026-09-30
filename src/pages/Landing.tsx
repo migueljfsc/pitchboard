@@ -24,7 +24,7 @@ import { heroBoard } from "@/pages/landingBoards";
 import { LocaleSwitch } from "@/components/LocaleSwitch";
 import { LogoMark, Wordmark } from "@/components/Logo";
 import { SportIcon } from "@/components/SportMenu";
-import { BAR_BUTTON, BAR_PRIMARY } from "@/components/ui/bar";
+import { BAR_BUTTON, BAR_DIVIDER, BAR_PRIMARY } from "@/components/ui/bar";
 import { useI18n } from "@/i18n/context";
 import { useAccount } from "@/lib/useAccount";
 import { DURATION, EASE_OUT, enter } from "@/lib/motion";
@@ -81,12 +81,16 @@ export function Landing() {
               {t("landing.nav.how")}
             </a>
           </div>
-          <div className="ml-auto flex items-center gap-2">
-            <LocaleSwitch />
+          {/* The same end as the editor's bar: the way in, then the language, then the coffee. */}
+          <div className="ml-auto flex items-center gap-1.5">
             <a href={APP_PATH} className={BAR_PRIMARY}>
               {t("landing.nav.open")}
               <ArrowRight size={13} />
             </a>
+            <span className={BAR_DIVIDER} />
+            <LocaleSwitch />
+            <span className={BAR_DIVIDER} />
+            <CoffeeLink />
           </div>
         </div>
       </nav>
@@ -525,16 +529,8 @@ function Footer() {
         <span>{t("landing.footer.note")}</span>
         <div className="ml-auto flex items-center gap-2">
           <LocaleSwitch />
-          <a
-            href="https://buymeacoffee.com/migueljfsc"
-            target="_blank"
-            rel="noopener noreferrer"
-            title={t("app.coffee")}
-            aria-label={t("app.coffee")}
-            className="flex size-7 items-center justify-center rounded-md bg-accent text-ink-900 transition hover:brightness-110"
-          >
-            <Coffee size={14} />
-          </a>
+          <span className={BAR_DIVIDER} />
+          <CoffeeLink />
         </div>
       </div>
     </footer>
@@ -542,6 +538,23 @@ function Footer() {
 }
 
 // ------------------------------------------------------------------ pieces
+
+/** Buy Me a Coffee, as the editor's bar has it: a plain link, never their embed script. */
+function CoffeeLink() {
+  const { t } = useI18n();
+  return (
+    <a
+      href="https://buymeacoffee.com/migueljfsc"
+      target="_blank"
+      rel="noopener noreferrer"
+      title={t("app.coffee")}
+      aria-label={t("app.coffee")}
+      className="flex size-7 shrink-0 items-center justify-center rounded-md bg-accent text-ink-900 transition hover:brightness-110"
+    >
+      <Coffee size={14} />
+    </a>
+  );
+}
 
 /** Rises into place the first time it scrolls into view. */
 function Reveal({ children, className, delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {

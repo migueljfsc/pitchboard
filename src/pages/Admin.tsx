@@ -1,5 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, animate, motion, useReducedMotion } from "motion/react";
+import { ArrowLeft, ArrowRight, RotateCw, Search } from "lucide-react";
 import { DeleteAccountDialog } from "@/components/DeleteAccountDialog";
+import { LogoMark, Wordmark } from "@/components/Logo";
+import { BAR_BUTTON } from "@/components/ui/bar";
+import { EASE_OUT, enter, leave } from "@/lib/motion";
 import {
   adminDeleteUser,
   ApiError,
@@ -11,7 +16,7 @@ import {
   type AdminUserDetail,
   type AdminUserSummary,
 } from "@/share/api";
-import { sharePath } from "@/share/routes";
+import { APP_PATH, sharePath } from "@/share/routes";
 import { ChartCard, ColumnChart, LineChart, Sparkline, StackedBar } from "./AdminCharts";
 import {
   AMBER,
@@ -38,6 +43,10 @@ export function Admin() {
   const [stats, setStats] = useState<AdminStats | "denied" | "signed-out" | "failed" | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [refresh, setRefresh] = useState<"idle" | "loading" | "failed">("idle");
+  const scroller = useRef<HTMLDivElement>(null);
+
+  // A different view starts at its top, not wherever the last one was scrolled to.
+  useEffect(() => scroller.current?.scrollTo({ top: 0 }), [selected]);
 
   const reload = () => {
     setRefresh("loading");
@@ -66,7 +75,13 @@ export function Admin() {
     };
   }, []);
 
-  if (stats === null) return <Notice>Loading…</Notice>;
+  if (stats === null) {
+    return (
+      <Shell>
+        <OverviewSkeleton />
+      </Shell>
+    );
+  }
   if (stats === "failed") return <Notice>Could not reach the server.</Notice>;
   if (stats === "denied") return <Notice>Nothing here.</Notice>;
   if (stats === "signed-out") {
@@ -85,14 +100,71 @@ export function Admin() {
   }
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-6xl px-4 py-8">
-        {selected ? (
-          <UserDetail id={selected} onBack={() => setSelected(null)} />
-        ) : (
-          <Overview stats={stats} onSelect={setSelected} refresh={refresh} onRefresh={reload} />
-        )}
-      </div>
+    <Shell scroller={scroller} refresh={selected ? undefined : refresh} onRefresh={reload}>
+      {/* One view at a time: the list steps aside for an account, and back. */}
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={selected ?? "overview"}
+          initial={{ opacity: 0, x: selected ? 16 : -16 }}
+          animate={{ opacity: 1, x: 0, transition: enter }}
+          exit={{ opacity: 0, x: selected ? -16 : 16, transition: leave }}
+        >
+          {selected ? (
+            <UserDetail id={selected} onBack={() => setSelected(null)} />
+          ) : (
+            <Overview stats={stats} onSelect={setSelected} refresh={refresh} />
+          )}
+        </motion.div>
+      </AnimatePresence>
+    </Shell>
+  );
+}
+
+/**
+ * The page's frame: the mark back to the front door, what this page is, and the way into the
+ * board — the same bar the landing page and the editor open with.
+ */
+function Shell({
+  scroller,
+  refresh,
+  onRefresh,
+  children,
+}: {
+  scroller?: React.Ref<HTMLDivElement>;
+  refresh?: "idle" | "loading" | "failed";
+  onRefresh?: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div ref={scroller} className="h-full overflow-y-auto bg-ink-900">
+      <nav className="sticky top-0 z-30 border-b border-ink-700 bg-ink-900/80 backdrop-blur-md">
+        <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2.5">
+          <a href="/" title="Pitchboard" className="rounded-lg">
+            <Wordmark name="Pitchboard" />
+          </a>
+          <span className="rounded-full border border-accent/25 bg-accent/[0.07] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-accent">
+            Usage
+          </span>
+          <div className="ml-auto flex items-center gap-1.5">
+            {refresh && onRefresh && (
+              <button
+                type="button"
+                onClick={onRefresh}
+                disabled={refresh === "loading"}
+                className={`${BAR_BUTTON} disabled:opacity-60 ${refresh === "failed" ? "text-red-300 hover:text-red-200" : ""}`}
+              >
+                <RotateCw size={13} className={refresh === "loading" ? "animate-spin" : undefined} />
+                {refresh === "loading" ? "Refreshing…" : refresh === "failed" ? "Refresh failed · retry" : "Refresh"}
+              </button>
+            )}
+            <a href={APP_PATH} className={BAR_BUTTON}>
+              Open the board
+              <ArrowRight size={13} />
+            </a>
+          </div>
+        </div>
+      </nav>
+      <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
     </div>
   );
 }
@@ -120,12 +192,10 @@ function Overview({
   stats,
   onSelect,
   refresh,
-  onRefresh,
 }: {
   stats: AdminStats;
   onSelect: (id: string) => void;
   refresh: "idle" | "loading" | "failed";
-  onRefresh: () => void;
 }) {
   const { totals, users, series, methods } = stats;
   const charts = useMemo(() => {
@@ -153,21 +223,12 @@ function Overview({
 
   return (
     <>
-      <header className="mb-6 flex items-baseline justify-between">
-        <h1 className="text-lg font-semibold text-ink-200">Pitchboard · usage</h1>
-        <div className="flex items-baseline gap-4">
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={refresh === "loading"}
-            className={`text-xs transition disabled:opacity-50 ${refresh === "failed" ? "text-red-300 hover:text-red-200" : "text-ink-400 hover:text-ink-200"}`}
-          >
-            {refresh === "loading" ? "Refreshing…" : refresh === "failed" ? "Refresh failed · retry" : "Refresh"}
-          </button>
-          <a href="/" className="text-xs text-ink-400 hover:text-ink-200">
-            Back to the board
-          </a>
-        </div>
+      <header className="mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight text-white">Usage</h1>
+        <p className="mt-1 text-xs text-ink-400">
+          {totals.users.toLocaleString()} accounts
+          {refresh === "loading" && <span className="ml-2 text-ink-500">· refreshing</span>}
+        </p>
       </header>
 
       <Tiles
@@ -242,12 +303,15 @@ function Overview({
         <h2 className="text-sm font-semibold text-ink-300">
           Accounts <span className="font-normal text-ink-500">{users.length}</span>
         </h2>
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Filter by email or name"
-          className="w-64 rounded-md border border-ink-600 bg-ink-800 px-2 py-1 text-xs text-ink-200 placeholder:text-ink-500 focus:border-accent focus:outline-none"
-        />
+        <label className="relative">
+          <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-500" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Filter by email or name"
+            className="w-64 rounded-lg border border-ink-600 bg-ink-800 py-1.5 pl-8 pr-2 text-xs text-ink-200 transition placeholder:text-ink-500 focus:border-accent focus:outline-none"
+          />
+        </label>
       </div>
 
       <Table
@@ -294,18 +358,21 @@ function UserDetail({ id, onBack }: { id: string; onBack: () => void }) {
 
   return (
     <>
-      <button type="button" onClick={onBack} className="mb-6 text-xs text-ink-400 hover:text-ink-200">
-        ← All accounts
+      <button type="button" onClick={onBack} className={`${BAR_BUTTON} group -ml-2.5 mb-6 text-ink-400`}>
+        <ArrowLeft size={13} className="transition-transform group-hover:-translate-x-0.5" />
+        All accounts
       </button>
 
-      {detail === null && <p className="text-sm text-ink-400">Loading…</p>}
+      {detail === null && <DetailSkeleton />}
       {detail === "failed" && <p className="text-sm text-red-300">Could not load this account.</p>}
 
       {detail && detail !== "failed" && (
         <>
           <header className="mb-6 flex items-start justify-between gap-4">
             <div>
-              <h1 className="text-lg font-semibold text-ink-200">{detail.user.display_name ?? detail.user.email}</h1>
+              <h1 className="text-2xl font-semibold tracking-tight text-white">
+                {detail.user.display_name ?? detail.user.email}
+              </h1>
               <p className="text-xs text-ink-400">
                 {detail.user.email} · joined {formatDate(detail.user.created_at)} · last login{" "}
                 {formatDate(detail.user.last_login_at)} · last seen {formatDate(detail.user.last_seen_at)}
@@ -314,25 +381,27 @@ function UserDetail({ id, onBack }: { id: string; onBack: () => void }) {
             <button
               type="button"
               onClick={() => setDeleting(true)}
-              className="shrink-0 rounded-md border border-red-500/60 px-3 py-1.5 text-xs text-red-300 transition hover:bg-red-600 hover:text-white"
+              className="shrink-0 rounded-lg border border-red-500/60 px-3 py-1.5 text-xs text-red-300 transition hover:bg-red-600 hover:text-white"
             >
               Delete account
             </button>
           </header>
 
-          {deleting && (
-            <DeleteAccountDialog
-              email={detail.user.email}
-              title="Delete this account?"
-              message="This account and everything in it will be deleted. This cannot be undone."
-              onDelete={async (typed) => {
-                await adminDeleteUser(id, typed);
-                // A reload rather than patching state: the totals and the list both change.
-                window.location.assign("/admin");
-              }}
-              onCancel={() => setDeleting(false)}
-            />
-          )}
+          <AnimatePresence>
+            {deleting && (
+              <DeleteAccountDialog
+                email={detail.user.email}
+                title="Delete this account?"
+                message="This account and everything in it will be deleted. This cannot be undone."
+                onDelete={async (typed) => {
+                  await adminDeleteUser(id, typed);
+                  // A reload rather than patching state: the totals and the list both change.
+                  window.location.assign("/admin");
+                }}
+                onCancel={() => setDeleting(false)}
+              />
+            )}
+          </AnimatePresence>
 
           <Tiles
             items={[
@@ -420,10 +489,67 @@ function projectPath(projects: AdminUserDetail["projects"], id: string): string 
 
 function Notice({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center p-8 text-center text-sm text-ink-300">
-      {children}
+    <div className="flex h-full w-full flex-col items-center justify-center gap-5 bg-ink-900 p-8 text-center text-sm text-ink-300">
+      <a href="/" title="Pitchboard">
+        <LogoMark className="size-10" />
+      </a>
+      <div className="animate-fade-up">{children}</div>
     </div>
   );
+}
+
+function OverviewSkeleton() {
+  return (
+    <div role="status" aria-label="Loading">
+      <div className="skeleton mb-2 h-7 w-32" />
+      <div className="skeleton mb-6 h-3 w-24" />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {Array.from({ length: 8 }, (_, i) => (
+          <div key={i} className="rounded-xl border border-ink-700 bg-ink-800 p-3">
+            <div className="skeleton h-2.5 w-16" />
+            <div className="skeleton mt-2 h-6 w-12" />
+          </div>
+        ))}
+      </div>
+      <div className="mt-6 grid gap-3 md:grid-cols-2">
+        <div className="skeleton h-56 md:col-span-2" />
+        <div className="skeleton h-56" />
+        <div className="skeleton h-56" />
+      </div>
+    </div>
+  );
+}
+
+function DetailSkeleton() {
+  return (
+    <div role="status" aria-label="Loading">
+      <div className="skeleton h-7 w-56" />
+      <div className="skeleton mt-2 h-3 w-80" />
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {Array.from({ length: 5 }, (_, i) => (
+          <div key={i} className="skeleton h-16" />
+        ))}
+      </div>
+      <div className="skeleton mt-8 h-40" />
+    </div>
+  );
+}
+
+/** A figure counting up to its value, and on to the next when a refresh changes it. */
+function CountUp({ value }: { value: number }) {
+  const reduced = useReducedMotion();
+  const [shown, setShown] = useState(0);
+  const from = useRef(0);
+  useEffect(() => {
+    const controls = animate(from.current, value, {
+      duration: reduced ? 0 : 0.9,
+      ease: EASE_OUT,
+      onUpdate: setShown,
+    });
+    from.current = value;
+    return () => controls.stop();
+  }, [value, reduced]);
+  return <>{Math.round(shown).toLocaleString()}</>;
 }
 
 /** Label, value, an optional note, and an optional weekly trend drawn under it. */
@@ -432,15 +558,21 @@ type Tile = [string, number | string, string | null, number[]?];
 function Tiles({ items }: { items: Tile[] }) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      {items.map(([label, value, note, trend]) => (
-        <div key={label} className="rounded-lg border border-ink-700 bg-ink-800 p-3">
+      {items.map(([label, value, note, trend], i) => (
+        <motion.div
+          key={label}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: EASE_OUT, delay: i * 0.04 }}
+          className="rounded-xl border border-ink-700 bg-gradient-to-b from-ink-800 to-ink-800/60 p-3 transition-colors duration-300 hover:border-ink-600"
+        >
           <div className="text-[11px] tracking-wide text-ink-400 uppercase">{label}</div>
-          <div className="mt-1 text-2xl font-semibold text-ink-200">
-            {typeof value === "number" ? value.toLocaleString() : value}
+          <div className="mt-1 text-2xl font-semibold tabular-nums text-white">
+            {typeof value === "number" ? <CountUp value={value} /> : value}
           </div>
           {note && <div className="mt-1 text-[11px] text-ink-500">{note}</div>}
           {trend && <Sparkline values={trend} />}
-        </div>
+        </motion.div>
       ))}
     </div>
   );
@@ -467,7 +599,7 @@ function Table({ head, rows, numeric = [], empty }: { head: string[]; rows: Row[
   if (rows.length === 0) return <p className="text-xs text-ink-500">{empty}</p>;
   const align = (i: number) => (numeric.includes(i) ? "text-right tabular-nums" : "text-left");
   return (
-    <div className="overflow-x-auto rounded-lg border border-ink-700">
+    <div className="overflow-x-auto rounded-xl border border-ink-700">
       <table className="w-full text-xs">
         <thead className="bg-ink-800 text-ink-400">
           <tr>
@@ -483,7 +615,7 @@ function Table({ head, rows, numeric = [], empty }: { head: string[]; rows: Row[
             <tr
               key={row.key}
               onClick={row.onClick}
-              className={`border-t border-ink-700 text-ink-300 ${row.onClick ? "cursor-pointer hover:bg-ink-800" : ""}`}
+              className={`border-t border-ink-700 text-ink-300 transition-colors ${row.onClick ? "cursor-pointer hover:bg-ink-800 hover:text-white" : ""}`}
             >
               {row.cells.map((cell, i) => (
                 <td key={i} className={`px-3 py-2 whitespace-nowrap ${align(i)}`}>

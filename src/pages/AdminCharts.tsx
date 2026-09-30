@@ -8,6 +8,8 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { motion } from "motion/react";
+import { EASE_OUT } from "@/lib/motion";
 
 import { AMBER, DAY_S, shortDate } from "./adminData";
 
@@ -87,7 +89,9 @@ export function ChartCard({
 }) {
   const [asTable, setAsTable] = useState(false);
   return (
-    <section className={`rounded-lg border border-ink-700 bg-ink-800 p-4 ${className}`}>
+    <section
+      className={`rounded-xl border border-ink-700 bg-gradient-to-b from-ink-800 to-ink-800/60 p-4 transition-colors duration-300 hover:border-ink-600 ${className}`}
+    >
       <header className="mb-3 flex items-start justify-between gap-3">
         <div>
           <h3 className="text-xs font-semibold text-ink-200">{title}</h3>
@@ -96,7 +100,7 @@ export function ChartCard({
         <button
           type="button"
           onClick={() => setAsTable((v) => !v)}
-          className="shrink-0 rounded border border-ink-600 px-1.5 py-0.5 text-[10px] text-ink-400 transition hover:border-ink-400 hover:text-ink-200"
+          className="shrink-0 rounded-md border border-ink-600 px-1.5 py-0.5 text-[10px] text-ink-400 transition hover:border-ink-400 hover:text-ink-200"
         >
           {asTable ? "Chart" : "Table"}
         </button>
@@ -172,7 +176,16 @@ export function ColumnChart({
               const x = LEFT + i * band + (band - barW) / 2;
               return (
                 <g key={i}>
-                  <path d={columnPath(x, y(v), barW, PLOT_H)} fill={colorOf(i)} opacity={hover === null || hover === i ? 1 : 0.55} />
+                  {/* Grows up from the axis the first time it is drawn, a column at a time. */}
+                  <motion.path
+                    d={columnPath(x, y(v), barW, PLOT_H)}
+                    fill={colorOf(i)}
+                    opacity={hover === null || hover === i ? 1 : 0.55}
+                    initial={{ scaleY: 0 }}
+                    animate={{ scaleY: 1 }}
+                    transition={{ duration: 0.5, ease: EASE_OUT, delay: 0.1 + i * 0.03 }}
+                    style={{ transformBox: "fill-box", originY: 1 }}
+                  />
                   {showLabel(i) && (
                     <text x={x + barW / 2} y={PLOT_H + 14} textAnchor="middle" fontSize={10} fill={MUTED}>
                       {labels[i]}
@@ -253,9 +266,36 @@ export function LineChart({ values, since, unit }: { values: number[]; since: nu
                 {dateOf(i)}
               </text>
             ))}
-            <path d={area} fill={AMBER} opacity={0.1} />
-            <path d={line} fill="none" stroke={AMBER} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-            <circle cx={x(last)} cy={y(values[last])} r={4} fill={AMBER} stroke={SURFACE} strokeWidth={2} />
+            <motion.path
+              d={area}
+              fill={AMBER}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.1 }}
+              transition={{ duration: 0.6, delay: 0.5 }}
+            />
+            <motion.path
+              d={line}
+              fill="none"
+              stroke={AMBER}
+              strokeWidth={2}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              initial={{ pathLength: 0 }}
+              animate={{ pathLength: 1 }}
+              transition={{ duration: 0.9, ease: EASE_OUT }}
+            />
+            <motion.circle
+              cx={x(last)}
+              cy={y(values[last])}
+              r={4}
+              fill={AMBER}
+              stroke={SURFACE}
+              strokeWidth={2}
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: "spring", stiffness: 500, damping: 20, delay: 0.85 }}
+              style={{ transformBox: "fill-box", originX: 0.5, originY: 0.5 }}
+            />
             <text x={x(last) + 8} y={y(values[last])} dy="0.32em" fontSize={11} fontWeight={600} fill="#dde5e2">
               {fmt(values[last])}
             </text>
@@ -296,6 +336,12 @@ export function StackedBar({ segments }: { segments: Array<{ label: string; valu
       <div ref={ref} className="relative pt-12" onPointerLeave={() => setHover(null)}>
         {width > 0 && total > 0 && (
           <svg width={width} height={20} role="img" aria-label="Stacked bar">
+            <motion.g
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: 1 }}
+              transition={{ duration: 0.7, ease: EASE_OUT, delay: 0.1 }}
+              style={{ originX: 0 }}
+            >
             {placed.map((s, k) => {
               const first = k === 0;
               const lastSeg = k === placed.length - 1;
@@ -318,6 +364,7 @@ export function StackedBar({ segments }: { segments: Array<{ label: string; valu
                 />
               );
             })}
+            </motion.g>
           </svg>
         )}
         {total === 0 && <div className="h-5 rounded bg-ink-700" />}
@@ -357,7 +404,7 @@ export function Sparkline({ values }: { values: number[] }) {
     <div ref={ref} className="mt-2" aria-hidden>
       {width > 0 && last && (
         <svg width={width} height={h}>
-          <path
+          <motion.path
             d={pts.map(([px, py], i) => `${i ? "L" : "M"}${px},${py}`).join("")}
             fill="none"
             stroke={AMBER}
@@ -365,6 +412,9 @@ export function Sparkline({ values }: { values: number[] }) {
             strokeLinejoin="round"
             strokeLinecap="round"
             opacity={0.8}
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: 1 }}
+            transition={{ duration: 0.8, ease: EASE_OUT, delay: 0.2 }}
           />
           <circle cx={last[0]} cy={last[1]} r={3} fill={AMBER} />
         </svg>
