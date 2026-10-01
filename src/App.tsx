@@ -3,7 +3,8 @@ import type { BoardDoc } from "@/board/types";
 import { decodeBoard, readHash, readView, withoutHash, type DecodeOutcome } from "@/share/urlcodec";
 import { fetchShare } from "@/share/api";
 import { parseStoredDoc } from "@/share/cloud";
-import { APP_PATH, isAdminPath, isLandingPath, readShareSlug } from "@/share/routes";
+import { APP_PATH, HOME_PATH, isAdminPath, isLandingPath, readShareSlug } from "@/share/routes";
+import { BAR_PRIMARY } from "@/components/ui/bar";
 import { useI18n } from "@/i18n/context";
 import { LogoMark } from "@/components/Logo";
 import { cn } from "@/lib/utils";
@@ -128,7 +129,7 @@ function Pages() {
         <button
           type="button"
           onClick={clearPath}
-          className="mt-4 block rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-ink-900 transition hover:brightness-110"
+          className={cn(BAR_PRIMARY, "mx-auto mt-5")}
         >
           {t("app.newBoard")}
         </button>
@@ -158,7 +159,7 @@ function Pages() {
         <button
           type="button"
           onClick={clearHash}
-          className="mt-4 block rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-ink-900 transition hover:brightness-110"
+          className={cn(BAR_PRIMARY, "mx-auto mt-5")}
         >
           {t("app.newBoard")}
         </button>
@@ -190,7 +191,9 @@ function Pages() {
 function Splash({ children, tone }: { children: React.ReactNode; tone?: "bad" }) {
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-5 bg-ink-900 p-8 text-center">
-      <LogoMark className={cn("size-10", tone !== "bad" && "animate-pulse")} />
+      <a href={HOME_PATH} title="Pitchboard" className="rounded-lg">
+        <LogoMark className={cn("size-10", tone !== "bad" && "animate-pulse")} />
+      </a>
       <div
         className={`max-w-md animate-fade-up text-sm leading-relaxed ${tone === "bad" ? "text-red-300" : "text-ink-300"}`}
       >

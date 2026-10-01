@@ -30,6 +30,15 @@ export function LiveBoard({ doc, view = DEFAULT_PITCH_VIEW, still = 0.5, classNa
   const turf = useRef<TurfCache>(new Map());
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [onScreen, setOnScreen] = useState(false);
+  // Animation frames already stop in a background tab; this says so outright, so the loop
+  // is cancelled rather than merely starved.
+  const [pageShown, setPageShown] = useState(() => document.visibilityState === "visible");
+
+  useEffect(() => {
+    const onChange = () => setPageShown(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", onChange);
+    return () => document.removeEventListener("visibilitychange", onChange);
+  }, []);
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -78,18 +87,24 @@ export function LiveBoard({ doc, view = DEFAULT_PITCH_VIEW, still = 0.5, classNa
     };
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduced || !onScreen) {
+    if (reduced || !onScreen || !pageShown) {
       paint(total * still);
       return;
     }
 
+    // Thirty frames a second: a play reads as well at it, and a page of boards drawing at the
+    // display's full rate is a laptop's fan for nothing.
     const start = performance.now() - total * still * 1000;
+    let drawn = -Infinity;
     let frame = requestAnimationFrame(function tick(now) {
-      paint(((now - start) / 1000) % total);
+      if (now - drawn >= FRAME_MS) {
+        drawn = now;
+        paint(((now - start) / 1000) % total);
+      }
       frame = requestAnimationFrame(tick);
     });
     return () => cancelAnimationFrame(frame);
-  }, [doc, view, size, onScreen, still]);
+  }, [doc, view, size, onScreen, pageShown, still]);
 
   return (
     <div ref={wrapRef} className={cn("relative", className)}>
@@ -102,3 +117,6 @@ export function LiveBoard({ doc, view = DEFAULT_PITCH_VIEW, still = 0.5, classNa
     </div>
   );
 }
+
+/** How often a showcase board is redrawn: thirty frames a second, a hair under so a 60 Hz tick is never skipped. */
+const FRAME_MS = 1000 / 30 - 2;

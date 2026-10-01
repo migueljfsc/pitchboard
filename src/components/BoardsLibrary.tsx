@@ -28,6 +28,7 @@ import {
   Search,
   Trash2,
   X,
+  Save,
 } from "lucide-react";
 
 import { PickProject } from "@/components/PickProject";
@@ -85,12 +86,14 @@ type Props = {
   /** The open board's sport: where a folder made from "All boards" is filed (D114). */
   sport: Sport;
   /** Held by the editor, so the File menu opens the same library. */
+  /** The board on screen, which an empty folder offers to keep. */
+  boardName: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
 
 /** The top-bar button, and the library it opens. */
-export function BoardsLibrary({ cloud, sport, open, onOpenChange: setOpen }: Props) {
+export function BoardsLibrary({ cloud, sport, boardName, open, onOpenChange: setOpen }: Props) {
   const { t } = useI18n();
 
   return (
@@ -114,7 +117,7 @@ export function BoardsLibrary({ cloud, sport, open, onOpenChange: setOpen }: Pro
       {/* Unmounted when closed, so every visit starts on a fresh list rather than on
           whatever another device has since changed underneath it. */}
       <AnimatePresence>
-          {open && <Library cloud={cloud} sport={sport} onClose={() => setOpen(false)} />}
+          {open && <Library cloud={cloud} sport={sport} boardName={boardName} onClose={() => setOpen(false)} />}
       </AnimatePresence>
     </>
   );
@@ -131,7 +134,12 @@ type Dragging = { kind: "boards"; ids: string[] } | { kind: "project"; id: strin
 /** Where it would land: a folder, or a sport's root. */
 type DropTarget = { kind: "project"; id: string } | null;
 
-function Library({ cloud, sport, onClose }: Pick<Props, "cloud" | "sport"> & { onClose: () => void }) {
+function Library({
+  cloud,
+  sport,
+  boardName,
+  onClose,
+}: Pick<Props, "cloud" | "sport" | "boardName"> & { onClose: () => void }) {
   const { t, tn } = useI18n();
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [boards, setBoards] = useState<StoredBoardSummary[] | null>(null);
@@ -753,8 +761,24 @@ function Library({ cloud, sport, onClose }: Pick<Props, "cloud" | "sport"> & { o
                   ))}
                 </li>
               ) : visible.length === 0 ? (
-                <li className="px-2 py-1 text-[11px] leading-relaxed text-ink-400">
+                <li className="flex flex-col items-start gap-2 px-2 py-1 text-[11px] leading-relaxed text-ink-400">
                   {query.trim() ? t("library.noMatches", { query: query.trim() }) : t("library.empty")}
+                  {/* An empty folder of the board's own sport is somewhere the board on screen
+                      could go, when it is not saved anywhere yet (D114). */}
+                  {!query.trim() && !cloud.board && active && projects && sportOfProject(projects, active) === sport && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void cloud.saveInto(active, boardName).then((ok) => {
+                          if (ok) void refresh();
+                        })
+                      }
+                      className="flex items-center gap-1.5 rounded-lg border border-accent/40 bg-accent/10 px-2.5 py-1.5 text-xs font-medium text-accent transition hover:bg-accent/20"
+                    >
+                      <Save size={13} />
+                      {t("library.saveHere")}
+                    </button>
+                  )}
                 </li>
               ) : (
                 visible.map((board) => (

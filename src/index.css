@@ -175,3 +175,25 @@ body {
 .scrubber:active::-webkit-slider-thumb {
   box-shadow: 0 0 0 6px rgb(251 191 36 / 0.25);
 }
+
+/**
+ * Rising into place as it scrolls into view, tied to the scroll itself rather than to a script
+ * watching it — so where the browser cannot (or the reader asked for less motion), the element
+ * is simply there, never left waiting at zero opacity for an animation that does not come.
+ */
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal {
+      animation: reveal var(--ease-out) both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 35%;
+    }
+  }
+}

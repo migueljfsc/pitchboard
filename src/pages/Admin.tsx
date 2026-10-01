@@ -3,7 +3,7 @@ import { AnimatePresence, animate, motion, useReducedMotion } from "motion/react
 import { ArrowLeft, ArrowRight, RotateCw, Search } from "lucide-react";
 import { DeleteAccountDialog } from "@/components/DeleteAccountDialog";
 import { LogoMark, Wordmark } from "@/components/Logo";
-import { BAR_BUTTON } from "@/components/ui/bar";
+import { BAR_BUTTON, BAR_PRIMARY } from "@/components/ui/bar";
 import { EASE_OUT, enter, leave } from "@/lib/motion";
 import {
   adminDeleteUser,
@@ -93,7 +93,7 @@ export function Admin() {
         <button
           type="button"
           onClick={startGoogleSignIn}
-          className="mt-4 block rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-ink-900 transition hover:brightness-110"
+          className={`${BAR_PRIMARY} mx-auto mt-5`}
         >
           Sign in
         </button>

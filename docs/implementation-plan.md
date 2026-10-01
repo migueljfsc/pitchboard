@@ -43,6 +43,7 @@ before any React touches it, and every phase ends at a state you can look at.
 | — | A note per scene, in the viewer, while presenting and in export captions (D121) |
 | — | Formations drawn by hand: saved from the board, kept in a library like squads, carried on the team (D122) |
 | — | Ice hockey: the IIHF rink, goals standing on the ice with play behind them, six a side (D123) |
+| — | The viewer in the app's style, a landing page that loads visible, empty lists with a next step (D124) |
 
 ## Open
 

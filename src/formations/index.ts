@@ -924,6 +924,37 @@ export function shapeOf(doc: BoardDoc, teamIndex: 0 | 1, sceneIndex: number, nam
   return { name: name.trim().slice(0, 40), slots, ...(units.length ? { units: units.slice(0, 20) } : {}) };
 }
 
+/**
+ * The links a side's formation seeds — or its drawn shape's units (D122) — for the players it
+ * has now, without moving anybody: what a side whose links were all deleted can have back.
+ * Slots pair by ORDER, as everywhere, since a renumbered player keeps his id. A side laid out
+ * from no formation at all (a video import) has nothing to seed.
+ */
+export function seededLinks(doc: BoardDoc, teamIndex: 0 | 1, lineName: LineNamer = englishLine): Link[] {
+  const team = doc.teams[teamIndex];
+  if (!team.formation && !team.shape) return [];
+  const built = buildTeam(
+    {
+      ...(teamIndex === 0 ? HOME : AWAY),
+      id: team.id,
+      name: team.name,
+      color: team.color,
+      textColor: team.textColor,
+      formation: team.formation ?? sidesFor(doc.sport)[teamIndex].formation,
+      ...(team.shape ? { shape: team.shape } : {}),
+      squad: team.players.map((p) => ({ number: p.number, label: p.label })),
+    },
+    doc.pitch,
+    doc.sport,
+    lineName,
+  );
+  const ours = new Map(built.team.players.map((p, k) => [p.id, team.players[k]?.id]));
+  return built.links.flatMap((link) => {
+    const members = link.members.map((id) => ours.get(id));
+    return members.every((id): id is string => id !== undefined) ? [{ ...link, members }] : [];
+  });
+}
+
 /** Which goal a side defends, by index. teams[0] attacks +x throughout. */
 export const directionOf = (teamIndex: number): Direction =>
   teamIndex === 0 ? HOME.direction : AWAY.direction;

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AnimatePresence } from "motion/react";
-import { Download, Pause, Pencil, Play, Presentation, Repeat, X } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { Download, Pencil, Presentation, Repeat, X } from "lucide-react";
 import type { BoardDoc, PitchView } from "@/board/types";
 import { DEFAULT_PITCH_VIEW } from "@/board/types";
 import { BoardCanvas } from "@/components/BoardCanvas";
@@ -15,6 +15,12 @@ import { useI18n } from "@/i18n/context";
 import { LocaleSwitch } from "@/components/LocaleSwitch";
 import { countUsage } from "@/share/usage";
 import { SceneNoteStrip } from "@/components/SceneNote";
+import { CoffeeLink } from "@/components/CoffeeLink";
+import { LogoMark } from "@/components/Logo";
+import { BAR_BUTTON, BAR_DIVIDER, BAR_PRIMARY } from "@/components/ui/bar";
+import { PlayButton } from "@/components/ui/PlayButton";
+import { HOME_PATH } from "@/share/routes";
+import { spring } from "@/lib/motion";
 
 type Props = {
   doc: BoardDoc;
@@ -129,22 +135,27 @@ export function Viewer({ doc, initialView, onFork }: Props) {
   return (
     <div className="flex h-full w-full flex-col bg-ink-900">
       {!present && (
-      <header className="flex shrink-0 items-center gap-3 border-b border-ink-700 bg-ink-800 px-4 py-2.5">
+      <header className="flex shrink-0 items-center gap-3 border-b border-ink-700 bg-ink-800 px-4 py-2">
+        <a href={HOME_PATH} title={t("app.name")} className="shrink-0 rounded-lg">
+          <LogoMark />
+        </a>
+        <span className={BAR_DIVIDER} />
         <div className="min-w-0">
           <h1 className="truncate text-sm font-semibold text-white">{doc.name}</h1>
-          <p className="text-[11px] text-ink-400">
+          <p className="truncate text-[11px] text-ink-400">
             {t("viewer.shared")} · {doc.teams[0].name} v {doc.teams[1].name} ·{" "}
             {tn("viewer.scenes", doc.scenes.length)}
           </p>
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
           <ViewControls view={pitchView} onChange={setPitchView} showHalves={false} />
+          <span className={BAR_DIVIDER} />
           <button
             type="button"
             onClick={() => presentOn(true)}
             title={t("present.enter.title")}
-            className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
+            className={BAR_BUTTON}
           >
             <Presentation size={13} />
             {t("present.enter")}
@@ -153,20 +164,20 @@ export function Viewer({ doc, initialView, onFork }: Props) {
             type="button"
             onClick={() => setExportOpen(true)}
             title={t("viewer.download.title")}
-            className="flex items-center gap-1.5 rounded-md border border-ink-600 bg-ink-900 px-2.5 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white"
+            className={BAR_BUTTON}
           >
             <Download size={13} />
             {t("viewer.download")}
           </button>
-          <LocaleSwitch />
-          <button
-            type="button"
-            onClick={onFork}
-            className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-ink-900 transition hover:brightness-110"
-          >
+          {/* The one thing a recipient is invited to do: take the board and make it theirs. */}
+          <button type="button" onClick={onFork} className={BAR_PRIMARY}>
             <Pencil size={13} />
             {t("viewer.fork")}
           </button>
+          <span className={BAR_DIVIDER} />
+          <LocaleSwitch />
+          <span className={BAR_DIVIDER} />
+          <CoffeeLink />
         </div>
       </header>
       )}
@@ -188,14 +199,11 @@ export function Viewer({ doc, initialView, onFork }: Props) {
       <SceneNoteStrip doc={doc} index={sceneIndex} />
 
       <div className="flex shrink-0 items-center gap-3 border-t border-ink-700 bg-ink-800 px-4 py-3">
-        <button
-          type="button"
-          onClick={() => setPlaying(!playing)}
-          aria-label={t(playing ? "viewer.pause" : "viewer.play")}
-          className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-ink-900 transition hover:brightness-110"
-        >
-          {playing ? <Pause size={15} /> : <Play size={15} />}
-        </button>
+        <PlayButton
+          playing={playing}
+          onToggle={() => setPlaying(!playing)}
+          label={t(playing ? "viewer.pause" : "viewer.play")}
+        />
 
         <button
           type="button"
@@ -224,10 +232,11 @@ export function Viewer({ doc, initialView, onFork }: Props) {
             setTime(Number(e.target.value));
           }}
           aria-label={t("viewer.scrub")}
-          className="min-w-0 flex-1 accent-accent"
+          className="scrubber min-w-0 flex-1"
+          style={{ "--fill": `${total > 0 ? (Math.min(time, total) / total) * 100 : 0}%` } as React.CSSProperties}
         />
 
-        <span className="shrink-0 font-mono text-[11px] text-ink-400">
+        <span className="shrink-0 font-mono text-[11px] tabular-nums text-ink-400">
           {time.toFixed(1)}s / {total.toFixed(1)}s
         </span>
 
@@ -251,13 +260,22 @@ export function Viewer({ doc, initialView, onFork }: Props) {
               key={scene.id}
               type="button"
               onClick={() => goToScene(i)}
+              aria-current={sceneIndex === i ? "true" : undefined}
               className={cn(
-                "shrink-0 rounded-md border px-3 py-1.5 text-left text-xs transition",
-                sceneIndex === i
-                  ? "border-accent text-white"
-                  : "border-ink-600 text-ink-300 hover:border-ink-400 hover:text-white",
+                "relative isolate shrink-0 rounded-lg px-3 py-1.5 text-left text-xs transition",
+                sceneIndex === i ? "text-ink-900" : "text-ink-300 hover:bg-white/[0.06] hover:text-white",
               )}
             >
+              {/* One highlight, sliding from scene to scene as the play moves through them. */}
+              {sceneIndex === i && (
+                <motion.span
+                  layoutId="viewer-scene"
+                  aria-hidden
+                  transition={spring}
+                  className="absolute inset-0 -z-10 rounded-lg bg-accent"
+                />
+              )}
+              <span className="mr-1.5 font-mono text-[10px] opacity-60">{i + 1}</span>
               {scene.name}
             </button>
           ))}

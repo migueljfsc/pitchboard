@@ -1,10 +1,9 @@
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   ArrowRight,
   Box,
   Clapperboard,
-  Coffee,
   FileJson,
   Film,
   Link2,
@@ -27,9 +26,10 @@ import { SportIcon } from "@/components/SportMenu";
 import { BAR_BUTTON, BAR_DIVIDER, BAR_PRIMARY } from "@/components/ui/bar";
 import { useI18n } from "@/i18n/context";
 import { useAccount } from "@/lib/useAccount";
-import { DURATION, EASE_OUT, enter } from "@/lib/motion";
+import { DURATION, EASE_OUT } from "@/lib/motion";
 import { APP_PATH, HOME_PATH, cameHome } from "@/share/routes";
 import { cn } from "@/lib/utils";
+import { CoffeeLink } from "@/components/CoffeeLink";
 
 const TILTED: PitchView = { half: "full", rotated: true, tilt: true };
 /** The attacking half, turned to lie wide, so a card shows the press rather than a strip of it. */
@@ -143,40 +143,32 @@ function Hero({ doc }: { doc: BoardDoc }) {
   return (
     <section className="relative mx-auto grid max-w-6xl items-center gap-12 px-4 pb-20 pt-14 sm:px-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:pt-24">
       <div>
-        <motion.span
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0, transition: enter }}
-          className="inline-flex items-center gap-2 rounded-full border border-accent/25 bg-accent/[0.07] px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-accent"
-        >
+        <span className="inline-flex items-center gap-2 rounded-full border border-accent/25 bg-accent/[0.07] px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-accent animate-fade-up">
           <span className="relative flex size-1.5">
             <span className="absolute inline-flex size-full animate-ping rounded-full bg-accent opacity-60" />
             <span className="relative inline-flex size-1.5 rounded-full bg-accent" />
           </span>
           {t("landing.hero.eyebrow")}
-        </motion.span>
+        </span>
 
+        {/* Drawn at once, not animated in: it is what the page is measured by as it loads, and
+            what a crawler or a tab opened in the background has to be able to read. */}
         <h1 className="mt-6 text-4xl font-semibold leading-[1.08] tracking-tight text-white sm:text-5xl">
-          <Words text={t("landing.hero.title")} delay={0.08} />
-          <Words
-            text={t("landing.hero.title2")}
-            delay={0.3}
-            wordClassName="bg-gradient-to-r from-accent via-amber-200 to-accent bg-clip-text text-transparent"
-          />
+          {/* Each line balanced on its own, so a wrapped one splits evenly. */}
+          <span className="block text-balance">{t("landing.hero.title")}</span>
+          <span className="block text-balance bg-gradient-to-r from-accent via-amber-200 to-accent bg-clip-text text-transparent">
+            {t("landing.hero.title2")}
+          </span>
         </h1>
 
-        <motion.p
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0, transition: { ...enter, duration: DURATION.slow, delay: 0.5 } }}
-          className="mt-6 max-w-xl text-base leading-relaxed text-ink-300 sm:text-lg"
+        <p
+          className="mt-6 max-w-xl animate-fade-up text-base leading-relaxed text-ink-300 sm:text-lg"
+          style={{ animationDelay: "120ms" }}
         >
           {t("landing.hero.lead")}
-        </motion.p>
+        </p>
 
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0, transition: { ...enter, duration: DURATION.slow, delay: 0.62 } }}
-          className="mt-8 flex flex-wrap items-center gap-3"
-        >
+        <div className="mt-8 flex animate-fade-up flex-wrap items-center gap-3" style={{ animationDelay: "200ms" }}>
           <a href={APP_PATH} className={cn(BAR_PRIMARY, "group px-5 py-3 text-sm")}>
             {t("landing.hero.cta")}
             <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
@@ -185,14 +177,10 @@ function Hero({ doc }: { doc: BoardDoc }) {
             <Play size={14} />
             {t("landing.hero.more")}
           </a>
-        </motion.div>
+        </div>
       </div>
 
-      <motion.figure
-        initial={{ opacity: 0, y: 24, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1, transition: { duration: 0.7, ease: EASE_OUT, delay: 0.2 } }}
-        className="relative"
-      >
+      <figure className="relative animate-fade-up" style={{ animationDelay: "160ms" }}>
         <div
           aria-hidden
           className="absolute -inset-10 -z-10 rounded-[3rem] bg-[radial-gradient(closest-side,rgb(251_191_36/0.18),transparent)] blur-2xl"
@@ -213,39 +201,8 @@ function Hero({ doc }: { doc: BoardDoc }) {
           />
         </div>
         <figcaption className="mt-3 text-center text-xs text-ink-500">{t("landing.hero.caption")}</figcaption>
-      </motion.figure>
+      </figure>
     </section>
-  );
-}
-
-/** A line of the headline, a word at a time. */
-function Words({ text, delay, wordClassName }: { text: string; delay: number; wordClassName?: string }) {
-  return (
-    // A line of its own, balanced on its own: a wrapped headline splits evenly rather than
-    // leaving its last word alone.
-    <span className="block text-balance">
-      {/* The space sits between the words rather than inside one, so a line that wraps
-          starts flush instead of with the space it broke on. */}
-      {text.split(" ").map((word, i) => (
-        <Fragment key={`${word}-${i}`}>
-          {i > 0 && " "}
-          <motion.span
-            initial={{ opacity: 0, y: "0.35em", filter: "blur(6px)" }}
-            animate={{
-              opacity: 1,
-              y: 0,
-              filter: "blur(0px)",
-              transition: { duration: 0.5, ease: EASE_OUT, delay: delay + i * 0.07 },
-            }}
-            // Any gradient is painted by the word itself: clipped from the line instead, Chrome
-            // can leave a word that is still animating unpainted until something redraws it.
-            className={cn("inline-block", wordClassName)}
-          >
-            {word}
-          </motion.span>
-        </Fragment>
-      ))}
-    </span>
   );
 }
 
@@ -279,7 +236,6 @@ function Features({ boards }: { boards: ReturnType<typeof useBoards> }) {
         </Card>
 
         <Card
-          delay={0.08}
           icon={<Box size={16} />}
           title={t("landing.feature.tilt.title")}
           body={t("landing.feature.tilt.body")}
@@ -302,42 +258,31 @@ function Features({ boards }: { boards: ReturnType<typeof useBoards> }) {
         </Card>
 
         <Card
-          delay={0.08}
           icon={<Film size={16} />}
           title={t("landing.feature.export.title")}
           body={t("landing.feature.export.body")}
         >
           <div className="flex h-full min-h-32 items-center justify-center gap-3">
-            {["MP4", "GIF", "PNG"].map((format, i) => (
-              <motion.span
+            {["MP4", "GIF", "PNG"].map((format) => (
+              <span
                 key={format}
-                initial={{ opacity: 0, y: 12 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: DURATION.slow, ease: EASE_OUT, delay: 0.15 + i * 0.1 }}
-                whileHover={{ y: -4 }}
-                className="rounded-xl border border-ink-600 bg-ink-900 px-4 py-3 font-mono text-sm font-semibold text-white shadow-lg shadow-black/30"
+                className="rounded-xl border border-ink-600 bg-ink-900 px-4 py-3 font-mono text-sm font-semibold text-white shadow-lg shadow-black/30 transition-transform hover:-translate-y-1"
               >
                 {format}
-              </motion.span>
+              </span>
             ))}
           </div>
         </Card>
 
         <Card
-          delay={0.16}
           icon={<Share2 size={16} />}
           title={t("landing.feature.share.title")}
           body={t("landing.feature.share.body")}
         >
           <ul className="flex flex-col gap-2">
-            {SHARE_WAYS.map(({ icon: Icon, key, sample }, i) => (
-              <motion.li
+            {SHARE_WAYS.map(({ icon: Icon, key, sample }) => (
+              <li
                 key={key}
-                initial={{ opacity: 0, x: -8 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: DURATION.slow, ease: EASE_OUT, delay: 0.1 + i * 0.08 }}
                 className="flex items-center gap-2.5 rounded-lg border border-ink-600 bg-ink-900 px-3 py-2 transition-colors hover:border-accent/40"
               >
                 <Icon size={14} className="shrink-0 text-accent" />
@@ -348,14 +293,13 @@ function Features({ boards }: { boards: ReturnType<typeof useBoards> }) {
                   </span>
                   <span className="block truncate text-[11px] text-ink-400">{t(`${key}.hint`)}</span>
                 </span>
-              </motion.li>
+              </li>
             ))}
           </ul>
         </Card>
 
         <Card
           className="md:col-span-3"
-          delay={0.08}
           icon={<Clapperboard size={16} />}
           title={t("landing.feature.video.title")}
           body={t("landing.feature.video.body")}
@@ -371,18 +315,15 @@ function Card({
   body,
   children,
   className,
-  delay = 0,
 }: {
   icon: ReactNode;
   title: string;
   body: string;
   children?: ReactNode;
   className?: string;
-  delay?: number;
 }) {
   return (
     <Reveal
-      delay={delay}
       className={cn(
         "group relative flex flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-b from-ink-800/80 to-ink-800/30 p-5 transition-colors duration-300 hover:border-accent/25",
         className,
@@ -474,16 +415,9 @@ function HowItWorks() {
         <h2 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">{t("landing.how.title")}</h2>
       </Reveal>
       <ol className="relative mt-14 grid gap-10 md:grid-cols-3 md:gap-6">
-        <motion.span
-          aria-hidden
-          initial={{ scaleX: 0 }}
-          whileInView={{ scaleX: 1 }}
-          viewport={{ once: true, amount: 0.6 }}
-          transition={{ duration: 1.1, ease: EASE_OUT, delay: 0.2 }}
-          className="absolute left-[16.7%] right-[16.7%] top-6 hidden h-px origin-left bg-gradient-to-r from-accent/60 via-accent/30 to-accent/60 md:block"
-        />
+        <span aria-hidden className="absolute left-[16.7%] right-[16.7%] top-6 hidden h-px bg-gradient-to-r from-accent/60 via-accent/30 to-accent/60 md:block" />
         {steps.map((step, i) => (
-          <Reveal key={step.title} delay={0.12 * i} className="relative flex flex-col items-center text-center">
+          <Reveal key={step.title} className="relative flex flex-col items-center text-center">
             <span className="relative flex size-12 items-center justify-center rounded-2xl border border-accent/30 bg-ink-800 text-accent shadow-[0_0_24px_-6px_rgb(251_191_36/0.5)]">
               {step.icon}
               <span className="absolute -right-2 -top-2 flex size-5 items-center justify-center rounded-full bg-accent font-mono text-[10px] font-bold text-ink-900">
@@ -546,36 +480,13 @@ function Footer() {
 
 // ------------------------------------------------------------------ pieces
 
-/** Buy Me a Coffee, as the editor's bar has it: a plain link, never their embed script. */
-function CoffeeLink() {
-  const { t } = useI18n();
-  return (
-    <a
-      href="https://buymeacoffee.com/migueljfsc"
-      target="_blank"
-      rel="noopener noreferrer"
-      title={t("app.coffee")}
-      aria-label={t("app.coffee")}
-      className="flex size-7 shrink-0 items-center justify-center rounded-md bg-accent text-ink-900 transition hover:brightness-110"
-    >
-      <Coffee size={14} />
-    </a>
-  );
-}
-
-/** Rises into place the first time it scrolls into view. */
-function Reveal({ children, className, delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 18 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.25 }}
-      transition={{ duration: 0.6, ease: EASE_OUT, delay }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  );
+/**
+ * Rises into place as it scrolls into view, in a browser that can tie an animation to scrolling
+ * (`.reveal`, CSS only). Anywhere else — and for a crawler, a reader who asked for less motion,
+ * or a tab opened in the background — it is simply there.
+ */
+function Reveal({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cn("reveal", className)}>{children}</div>;
 }
 
 /** The page's light: two soft glows and the faint lines of a pitch, fixed behind everything. */

@@ -313,8 +313,9 @@ Each is one line of what breaks; the reasoning is in the cited decision.
   parameter `wantsApp` knows, or the landing page swallows it.
 - **The logo links to `HOME_PATH`, never a bare `/`** — `/` sends a signed-in visitor on to
   the editor, so a logo pointing there never reaches the landing page.
-- **A gradient on animated words is painted per word.** Clipped from their parent, Chrome can
-  leave a word that is still animating unpainted until something forces a repaint.
+- **Nothing on the landing page starts invisible and waits for a script** (D124). The headline is
+  drawn at once; the rest fades up in CSS or reveals on a scroll timeline (`.reveal`), and is just
+  there where neither runs — a crawler, a background tab, reduced motion.
 
 ### Export (D6)
 - **Quantise the GIF palette once**, from sampled frames; **delays are differences of rounded

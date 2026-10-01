@@ -714,6 +714,26 @@ zone. Three plays: a breakout from behind the net, a 1-2-2 forecheck, and an off
 face-off won back to the point. The ice is a floor, taking the board's shade and nothing else, and
 its line colour is the goal posts' red, which a standing goal is framed in.
 
+## D124 — The shared board looks like the app, and the front door loads at once
+**The viewer** — what a coach's link opens — had missed D118's pass. It now wears the same bar:
+the mark back to the landing page, quiet buttons and one filled one ("copy to edit", the one thing
+a recipient is invited to do), the language and the coffee last, as on every page; the animated
+play button and the amber scrubber are the editor's own (`ui/PlayButton`, `.scrubber`), and the
+scene buttons share one highlight that slides as the play moves. The splash and error screens
+take the same button and the mark.
+
+**The landing page no longer starts invisible.** Its headline faded in word by word through a
+script, so the page's largest text was measured late, and in a background tab — or to a crawler —
+it waited at zero opacity for frames that did not come. The headline is drawn at once; the
+eyebrow, the lead, the buttons and the board fade up in CSS, which finishes on its own clock; the
+sections below reveal on a scroll timeline where the browser has one and are simply there where it
+does not. The showcase boards draw at thirty frames a second and stop outright while the page is
+hidden, painting a still instead.
+
+**An empty list says what to do next.** An empty folder of the board's own sport offers to save the
+board there (when it is not saved yet); an empty squad library is a button to save this side; a
+side with no links left can have its formation's lines back (`seededLinks`, pairing by order).
+
 ---
 
 ## The importer (`src/import/`)

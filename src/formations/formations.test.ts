@@ -13,6 +13,7 @@ import {
   fromNotation,
   getFormation,
   resetPositions,
+  seededLinks,
   setTeamShape,
   shapeOf,
 } from ".";
@@ -543,5 +544,26 @@ describe("a hand-drawn shape (D122)", () => {
     const doc = changeFormation(createBoardDoc(), 0, shapeOf(drawn(), 0, 0, "Wide"));
     doc.teams[0].shape!.units = [{ name: "Bad", style: "chain", slots: [0, 40] }];
     expect(boardDocSchema.safeParse(doc).success).toBe(false);
+  });
+});
+
+describe("a side's links given back", () => {
+  it("are the formation's lines, for the players the side has, after all were deleted", () => {
+    const fresh = createBoardDoc();
+    const homeLinks = fresh.links.filter((l) => l.members.every((m) => m.startsWith("home-")));
+    const cleared = { ...fresh, links: fresh.links.filter((l) => !homeLinks.includes(l)) };
+    expect(seededLinks(cleared, 0)).toEqual(homeLinks);
+  });
+
+  it("follow a renumbered player, since slots pair by order", () => {
+    const doc = createBoardDoc();
+    doc.teams[0].players[1] = { ...doc.teams[0].players[1], number: 22 };
+    const kept = doc.teams[0].players[1].id;
+    expect(seededLinks(doc, 0).some((l) => l.members.includes(kept))).toBe(true);
+  });
+
+  it("are a drawn shape's units for a side standing in one", () => {
+    const doc = changeFormation(createBoardDoc(), 0, shapeOf(createBoardDoc(), 0, 0, "Wide"));
+    expect(seededLinks(doc, 0).map((l) => l.name)).toEqual(doc.teams[0].shape!.units!.map((u) => u.name));
   });
 });

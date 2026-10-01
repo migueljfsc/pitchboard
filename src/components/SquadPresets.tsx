@@ -112,6 +112,17 @@ export function SquadPresets({
             <X size={13} />
           </LibraryButton>
         </div>
+      ) : presets.length === 0 && writable ? (
+        // Nothing saved yet: the empty picker would only say so, so it offers the one thing
+        // there is to do instead.
+        <button
+          type="button"
+          onClick={startSaving}
+          className="flex items-center justify-center gap-1.5 rounded-md border border-dashed border-ink-600 px-2 py-1.5 text-xs text-ink-300 transition hover:border-accent hover:text-white"
+        >
+          <BookmarkPlus size={13} />
+          {t("preset.saveFirst", { team: team.name })}
+        </button>
       ) : (
         <div className="flex gap-1">
           <select

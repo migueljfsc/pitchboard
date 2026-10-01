@@ -14,6 +14,7 @@ import {
   Sun,
   Trash2,
   X,
+  RotateCcw,
 } from "lucide-react";
 import type { BoardDoc, Link, LinkArrows, LinkLine, LinkStyle } from "@/board/types";
 import {
@@ -53,6 +54,11 @@ type Props = {
   sceneIndex: number;
   /** What a side's tab is called — the team's name, as the formations tabs have it. */
   teamLabel: (side: 0 | 1) => string;
+  /**
+   * The lines a side's formation seeds, for a side with none left — what the empty tab offers
+   * to put back. Empty where there is nothing to offer.
+   */
+  seeded: (side: 0 | 1) => Link[];
 };
 
 type Side = 0 | 1 | "both";
@@ -100,6 +106,7 @@ export function LinkPanel({
   onExpandedChange,
   sceneIndex,
   teamLabel,
+  seeded,
 }: Props) {
   // Which row is in the air, and which GAP it would drop into — 0 is above the
   // first row, n below the last. A gap says where the row lands; highlighting a
@@ -197,6 +204,17 @@ export function LinkPanel({
       <div className="flex flex-col gap-1.5">
         {shown.length === 0 && (
           <p className="text-[11px] leading-relaxed text-ink-500">{t("links.noneOnSide")}</p>
+        )}
+        {/* A side with nothing linked can have its formation's lines back, in one step. */}
+        {shown.length === 0 && tab !== "both" && seeded(tab).length > 0 && (
+          <button
+            type="button"
+            onClick={() => onDocChange({ ...doc, links: [...doc.links, ...seeded(tab)] })}
+            className="flex items-center justify-center gap-1.5 self-start rounded-md border border-dashed border-ink-600 px-2.5 py-1.5 text-xs text-ink-300 transition hover:border-accent hover:text-white"
+          >
+            <RotateCcw size={12} />
+            {i18n.tn("links.restore", seeded(tab).length, { n: seeded(tab).length })}
+          </button>
         )}
         {shown.map((i) => doc.links[i]).map((link, row) => (
           <LinkRow

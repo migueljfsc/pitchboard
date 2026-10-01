@@ -60,7 +60,6 @@ import {
   Undo2,
   Upload,
   Users,
-  Coffee,
 } from "lucide-react";
 import { Inspector } from "@/components/Inspector";
 import { DrawingsPanel } from "@/components/DrawingsPanel";
@@ -166,11 +165,13 @@ import {
   type Direction,
   setTeamShape,
   shapeOf,
+  seededLinks,
 } from "@/formations";
 import { APP_PATH, HOME_PATH } from "@/share/routes";
 import { countUsage } from "@/share/usage";
 import { useFormations } from "@/lib/useFormations";
 import { customFormation, formationsOf, sameName, type CustomFormation } from "@/share/formationLibrary";
+import { CoffeeLink } from "@/components/CoffeeLink";
 
 /** What a confirmation is currently guarding. */
 type Pending =
@@ -1951,6 +1952,7 @@ export function Editor({ initialDoc }: Props = {}) {
             <BoardsLibrary
               cloud={cloud}
               sport={sportOf(doc).id}
+              boardName={doc.name}
               open={libraryOpen}
               onOpenChange={setLibraryOpen}
             />
@@ -1989,16 +1991,7 @@ export function Editor({ initialDoc }: Props = {}) {
               accent rather than Buy Me a Coffee's embed script — a script tag in React never
               runs, and theirs would send every visitor's IP to a third party. */}
           <span className={BAR_DIVIDER} />
-          <a
-            href="https://buymeacoffee.com/migueljfsc"
-            target="_blank"
-            rel="noopener noreferrer"
-            title={t("app.coffee")}
-            aria-label={t("app.coffee")}
-            className="flex size-7 shrink-0 items-center justify-center rounded-md bg-accent text-ink-900 transition hover:brightness-110"
-          >
-            <Coffee size={14} />
-          </a>
+          <CoffeeLink />
         </div>
       </header>
       )}
@@ -2160,6 +2153,7 @@ export function Editor({ initialDoc }: Props = {}) {
               onExpandedChange={setExpandedLink}
               sceneIndex={activeScene}
               teamLabel={(i) => doc.teams[i].name || formationName(i)}
+              seeded={(i) => seededLinks(doc, i, lineNamer(t))}
             />
           </Section>
 
