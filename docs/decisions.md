@@ -592,7 +592,9 @@ is in Formations, the File menu and the board's right-click menu.
 **Selection is one card.** Who it is (token, name, number), one-tap actions (ball, glow, path,
 arrow), the run into this scene folded behind a summary, and what applies in every scene (keeper,
 side, removal) under a title saying so. How far a drag carries (D41) is a menu in the card's header,
-always in view. With nothing selected the card is the scene (D126).
+always in view. Nothing selected is one line. Each part of the card that folds is one box, its
+header and body inside one border, so what folds reads as inside what it folds under; the run and
+"in every scene" start folded, their summaries saying enough to decide whether to open them.
 
 **A link picked on the board is edited in the card** (`LinkCard`, the list's `LinkEditor`). A pick
 selects the members first, then names the link; the card shows it while the selection is exactly
@@ -630,9 +632,13 @@ the surround is the chrome; in 3D
 the depth shading goes on `source-atop` and darkens only painted pixels — identical on an opaque
 export frame, and no dark box on a transparent one.
 
-**With nothing selected, the Selection card is the scene** (`ScenePanel`): name, note, timing,
-spotlight, the ball's part in the travel in, and moving, copying or deleting it. Editing the scene
-means deselecting first, which is what "nothing selected" says.
+**The scene's own fields are at the bottom, in reach whatever is selected.** Its name and note sit
+beside the track and previews (`SceneIdentity`), so the scene in view is next to what it is called
+— the note a fixed box that scrolls, since one sized to its text widened the column and pushed the
+previews away; timing,
+spotlight, the ball's part in the travel in, and moving, copying or deleting it are one row under
+them (`ScenePanel`), which takes the name and note back while the previews are folded. Putting them in the Selection card when nothing was selected was tried and
+reverted: having to click away to edit a scene was confusing.
 
 **The timeline is a transport and a scene track.** One block per scene, as long as it lasts (travel
 striped, hold solid), laid under the scrubber so its edges meet the thumb: click to select, drag

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Plus, Waves, Gauge, Images, Info, Repeat } from "lucide-react";
 import type { BoardDoc, PitchView } from "@/board/types";
 import { SceneThumb, THUMB_WIDTH } from "@/components/SceneThumb";
+import { SceneIdentity, ScenePanel } from "@/components/ScenePanel";
 import { loadScenePreviews, saveScenePreviews } from "@/share/scenePreviews";
 import { addSceneAfter, ballTravelBetween, moveScene, setSceneTiming, totalSeconds } from "@/board/scenes";
 import { DEFAULT_END_HOLD_MS, DEFAULT_FLOW_SPEED, resolveAt, runsThrough, sceneTimings } from "@/board/timeline";
@@ -28,13 +29,14 @@ type Props = {
   /** Playback speed, 1 for real time. Editor-only; an export always renders at 1×. */
   speed: number;
   onSpeedChange: (speed: number) => void;
+  /** Deleting a scene goes through the editor, which can offer to undo it. */
+  onDeleteScene: (index: number) => void;
 };
 
 /**
  * Playback above, the scenes below it as one track: a block per scene, as long as the scene
- * lasts, laid under the scrubber so a block's edge sits under the thumb at that moment — and,
- * unless folded away, a preview of each scene under that. The scene's own fields live in the
- * Selection card (`ScenePanel`), not here.
+ * lasts, laid under the scrubber so a block's edge sits under the thumb at that moment; unless
+ * folded away, a preview of each scene under that; and the selected scene's own fields last.
  */
 export function Timeline({
   doc,
@@ -50,6 +52,7 @@ export function Timeline({
   onLoopChange,
   speed,
   onSpeedChange,
+  onDeleteScene,
 }: Props) {
   const { t } = useI18n();
   const total = totalSeconds(doc);
@@ -153,7 +156,9 @@ export function Timeline({
         </span>
       </div>
 
-      <span aria-hidden />
+      {/* With the previews shown, the scene's name and note fill the column beside the track
+          and the previews; folded, that cell is empty and they join the row below. */}
+      {thumbs ? <SceneIdentity doc={doc} activeScene={activeScene} onDocChange={onDocChange} /> : <span aria-hidden />}
 
       <SceneTrack
         doc={doc}
@@ -170,7 +175,6 @@ export function Timeline({
 
       {thumbs && (
         <>
-          <span aria-hidden />
           <ScenePreviews
             doc={doc}
             view={view}
@@ -182,6 +186,17 @@ export function Timeline({
           <span aria-hidden />
         </>
       )}
+
+      <div className="col-span-3 border-t border-ink-700 pt-2.5">
+        <ScenePanel
+          doc={doc}
+          activeScene={activeScene}
+          withIdentity={!thumbs}
+          onDocChange={onDocChange}
+          onActiveSceneChange={onActiveSceneChange}
+          onDeleteScene={onDeleteScene}
+        />
+      </div>
     </div>
   );
 }

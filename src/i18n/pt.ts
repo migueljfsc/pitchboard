@@ -471,7 +471,6 @@ export const pt: Dictionary = {
   "timeline.moveLater": "Mover a cena para a frente",
   "timeline.duplicate": "Duplicar a cena",
   "timeline.deleteScene": "Apagar a cena",
-  "scene.panel.hint": "Clique num jogador, na bola ou numa ligação no quadro para os editar.",
 
   // ------------------------------------------------------------- inspector
   "inspect.empty.lead": "Clique num jogador, na bola ou numa ligação no quadro.",

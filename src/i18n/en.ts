@@ -481,7 +481,6 @@ export const en = {
   "timeline.moveLater": "Move scene later",
   "timeline.duplicate": "Duplicate scene",
   "timeline.deleteScene": "Delete scene",
-  "scene.panel.hint": "Click a player, the ball or a link on the board to edit it instead.",
 
   // ------------------------------------------------------------- inspector
   "inspect.empty.lead": "Click a player, the ball or a link on the board.",

@@ -544,16 +544,20 @@ function Quick({
   );
 }
 
-/** A titled part of the card; `summary` sits beside the title and the body folds behind it. */
+/**
+ * A titled part of the card; `summary` sits beside the title and the body folds behind it,
+ * folded to start with.
+ * Header and body share one border, so what folds is visibly inside what it folds under.
+ */
 function Section({ title, summary, children }: { title: string; summary?: string | null; children: React.ReactNode }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   return (
-    <section className="flex flex-col gap-2.5">
+    <section className="overflow-hidden rounded-md border border-ink-700">
       <button
         type="button"
         onClick={() => setOpen(!open)}
         aria-expanded={open}
-        className="flex items-center gap-2 rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-left transition hover:border-ink-600 hover:bg-ink-700/60"
+        className="flex w-full items-center gap-2 bg-ink-800 px-2 py-1.5 text-left transition hover:bg-ink-700/60"
       >
         <span className="flex size-5 shrink-0 items-center justify-center rounded bg-ink-700 text-ink-200">
           <ChevronRight size={12} className={cn("transition-transform", open && "rotate-90")} />
@@ -563,7 +567,7 @@ function Section({ title, summary, children }: { title: string; summary?: string
           {summary && <span className="truncate font-mono text-[10px] text-ink-400">{summary}</span>}
         </span>
       </button>
-      {open && <div className="flex flex-col gap-2.5">{children}</div>}
+      {open && <div className="flex flex-col gap-2.5 border-t border-ink-700 p-2.5">{children}</div>}
     </section>
   );
 }
@@ -748,12 +752,12 @@ function Disclosure({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="flex flex-col gap-2">
+    <div className="overflow-hidden rounded border border-ink-600">
       <button
         type="button"
         onClick={() => setOpen(!open)}
         aria-expanded={open}
-        className="flex items-center gap-1.5 rounded border border-ink-600 px-2 py-1.5 text-left text-[11px] transition hover:border-ink-400"
+        className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-[11px] transition hover:bg-white/[0.04]"
       >
         <ChevronRight
           size={12}
@@ -764,7 +768,7 @@ function Disclosure({
           {summary}
         </span>
       </button>
-      {open && <div className="flex flex-col gap-2.5 pl-1">{children}</div>}
+      {open && <div className="flex flex-col gap-2.5 border-t border-ink-600 p-2">{children}</div>}
     </div>
   );
 }

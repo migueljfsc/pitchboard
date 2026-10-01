@@ -36,7 +36,7 @@ touches it, and every phase ends at something you can look at.
 | — | Anonymous usage counters, daily sweep, lazy pages, account zip (D119, D120) |
 | — | Scene notes (D121); formations drawn by hand (D122) |
 | — | Left sidebar redesign: one Selection card, view bar on the board, squad list (D125) |
-| — | Visual identity and editor layout: dark grass, chalk, Archivo; scene track and Scene card (D126) |
+| — | Visual identity and editor layout: dark grass, chalk, Archivo; a scene track sized by time (D126) |
 
 ## Open
 

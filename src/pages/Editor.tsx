@@ -68,7 +68,6 @@ import { ShortcutsDialog } from "@/components/ShortcutsDialog";
 import { ShareDialog } from "@/components/ShareDialog";
 import { ImportDialog, type ImportKind } from "@/components/ImportDialog";
 import { LinkCard, LinkPanel } from "@/components/LinkPanel";
-import { ScenePanel } from "@/components/ScenePanel";
 import { DrawPanel, DrawToolStrip } from "@/components/DrawPanel";
 import { SceneThumb } from "@/components/SceneThumb";
 import { SpeedButton, Timeline } from "@/components/Timeline";
@@ -2169,14 +2168,6 @@ export function Editor({ initialDoc }: Props = {}) {
                   sceneIndex={activeScene}
                   onPlayers={() => setCardLink(null)}
                 />
-              ) : visible.size === 0 ? (
-                <ScenePanel
-                  doc={doc}
-                  activeScene={activeScene}
-                  onDocChange={setDoc}
-                  onActiveSceneChange={selectScene}
-                  onDeleteScene={removeScene}
-                />
               ) : (
           <Inspector
                 doc={doc}
@@ -2473,6 +2464,7 @@ export function Editor({ initialDoc }: Props = {}) {
               onLoopChange={setLoop}
               speed={speed}
               onSpeedChange={setSpeed}
+              onDeleteScene={removeScene}
             />
           )}
         </main>
