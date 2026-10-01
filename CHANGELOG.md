@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.86.0 (2026-10-01)
+
+### Feat
+
+- **ui**: viewer in the app's style, a landing page that loads visible, empty states with a next step
+
 ## v0.85.0 (2026-10-01)
 
 ### Feat
