@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.90.0 (2026-10-01)
+
+### Feat
+
+- **ui**: the mark as a green court on a chalk tile, in the tab and the app
+
 ## v0.89.0 (2026-10-01)
 
 ### Feat
