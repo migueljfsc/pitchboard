@@ -48,6 +48,9 @@ import {
 } from "./lib/presets";
 import { deleteAccount } from "./lib/account";
 import { adminDeleteUser, adminStats, adminUser, isAdmin } from "./lib/admin";
+import { countUsage } from "./lib/usage";
+import { createFormation, deleteFormation, listFormations, saveFormation } from "./lib/formations";
+import { sweep } from "./lib/cleanup";
 import { fail, json, secured } from "./lib/http";
 import { publishBoard, readShare, sharePage, unpublishBoard } from "./lib/shares";
 import { SLUG_LENGTH } from "./lib/limits";
@@ -80,6 +83,11 @@ function backToApp(origin: string, error?: string): Response {
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     return secured(await app.fetch(request, env, ctx));
+  },
+
+  /** The daily sweep of expired rows (`triggers.crons` in wrangler.jsonc). */
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(sweep(env, Math.floor(Date.now() / 1000)));
   },
 };
 
@@ -124,6 +132,10 @@ const app = {
         await destroySession(env, request);
         return json({ ok: true }, 200, { "set-cookie": clearedSessionCookie() });
       }
+
+      // Anonymous usage counters (D119): no session, a fixed list of events, capped rows.
+      case "POST /api/usage":
+        return countUsage(env, request, now);
 
       // Email and password (D109). Each answers JSON and sets the session cookie itself.
       case "POST /api/auth/register":
@@ -286,6 +298,10 @@ const ROUTES: Array<{ method: string; pattern: RegExp; handle: (ctx: Ctx, ...p: 
   { method: "POST", pattern: new RegExp(`^/api/presets$`), handle: createPreset },
   { method: "PUT", pattern: new RegExp(`^/api/presets/${ID}$`), handle: savePreset },
   { method: "DELETE", pattern: new RegExp(`^/api/presets/${ID}$`), handle: deletePreset },
+  { method: "GET", pattern: new RegExp(`^/api/formations$`), handle: listFormations },
+  { method: "POST", pattern: new RegExp(`^/api/formations$`), handle: createFormation },
+  { method: "PUT", pattern: new RegExp(`^/api/formations/${ID}$`), handle: saveFormation },
+  { method: "DELETE", pattern: new RegExp(`^/api/formations/${ID}$`), handle: deleteFormation },
 ];
 
 async function dispatch(env: Env, request: Request, url: URL, now: number): Promise<Response> {

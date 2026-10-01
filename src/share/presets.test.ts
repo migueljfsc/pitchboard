@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AWAY, createBoardDoc } from "@/formations";
+import { AWAY, changeFormation, createBoardDoc, shapeOf } from "@/formations";
 import { addPlayer, setPlayerLabel, setPlayerNumber } from "@/board/players";
 import { createLink } from "@/board/links";
 import { addSceneAfter } from "@/board/scenes";
@@ -21,6 +21,7 @@ import {
   replaceable,
   savePresets,
   serialisePreset,
+  shapeName,
   updatePreset,
   type PresetLibrary,
 } from "./presets";
@@ -389,5 +390,30 @@ describe("clearPresets", () => {
     clearPresets(store);
     expect(store.getItem(PRESETS_KEY)).toBeNull();
     expect(loadPresets(store)).toEqual([]);
+  });
+});
+
+describe("a squad in a hand-drawn shape (D122)", () => {
+  it("keeps its shape when saved, and brings it back when applied", () => {
+    const drawn = createBoardDoc();
+    drawn.scenes[0].positions["home-7"] = { x: 70, y: 6 };
+    const doc = changeFormation(createBoardDoc(), 0, shapeOf(drawn, 0, 0, "Wide"));
+    const preset = presetFrom(doc, 0, [], "Our XI");
+    expect(preset.shape?.name).toBe("Wide");
+    expect(preset.formation).toBeUndefined();
+
+    const outcome = applyPreset(createBoardDoc(), 0, preset);
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.doc.teams[0].shape?.name).toBe("Wide");
+    expect(outcome.doc.scenes[0].positions["home-7"].x).toBeCloseTo(70, 2);
+  });
+
+  it("is told apart from the same name in another shape", () => {
+    const drawn = createBoardDoc();
+    const shaped = presetFrom(changeFormation(createBoardDoc(), 0, shapeOf(drawn, 0, 0, "Wide")), 0, [], "Arsenal");
+    const plain = { ...presetFrom(createBoardDoc(), 0, [], "Arsenal"), id: "squad-9" };
+    expect(replaceable([plain], "Arsenal", shapeName(shaped))).toBeNull();
+    expect(replaceable([shaped], "Arsenal", shapeName(shaped))?.id).toBe(shaped.id);
   });
 });

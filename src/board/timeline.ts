@@ -521,20 +521,68 @@ function facingOf(entityId: string, doc: BoardDoc): Vec2 {
   return { x: home ? 1 : -1, y: 0 };
 }
 
+/**
+ * The way `entityId` was going at the end of his most recent run into scene `index` or
+ * earlier — the curve's own end where the run was drawn bent — or null if he has not moved.
+ *
+ * A standing carrier has no direction of his own. Keeping the last one he had means the ball
+ * stays where it was when he pulled up, instead of snapping round to his team's attacking
+ * direction the instant he stops (BUG-2).
+ */
+function lastHeading(entityId: string, doc: BoardDoc, index: number): Vec2 | null {
+  for (let k = Math.min(index, doc.scenes.length - 1); k >= 1; k--) {
+    const from = doc.scenes[k - 1].positions[entityId];
+    const to = doc.scenes[k].positions[entityId];
+    if (!from || !to) continue;
+    if (Math.hypot(to.x - from.x, to.y - from.y) < 1e-6) continue;
+    const c2 = doc.scenes[k].paths[entityId]?.c2;
+    for (const back of c2 ? [c2, from] : [from]) {
+      const dx = to.x - back.x;
+      const dy = to.y - back.y;
+      const len = Math.hypot(dx, dy);
+      if (len > 1e-6) return { x: dx / len, y: dy / len };
+    }
+  }
+  return null;
+}
+
 /** Where the ball sits when `carrier` is running with it. */
 function gluedTo(carrier: string, r: Resolved, doc: BoardDoc): Vec2 {
   const at = positionAt(carrier, r, doc);
 
   // Point the offset along the direction of travel, sampled a moment ahead. A
   // carrier running through a scene is moving during its hold, so a hold is
-  // sampled too — for anyone standing still the two samples agree and the facing
-  // stands.
-  let dir = facingOf(carrier, doc);
+  // sampled too. Anyone standing still keeps the way he last ran, or, if he never
+  // has, the way his team attacks.
+  let dir: Vec2;
   const ahead = positionAt(carrier, later(r, doc, GLUE_LOOKAHEAD_MS), doc);
   const dx = ahead.x - at.x;
   const dy = ahead.y - at.y;
   const len = Math.hypot(dx, dy);
-  if (len > 1e-6) dir = { x: dx / len, y: dy / len };
+  if (len > 1e-6) {
+    dir = { x: dx / len, y: dy / len };
+    // Setting off, the ball turns from where it pointed while he stood to the way he is
+    // going over his first `glue` metres, instead of snapping round in one frame. A run
+    // through a scene never stood, so a hold is left alone.
+    const start = r.from !== r.to ? r.from.positions[carrier] : undefined;
+    const gone = start ? Math.hypot(at.x - start.x, at.y - start.y) : Infinity;
+    const glue = ballGlue(doc);
+    if (gone < glue) {
+      const stood = lastHeading(carrier, doc, r.index - 1) ?? facingOf(carrier, doc);
+      const w = gone / glue;
+      const bx = stood.x * (1 - w) + dir.x * w;
+      const by = stood.y * (1 - w) + dir.y * w;
+      const blended = Math.hypot(bx, by);
+      // Turning straight round passes through nothing; it takes the new way at once.
+      if (blended > 1e-6) dir = { x: bx / blended, y: by / blended };
+    }
+  } else {
+    // Standing where this scene puts him, his run into it is over; anywhere else he has
+    // not set off yet, and the last run was into an earlier scene.
+    const target = r.to.positions[carrier];
+    const arrived = !!target && Math.hypot(target.x - at.x, target.y - at.y) < 1e-6;
+    dir = lastHeading(carrier, doc, arrived ? r.index : r.index - 1) ?? facingOf(carrier, doc);
+  }
 
   const glue = ballGlue(doc);
   return { x: at.x + dir.x * glue, y: at.y + dir.y * glue };

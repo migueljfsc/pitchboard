@@ -46,6 +46,7 @@ import {
   updatePreset,
   type PresetLibrary,
   type SquadPreset,
+  shapeName,
 } from "@/share/presets";
 
 /** Codes the Worker emits for these routes; anything else reads as the generic line. */
@@ -239,7 +240,7 @@ export function usePresets(signedIn: boolean, resolving: boolean): PresetsState 
     try {
       let library = libraryFromRows(await listPresets());
       for (const preset of local) {
-        const standing = replaceable(library, preset.label, preset.formation);
+        const standing = replaceable(library, preset.label, shapeName(preset));
         if (standing) {
           const merged = { ...preset, id: standing.id };
           await savePreset(standing.id, merged.label, serialisePreset(merged));

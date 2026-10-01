@@ -18,7 +18,7 @@ import {
 } from "./annotations";
 import { MAX_FLOW_SPEED, MIN_FLOW_SPEED } from "./timeline";
 import { MAX_SCENE_ZOOM } from "./camera";
-import { MAX_SPOTLIGHT } from "./scenes";
+import { MAX_NOTE_CHARS, MAX_SPOTLIGHT } from "./scenes";
 
 const vec2 = z.object({ x: z.number().finite(), y: z.number().finite() });
 
@@ -29,6 +29,35 @@ const player = z.object({
   number: z.number().int().min(0).max(99),
   label: z.string().max(40),
 });
+
+/** A hand-drawn formation (D122): shared by the board, the setup file and the formation library. */
+export const teamShapeSchema = z
+  .object({
+    name: z.string().trim().min(1).max(40),
+    slots: z
+      .array(
+        z.object({
+          depth: z.number().min(0).max(1),
+          across: z.number().min(0).max(1),
+          number: z.number().int().min(0).max(99),
+        }),
+      )
+      .min(1)
+      .max(30),
+    units: z
+      .array(
+        z.object({
+          name: z.string().max(60),
+          style: z.enum(["chain", "polygon", "filled"]),
+          slots: z.array(z.number().int().min(0)).min(2).max(30),
+        }),
+      )
+      .max(20)
+      .optional(),
+  })
+  .refine((shape) => (shape.units ?? []).every((u) => u.slots.every((i) => i < shape.slots.length)), {
+    message: "a unit names a slot the shape does not have",
+  });
 
 const team = z.object({
   id: z.string().min(1),
@@ -42,11 +71,13 @@ const team = z.object({
     .optional(),
   hidden: z.boolean().optional(),
   formation: z.string().min(1).max(20).optional(),
+  shape: teamShapeSchema.optional(),
 });
 
 const scene = z.object({
   id: z.string().min(1),
   name: z.string().max(60),
+  note: z.string().max(MAX_NOTE_CHARS).optional(),
   transitionMs: z.number().int().min(0).max(60_000),
   holdMs: z.number().int().min(0).max(60_000),
   positions: z.record(z.string(), vec2),

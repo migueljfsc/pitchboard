@@ -20,6 +20,10 @@ const GROUPS: Record<string, MessageKey> = {
   Defence: "formation.group.defence",
   Rotation: "formation.group.rotation",
   "Serve receive": "formation.group.serveReceive",
+  Systems: "formation.group.systems",
+  Lineup: "formation.group.lineup",
+  "Defensive zone": "formation.group.defensiveZone",
+  "Neutral zone": "formation.group.neutralZone",
 };
 
 const NAMES: Record<string, MessageKey> = {

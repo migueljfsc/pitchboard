@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HALO_REACH, SHAFT_INTO_HEAD, SHOT_OFFSET, drawBoard } from "./render";
+import { HALO_REACH, SHAFT_INTO_HEAD, SHOT_OFFSET, drawBoard, wrapLines } from "./render";
 import { HEAD_LENGTH, addAnnotation, draftAnnotation } from "./annotations";
 import { ballRadius, tokenRadius } from "./pitch";
 import { PITCH, PITCH_PADDING, TEAM_NAME_OFFSET } from "./pitch";
@@ -9,6 +9,7 @@ import { updateLink } from "./links";
 import {
   DEFAULT_SPOTLIGHT,
   addSceneAfter,
+  setSceneNote,
   setCarrier,
   setHighlight,
   setRunHidden,
@@ -1030,5 +1031,50 @@ describe("the ruler", () => {
     expect(wedges({ x: 50, y: 30, w: 5, h: 8 })).toBe(2);
     expect(wedges({ x: 50, y: 30, w: 6, h: 8 })).toBe(1);
     expect(wedges({ x: 10, y: 10, w: 6, h: 8 })).toBe(0);
+  });
+});
+
+describe("a scene's note in the caption", () => {
+  const doc = setSceneNote(createBoardDoc(), 0, "Hold the line");
+  const texts = (log: string[]) => log.filter((e) => e.startsWith("fillText("));
+
+  it("is drawn under the scene's name when asked for", () => {
+    const r = createRecordingCtx();
+    drawBoard(r.ctx, doc, 0, view({ interactive: false, caption: { title: "", scene: true, note: true } }));
+    expect(r.log.some((e) => e.includes("Hold the line"))).toBe(true);
+  });
+
+  it("is left out unless asked for, exactly as before notes existed", () => {
+    const before = createRecordingCtx();
+    const off = createRecordingCtx();
+    drawBoard(before.ctx, doc, 0, view({ interactive: false, caption: { title: "Press", scene: true } }));
+    drawBoard(off.ctx, doc, 0, view({ interactive: false, caption: { title: "Press", scene: true, note: false } }));
+    expect(off.log).toEqual(before.log);
+    expect(texts(off.log).some((e) => e.includes("Hold the line"))).toBe(false);
+  });
+
+  it("draws a caption from the note alone", () => {
+    const plain = createRecordingCtx();
+    const r = createRecordingCtx();
+    drawBoard(plain.ctx, doc, 0, view({ interactive: false }));
+    drawBoard(r.ctx, doc, 0, view({ interactive: false, caption: { title: "", scene: false, note: true } }));
+    expect(texts(r.log).length - texts(plain.log).length).toBe(1);
+  });
+});
+
+describe("wrapLines", () => {
+  const measure = (t: string) => t.length * 10;
+
+  it("breaks at spaces to fit, and keeps the note's own line breaks", () => {
+    expect(wrapLines("press the full back early", 120, measure, 4)).toEqual(["press the", "full back", "early"]);
+    expect(wrapLines("one\ntwo", 1000, measure, 4)).toEqual(["one", "two"]);
+  });
+
+  it("puts a word longer than a line on its own line rather than splitting it", () => {
+    expect(wrapLines("a counterpressing b", 50, measure, 4)).toEqual(["a", "counterpressing", "b"]);
+  });
+
+  it("stops at the limit, and says there was more", () => {
+    expect(wrapLines("a b c d e", 10, measure, 3)).toEqual(["a", "b", "c…"]);
   });
 });

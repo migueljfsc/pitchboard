@@ -175,15 +175,20 @@ export function presetFrom(
 export function replaceable(
   list: PresetLibrary,
   label: string,
+  /** The formation, or a hand-drawn shape's name (`shapeName`). */
   formation: string | undefined,
 ): SquadPreset | null {
   const key = label.trim().toLowerCase();
   return (
     list.find(
-      (p) => p.label.trim().toLowerCase() === key && (p.formation ?? "") === (formation ?? ""),
+      (p) => p.label.trim().toLowerCase() === key && shapeName(p) === (formation ?? ""),
     ) ?? null
   );
 }
+
+/** What a preset's shape is called: its formation, or its hand-drawn shape's name (D122). */
+export const shapeName = (preset: { formation?: string; shape?: { name: string } }): string =>
+  preset.shape?.name ?? preset.formation ?? "";
 
 export const addPreset = (list: PresetLibrary, preset: SquadPreset): PresetLibrary =>
   [...list, preset].slice(-MAX_PRESETS);
@@ -225,6 +230,7 @@ export function applyPreset(
     textColor: preset.textColor ?? base.textColor,
     pattern: preset.pattern ?? base.pattern,
     formation: preset.formation ?? base.formation,
+    ...(preset.shape ? { shape: preset.shape } : {}),
     squad: preset.players,
   };
 
@@ -237,7 +243,7 @@ export function applyPreset(
     if (duplicateNumber(preset.players)) {
       throw new SetupError(msg("preset.duplicateNumber"));
     }
-    if (preset.formation && built.formation !== preset.formation) {
+    if (!preset.shape && preset.formation && built.formation !== preset.formation) {
       throw new SetupError(msg("preset.unknownFormation", { formation: preset.formation }));
     }
     // buildTeam fills the formation's slots and ignores anything past them, so a
@@ -246,7 +252,7 @@ export function applyPreset(
       throw new SetupError(
         msg("preset.tooManyPlayers", {
           saved: preset.players.length,
-          formation: built.formation ?? "",
+          formation: built.formation ?? built.shape?.name ?? "",
           places: built.players.length,
         }),
       );

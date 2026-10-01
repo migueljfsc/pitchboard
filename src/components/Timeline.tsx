@@ -26,19 +26,21 @@ import {
   ballTravelBetween,
   canLoft as canLoftInto,
   canShoot as canShootInto,
+  DEFAULT_SPOTLIGHT,
   duplicateScene,
+  MAX_NOTE_CHARS,
+  MAX_SPOTLIGHT,
   moveScene,
   renameScene,
   setDelay,
-  setSceneTiming,
   setLoft,
-  setTravel,
-  setShot,
-  totalSeconds,
+  setSceneNote,
   setScenePace,
+  setSceneTiming,
+  setShot,
   setSpotlight,
-  DEFAULT_SPOTLIGHT,
-  MAX_SPOTLIGHT,
+  setTravel,
+  totalSeconds,
 } from "@/board/scenes";
 import {
   DEFAULT_END_HOLD_MS,
@@ -436,6 +438,22 @@ export function Timeline({
                 onDocChange(renameScene(doc, activeScene, e.target.value), `scene-name:${scene.id}`)
               }
               className="w-32 rounded-md border border-ink-600 bg-ink-900 px-2 py-1 text-xs text-ink-200 outline-none focus:border-accent"
+            />
+          </label>
+
+          {/* What the coach wants said about this scene: shown under the board in the viewer
+              and while presenting, and in an export's caption when asked for. */}
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("timeline.note")}</span>
+            <textarea
+              value={scene.note ?? ""}
+              rows={1}
+              maxLength={MAX_NOTE_CHARS}
+              placeholder={t("timeline.note.placeholder")}
+              onChange={(e) =>
+                onDocChange(setSceneNote(doc, activeScene, e.target.value), `scene-note:${scene.id}`)
+              }
+              className="field-sizing-content max-h-24 min-h-[26px] w-56 resize-none rounded-md border border-ink-600 bg-ink-900 px-2 py-1 text-xs leading-snug text-ink-200 outline-none placeholder:text-ink-500 focus:border-accent"
             />
           </label>
 

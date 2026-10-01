@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { runExport, type ExportHandle } from "@/export/client";
 import type { ExportFormat, ExportPhase, ExportRequest } from "@/export/types";
+import { countUsage } from "@/share/usage";
+import { isUsageEvent } from "@/share/usageEvents";
 
 /**
  * Where a finished export goes: a file the coach chose through the system's save
@@ -99,6 +101,9 @@ export function useExportJob(): ExportJob {
    * under its real name instead.
    */
   const save = useCallback(async (data: Blob, extension: string, target: Target) => {
+    // Counted by what was actually written: a video can come back in another container.
+    const event = `export.${extension}`;
+    if (isUsageEvent(event)) countUsage(event);
     const matches = target.name.toLowerCase().endsWith(`.${extension}`);
     const name = matches ? target.name : target.name.replace(/\.[^.]+$/, "") + `.${extension}`;
     file.current = { data, name };
@@ -177,7 +182,8 @@ export function useExportJob(): ExportJob {
   return { running, error, saved, startClip, startPng, cancel, downloadAgain, forget };
 }
 
-function download({ data, name }: { data: Blob; name: string }) {
+/** Hands a file to the browser's own download, the way every export ends. */
+export function download({ data, name }: { data: Blob; name: string }) {
   const url = URL.createObjectURL(data);
   const a = document.createElement("a");
   a.href = url;

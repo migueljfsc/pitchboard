@@ -48,6 +48,7 @@ export function confirms(body: Record<string, unknown>, email: string): boolean 
 export async function eraseAccount(env: Env, id: string, email: string): Promise<void> {
   await env.DB.batch([
     env.DB.prepare("DELETE FROM presets WHERE user_id = ?").bind(id),
+    env.DB.prepare("DELETE FROM formations WHERE user_id = ?").bind(id),
     env.DB.prepare("DELETE FROM boards WHERE user_id = ?").bind(id),
     env.DB.prepare("DELETE FROM projects WHERE user_id = ?").bind(id),
     env.DB.prepare("DELETE FROM identities WHERE user_id = ?").bind(id),

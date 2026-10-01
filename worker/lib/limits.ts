@@ -80,3 +80,11 @@ export const MAX_PRESET_LABEL_CHARS = 60;
  * coach's levels; `MAX_PROJECTS_PER_USER` does not count the roots either.
  */
 export const MAX_PROJECT_DEPTH = 5;
+
+/**
+ * Hand-drawn formations, per account (D122). Mirrors `MAX_FORMATIONS` in
+ * `src/share/formationLibrary.ts`. A shape is thirty slots and a few units at most — a couple of
+ * kilobytes — so the preset byte cap covers it with room to spare.
+ */
+export const MAX_FORMATIONS_PER_USER = 50;
+export const MAX_FORMATION_NAME_CHARS = 40;

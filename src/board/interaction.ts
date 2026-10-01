@@ -739,7 +739,8 @@ export function clampBall(
   bounds: { length: number; width: number },
   goal: SportSpec["goal"] = SPORTS.football.goal,
 ): Vec2 {
-  if (goal.kind !== "net") return clampToPitch(p, bounds);
+  // A net standing on the ice is inside the board, and so is anywhere the ball can go (D123).
+  if (goal.kind !== "net" || goal.line) return clampToPitch(p, bounds);
   const x = clamp(p.x, -goal.depth, bounds.length + goal.depth);
   const inNet = x < 0 || x > bounds.length;
   const half = goal.width / 2;

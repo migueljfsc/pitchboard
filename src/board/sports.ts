@@ -25,7 +25,17 @@ export type NetGoal = {
   /** Behind the line, in units. */
   depth: number;
   height: number;
+  /**
+   * How far the goal line stands in from the end of the board, in units. Absent is on the
+   * end, as every net was before ice hockey (D123), whose goals stand 4 m out from the end
+   * boards with play behind them.
+   */
+  line?: number;
 };
+
+/** Where a net's goal line is along the board: at the near end (`dir` 1) or the far one. */
+export const goalLineX = (goal: NetGoal, length: number, dir: 1 | -1): number =>
+  dir === 1 ? (goal.line ?? 0) : length - (goal.line ?? 0);
 
 /**
  * A basketball goal: a ring in front of a backboard, inside the court, off the floor.
@@ -205,6 +215,46 @@ export const VOLLEYBALL_COURT = {
   antenna: 0.8,
 } as const;
 
+/**
+ * An IIHF ice rink's markings, in metres (IIHF Official Rule Book and Ice Arena Guide): the
+ * championship rink, 60 × 30 m with the larger corner radius. The goal lines stand in from the
+ * end boards, and the goals on them, so play goes on behind each net (D123).
+ */
+export const ICE_RINK = {
+  length: 60,
+  width: 30,
+  cornerRadius: 8.5,
+  goalLine: 4,
+  goalLineWidth: 0.05,
+  /** Fifteen metres apart, so a quarter of the rink: centred 7.5 m either side of centre ice. */
+  blueApart: 15,
+  blueWidth: 0.3,
+  redWidth: 0.3,
+  circleRadius: 4.5,
+  centreSpot: 0.15,
+  spot: 0.3,
+  /** End-zone spots: out from the goal line, and either side of the long axis. */
+  endSpotOut: 6,
+  spotSide: 7,
+  /** Neutral-zone spots: in from each blue line, towards centre ice. */
+  neutralSpotIn: 1.5,
+  /** The hash marks on the outer edge of each end-zone circle, parallel to the goal line. */
+  hashLength: 0.6,
+  hashApart: 1.7,
+  /** The goal crease, a semicircle out from the goal line. */
+  crease: 1.83,
+  /** The goalkeeper's trapezoid behind each goal: across at the goal line, and at the boards. */
+  trapezoid: { atGoalLine: 6.8, atBoards: 8.6 },
+  /** The officials' crease, a semicircle against the boards at centre ice. */
+  officials: 3,
+  goalWidth: 1.83,
+  goalHeight: 1.22,
+  goalDepth: 1.12,
+} as const;
+
+const ICE = scaled(ICE_RINK.length, ICE_RINK.width);
+const ih = (m: number): number => m / ICE.metresPerUnit;
+
 const V = VOLLEYBALL_COURT;
 const VOLLEYBALL = scaled(V.length + V.freeZone * 2, V.width + V.freeZone * 2);
 const vb = (m: number): number => m / VOLLEYBALL.metresPerUnit;
@@ -294,6 +344,30 @@ export const SPORTS: Record<Sport, SportSpec> = {
       spans: [fh(HOCKEY_FIELD.goalWidth)],
     },
   },
+  icehockey: {
+    id: "icehockey",
+    ...ICE,
+    keeper: true,
+    // Ice takes the board's shade and nothing else, as a hall floor does.
+    surface: "floor",
+    goal: {
+      kind: "net",
+      width: ih(ICE_RINK.goalWidth),
+      depth: ih(ICE_RINK.goalDepth),
+      height: ih(ICE_RINK.goalHeight),
+      line: ih(ICE_RINK.goalLine),
+    },
+    ballGlyph: "🏒",
+    headroom: 0.05,
+    snaps: {
+      depths: [
+        ICE_RINK.goalLine,
+        ICE_RINK.goalLine + ICE_RINK.endSpotOut,
+        ICE_RINK.length / 2 - ICE_RINK.blueApart / 2,
+      ].map(ih),
+      spans: [ih(ICE_RINK.spotSide * 2)],
+    },
+  },
   volleyball: {
     id: "volleyball",
     ...VOLLEYBALL,
@@ -332,6 +406,17 @@ export function goalAt(doc: Pick<BoardDoc, "sport" | "pitch">, p: Vec2): Vec2 | 
   const goal = sportOf(doc).goal;
   const { length, width } = doc.pitch;
   if (goal.kind === "none") return null;
+  if (goal.kind === "net" && goal.line) {
+    // A goal standing on the ice is its own footprint: behind the goal line but beside or
+    // behind the net is where play goes on, not a goal (D123).
+    const half = goal.width / 2;
+    if (Math.abs(p.y - width / 2) > half) return null;
+    const near = goalLineX(goal, length, 1);
+    const far = goalLineX(goal, length, -1);
+    const inNear = p.x < near && p.x >= near - goal.depth;
+    const inFar = p.x > far && p.x <= far + goal.depth;
+    return inNear || inFar ? p : null;
+  }
   if (goal.kind === "net") return p.x < 0 || p.x > length ? p : null;
   for (const x of [goal.centre, length - goal.centre]) {
     const ring = { x, y: width / 2 };

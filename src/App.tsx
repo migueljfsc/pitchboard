@@ -1,18 +1,24 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import type { BoardDoc } from "@/board/types";
-import { Editor } from "@/pages/Editor";
-import { Viewer } from "@/pages/Viewer";
 import { decodeBoard, readHash, readView, withoutHash, type DecodeOutcome } from "@/share/urlcodec";
 import { fetchShare } from "@/share/api";
 import { parseStoredDoc } from "@/share/cloud";
 import { APP_PATH, isAdminPath, isLandingPath, readShareSlug } from "@/share/routes";
-import { Landing } from "@/pages/Landing";
 import { useI18n } from "@/i18n/context";
 import { LogoMark } from "@/components/Logo";
 import { cn } from "@/lib/utils";
 
 /** Loaded only on /admin, so no visitor downloads the operator's page. */
 const Admin = lazy(() => import("@/pages/Admin").then((m) => ({ default: m.Admin })));
+
+/**
+ * Each page is its own chunk, so the front door does not download the editor and a shared
+ * board does not download either: a page loads what it draws. The fallback is nothing — the
+ * body is already the app's ink, and a chunk this size arrives before a spinner would read.
+ */
+const Editor = lazy(() => import("@/pages/Editor").then((m) => ({ default: m.Editor })));
+const Viewer = lazy(() => import("@/pages/Viewer").then((m) => ({ default: m.Viewer })));
+const Landing = lazy(() => import("@/pages/Landing").then((m) => ({ default: m.Landing })));
 
 /**
  * Chooses what the address is asking for.
@@ -37,7 +43,7 @@ const Admin = lazy(() => import("@/pages/Admin").then((m) => ({ default: m.Admin
  * address can be, read once, because changing one is a page load rather than an
  * event. Both resolve because the Worker serves index.html for unknown paths.
  */
-export function App() {
+function Pages() {
   const { t, tm } = useI18n();
   const [hash, setHash] = useState(() => window.location.hash);
   const [slug, setSlug] = useState<string | null>(() => readShareSlug());
@@ -191,5 +197,14 @@ function Splash({ children, tone }: { children: React.ReactNode; tone?: "bad" })
         {children}
       </div>
     </div>
+  );
+}
+
+/** The pages, loaded as chunks; see `Pages` for which the address asks for. */
+export function App() {
+  return (
+    <Suspense fallback={null}>
+      <Pages />
+    </Suspense>
   );
 }

@@ -13,6 +13,8 @@ import { frameAt } from "@/board/timeline";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n/context";
 import { LocaleSwitch } from "@/components/LocaleSwitch";
+import { countUsage } from "@/share/usage";
+import { SceneNoteStrip } from "@/components/SceneNote";
 
 type Props = {
   doc: BoardDoc;
@@ -89,6 +91,7 @@ export function Viewer({ doc, initialView, onFork }: Props) {
 
   const presentOn = (on: boolean) => {
     setPresent(on);
+    if (on) countUsage("present");
     // Fullscreen is a request the browser may refuse; presenting works in the window too.
     if (on) void document.documentElement.requestFullscreen?.().catch(() => {});
     else if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
@@ -181,6 +184,8 @@ export function Viewer({ doc, initialView, onFork }: Props) {
           onDocChange={noop}
         />
       </div>
+
+      <SceneNoteStrip doc={doc} index={sceneIndex} />
 
       <div className="flex shrink-0 items-center gap-3 border-t border-ink-700 bg-ink-800 px-4 py-3">
         <button

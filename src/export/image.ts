@@ -79,7 +79,7 @@ export async function renderSheet(
   const tile = surface(layout.tile);
   const view = exportView(doc, layout.tile, pitchView, {
     // Named unless a caption was asked for without the scene's name.
-    caption: { title: "", scene: look.caption?.scene ?? true },
+    caption: { title: "", scene: look.caption?.scene ?? true, note: look.caption?.note ?? false },
     transparent: look.transparent,
   });
   for (const [i, index] of scenes.entries()) {

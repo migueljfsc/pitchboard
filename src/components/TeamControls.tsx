@@ -1,13 +1,14 @@
 import { Eye, EyeOff, UserPlus } from "lucide-react";
 import type { BoardDoc, TeamPattern } from "@/board/types";
-import { formationGroupsFor, formationsFor, type Direction } from "@/formations";
+import type { Direction } from "@/formations";
 import { sportOf } from "@/board/sports";
-import { formationLabel, groupLabel } from "@/lib/formationText";
 import { MAX_SQUAD } from "@/board/players";
 import { ColorPicker } from "@/components/ui/ColorPicker";
 import { contrastOn } from "@/lib/color";
 import type { Change } from "@/lib/history";
 import { SquadPresets } from "@/components/SquadPresets";
+import { FormationPicker } from "@/components/FormationPicker";
+import type { FormationLibrary } from "@/share/formationLibrary";
 import type { PresetLibrary } from "@/share/presets";
 import type { PresetSource } from "@/lib/usePresets";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,13 @@ type Props = {
   onApplyPreset: (teamIndex: 0 | 1, id: string) => void;
   onRenamePreset: (id: string, label: string) => void;
   onDeletePreset: (id: string) => void;
+  /** This sport's hand-drawn formations (D122). */
+  shapes: FormationLibrary;
+  shapeSource: PresetSource;
+  onApplyShape: (teamIndex: 0 | 1, id: string) => void;
+  onSaveShape: (teamIndex: 0 | 1, name: string) => void;
+  onRenameShape: (id: string, name: string) => void;
+  onDeleteShape: (id: string) => void;
 };
 
 export function TeamControls({
@@ -43,6 +51,12 @@ export function TeamControls({
   onApplyPreset,
   onRenamePreset,
   onDeletePreset,
+  shapes,
+  shapeSource,
+  onApplyShape,
+  onSaveShape,
+  onRenameShape,
+  onDeleteShape,
 }: Props) {
   const { t } = useI18n();
   const team = doc.teams[teamIndex];
@@ -86,24 +100,18 @@ export function TeamControls({
         </button>
       </div>
 
-      <label className="flex flex-col gap-1.5">
-        <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("team.formation")}</span>
-        <select
-          value={formation}
-          onChange={(e) => onFormationChange(teamIndex, e.target.value)}
-          className="rounded-md border border-ink-600 bg-ink-900 px-2 py-1.5 text-xs text-ink-200 outline-none focus:border-accent"
-        >
-          {formationGroupsFor(doc.sport).map((group) => (
-            <optgroup key={group} label={groupLabel(t, group)}>
-              {formationsFor(doc.sport).filter((f) => f.group === group).map((f) => (
-                <option key={f.id} value={f.id}>
-                  {formationLabel(t, f.id)}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-      </label>
+      <FormationPicker
+        doc={doc}
+        teamIndex={teamIndex}
+        formation={formation}
+        onFormationChange={onFormationChange}
+        shapes={shapes}
+        source={shapeSource}
+        onApplyShape={onApplyShape}
+        onSaveShape={onSaveShape}
+        onRenameShape={onRenameShape}
+        onDeleteShape={onDeleteShape}
+      />
 
       <SquadPresets
         doc={doc}

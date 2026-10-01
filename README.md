@@ -4,7 +4,7 @@
 [![deploy](https://github.com/migueljfsc/pitchboard/actions/workflows/deploy-worker.yml/badge.svg)](https://github.com/migueljfsc/pitchboard/actions/workflows/deploy-worker.yml)
 
 An animated tactics board that runs in the browser — football, futsal, basketball, handball,
-field hockey and volleyball on one engine. Draw a formation, move players between scenes along
+field hockey, ice hockey and volleyball on one engine. Draw a formation, move players between scenes along
 curved runs, and export the result as **MP4**, **GIF**, or **PNG** — all client-side, no server
 rendering.
 
@@ -18,7 +18,7 @@ deployed by [`deploy-worker.yml`](.github/workflows/deploy-worker.yml) on every 
 
 > **Status: usable.** M1–M10 are built — the board, animation, live links, export, sharing,
 > infrastructure, annotations, board handling, seamless playback, and squad presets — along with
-> six sports, a 3D view, read-only presenting, video import, English and Portuguese, and
+> seven sports, a 3D view, read-only presenting, video import, English and Portuguese, and
 > accounts with a library of saved boards filed by sport. See
 > [`docs/implementation-plan.md`](docs/implementation-plan.md) for the plan and
 > [`docs/bugs.md`](docs/bugs.md) for known defects.

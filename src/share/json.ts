@@ -15,7 +15,7 @@
 import { z } from "zod";
 import type { BoardDoc, Link, LinkStyle, Team } from "@/board/types";
 import { SPORT_IDS } from "@/board/types";
-import { boardDocSchema } from "@/board/schema";
+import { boardDocSchema, teamShapeSchema } from "@/board/schema";
 import { migrate } from "@/board/migrate";
 import { replaceTeamLinks } from "@/board/links";
 import { createBoardDoc, sidesFor, type LineNamer, type TeamSpec } from "@/formations";
@@ -63,7 +63,8 @@ export function teamToSetup(doc: BoardDoc, index: 0 | 1): SetupTeam {
     color: team.color,
     textColor: team.textColor,
     ...(team.pattern ? { pattern: team.pattern } : {}),
-    formation: team.formation ?? sidesFor(doc.sport)[index].formation,
+    // A hand-drawn shape travels whole (D122); only a catalogue formation is a name.
+    ...(team.shape ? { shape: team.shape } : { formation: team.formation ?? sidesFor(doc.sport)[index].formation }),
     players: team.players.map((p) =>
       p.label ? { number: p.number, label: p.label } : { number: p.number },
     ),
@@ -117,6 +118,8 @@ export const setupTeamSchema = z.object({
   textColor: z.string().min(1).optional(),
   pattern: z.enum(["solid", "vertical", "horizontal"]).optional(),
   formation: z.string().min(1).max(20).optional(),
+  /** A hand-drawn shape in place of `formation` (D122). */
+  shape: teamShapeSchema.optional(),
   /** In formation order, keeper first. Shorter than the XI leaves the rest as the preset had them. */
   players: z.array(setupPlayerSchema).max(30).optional(),
   /** Given, these REPLACE the links the formation seeds for that side. */
@@ -248,6 +251,7 @@ function docFromSetup(setup: Setup, lineName?: LineNamer): BoardDoc {
       textColor: t.textColor ?? (t.color ? contrastOn(color) : base.textColor),
       pattern: t.pattern ?? base.pattern,
       formation: t.formation ?? base.formation,
+      ...(t.shape ? { shape: t.shape } : {}),
       squad: t.players,
     };
   }) as [TeamSpec, TeamSpec];
@@ -256,7 +260,7 @@ function docFromSetup(setup: Setup, lineName?: LineNamer): BoardDoc {
 
   setup.teams.forEach((t, i) => {
     const built = doc.teams[i];
-    if (t.formation && built.formation !== t.formation) {
+    if (!t.shape && t.formation && built.formation !== t.formation) {
       throw new SetupError(msg("import.team.unknownFormation", { n: i + 1, formation: t.formation }));
     }
     if (t.players && t.players.length > built.players.length) {
@@ -264,7 +268,7 @@ function docFromSetup(setup: Setup, lineName?: LineNamer): BoardDoc {
         msg("import.team.tooManyPlayers", {
           n: i + 1,
           listed: t.players.length,
-          formation: built.formation ?? "",
+          formation: built.formation ?? built.shape?.name ?? "",
           places: built.players.length,
         }),
       );

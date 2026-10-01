@@ -13,6 +13,8 @@ import {
   fromNotation,
   getFormation,
   resetPositions,
+  setTeamShape,
+  shapeOf,
 } from ".";
 import { boardDocSchema } from "@/board/schema";
 import { setPlayerLabel, setPlayerNumber } from "@/board/players";
@@ -476,5 +478,70 @@ describe("seeded link names follow the board's language (D38)", () => {
     expect(named.links.map((l) => l.id)).toEqual(english.links.map((l) => l.id));
     expect(named.links[0].name).toBe("back:4");
     expect(english.links[0].name).toBe("Back 4");
+  });
+});
+
+describe("a hand-drawn shape (D122)", () => {
+  /** home-7 pushed high and wide in scene 1, then kept as a shape. */
+  const drawn = () => {
+    const doc = createBoardDoc();
+    doc.scenes[0].positions["home-7"] = { x: 70, y: 6 };
+    return doc;
+  };
+
+  it("lays out again exactly where it was drawn", () => {
+    const doc = drawn();
+    const shape = shapeOf(doc, 0, 0, "Our 4-3-3 wide");
+    const fresh = changeFormation(createBoardDoc(), 0, shape);
+    for (const p of doc.teams[0].players) {
+      expect(fresh.scenes[0].positions[p.id].x).toBeCloseTo(doc.scenes[0].positions[p.id].x, 2);
+      expect(fresh.scenes[0].positions[p.id].y).toBeCloseTo(doc.scenes[0].positions[p.id].y, 2);
+    }
+    expect(fresh.teams[0].shape?.name).toBe("Our 4-3-3 wide");
+    expect(fresh.teams[0].formation).toBeUndefined();
+  });
+
+  it("is the other side's shape mirrored, not copied", () => {
+    const source = drawn();
+    const shape = shapeOf(source, 0, 0, "Wide");
+    const doc = changeFormation(createBoardDoc(), 1, shape);
+    // Slots pair by ORDER: whoever stands in home-7's slot on the away side.
+    const slot = source.teams[0].players.findIndex((p) => p.id === "home-7");
+    const mirrored = doc.teams[1].players[slot];
+    expect(doc.scenes[0].positions[mirrored.id].x).toBeCloseTo(105 - 70, 2);
+    expect(doc.scenes[0].positions[mirrored.id].y).toBeCloseTo(68 - 6, 2);
+  });
+
+  it("keeps its units, and resets positions to its own marks", () => {
+    const shape = shapeOf(drawn(), 0, 0, "Wide");
+    expect(shape.units?.length).toBeGreaterThan(0);
+    let doc = changeFormation(createBoardDoc(), 0, shape);
+    expect(doc.links.filter((l) => l.members.every((m) => m.startsWith("home-")))).toHaveLength(shape.units!.length);
+    doc.scenes[0].positions["home-7"] = { x: 10, y: 10 };
+    doc = resetPositions(doc);
+    expect(doc.scenes[0].positions["home-7"].x).toBeCloseTo(70, 2);
+  });
+
+  it("is recorded on saving without moving anybody", () => {
+    const doc = drawn();
+    const kept = setTeamShape(doc, 0, shapeOf(doc, 0, 0, "Wide"));
+    expect(kept.scenes).toBe(doc.scenes);
+    expect(kept.teams[0].shape?.name).toBe("Wide");
+    expect(kept.teams[0].formation).toBeUndefined();
+    expect(resetPositions(kept).scenes[0].positions["home-7"].x).toBeCloseTo(70, 2);
+  });
+
+  it("gives way to a catalogue formation, and the board still validates", () => {
+    const shaped = changeFormation(createBoardDoc(), 0, shapeOf(drawn(), 0, 0, "Wide"));
+    expect(boardDocSchema.safeParse(shaped).success).toBe(true);
+    const back = changeFormation(shaped, 0, "4-4-2");
+    expect(back.teams[0].shape).toBeUndefined();
+    expect(back.teams[0].formation).toBe("4-4-2");
+  });
+
+  it("is refused by the schema when a unit names a slot it does not have", () => {
+    const doc = changeFormation(createBoardDoc(), 0, shapeOf(drawn(), 0, 0, "Wide"));
+    doc.teams[0].shape!.units = [{ name: "Bad", style: "chain", slots: [0, 40] }];
+    expect(boardDocSchema.safeParse(doc).success).toBe(false);
   });
 });

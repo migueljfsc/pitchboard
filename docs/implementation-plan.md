@@ -38,13 +38,14 @@ before any React touches it, and every phase ends at a state you can look at.
 | — | Futsal, second in every list after football: FIFA's 40 x 20 m court, five a side, four systems, three plays (D117) |
 | — | Read-only presenting, security headers, links by side, scene-range export with preview and scene sheets, File menu, set-piece templates, viewer present and download (D116) |
 | — | A landing page at `/` playing live boards, the editor at `/app`, and a motion system: animated dialogs, menus, sections, timeline and toasts, a settling selection ring (D118) |
+| — | Anonymous daily usage counters — visits, exports, shares, imports, presenting — in the admin view (D119) |
+| — | A daily sweep of expired rows, pages as lazy chunks, and a zip of everything an account holds (D120) |
+| — | A note per scene, in the viewer, while presenting and in export captions (D121) |
+| — | Formations drawn by hand: saved from the board, kept in a library like squads, carried on the team (D122) |
+| — | Ice hockey: the IIHF rink, goals standing on the ice with play behind them, six a side (D123) |
 
 ## Open
 
-- **Ice hockey** (D113): a `SportSpec`, a rink drawer with rounded boards, goals inside the rink
-  (play goes behind the net, so a net there is not behind the end line), and six a side.
-- **Save the current shape as a custom formation.** The last item from M1. Formations are
-  generated from notation (D11), so this needs somewhere to keep one that is not.
 - Known defects are in [`bugs.md`](./bugs.md). Non-goals are in `AGENTS.md` (D9).
 
 ## Definition of done, per change

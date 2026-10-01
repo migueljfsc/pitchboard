@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FUTSAL_COURT, SPORTS, goalAt, sportOf, toMetres } from "./sports";
+import { FUTSAL_COURT, ICE_RINK, SPORTS, goalAt, goalLineX, sportOf, toMetres } from "./sports";
 import { clampBall, moveEntities, playBall } from "./interaction";
 import { addSceneAfter, setCarrier } from "./scenes";
 import { boardDocSchema } from "./schema";
@@ -260,5 +260,45 @@ describe("volleyball", () => {
     const doc = board();
     expect(goalAt(doc, { x: -1, y: doc.pitch.width / 2 })).toBeNull();
     expect(goalAt(doc, { x: doc.pitch.length / 2, y: doc.pitch.width / 2 })).toBeNull();
+  });
+});
+
+describe("ice hockey's goals stand on the ice (D123)", () => {
+  const spec = SPORTS.icehockey;
+  const doc = { sport: "icehockey" as const, pitch: spec.pitch };
+  const goal = spec.goal.kind === "net" ? spec.goal : null;
+  const m = (metres: number) => metres / spec.metresPerUnit;
+  const cy = spec.pitch.width / 2;
+
+  it("is the IIHF championship rink, goal lines four metres in", () => {
+    expect(toMetres(doc, spec.pitch.length)).toBeCloseTo(ICE_RINK.length, 6);
+    expect(toMetres(doc, spec.pitch.width)).toBeCloseTo(ICE_RINK.width, 6);
+    expect(goalLineX(goal!, spec.pitch.length, 1)).toBeCloseTo(m(4), 6);
+    expect(goalLineX(goal!, spec.pitch.length, -1)).toBeCloseTo(m(56), 6);
+  });
+
+  it("scores a puck in the net, at either end", () => {
+    expect(goalAt(doc, { x: m(3.6), y: cy })).not.toBeNull();
+    expect(goalAt(doc, { x: m(56.5), y: cy + m(0.5) })).not.toBeNull();
+  });
+
+  // Play goes on behind the net: the goal line alone is not a goal.
+  it("does not score behind the net, beside it, or short of the line", () => {
+    expect(goalAt(doc, { x: m(1.5), y: cy })).toBeNull();
+    expect(goalAt(doc, { x: m(3.6), y: cy + m(2) })).toBeNull();
+    expect(goalAt(doc, { x: m(4.5), y: cy })).toBeNull();
+    expect(goalAt(doc, { x: m(58.5), y: cy })).toBeNull();
+  });
+
+  it("lets the puck go anywhere on the ice, behind the nets included", () => {
+    const behind = { x: m(1), y: cy };
+    expect(clampBall(behind, spec.pitch, spec.goal)).toEqual(behind);
+    expect(clampBall({ x: -5, y: cy }, spec.pitch, spec.goal).x).toBe(0);
+  });
+
+  it("leaves football's goals on the end of the board", () => {
+    const football = SPORTS.football.goal;
+    expect(football.kind === "net" && football.line).toBeFalsy();
+    expect(goalAt({ pitch: SPORTS.football.pitch }, { x: -1, y: 34 })).not.toBeNull();
   });
 });

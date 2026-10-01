@@ -32,6 +32,7 @@ export const SPORT_TEMPLATES = {
   basketball: ["pickAndRoll", "fastBreak", "baselineInbound"],
   handball: ["handballFastBreak", "crossing", "sevenOnSix"],
   hockey: ["penaltyCorner", "hockeyBuildUp", "hockeyPress"],
+  icehockey: ["iceBreakout", "iceForecheck", "iceFaceoff"],
   volleyball: ["serveReceive", "freeBall", "baseDefence"],
 } as const satisfies Record<Sport, readonly string[]>;
 
@@ -430,6 +431,100 @@ const STEPS: Record<TemplateId, Step[]> = {
     { moves: { "home-9": { x: 78, y: 27.5 }, "home-7": { x: 74, y: 14 }, "home-11": { x: 74, y: 41 }, "away-6": { x: 83, y: 16 } }, ball: "away-6" },
     { moves: { "home-7": { x: 81, y: 15 }, "home-9": { x: 80, y: 22 } }, ball: "away-6" },
     { moves: { "home-7": { x: 82, y: 16 } }, ball: "home-7" },
+  ],
+
+  // --- ice hockey: a 60 x 30 m rink, goal lines at x = 4 and 56, blue lines at 22.5 and 37.5 ---
+  // The defence reverses the puck behind the net, it goes up the wall, out through the middle,
+  // and the line carries it in three-wide for a shot.
+  iceBreakout: [
+    {
+      moves: {
+        "home-1": { x: 5, y: 15 },
+        "home-2": { x: 2.6, y: 12 },
+        "home-3": { x: 6.5, y: 21 },
+        "home-4": { x: 15, y: 2.5 },
+        "home-5": { x: 11, y: 15 },
+        "home-6": { x: 15, y: 27.5 },
+        "away-5": { x: 8, y: 8 },
+        "away-4": { x: 14, y: 9 },
+        "away-6": { x: 14, y: 21 },
+      },
+      ball: "home-2",
+    },
+    { moves: { "home-3": { x: 3, y: 23 }, "home-2": { x: 5, y: 13.5 }, "away-5": { x: 4.5, y: 10.5 } }, ball: "home-3" },
+    {
+      moves: { "home-6": { x: 19, y: 27.5 }, "home-3": { x: 6, y: 25.5 }, "home-5": { x: 17, y: 20 }, "away-6": { x: 16, y: 24.5 } },
+      ball: "home-6",
+    },
+    {
+      moves: {
+        "home-5": { x: 27, y: 17 },
+        "home-4": { x: 25, y: 5 },
+        "home-6": { x: 26, y: 26 },
+        "away-2": { x: 36, y: 11 },
+        "away-3": { x: 36, y: 19 },
+      },
+      ball: "home-5",
+    },
+    {
+      moves: {
+        "home-5": { x: 40, y: 15 },
+        "home-4": { x: 39, y: 5 },
+        "home-6": { x: 40, y: 25 },
+        "away-2": { x: 45, y: 11.5 },
+        "away-3": { x: 45, y: 18.5 },
+      },
+      ball: "home-5",
+      runOn: ["home-6"],
+    },
+    { moves: { "home-6": { x: 49, y: 22 }, "away-3": { x: 49.5, y: 18 } }, ball: "home-6" },
+    { ball: { x: 56.5, y: 15.4 }, shot: true },
+  ],
+  // A 1-2-2 forecheck: the first forward angles the puck carrier to the wall, the strong-side
+  // winger pinches, and the turnover goes to the slot.
+  iceForecheck: [
+    {
+      moves: {
+        "away-2": { x: 57.6, y: 13 },
+        "away-3": { x: 53, y: 22 },
+        "away-4": { x: 47, y: 4 },
+        "away-5": { x: 48, y: 15 },
+        "away-6": { x: 47, y: 26 },
+        "home-5": { x: 48, y: 17 },
+        "home-4": { x: 44, y: 7 },
+        "home-6": { x: 44, y: 23 },
+        "home-2": { x: 38, y: 9 },
+        "home-3": { x: 38, y: 21 },
+      },
+      ball: "away-2",
+    },
+    { moves: { "away-3": { x: 56, y: 24 }, "home-5": { x: 54, y: 20 } }, ball: "away-3" },
+    { moves: { "away-6": { x: 46, y: 27.5 }, "home-6": { x: 46.5, y: 25.5 }, "home-3": { x: 40, y: 22.5 } }, ball: "away-6" },
+    { moves: { "home-6": { x: 47.5, y: 26.5 }, "away-6": { x: 45.5, y: 27.8 } }, ball: "home-6" },
+    { moves: { "home-5": { x: 51, y: 16 }, "away-5": { x: 52.5, y: 18.5 } }, ball: "home-5" },
+    { ball: { x: 56.5, y: 14.7 }, shot: true },
+  ],
+  // An offensive-zone face-off on the right-hand circle, won back to the point; the shot
+  // comes through a screen in front of the goalie.
+  iceFaceoff: [
+    {
+      moves: {
+        "home-5": { x: 49.3, y: 22 },
+        "away-5": { x: 50.7, y: 22 },
+        "home-4": { x: 47, y: 17.5 },
+        "home-6": { x: 49.5, y: 25.8 },
+        "home-2": { x: 41, y: 8 },
+        "home-3": { x: 41, y: 19 },
+        "away-4": { x: 51.5, y: 17.6 },
+        "away-6": { x: 51.5, y: 26.3 },
+        "away-2": { x: 54, y: 12 },
+        "away-3": { x: 54, y: 19 },
+      },
+      ball: { x: 50, y: 22 },
+    },
+    { moves: { "home-3": { x: 41, y: 20 } }, ball: "home-3" },
+    { moves: { "home-4": { x: 54, y: 15.8 }, "away-3": { x: 54.5, y: 17.5 } }, ball: "home-3" },
+    { ball: { x: 56.5, y: 15.6 }, shot: true },
   ],
 
   // --- volleyball: a 24 x 15 m board, the court's lines 3 m in, the net at x = 12 ---

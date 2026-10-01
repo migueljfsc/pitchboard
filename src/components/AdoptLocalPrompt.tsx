@@ -29,6 +29,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useI18n } from "@/i18n/context";
 import type { CloudBoard } from "@/lib/useCloudBoard";
 import type { PresetsState } from "@/lib/usePresets";
+import type { FormationsState } from "@/lib/useFormations";
 import { listProjects } from "@/share/api";
 import { loadBoard } from "@/share/local";
 
@@ -52,6 +53,7 @@ export function AdoptLocalPrompt({
   sport,
   signedIn,
   presets,
+  formations,
 }: {
   cloud: CloudBoard;
   boardName: string;
@@ -59,13 +61,15 @@ export function AdoptLocalPrompt({
   sport: Sport;
   signedIn: boolean;
   presets: PresetsState;
+  /** Drawn formations kept in this browser (D122) — offered with the squads, as one library. */
+  formations: FormationsState;
 }) {
   const { t } = useI18n();
   const [asked, setAsked] = useState(isWelcome);
   // Both captured at mount, beside the marker: adopting empties the local library, and a
   // dialog whose message changes while it is open is a dialog that asked something else.
   const [hadBoard] = useState(() => loadBoard() !== null);
-  const [hadSquads] = useState(() => presets.local.length > 0);
+  const [hadSquads] = useState(() => presets.local.length > 0 || formations.local.length > 0);
 
   useEffect(forgetWelcome, []);
 
@@ -85,7 +89,10 @@ export function AdoptLocalPrompt({
     }
     // Last, and separately: a board that could not be saved is no reason to leave the squads
     // behind, and this reports its own failures through the squad panel.
-    if (hadSquads) await presets.adopt();
+    if (hadSquads) {
+      await presets.adopt();
+      await formations.adopt();
+    }
   };
 
   return (

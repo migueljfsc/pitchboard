@@ -60,7 +60,11 @@ export function describeChange(prev: BoardDoc, next: BoardDoc): Message {
   const players = (d: BoardDoc) => d.teams.reduce((n, t) => n + t.players.length, 0);
   if (players(next) > players(prev)) return msg("history.playerAdded");
   if (players(next) < players(prev)) return msg("history.playerRemoved");
-  if (next.teams.some((t, i) => t.formation !== prev.teams[i].formation)) {
+  if (
+    next.teams.some(
+      (t, i) => t.formation !== prev.teams[i].formation || t.shape?.name !== prev.teams[i].shape?.name,
+    )
+  ) {
     return msg("history.formation");
   }
 

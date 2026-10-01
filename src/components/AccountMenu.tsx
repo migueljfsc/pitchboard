@@ -18,7 +18,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { LogOut, Shield, Trash2, UserRound } from "lucide-react";
+import { Download, Loader2, LogOut, Shield, Trash2, UserRound } from "lucide-react";
 
 import { AnimatePresence } from "motion/react";
 import { DeleteAccountDialog } from "@/components/DeleteAccountDialog";
@@ -30,6 +30,8 @@ import { enterSignedIn, errorKey } from "@/lib/signIn";
 import { cn } from "@/lib/utils";
 import type { AccountState } from "@/lib/useAccount";
 import { ApiError, deleteAccount, verifyEmail } from "@/share/api";
+import { libraryArchive } from "@/share/archive";
+import { download } from "@/lib/useExportJob";
 
 /** Codes the Worker actually emits; anything else is a bug and reads as the generic line. */
 const KNOWN_ERRORS = new Set(["access_denied", "invalid_state", "email_unverified"]);
@@ -85,6 +87,7 @@ export function AccountMenu({ account, loading, signOut }: AccountState) {
   const [linkError, setLinkError] = useState<MessageKey | null>(null);
   const [verifying, setVerifying] = useState(() => link !== null && "verify" in link);
   const [deleting, setDeleting] = useState(false);
+  const [archive, setArchive] = useState<"idle" | "busy" | "failed">("idle");
   const root = useRef<HTMLDivElement>(null);
 
   useEffect(forgetAuthParams, []);
@@ -183,6 +186,24 @@ export function AccountMenu({ account, loading, signOut }: AccountState) {
 
   const label = account.displayName ?? account.email;
 
+  /** Everything saved, as one zip (`share/archive.ts`); the menu stays open while it builds. */
+  const downloadArchive = async () => {
+    setArchive("busy");
+    try {
+      const { blob } = await libraryArchive({
+        sport: (sport) => t(`sport.${sport}`),
+        presets: t("account.archive.presets"),
+        formations: t("account.archive.formations"),
+        untitled: t("doc.board"),
+      });
+      download({ data: blob, name: `pitchboard-${new Date().toISOString().slice(0, 10)}.zip` });
+      setArchive("idle");
+      setOpen(false);
+    } catch {
+      setArchive("failed");
+    }
+  };
+
   return (
     <div ref={root} className="relative shrink-0">
       <button
@@ -221,6 +242,23 @@ export function AccountMenu({ account, loading, signOut }: AccountState) {
               <Shield size={12} />
               {t("account.admin")}
             </a>
+          )}
+
+          <button
+            type="button"
+            role="menuitem"
+            disabled={archive === "busy"}
+            title={t("account.archive.hint")}
+            onClick={() => void downloadArchive()}
+            className="flex items-center gap-1.5 rounded border border-ink-600 px-2 py-1.5 text-[11px] text-ink-200 transition hover:border-accent hover:text-white disabled:opacity-60"
+          >
+            {archive === "busy" ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+            {t(archive === "busy" ? "account.archive.busy" : "account.archive")}
+          </button>
+          {archive === "failed" && (
+            <p role="alert" className="px-1 text-[11px] leading-relaxed text-red-300">
+              {t("account.archive.failed")}
+            </p>
           )}
 
           <button

@@ -194,4 +194,11 @@ const ICONS: Record<Exclude<Sport, "volleyball">, ReactNode> = {
       <circle cx="12" cy="20.2" r="1.5" />
     </>
   ),
+  // One stick with a flat blade, and a puck: told apart from field hockey's crossed sticks and ball.
+  icehockey: (
+    <>
+      <path d="M8 2.5l6.5 15h5.2c.9 0 1.3.8 1 1.5l-.3.5h-7.2" />
+      <ellipse cx="6.5" cy="19.5" rx="3.5" ry="1.4" />
+    </>
+  ),
 };

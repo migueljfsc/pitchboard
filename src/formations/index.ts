@@ -21,6 +21,7 @@ import type {
   Sport,
   Team,
   TeamPattern,
+  TeamShape,
   Vec2,
 } from "@/board/types";
 import { SPORTS } from "@/board/sports";
@@ -401,6 +402,39 @@ const HOCKEY_FORMATIONS: Formation[] = (
 ).flatMap(([group, ids]) => ids.map((id) => fromNotation(id, group, "hockey")));
 
 /**
+ * Ice hockey's shapes, a goalie and five skaters (D123). Depths are metres over the rink's 60,
+ * own goal line at 4 and the own blue line at 22.5; spreads are metres over its 30. Numbers
+ * are positions, the goalie 1: the defence pair 2 and 3, then left wing, centre and right
+ * wing as 4, 5 and 6.
+ */
+const IH_GOALIE: [LineRole, number, number[], number[]] = ["keeper", 0.085, [0.5], [1]];
+const ICE_FORMATIONS: Formation[] = [
+  laidOut("icehockey", "2-3", "Lineup", [
+    IH_GOALIE,
+    ["court.back", 0.3, [0.3, 0.7], [2, 3]],
+    ["court.front", 0.44, [0.17, 0.5, 0.83], [4, 5, 6]],
+  ]),
+  laidOut("icehockey", "Box+1", "Defensive zone", [
+    IH_GOALIE,
+    ["court.back", 0.12, [0.37, 0.63], [2, 3]],
+    ["court.middle", 0.2, [0.5], [5]],
+    ["court.front", 0.3, [0.2, 0.8], [4, 6]],
+  ]),
+  laidOut("icehockey", "1-2-2", "Neutral zone", [
+    IH_GOALIE,
+    ["court.back", 0.33, [0.35, 0.65], [2, 3]],
+    ["court.middle", 0.4, [0.25, 0.75], [4, 6]],
+    ["court.front", 0.45, [0.5], [5]],
+  ]),
+  laidOut("icehockey", "2-1-2", "Neutral zone", [
+    IH_GOALIE,
+    ["court.back", 0.32, [0.35, 0.65], [2, 3]],
+    ["court.middle", 0.38, [0.5], [5]],
+    ["court.front", 0.45, [0.25, 0.75], [4, 6]],
+  ]),
+];
+
+/**
  * Volleyball's shapes, six a side and no keeper. Depths are metres over the board's 24 —
  * court and free zone, own end line at 3, net at 12 — and spreads metres over its 15.
  * Numbers are rotation positions: 4-3-2 across the front, 5-6-1 across the back.
@@ -428,6 +462,7 @@ const CATALOGUE: Record<Sport, Formation[]> = {
   basketball: BASKETBALL_FORMATIONS,
   handball: HANDBALL_FORMATIONS,
   hockey: HOCKEY_FORMATIONS,
+  icehockey: ICE_FORMATIONS,
   volleyball: VOLLEYBALL_FORMATIONS,
 };
 
@@ -438,6 +473,7 @@ const SIDE_FORMATIONS: Record<Sport, [string, string]> = {
   basketball: ["2-3", "1-3-1"],
   handball: ["6-0", "5-1"],
   hockey: ["4-3-3", "3-3-1-3"],
+  icehockey: ["2-3", "1-2-2"],
   volleyball: ["Base", "W-receive"],
 };
 
@@ -470,7 +506,50 @@ export type TeamSpec = {
    * preset would otherwise have handed out.
    */
   squad?: { number?: number; label?: string }[];
+  /** A hand-drawn shape to lay out instead of `formation` (D122). */
+  shape?: TeamShape;
 };
+
+/**
+ * One slot of a layout, wherever it came from: a notation's lines or a hand-drawn shape.
+ * `depth` and `across` are as `TeamShape` measures them.
+ */
+type Slot = { depth: number; across: number; number: number };
+type Unit = { name: (lineName: LineNamer) => string; id: string; style: LinkStyle; slots: number[] };
+
+/** A catalogue formation, flattened into slots and the units its lines seed. */
+function formationLayout(formation: Formation): { slots: Slot[]; units: Unit[] } {
+  const slots: Slot[] = [];
+  const units: Unit[] = [];
+  for (const line of formation.lines) {
+    const first = slots.length;
+    line.spread.forEach((across, i) =>
+      slots.push({ depth: line.depths?.[i] ?? line.depth, across, number: line.numbers[i] ?? i + 1 }),
+    );
+    if (line.link && line.spread.length >= 2) {
+      units.push({
+        name: (lineName) => lineName(line),
+        id: slug(line.label),
+        style: line.link,
+        slots: line.spread.map((_, i) => first + i),
+      });
+    }
+  }
+  return { slots, units };
+}
+
+/** A hand-drawn shape, as the same slots and units. */
+function shapeLayout(shape: TeamShape): { slots: Slot[]; units: Unit[] } {
+  return {
+    slots: shape.slots,
+    units: (shape.units ?? []).map((unit, k) => ({
+      name: () => unit.name,
+      id: `unit-${k + 1}`,
+      style: unit.style,
+      slots: unit.slots,
+    })),
+  };
+}
 
 export type BuiltTeam = {
   team: Team;
@@ -498,14 +577,11 @@ export function buildTeam(
   /** What the seeded links are called: in the board's language, English when not given. */
   lineName: LineNamer = englishLine,
 ): BuiltTeam {
-  const formation = getFormation(spec.formation, sport);
+  const formation = spec.shape ? null : getFormation(spec.formation, sport);
+  const layout = spec.shape ? shapeLayout(spec.shape) : formationLayout(formation!);
   const players: Player[] = [];
   const positions: Record<string, Vec2> = {};
   const links: Link[] = [];
-
-  // Runs across every line, so a squad override addresses the eleven in one
-  // sequence rather than line by line.
-  let slot = 0;
 
   // Ids are `<team>-<number>`, so two players sharing a number share an id, and
   // the second silently overwrites the first in every scene's positions. A
@@ -513,39 +589,39 @@ export function buildTeam(
   // change can, when it is shorter than the new shape and a default lands on a
   // number the squad already uses.
   const used = new Set<number>();
+  const ids: string[] = [];
 
-  for (const line of formation.lines) {
-    const ids: string[] = [];
+  // Runs across every slot, so a squad override addresses the eleven in one sequence
+  // rather than line by line.
+  layout.slots.forEach((slot, i) => {
+    const override = spec.squad?.[i];
+    const number = freeNumber(override?.number ?? slot.number, used);
+    used.add(number);
+    const id = `${spec.id}-${number}`;
+    ids.push(id);
 
-    line.spread.forEach((across, i) => {
-      const override = spec.squad?.[slot++];
-      const depth = line.depths?.[i] ?? line.depth;
-      const number = freeNumber(override?.number ?? line.numbers[i] ?? i + 1, used);
-      used.add(number);
-      const id = `${spec.id}-${number}`;
-      ids.push(id);
+    players.push({ id, number, label: override?.label ?? "" });
+    positions[id] = {
+      x: spec.direction === "left" ? slot.depth * pitch.length : (1 - slot.depth) * pitch.length,
+      // Mirror across the width too, so the two sides are not a straight copy
+      // and full-backs end up on opposite flanks as they should.
+      y: spec.direction === "left" ? slot.across * pitch.width : (1 - slot.across) * pitch.width,
+    };
+  });
 
-      players.push({ id, number, label: override?.label ?? "" });
-      positions[id] = {
-        x: spec.direction === "left" ? depth * pitch.length : (1 - depth) * pitch.length,
-        // Mirror across the width too, so the two sides are not a straight copy
-        // and full-backs end up on opposite flanks as they should.
-        y: spec.direction === "left" ? across * pitch.width : (1 - across) * pitch.width,
-      };
+  // A link needs at least two members; lone strikers and keepers get none.
+  for (const unit of layout.units) {
+    const members = unit.slots.map((i) => ids[i]).filter((id): id is string => id !== undefined);
+    if (members.length < 2) continue;
+    links.push({
+      id: `${spec.id}-${unit.id}`,
+      // The line alone: the links panel files each link under its side already.
+      name: unit.name(lineName),
+      members,
+      style: unit.style,
+      // No colour: a seeded link follows the kit it was seeded from.
+      showDistances: false,
     });
-
-    // A link needs at least two members; lone strikers and keepers get none.
-    if (line.link && ids.length >= 2) {
-      links.push({
-        id: `${spec.id}-${slug(line.label)}`,
-        // The line alone: the links panel files each link under its side already.
-        name: lineName(line),
-        members: ids,
-        style: line.link,
-        // No colour: a seeded link follows the kit it was seeded from.
-        showDistances: false,
-      });
-    }
   }
 
   return {
@@ -560,7 +636,8 @@ export function buildTeam(
       // the same reason a formation change has to carry the squad across.
       ...(spec.pattern ? { pattern: spec.pattern } : {}),
       players,
-      formation: formation.id,
+      // A shape stands in for a formation rather than beside one.
+      ...(spec.shape ? { shape: spec.shape } : { formation: formation!.id }),
     },
     positions,
     links,
@@ -779,24 +856,72 @@ export function applyFormation(
 export function changeFormation(
   doc: BoardDoc,
   teamIndex: 0 | 1,
-  formation: string,
+  /** A catalogue formation's id, or a hand-drawn shape (D122). */
+  formation: string | TeamShape,
   lineName: LineNamer = englishLine,
 ): BoardDoc {
   const team = doc.teams[teamIndex];
+  const base = teamIndex === 0 ? HOME : AWAY;
   return applyFormation(
     doc,
     teamIndex,
     {
-      ...(teamIndex === 0 ? HOME : AWAY),
+      ...base,
       name: team.name,
       color: team.color,
       textColor: team.textColor,
       pattern: team.pattern,
-      formation,
+      formation: typeof formation === "string" ? formation : base.formation,
+      ...(typeof formation === "string" ? {} : { shape: formation }),
       squad: team.players.map((p) => ({ number: p.number, label: p.label })),
     },
     lineName,
   );
+}
+
+/**
+ * Record that a side now stands in `shape`, moving nobody (D122). Saving a shape names where the
+ * players already are; laying them out again belongs to a formation change, which this is not.
+ * The shape takes the formation's place, so Reset positions returns to it.
+ */
+export function setTeamShape(doc: BoardDoc, teamIndex: 0 | 1, shape: TeamShape): BoardDoc {
+  const teams = doc.teams.slice() as [Team, Team];
+  const team: Team = { ...teams[teamIndex], shape };
+  delete team.formation;
+  teams[teamIndex] = team;
+  return { ...doc, teams };
+}
+
+/**
+ * One side's positions in one scene, as a shape to keep (D122): a slot per player in squad
+ * order, keeper first, and that side's units by slot. Measured as `TeamShape` measures, so it
+ * lays out again for either side and on any board of the sport.
+ */
+export function shapeOf(doc: BoardDoc, teamIndex: 0 | 1, sceneIndex: number, name: string): TeamShape {
+  const team = doc.teams[teamIndex];
+  const scene = doc.scenes[sceneIndex] ?? doc.scenes[0];
+  const left = directionOf(teamIndex) === "left";
+  const { length, width } = doc.pitch;
+  const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+  // Rounded to a centimetre's worth of the pitch: a shape is a plan, and fifteen decimal
+  // places of one is noise in every file and every request that carries it.
+  const round = (v: number) => Math.round(clamp01(v) * 10_000) / 10_000;
+
+  const slots = team.players.map((p) => {
+    const at = scene.positions[p.id] ?? { x: length / 2, y: width / 2 };
+    return {
+      depth: round(left ? at.x / length : 1 - at.x / length),
+      across: round(left ? at.y / width : 1 - at.y / width),
+      number: p.number,
+    };
+  });
+
+  const slotOf = new Map(team.players.map((p, i) => [p.id, i]));
+  const units = doc.links
+    .filter((l) => l.members.length >= 2 && l.members.every((m) => slotOf.has(m)))
+    .map((l) => ({ name: l.name, style: l.style, slots: l.members.map((m) => slotOf.get(m)!) }));
+
+  return { name: name.trim().slice(0, 40), slots, ...(units.length ? { units: units.slice(0, 20) } : {}) };
 }
 
 /** Which goal a side defends, by index. teams[0] attacks +x throughout. */
@@ -845,6 +970,7 @@ export function formationMarks(doc: BoardDoc): Record<string, Vec2> {
         color: team.color,
         textColor: team.textColor,
         formation: team.formation ?? sidesFor(doc.sport)[i].formation,
+        ...(team.shape ? { shape: team.shape } : {}),
         direction: directionOf(i),
       },
       doc.pitch,

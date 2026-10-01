@@ -26,7 +26,7 @@ export const EXPORT_SHAPES: readonly ExportShape[] = ["board", "square", "wide"]
 
 /** Everything about an export's look that is not the board: the caption and the background. */
 export type ExportLook = {
-  caption?: { title: string; scene: boolean } | null;
+  caption?: { title: string; scene: boolean; note?: boolean } | null;
   /** PNG only: no surround behind the pitch. */
   transparent?: boolean;
 };

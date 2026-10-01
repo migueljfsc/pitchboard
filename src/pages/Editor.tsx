@@ -91,7 +91,14 @@ import { lineUp, nudgeEntities, spaceEvenly, type Carry } from "@/board/interact
 import { useHistory, type Change } from "@/lib/history";
 import { useAutosave } from "@/lib/useAutosave";
 import { AUTOSAVE_MS, loadBoard, saveBoard } from "@/share/local";
-import { applyPreset, presetFrom, presetsFor, replaceable, type SquadPreset } from "@/share/presets";
+import {
+  applyPreset,
+  presetFrom,
+  presetsFor,
+  replaceable,
+  type SquadPreset,
+  shapeName,
+} from "@/share/presets";
 import { cn } from "@/lib/utils";
 import { MODIFIER } from "@/lib/platform";
 import { LocaleSwitch } from "@/components/LocaleSwitch";
@@ -157,8 +164,13 @@ import {
   isUntouched,
   resetPositions,
   type Direction,
+  setTeamShape,
+  shapeOf,
 } from "@/formations";
 import { APP_PATH, HOME_PATH } from "@/share/routes";
+import { countUsage } from "@/share/usage";
+import { useFormations } from "@/lib/useFormations";
+import { customFormation, formationsOf, sameName, type CustomFormation } from "@/share/formationLibrary";
 
 /** What a confirmation is currently guarding. */
 type Pending =
@@ -167,6 +179,8 @@ type Pending =
   | { kind: "positions" }
   | { kind: "links" }
   | { kind: "preset"; preset: SquadPreset; replacing: SquadPreset }
+  /** Saving a drawn formation over one kept under the same name (D122). */
+  | { kind: "shape"; teamIndex: 0 | 1; entry: CustomFormation }
   /** `source` is what the file turned out to be, so the confirmation can say. */
   | { kind: "import"; doc: BoardDoc; source: ImportKind };
 
@@ -303,6 +317,10 @@ export function Editor({ initialDoc }: Props = {}) {
   // Presenting is a way of looking at the board, so it is editor state and
   // never reaches the document — the same rule the framing follows (D12).
   const [present, setPresent] = useState(false);
+  // Counted as it starts, however it was asked for: the button, the menu or the palette.
+  useEffect(() => {
+    if (present) countUsage("present");
+  }, [present]);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -426,10 +444,11 @@ export function Editor({ initialDoc }: Props = {}) {
   const accountState = useAccount();
   const cloud = useCloudBoard(savedDoc, setDoc, accountState.account !== null);
   const library = usePresets(accountState.account !== null, accountState.loading);
+  const shapes = useFormations(accountState.account !== null, accountState.loading);
 
   // Applying a preset fails here; saving, renaming and deleting one fail inside the library.
-  // Both are about the same panel and there is only ever one of them, so they share a line.
-  const libraryError = presetError ?? library.error;
+  // All are about the same panel and there is only ever one of them, so they share a line.
+  const libraryError = presetError ?? library.error ?? shapes.error;
 
   const undo = useCallback(() => {
     pinScrubber(undoHistory(), chosenScene);
@@ -454,7 +473,8 @@ export function Editor({ initialDoc }: Props = {}) {
   // that arrives by import still knows its own shape.
   const formationOf = (i: 0 | 1) => doc.teams[i].formation ?? sidesFor(doc.sport)[i].formation;
   /** The same, as the reader reads it. */
-  const formationName = (i: 0 | 1) => formationLabel(t, formationOf(i));
+  /** What a side stands in, as the reader reads it: its drawn shape's name, or its formation. */
+  const formationName = (i: 0 | 1) => doc.teams[i].shape?.name ?? formationLabel(t, formationOf(i));
 
   // Scene 0 has no incoming transition, so there is no run to shape there.
   const editScene = activeScene > 0 ? activeScene : undefined;
@@ -651,7 +671,7 @@ export function Editor({ initialDoc }: Props = {}) {
 
     // The same name in the same shape is the same squad being saved again. A
     // different shape under that name is a separate preset, so it just adds.
-    const replacing = replaceable(presetsFor(library.presets, doc.sport), preset.label, preset.formation);
+    const replacing = replaceable(presetsFor(library.presets, doc.sport), preset.label, shapeName(preset));
     if (replacing) {
       setPending({ kind: "preset", preset, replacing });
       return;
@@ -679,6 +699,34 @@ export function Editor({ initialDoc }: Props = {}) {
     setDoc(outcome.doc);
     // The squad has been rebuilt, so anything selected refers to players who no
     // longer exist under those ids.
+    setSelection(new Set());
+  };
+
+  /**
+   * Keep where a side stands in this scene as a formation (D122). Nobody moves: the shape is
+   * recorded on the team, so Reset positions returns to it, and kept in the library to pick
+   * again. A name already kept in this sport asks before it is replaced.
+   */
+  const onSaveShape = (teamIndex: 0 | 1, name: string) => {
+    const entry = customFormation(shapeOf(doc, teamIndex, activeScene, name), doc.sport ?? "football", shapes.formations);
+    if (sameName(shapes.formations, entry.shape.name, doc.sport ?? "football")) {
+      setPending({ kind: "shape", teamIndex, entry });
+      return;
+    }
+    keepShape(teamIndex, entry);
+  };
+
+  const keepShape = (teamIndex: 0 | 1, entry: CustomFormation) => {
+    shapes.save(entry);
+    setDoc(setTeamShape(doc, teamIndex, entry.shape));
+    setPending(null);
+  };
+
+  /** A kept shape, laid out like any formation change. */
+  const onApplyShape = (teamIndex: 0 | 1, id: string) => {
+    const entry = shapes.formations.find((f) => f.id === id);
+    if (!entry) return;
+    setDoc(changeFormation(doc, teamIndex, entry.shape, lineNamer(t)));
     setSelection(new Set());
   };
 
@@ -783,11 +831,17 @@ export function Editor({ initialDoc }: Props = {}) {
    * framing is left alone deliberately — how you are looking at the pitch is not
    * one of the changes you made to it.
    */
+  const shapeSpec = (i: 0 | 1) => {
+    const shape = doc.teams[i].shape;
+    return shape ? { shape } : {};
+  };
+
   const reset = () => {
     setDoc(
+      // A fresh board keeps each side's shape — drawn or from the catalogue (D11, D122).
       createBoardDoc(
-        { ...homeSpec(doc.sport), formation: formationOf(0) },
-        { ...awaySpec(doc.sport), formation: formationOf(1) },
+        { ...homeSpec(doc.sport), formation: formationOf(0), ...shapeSpec(0) },
+        { ...awaySpec(doc.sport), formation: formationOf(1), ...shapeSpec(1) },
         undefined,
         seedLabels(),
         doc.sport,
@@ -833,7 +887,8 @@ export function Editor({ initialDoc }: Props = {}) {
     notify(t("toast.positions"));
   };
 
-  const importDoc = (next: BoardDoc) => {
+  const importDoc = (next: BoardDoc, source: ImportKind) => {
+    countUsage(`import.${source}`);
     setDoc(next);
     clearEditorState();
     setImportOpen(false);
@@ -1906,6 +1961,7 @@ export function Editor({ initialDoc }: Props = {}) {
             sport={sportOf(doc).id}
             signedIn={accountState.account !== null}
             presets={library}
+            formations={shapes}
           />
           {/* Signing out resets the editor: the board you had while signed in is not the
               board the next person to open this browser should find. Composed at the call
@@ -2024,6 +2080,12 @@ export function Editor({ initialDoc }: Props = {}) {
                     onApplyPreset={onApplyPreset}
                     onRenamePreset={library.rename}
                     onDeletePreset={library.remove}
+                    shapes={formationsOf(shapes.formations, doc.sport)}
+                    shapeSource={shapes.source}
+                    onApplyShape={onApplyShape}
+                    onSaveShape={onSaveShape}
+                    onRenameShape={shapes.rename}
+                    onDeleteShape={shapes.remove}
                   />
                 </div>
               ))}
@@ -2176,9 +2238,22 @@ export function Editor({ initialDoc }: Props = {}) {
             <ConfirmDialog
               key="preset"
               title={t("confirm.preset.title", { label: pending.replacing.label })}
-              message={t("confirm.preset.message", { formation: formationLabel(t, pending.replacing.formation ?? "") })}
+              message={t("confirm.preset.message", {
+                formation: pending.replacing.shape?.name ?? formationLabel(t, pending.replacing.formation ?? ""),
+              })}
               confirmLabel={t("confirm.preset.action")}
               onConfirm={() => replacePreset(pending.preset, pending.replacing)}
+              onCancel={() => setPending(null)}
+            />
+          )}
+
+          {pending?.kind === "shape" && (
+            <ConfirmDialog
+              key="shape"
+              title={t("confirm.shape.title", { name: pending.entry.shape.name })}
+              message={t("confirm.shape.message")}
+              confirmLabel={t("confirm.shape.action")}
+              onConfirm={() => keepShape(pending.teamIndex, pending.entry)}
               onCancel={() => setPending(null)}
             />
           )}
@@ -2197,7 +2272,7 @@ export function Editor({ initialDoc }: Props = {}) {
                   : t(`confirm.import.message.${pending.source}`, { name: pending.doc.name })
               }
               confirmLabel={t("confirm.import.action")}
-              onConfirm={() => importDoc(pending.doc)}
+              onConfirm={() => importDoc(pending.doc, pending.source)}
               onCancel={() => setPending(null)}
             />
           )}
@@ -2296,6 +2371,7 @@ export function Editor({ initialDoc }: Props = {}) {
               <PresentOverlay
                 board={doc.name}
                 scene={doc.scenes[resolveAt(doc, time).index]?.name ?? ""}
+                note={doc.scenes[resolveAt(doc, time).index]?.note ?? ""}
                 playing={playing}
                 onPlay={() => setPlayback(true)}
               />
@@ -2482,23 +2558,31 @@ export function Editor({ initialDoc }: Props = {}) {
 function PresentOverlay({
   board,
   scene,
+  note,
   playing,
   onPlay,
 }: {
   board: string;
   scene: string;
+  /** The scene's coaching note, under its name, for the room to read. */
+  note: string;
   playing: boolean;
   onPlay: () => void;
 }) {
   const { t } = useI18n();
   return (
     <>
-      {(board.trim() || scene.trim()) && (
+      {(board.trim() || scene.trim() || note.trim()) && (
         <div className="pointer-events-none absolute left-5 top-5 z-10 flex max-w-[60%] flex-col gap-1 rounded-lg bg-black/55 px-4 py-3 backdrop-blur-sm">
           {board.trim() && (
             <span className="truncate text-xl font-bold tracking-tight text-white">{board}</span>
           )}
           {scene.trim() && <span className="truncate text-sm text-white/80">{scene}</span>}
+          {note.trim() && (
+            <p className="mt-1 max-w-md whitespace-pre-line border-t border-white/15 pt-2 text-sm leading-relaxed text-white/90">
+              {note.trim()}
+            </p>
+          )}
         </div>
       )}
       {!playing && (

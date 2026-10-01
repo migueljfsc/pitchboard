@@ -39,6 +39,9 @@
     "MAIL_FROM": "Pitchboard <noreply@pitchboard.migueljfsc.dev>"
   },
 
+  // The daily sweep of expired sessions, email tokens and old usage counters (worker/lib/cleanup.ts).
+  "triggers": { "crons": ["17 4 * * *"] },
+
   // Sign-in, registration and reset (D109). The period can only be 10 or 60 seconds, and the
   // limiter is per Cloudflare location — it slows guessing, it does not count exactly.
   // namespace_id is any integer unique within the account.
@@ -47,6 +50,12 @@
       "name": "AUTH_LIMIT",
       "namespace_id": "1001",
       "simple": { "limit": 10, "period": 60 }
+    },
+    {
+      // Anonymous usage counters (D119): generous for a person, a wall for a loop.
+      "name": "USAGE_LIMIT",
+      "namespace_id": "1002",
+      "simple": { "limit": 30, "period": 60 }
     }
   ],
 

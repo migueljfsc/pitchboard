@@ -15,6 +15,7 @@
 import { body, confirms, eraseAccount } from "./account";
 import { fail, json } from "./http";
 import type { SessionUser } from "./session";
+import { usageDay } from "./usage";
 
 /** Newest first; enough for a portfolio site, and a bound on the response either way. */
 export const ADMIN_USER_LIMIT = 500;
@@ -56,7 +57,7 @@ const USER_COLUMNS = `
 export async function adminStats({ env, now }: AdminCtx): Promise<Response> {
   // Whole UTC days, today included: the last point is the total the tiles show.
   const since = now - (now % DAY_S) - (SERIES_DAYS - 1) * DAY_S;
-  const [totals, users, signups, boardsCreated, before, methods] = await env.DB.batch([
+  const [totals, users, signups, boardsCreated, before, methods, usage] = await env.DB.batch([
     env.DB.prepare(
       `SELECT
          (SELECT COUNT(*) FROM users) AS users,
@@ -97,6 +98,10 @@ export async function adminStats({ env, now }: AdminCtx): Promise<Response> {
                     EXISTS (SELECT 1 FROM identities i WHERE i.user_id = u.id) AS g
                FROM users u)`,
     ),
+    // Everybody's use, accounts or not (D119): only the days and events that had any.
+    env.DB.prepare(
+      "SELECT day, event, n FROM usage_daily WHERE day >= ?1 ORDER BY day",
+    ).bind(usageDay(since)),
   ]);
 
   return json({
@@ -110,6 +115,7 @@ export async function adminStats({ env, now }: AdminCtx): Promise<Response> {
       usersBefore: (before.results[0] as { n: number }).n,
     },
     methods: methods.results[0],
+    usage: usage.results,
   });
 }
 

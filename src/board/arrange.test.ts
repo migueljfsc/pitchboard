@@ -12,7 +12,7 @@ import {
 import { describeChange } from "./describe";
 import { addSceneAfter, setCarrier } from "./scenes";
 import { boardDocSchema } from "./schema";
-import { createBoardDoc } from "@/formations";
+import { changeFormation, createBoardDoc, shapeOf } from "@/formations";
 import { SPORT_TEMPLATES, TEMPLATE_IDS, buildTemplate } from "@/formations/templates";
 
 const doc = createBoardDoc();
@@ -87,6 +87,14 @@ describe("swapping two players", () => {
 });
 
 describe("describeChange", () => {
+  // A side moving from one drawn shape to another changes no `formation` — both are absent (D122).
+  it("names a change between two drawn shapes as a formation change", () => {
+    const base = createBoardDoc();
+    const wide = changeFormation(base, 0, shapeOf(base, 0, 0, "Wide"));
+    const tight = changeFormation(wide, 0, { ...wide.teams[0].shape!, name: "Tight" });
+    expect(describeChange(wide, tight).key).toBe("history.formation");
+  });
+
   it("names what an edit did", () => {
     const two = addSceneAfter(doc, 0);
     expect(describeChange(doc, two).key).toBe("history.sceneAdded");
@@ -184,9 +192,9 @@ describe("every sport's templates (D113)", () => {
   it("keeps the shots it is written with: none is pruned as impossible", () => {
     const shots = all.filter(([, id]) => buildTemplate(id, labels).scenes.some((s) => s.shot)).length;
     // Football's counter, corner, kick-off and free kick, all three futsal, basketball and
-    // handball plays, the hockey penalty corner, and every volleyball one — a spike, or the
-    // opponent's that is dug.
-    expect(shots).toBe(17);
+    // handball plays, the hockey penalty corner, all three ice hockey plays, and every
+    // volleyball one — a spike, or the opponent's that is dug.
+    expect(shots).toBe(20);
   });
 
   it("keeps the kick-off's two long balls in the air", () => {

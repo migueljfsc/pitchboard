@@ -31,6 +31,8 @@ export type ExportPrefs = {
   bitrate: number;
   shape: ExportShape;
   sceneCaption: boolean;
+  /** The scene's note under its name in a caption (D121). */
+  noteCaption: boolean;
   transparent: boolean;
 };
 
@@ -43,6 +45,7 @@ export const EXPORT_DEFAULTS: ExportPrefs = {
   bitrate: DEFAULT_BITRATE,
   shape: "board",
   sceneCaption: true,
+  noteCaption: true,
   transparent: false,
 };
 
@@ -76,6 +79,7 @@ export function loadExportPrefs(store: Store | null = browserStore()): ExportPre
     bitrate: oneOf(BITRATES, stored.bitrate) ?? d.bitrate,
     shape: oneOf(EXPORT_SHAPES, stored.shape) ?? d.shape,
     sceneCaption: flag(stored.sceneCaption) ?? d.sceneCaption,
+    noteCaption: flag(stored.noteCaption) ?? d.noteCaption,
     transparent: flag(stored.transparent) ?? d.transparent,
   };
 }

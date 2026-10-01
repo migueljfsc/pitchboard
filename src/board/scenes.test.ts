@@ -24,6 +24,9 @@ import {
   setShot,
   sliceScenes,
   totalSeconds,
+  MAX_NOTE_CHARS,
+  hasNotes,
+  setSceneNote,
 } from "./scenes";
 import { addAnnotation, draftAnnotation, isVisibleAt } from "./annotations";
 import { isVisibleIn } from "./range";
@@ -668,4 +671,31 @@ describe("setHighlight", () => {
     expect(isHighlighted(doc.scenes[0], BALL_ID)).toBe(true);
   });
 
+});
+
+describe("scene notes", () => {
+  const two = addSceneAfter(createBoardDoc(), 0);
+
+  it("are written as typed, and an emptied note leaves no field behind", () => {
+    const noted = setSceneNote(two, 1, "The 6 steps in ");
+    expect(noted.scenes[1].note).toBe("The 6 steps in ");
+    expect(hasNotes(noted)).toBe(true);
+
+    const cleared = setSceneNote(noted, 1, "   ");
+    expect("note" in cleared.scenes[1]).toBe(false);
+    expect(hasNotes(cleared)).toBe(false);
+  });
+
+  it("are capped, and survive the schema", () => {
+    const noted = setSceneNote(two, 0, "x".repeat(MAX_NOTE_CHARS + 50));
+    expect(noted.scenes[0].note).toHaveLength(MAX_NOTE_CHARS);
+    expect(boardDocSchema.parse(JSON.parse(JSON.stringify(noted)))).toEqual(noted);
+  });
+
+  // A new scene is the next moment of the move; what was said about the last one is not about it.
+  it("do not follow into a scene added after, but do into a duplicate", () => {
+    const noted = setSceneNote(two, 1, "Press the full-back");
+    expect(addSceneAfter(noted, 1).scenes[2].note).toBeUndefined();
+    expect(duplicateScene(noted, 1).scenes[2].note).toBe("Press the full-back");
+  });
 });

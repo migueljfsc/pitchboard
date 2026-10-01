@@ -24,10 +24,12 @@ import {
   cumulative,
   DAY_S,
   fillDays,
+  lastDays,
   lastWeeks,
   NEUTRAL,
   RECENCY,
   shortDate,
+  usageDays,
 } from "./adminData";
 
 const WEEKS = 12;
@@ -197,7 +199,24 @@ function Overview({
   onSelect: (id: string) => void;
   refresh: "idle" | "loading" | "failed";
 }) {
-  const { totals, users, series, methods } = stats;
+  const { totals, users, series, methods, usage } = stats;
+  const everyone = useMemo(() => {
+    const daily = (...events: string[]) => usageDays(usage, events, series.since, series.days);
+    return {
+      landing: daily("page.landing"),
+      editor: daily("page.editor"),
+      viewer: daily("page.viewer"),
+      visits: daily("page.landing", "page.editor", "page.viewer"),
+      exports: daily("export.mp4", "export.webm", "export.gif", "export.png"),
+      shares: daily("share.snapshot", "share.live"),
+      imports: daily("import.board", "import.setup", "import.tracks"),
+      present: daily("present"),
+      byFormat: (["mp4", "webm", "gif", "png"] as const).map((f) => lastDays(daily(`export.${f}`), series.days)),
+      snapshots: lastDays(daily("share.snapshot"), 7),
+      live: lastDays(daily("share.live"), 7),
+      fromVideo: lastDays(daily("import.tracks"), 7),
+    };
+  }, [usage, series]);
   const charts = useMemo(() => {
     const signups = fillDays(series.signups, series.since, series.days);
     const boards = fillDays(series.boards, series.since, series.days);
@@ -296,6 +315,55 @@ function Overview({
           table={RECENCY_LABELS.map((l, i) => [l, String(charts.seen[i])] as [string, string])}
         >
           <ColumnChart values={charts.seen} labels={RECENCY_LABELS} colors={[...RECENCY, NEUTRAL]} unit="accounts" />
+        </ChartCard>
+      </div>
+
+      {/* Everybody's use, signed in or not (D119): what the account figures above cannot see. */}
+      <div className="mt-10 mb-3">
+        <h2 className="text-sm font-semibold text-ink-300">
+          Everyone <span className="font-normal text-ink-500">accounts or not · last 7 days</span>
+        </h2>
+      </div>
+
+      <Tiles
+        items={[
+          ["Landing views", lastDays(everyone.landing, 7), `${lastDays(everyone.landing, 30).toLocaleString()} in 30 days`, lastWeeks(everyone.landing, WEEKS)],
+          ["Editor opens", lastDays(everyone.editor, 7), `${lastDays(everyone.editor, 30).toLocaleString()} in 30 days`, lastWeeks(everyone.editor, WEEKS)],
+          ["Shared boards viewed", lastDays(everyone.viewer, 7), `${lastDays(everyone.viewer, 30).toLocaleString()} in 30 days`, lastWeeks(everyone.viewer, WEEKS)],
+          ["Exports", lastDays(everyone.exports, 7), `${lastDays(everyone.exports, 30).toLocaleString()} in 30 days`, lastWeeks(everyone.exports, WEEKS)],
+          ["Links shared", lastDays(everyone.shares, 7), `${everyone.snapshots} snapshot · ${everyone.live} live`],
+          ["Imports", lastDays(everyone.imports, 7), `${everyone.fromVideo} from video`],
+          ["Presented", lastDays(everyone.present, 7), null],
+        ]}
+      />
+
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        <ChartCard
+          title="Visits per week"
+          subtitle={`Landing, editor and shared boards, last ${WEEKS} weeks`}
+          table={charts.weekStarts.map((d, i) => [d, String(lastWeeks(everyone.visits, WEEKS)[i])] as [string, string]).reverse()}
+        >
+          <ColumnChart values={lastWeeks(everyone.visits, WEEKS)} labels={charts.weekStarts} colors={AMBER} unit="visits" />
+        </ChartCard>
+
+        <ChartCard
+          title="Exports by format"
+          subtitle={`Every finished export, last ${series.days} days`}
+          table={[
+            ["MP4", String(everyone.byFormat[0])],
+            ["WebM", String(everyone.byFormat[1])],
+            ["GIF", String(everyone.byFormat[2])],
+            ["PNG", String(everyone.byFormat[3])],
+          ]}
+        >
+          <StackedBar
+            segments={[
+              { label: "MP4", value: everyone.byFormat[0], color: CATEGORICAL[0] },
+              { label: "WebM", value: everyone.byFormat[1], color: NEUTRAL },
+              { label: "GIF", value: everyone.byFormat[2], color: CATEGORICAL[1] },
+              { label: "PNG", value: everyone.byFormat[3], color: CATEGORICAL[2] },
+            ]}
+          />
         </ChartCard>
       </div>
 

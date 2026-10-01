@@ -10,6 +10,7 @@ import { drawCourt, floorTheme } from "./court";
 import { drawFutsalCourt, futsalTheme } from "./futsal";
 import { drawHandballCourt, hallTheme } from "./handball";
 import { drawHockeyPitch, turfTheme } from "./hockey";
+import { drawIceRink, iceTheme } from "./icehockey";
 import { drawVolleyballCourt, volleyballTheme } from "./volleyball";
 import { sportOf } from "./sports";
 
@@ -25,6 +26,7 @@ const SURFACES: Record<Sport, Surface> = {
   basketball: { theme: floorTheme, draw: drawCourt },
   handball: { theme: hallTheme, draw: drawHandballCourt },
   hockey: { theme: turfTheme, draw: drawHockeyPitch },
+  icehockey: { theme: iceTheme, draw: drawIceRink },
   volleyball: { theme: volleyballTheme, draw: drawVolleyballCourt },
 };
 

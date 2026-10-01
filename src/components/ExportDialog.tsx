@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Film, ImageIcon, Loader2, X } from "lucide-react";
 import type { BoardDoc, PitchView } from "@/board/types";
 import { JsonPane } from "@/components/JsonPane";
-import { sliceScenes, totalSeconds } from "@/board/scenes";
+import { sliceScenes, totalSeconds, hasNotes } from "@/board/scenes";
 import { drawBoard } from "@/board/render";
 import { SceneSelect } from "@/components/ui/SceneSelect";
 import type { ExportJob } from "@/lib/useExportJob";
@@ -111,6 +111,9 @@ export function ExportDialog({ doc, t, pitchView, onClose, exportJob }: Props) {
   const [captioned, setCaptioned] = useState(false);
   const [title, setTitle] = useState(doc.name);
   const [sceneCaption, setSceneCaption] = useState(prefs.sceneCaption);
+  const [noteCaption, setNoteCaption] = useState(prefs.noteCaption);
+  /** Only offered where there is a note to show. */
+  const noted = hasNotes(doc);
   const [transparent, setTransparent] = useState(prefs.transparent);
   // Which scenes: ids, as a range is stored, so reordering in the editor underneath
   // does not quietly change what is exported. Null is the first scene, or the last.
@@ -120,8 +123,8 @@ export function ExportDialog({ doc, t, pitchView, onClose, exportJob }: Props) {
   const [sheet, setSheet] = useState(false);
 
   useEffect(() => {
-    saveExportPrefs({ format, json, videoEdge, gifEdge, fps, bitrate, shape, sceneCaption, transparent });
-  }, [format, json, videoEdge, gifEdge, fps, bitrate, shape, sceneCaption, transparent]);
+    saveExportPrefs({ format, json, videoEdge, gifEdge, fps, bitrate, shape, sceneCaption, noteCaption, transparent });
+  }, [format, json, videoEdge, gifEdge, fps, bitrate, shape, sceneCaption, noteCaption, transparent]);
   // Only this dialog's own format is shown as running here; another format's
   // export, started earlier, is still reported in the header.
   const job = exportJob.running;
@@ -152,7 +155,7 @@ export function ExportDialog({ doc, t, pitchView, onClose, exportJob }: Props) {
     [format, sheet, scenes.length, longEdge, doc, pitchView, shape, captioned, title],
   );
   const look: ExportLook = {
-    caption: captioned ? { title, scene: sceneCaption } : null,
+    caption: captioned ? { title, scene: sceneCaption, note: noted && noteCaption } : null,
     // Only a still keeps an alpha channel.
     transparent: format === "png" && transparent,
   };
@@ -470,6 +473,20 @@ export function ExportDialog({ doc, t, pitchView, onClose, exportJob }: Props) {
                     />
                     {i18n.t("export.caption.scene")}
                   </label>
+                  {noted && (
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={noteCaption}
+                        onChange={(e) => {
+                          forget();
+                          setNoteCaption(e.target.checked);
+                        }}
+                        className="accent-accent"
+                      />
+                      {i18n.t("export.caption.note")}
+                    </label>
+                  )}
                 </div>
               )}
               {format === "png" && (
@@ -667,6 +684,7 @@ function ExportPreview({
   // start its loop again on every keystroke.
   const title = look.caption ? look.caption.title : null;
   const named = look.caption?.scene ?? false;
+  const noted = look.caption?.note ?? false;
   const transparent = look.transparent ?? false;
   const scenesKey = sheet?.scenes.join(",") ?? "";
   const isSheet = sheet !== null;
@@ -681,7 +699,7 @@ function ExportPreview({
     el.width = Math.max(2, Math.round(cssWidth * dpr));
     el.height = Math.max(2, Math.round(cssHeight * dpr));
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const caption = title === null ? null : { title, scene: named };
+    const caption = title === null ? null : { title, scene: named, note: noted };
     const view = exportView(doc, { width: cssWidth, height: cssHeight }, pitchView, { caption, transparent });
     if (still !== null) {
       drawBoard(ctx, doc, still, view);
@@ -696,14 +714,14 @@ function ExportPreview({
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [doc, pitchView, cssWidth, cssHeight, title, named, transparent, still, isSheet]);
+  }, [doc, pitchView, cssWidth, cssHeight, title, named, noted, transparent, still, isSheet]);
 
   useEffect(() => {
     if (!isSheet) return;
     let live = true;
     let url: string | null = null;
     const scenes = scenesKey.split(",").map(Number);
-    const caption = title === null ? null : { title, scene: named };
+    const caption = title === null ? null : { title, scene: named, note: noted };
     void renderSheet(doc, scenes, pitchView, PREVIEW_EDGE * 2, shape, { caption, transparent }).then((blob) => {
       if (!live) return;
       url = URL.createObjectURL(blob);
@@ -713,7 +731,7 @@ function ExportPreview({
       live = false;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [doc, pitchView, shape, title, named, transparent, scenesKey, isSheet]);
+  }, [doc, pitchView, shape, title, named, noted, transparent, scenesKey, isSheet]);
 
   return (
     <div className="flex justify-center rounded border border-ink-700 bg-ink-900 p-2">

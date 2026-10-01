@@ -24,7 +24,7 @@ import type {
   TurfCache,
   Vec2,
 } from "./types";
-import { sportOf, toMetres, type CentreNet, type HoopGoal } from "./sports";
+import { goalLineX, sportOf, toMetres, type CentreNet, type HoopGoal } from "./sports";
 import { ANTENNA_COLORS } from "./volleyball";
 import { RING_COLOR } from "./court";
 import { surfaceOf } from "./surfaces";
@@ -296,8 +296,10 @@ function drawCaption(ctx: Ctx, doc: BoardDoc, frame: Frame, view: RenderView): v
   const caption = view.caption;
   if (!caption) return;
   const title = caption.title.trim();
-  const scene = caption.scene ? (doc.scenes[frame.resolved.index]?.name.trim() ?? "") : "";
-  if (!title && !scene) return;
+  const into = doc.scenes[frame.resolved.index];
+  const scene = caption.scene ? (into?.name.trim() ?? "") : "";
+  const note = caption.note ? (into?.note?.trim() ?? "") : "";
+  if (!title && !scene && !note) return;
 
   const unit = Math.max(10, view.height * 0.028);
   const pad = unit * 0.6;
@@ -321,6 +323,17 @@ function drawCaption(ctx: Ctx, doc: BoardDoc, frame: Frame, view: RenderView): v
   }
 
   ctx.save();
+  if (note) {
+    // A note is prose: wrapped to part of the frame's width, and cut off rather than allowed
+    // to climb over the board.
+    const font = `400 ${unit * 0.68}px Inter, system-ui, -apple-system, sans-serif`;
+    ctx.font = font;
+    const width = Math.max(unit * 8, view.width * NOTE_WIDTH);
+    for (const text of wrapLines(note, width, (t) => ctx.measureText(t).width, NOTE_LINES)) {
+      lines.push({ text, font, size: unit * 0.68, color: "rgba(255,255,255,0.72)" });
+    }
+  }
+
   let w = 0;
   for (const line of lines) {
     ctx.font = line.font;
@@ -346,6 +359,41 @@ function drawCaption(ctx: Ctx, doc: BoardDoc, frame: Frame, view: RenderView): v
     at += line.size + gap;
   }
   ctx.restore();
+}
+
+/** How much of the frame's width a caption's note may take, and how many lines. */
+const NOTE_WIDTH = 0.42;
+const NOTE_LINES = 4;
+
+/**
+ * Break text into lines no wider than `width`, at spaces and at the note's own line breaks,
+ * keeping at most `max` — the last ending in an ellipsis when there was more. A word longer
+ * than a line stands on its own line rather than being split.
+ */
+export function wrapLines(
+  text: string,
+  width: number,
+  measure: (text: string) => number,
+  max: number,
+): string[] {
+  const lines: string[] = [];
+  for (const paragraph of text.split(/\r?\n/)) {
+    let line = "";
+    for (const word of paragraph.split(/\s+/).filter(Boolean)) {
+      const next = line ? `${line} ${word}` : word;
+      if (line && measure(next) > width) {
+        lines.push(line);
+        line = word;
+      } else {
+        line = next;
+      }
+    }
+    if (line) lines.push(line);
+  }
+  if (lines.length <= max) return lines;
+  const kept = lines.slice(0, max);
+  kept[max - 1] = `${kept[max - 1].replace(/[\s.,;:]+$/, "")}…`;
+  return kept;
 }
 
 /**
@@ -488,10 +536,12 @@ function drawTilted(
   ctx.save();
   clipToProjectedHalf(ctx, doc, view.half, cam);
   // A net stands behind its goal line, so the two ends are a complete depth sort. A
-  // ring stands inside the court, among the players, and is sorted with them instead.
-  const nets = sportOf(doc).goal.kind === "net";
+  // ring stands inside the court, among the players, and is sorted with them instead — as
+  // is a net standing on the ice, with play behind it (D123).
+  const goalSpec = sportOf(doc).goal;
+  const nets = goalSpec.kind === "net" && !goalSpec.line;
   if (nets) drawGoal(ctx, doc, cam, -1, theme);
-  drawBillboards(ctx, doc, frame, view, cam, marks);
+  drawBillboards(ctx, doc, frame, view, cam, marks, theme);
   if (nets) drawGoal(ctx, doc, cam, 1, theme);
 
   // In screen space, over the goals and everything standing: the pools are cut
@@ -615,7 +665,7 @@ function drawGoal(
 ): void {
   const P = sportOf(doc).goal;
   if (P.kind !== "net") return;
-  const line = dir === 1 ? 0 : doc.pitch.length;
+  const line = goalLineX(P, doc.pitch.length, dir);
   const back = line - dir * P.depth;
   const cy = doc.pitch.width / 2;
   const near = cy - P.width / 2;
@@ -895,6 +945,8 @@ function drawBillboards(
   view: RenderView,
   cam: Camera,
   marks: Annotation[],
+  /** The board's theme, which a goal standing among the players is drawn in. */
+  theme: PitchTheme,
 ): void {
   const scale = tokenScaleOf(doc);
 
@@ -998,6 +1050,14 @@ function drawBillboards(
   }
 
   const goal = sportOf(doc).goal;
+  if (goal.kind === "net" && goal.line) {
+    // Sorted by the middle of its goal line: a player behind the near net is in front of it,
+    // one behind the far net is behind it.
+    for (const dir of [1, -1] as const) {
+      const mouth = { x: goalLineX(goal, doc.pitch.length, dir), y: doc.pitch.width / 2 };
+      standing.push({ at: projectPitch(mouth, cam), draw: () => drawGoal(ctx, doc, cam, dir, theme) });
+    }
+  }
   if (goal.kind === "hoop") {
     for (const dir of [1, -1] as const) {
       const board = { x: dir === 1 ? goal.board.line : doc.pitch.length - goal.board.line, y: doc.pitch.width / 2 };
@@ -2671,7 +2731,7 @@ function drawBall(ctx: Ctx, p: Vec2, radius: number, state: TokenState): void {
 
 /**
  * Each game's ball: its light, body and rim colours, and what is drawn over them. A
- * hockey ball is hard, smooth and white, and has nothing to draw.
+ * hockey ball is hard, smooth and white, and has nothing to draw; nor has a puck.
  */
 const BALL_LOOKS: Record<
   Sport,
@@ -2682,6 +2742,8 @@ const BALL_LOOKS: Record<
   basketball: { shade: ["#f7a15a", "#e2702c", "#9c4516"], detail: (ctx, p, r, k) => drawBallSeams(ctx, p, r, k) },
   handball: { shade: ["#ffffff", "#eef1f5", "#b9c2cd"], detail: (ctx, p, r, k) => drawHandballPanels(ctx, p, r, k) },
   hockey: { shade: ["#ffffff", "#f3f4f6", "#c7ccd4"] },
+  // A puck: black rubber, nothing printed on it worth drawing at this size.
+  icehockey: { shade: ["#4a4f57", "#1b1e22", "#000000"] },
   volleyball: { shade: ["#ffffff", "#f4f1e6", "#c9c3ae"], detail: (ctx, p, r, k) => drawVolleyballPanels(ctx, p, r, k) },
 };
 

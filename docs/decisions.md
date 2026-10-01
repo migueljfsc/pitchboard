@@ -500,7 +500,7 @@ position, in a base rotation and two serve-receive shapes. The sport picker is a
 field — the sport's icon and bold name, a chevron, a faint wash on hover — opening a panel of line
 icons (`SportMenu`). It is its own listbox, since a native select's options cannot hold an icon, and
 keeps what the select gave: arrows, Enter, Esc, focus back on the button. Keys pressed in it stop
-there, so an arrow does not also nudge the selection. Ice hockey is on the backlog.
+there, so an arrow does not also nudge the selection. Ice hockey followed (D123).
 The UI's copy says board, space and goal where it said pitch, grass and net.
 
 ## D114 — The library is filed by sport
@@ -625,6 +625,94 @@ they came. Every dialog is `ui/Modal`, animated in and — inside `AnimatePresen
 Animation never reaches the document or an export. The one piece inside the canvas, a new
 selection's ring settling in, is `RenderView.focusIn`: a number the caller animates and the
 renderer draws, absent (settled) on every export, so `drawBoard` stays pure.
+
+## D119 — Counting everybody's use, anonymously
+`/admin` counted accounts, and accounts are optional (D39), so most of the site's use was
+invisible. The Worker now keeps `usage_daily`: one number per UTC day per event — a page opened
+(landing, editor, shared board), an export finished by format, a link shared (snapshot or live),
+a board imported by kind, a board presented. Nothing in it names a person, a session, a device or
+a board, so it stays off `deleteAccount`'s list (D110), and the admin page reads it beside the
+account figures under **Everyone**.
+
+**It is the Worker's one unauthenticated write**, so three things bound it: events come from a
+fixed list (`USAGE_EVENTS`, mirrored in the browser and held together by a test), a rate limit
+keyed by the caller's address (read for the limit, never stored), and a cap on every row, past
+which the upsert writes nothing — a loop cannot spend the free tier's writes. The browser fires
+and forgets; a page view is counted once per load in `main.tsx`, not in an effect StrictMode runs
+twice, and an export by the container actually written. Cloudflare Web Analytics was the other
+way: a third-party script, a CSP change, and page views only. The privacy page says what is
+counted.
+
+## D120 — Housekeeping: a daily sweep, pages as chunks, and taking your data with you
+**A daily sweep.** A session was deleted when presented after expiring, an email token when its
+address asked for another, so ones nobody came back for stayed forever. A cron trigger in
+`wrangler.jsonc` runs `worker/lib/cleanup.ts` once a day: expired sessions and tokens go, and
+usage counters older than `USAGE_KEEP_DAYS` (D119).
+
+**Each page is a chunk.** `App` loads the landing page, the editor and the viewer lazily, as it
+did the admin page, so the front door no longer downloads the editor. The main bundle went from
+577 kB to 277 kB, and the build's size warning with it.
+
+**Everything an account holds, as a zip.** The account menu's "Download all my boards" builds it
+in the browser from the endpoints the library already reads, a board at a time — no export route,
+no response holding a whole account. Boards are filed by sport and folder as the File menu writes
+them, so each opens again through Import, and squad presets sit beside them. `share/zip.ts` is a
+small writer over the native `CompressionStream` with UTF-8 names; a real unzipper, not only its
+own tests, has read what it writes.
+
+## D121 — A note per scene
+A scene had a name and nowhere for what the coach wants said about it. `Scene.note` is optional,
+capped at 500 characters, and written as typed; emptying it removes the field, so a board with no
+notes serialises as it always did. Adding a scene starts it without one — the next moment of the
+move is not what was said about the last — and a duplicate copies it.
+
+It shows where a board is watched rather than edited: under the board in the viewer (a strip that
+stays once any scene has a note, so the board does not jump as playback crosses scenes without
+one), in the card while presenting, and in an export's caption when asked for. The caption wraps
+it with `wrapLines`, a pure function tested with a fake measure, to part of the frame's width and
+four lines.
+
+## D122 — Formations drawn by hand
+The catalogue is notation (D11), so a shape a coach has dragged into place had nowhere to be kept.
+`TeamShape` is one: a slot per player, keeper first, as fractions of the board measured for the
+side defending the left goal — `depth` from its own goal line, `across` from the top touchline —
+so one shape lays out for either side, mirrored, and on any board of its sport. Units are kept by
+slot, in chain order.
+
+**The document carries the shape; the library only offers it.** `Team.shape` stands in for
+`Team.formation` — a team has one or the other — so Reset positions, a share link and an export
+reach it with no library in sight (invariant 1). Saving one (`shapeOf`) captures the active
+scene and records it on the team without moving anybody (`setTeamShape`); picking one is a
+formation change like any other, laying the side out on it. It travels through `TeamSpec` at
+all three builders — a formation change, the setup file, and a squad preset, which therefore
+keeps its shape.
+
+**The library is the squad library's twin** (D30): the browser's while signed out, the account's
+`formations` table while signed in, never both, adopted on sign-in with the squads and in the same
+dialog. It joins `deleteAccount`'s list and the download of everything (D120). A name already kept
+in that sport asks before it is replaced; a board already using the old shape keeps its copy.
+
+## D123 — Ice hockey, with goals on the ice
+Ice hockey is the IIHF championship rink, 60 × 30 m with 8.5 m corners, as a spec, a rink drawer
+(`icehockey.ts`), formations, templates, a puck and an icon — a table keyed by sport each, as D113
+laid out. The rulebook's numbers are in `ICE_RINK`: goal lines 4 m from the end boards, blue lines
+15 m apart (22.5 m from the boards — the NHL's 75 ft is not the IIHF's), 4.5 m face-off circles,
+end-zone spots 6 m out and 7 m either side, neutral-zone spots 1.5 m in from the blue lines, the
+goalkeeper's trapezoid (6.8 m at the goal line, 8.6 m at the boards), a 1.83 m crease, and a goal
+1.83 × 1.22 m.
+
+**The goals stand on the ice, with play behind them.** Every net before stood on the end of the
+board. `NetGoal.line` is how far in its goal line is, absent being on the end — so nothing about any
+other sport moved. With it, a goal is the net's own footprint (`goalAt`): a puck behind the goal
+line but beside or behind the net is still in play. The puck may go anywhere on the ice
+(`clampBall`), and in 3D a net standing on the ice is sorted among the players by its goal line, as
+a ring is by its backboard, so a player behind the near net is in front of it.
+
+A goalie and five skaters: the defence pair 2 and 3, then left wing, centre and right wing as 4, 5
+and 6, in a 2-3 lineup, a box-plus-one in the defensive zone, and 1-2-2 and 2-1-2 in the neutral
+zone. Three plays: a breakout from behind the net, a 1-2-2 forecheck, and an offensive-zone
+face-off won back to the point. The ice is a floor, taking the board's shade and nothing else, and
+its line colour is the goal posts' red, which a standing goal is framed in.
 
 ---
 

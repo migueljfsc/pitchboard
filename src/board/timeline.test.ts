@@ -664,3 +664,64 @@ describe("unseen players (D87)", () => {
   });
 
 });
+
+describe("a carrier who has stopped (BUG-2)", () => {
+  /** home-9 carries the ball 20 m across the pitch (+y) into scene 2, then stands. */
+  const sideways = () =>
+    twoScene((a, b) => {
+      a.carrier = HOME_9;
+      b.carrier = HOME_9;
+      b.positions[HOME_9] = { x: a.positions[HOME_9].x, y: a.positions[HOME_9].y + 20 };
+    });
+
+  it("keeps the ball ahead of him the way he last ran, not the way his team attacks", () => {
+    const doc = sideways();
+    const hold = resolveAt(doc, 3.2);
+    const player = positionAt(HOME_9, hold, doc);
+    const ball = ballIn(doc, hold);
+    expect(ball.x).toBeCloseTo(player.x, 5);
+    expect(ball.y - player.y).toBeCloseTo(ballGlue(doc), 5);
+  });
+
+  it("does not swing the ball round the moment he pulls up", () => {
+    const doc = sideways();
+    const running = ballIn(doc, resolveAt(doc, 2.99));
+    const stopped = ballIn(doc, resolveAt(doc, 3.01));
+    expect(Math.hypot(stopped.x - running.x, stopped.y - running.y)).toBeLessThan(0.1);
+  });
+
+  it("follows a curved run's own end, not the straight line between its scenes", () => {
+    const doc = twoScene((a, b) => {
+      a.carrier = HOME_9;
+      b.carrier = HOME_9;
+      const start = a.positions[HOME_9];
+      const end = { x: start.x + 20, y: start.y + 20 };
+      b.positions[HOME_9] = end;
+      // Bends in so that it arrives heading straight along +y.
+      b.paths[HOME_9] = { c1: { x: start.x + 20, y: start.y }, c2: { x: end.x, y: end.y - 10 } };
+    });
+    const hold = resolveAt(doc, 3.2);
+    const player = positionAt(HOME_9, hold, doc);
+    const ball = ballIn(doc, hold);
+    expect(ball.x).toBeCloseTo(player.x, 5);
+    expect(ball.y - player.y).toBeCloseTo(ballGlue(doc), 5);
+  });
+
+  it("turns the ball to his new way gradually as he sets off", () => {
+    // Standing facing his attack (+x), then carrying the ball across (+y).
+    const doc = sideways();
+    const standing = ballIn(doc, resolveAt(doc, 0.999));
+    const setOff = ballIn(doc, resolveAt(doc, 1.02));
+    expect(Math.hypot(setOff.x - standing.x, setOff.y - standing.y)).toBeLessThan(0.1);
+  });
+
+  it("faces his team's attacking direction when he has never moved", () => {
+    const doc = twoScene((a, b) => {
+      a.carrier = HOME_9;
+      b.carrier = HOME_9;
+    });
+    const hold = resolveAt(doc, 3.2);
+    const player = positionAt(HOME_9, hold, doc);
+    expect(ballIn(doc, hold).x - player.x).toBeCloseTo(ballGlue(doc), 5);
+  });
+});

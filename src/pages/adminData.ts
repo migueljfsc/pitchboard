@@ -44,3 +44,22 @@ export function isoDay(at: number): string {
 export function shortDate(at: number): string {
   return new Date(at * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
 }
+
+/** One or more anonymous counters (D119), summed per day and filled like `fillDays`. */
+export function usageDays(
+  usage: Array<{ day: string; event: string; n: number }>,
+  events: readonly string[],
+  since: number,
+  days: number,
+): number[] {
+  const wanted = new Set(events);
+  const byDay = new Map<string, number>();
+  for (const row of usage) {
+    if (wanted.has(row.event)) byDay.set(row.day, (byDay.get(row.day) ?? 0) + row.n);
+  }
+  return fillDays([...byDay].map(([day, n]) => ({ day, n })), since, days);
+}
+
+/** The sum of the last `n` days of a daily series. */
+export const lastDays = (daily: number[], n: number): number =>
+  daily.slice(-n).reduce((a, b) => a + b, 0);

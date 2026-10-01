@@ -4,7 +4,7 @@ import { boardFromTracks } from "@/import";
 import { boardDocSchema } from "@/board/schema";
 import { addSceneAfter, setCarrier } from "@/board/scenes";
 import { createLink } from "@/board/links";
-import { AWAY, HOME, createBoardDoc } from "@/formations";
+import { AWAY, HOME, changeFormation, createBoardDoc, shapeOf } from "@/formations";
 import type { BoardDoc } from "@/board/types";
 import { say } from "@/i18n/core";
 import { en } from "@/i18n/en";
@@ -249,5 +249,19 @@ describe("tracks files", () => {
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
     expect(outcome.error.key).toBe("import.tracks.empty");
+  });
+});
+
+describe("a hand-drawn shape in a setup file (D122)", () => {
+  it("travels whole, and the file builds the same side again", () => {
+    const drawn = createBoardDoc();
+    drawn.scenes[0].positions["home-7"] = { x: 70, y: 6 };
+    const doc = changeFormation(createBoardDoc(), 0, shapeOf(drawn, 0, 0, "Wide"));
+
+    const outcome = fromJson(toSetupJson(doc), boardFromTracks);
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.doc.teams[0].shape?.name).toBe("Wide");
+    expect(outcome.doc.scenes[0].positions["home-7"].x).toBeCloseTo(70, 2);
   });
 });

@@ -7,7 +7,7 @@ choice in [`docs/decisions.md`](docs/decisions.md) — cited below as Dn.
 
 ## Mission
 
-A browser tactics board — football, futsal, basketball, handball, field hockey and volleyball, one engine (D113) — where a coach draws a formation, moves players between scenes along
+A browser tactics board — football, futsal, basketball, handball, field hockey, ice hockey and volleyball, one engine (D113, D123) — where a coach draws a formation, moves players between scenes along
 curved runs, and exports the result as MP4, GIF, or PNG. Everything renders client-side; there
 is no server-side video pipeline and there will not be one.
 
@@ -66,7 +66,7 @@ src/board/                the engine — zero React, zero DOM
   pitch.ts                IFAB dimensions table + markings
   surfaces.ts             each sport's court theme and drawing — the renderer never asks which sport
   court.ts                the basketball court: floor, FIBA markings, rings from above
-  futsal.ts, handball.ts, hockey.ts, volleyball.ts
+  futsal.ts, handball.ts, hockey.ts, icehockey.ts, volleyball.ts
                           the other courts, each in its rulebook's metres
   markings.ts             shapes more than one court draws: the goal-area D, one path for both ends
   geometry.ts             bezier, arc-length LUT, easing
@@ -105,7 +105,7 @@ worker/                   Cloudflare Worker — the API, and the SPA's static pa
   index.ts                the router: /api/*, and /share/<slug> pages named after their board;
                           every other asset is served ahead of it
   lib/                    session, google, users, auth (email and password), password, account,
-                          mail, turnstile, boards (and the project tree), presets,
+                          mail, turnstile, boards (and the project tree), presets, usage,
                           admin (the operator's /admin view), crypto, http, headers, limits
   migrations/             D1 schema, applied by CI before the script is deployed
 wrangler.jsonc            bindings and asset routing; the ONLY place a binding is declared
@@ -170,6 +170,9 @@ Each is one line of what breaks; the reasoning is in the cited decision.
   (`SportSpec.court` is where the lines are), so a server can stand behind the end line; the
   board's edge, not a line, is what clamps a player. Its net stands across the middle and is
   sorted among the players by the centre line, as a ring is by its backboard.
+- **An ice hockey net stands on the ice** (`NetGoal.line`, D123). A goal is the net's footprint, not
+  everything past the goal line, and in 3D it is sorted among the players like a ring. Read where a
+  goal is with `goalLineX`, never assume the end of the board.
 - **A ring stands INSIDE the court.** It is depth-sorted among the billboards by its backboard,
   never drawn at the ends as a net is; in 3D a drop on it is tested where it is drawn
   (`ringAtScreen`), and a goal takes the ball over a player standing under it.
@@ -232,6 +235,8 @@ Each is one line of what breaks; the reasoning is in the cited decision.
 - **The ball's line and its flight come from `passEnds`**, sampled once — never `u=0`/`u=1`, which
   is wrong the moment the ball has timing of its own, and never re-read per frame, or it homes in.
 - **Pass endpoints are live** — the receiver's interpolated position, not his final mark.
+- **A carried ball never snaps round.** Standing, it points the way he last ran (`lastHeading`),
+  not his team's attack; setting off, it turns over his first `ballGlue` metres.
 - **Giving the ball away carries forward**, and `"all"` reaches no further than `"stationary"`.
 - **A drawn ball is not the match ball** (D20); nothing that reads "the ball" sees it.
 - **A dragged ball is played from the document the drag STARTED from** (D111), or a carrier
@@ -280,6 +285,9 @@ Each is one line of what breaks; the reasoning is in the cited decision.
 - **A formation change drops that side's links**, and ownership is read from the OLD team.
 - **Anything added to `Team` goes through `TeamSpec` at all THREE builders** — `changeFormation`,
   the setup importer in `json.ts`, and `applyPreset`. Missing one fails quietly on that path.
+- **A drawn shape lives on the team, not only in the library** (`Team.shape`, D122) — a team has
+  `formation` or `shape`, never both, and anything that reads a team's formation reads both.
+  Saving one moves nobody (`setTeamShape`); picking one is a formation change.
 - **A stored preset names players by shirt number**, never by id.
 - **There is only ever ONE squad library** — never a local cache while signed in.
 
@@ -314,7 +322,7 @@ Each is one line of what breaks; the reasoning is in the cited decision.
 - **Export size follows the board**, both axes even.
 - **Cancelling an export is terminating the worker.**
 
-### Worker (D39, D109, D110, D114)
+### Worker (D39, D109, D110, D114, D119)
 - **Every recursive CTE carries `n < WALK_LIMIT`** — a walk over a cycle does not terminate.
 - **The password KDF runs in the browser.** `deriveKey`'s iterations, salt prefix and email
   normalisation are frozen by a test vector; changing any locks every password account out.
@@ -330,6 +338,11 @@ Each is one line of what breaks; the reasoning is in the cited decision.
 - **Never mix a bare `?` with `?N` in one statement** — SQLite binds the wrong value, silently.
 - **A new third-party origin goes in `SECURITY_HEADERS`** — the CSP there covers the Worker's
   responses and, through the `_headers` the build writes, every static file (D116).
+- **`usage_daily` names nobody** (D119) — no user, session, address or board, ever; that is why
+  it is off `deleteAccount`'s list. A new event goes in `USAGE_EVENTS` on both sides.
+- **Expired rows are the daily sweep's** (`cleanup.ts`, D120) — a new table with an expiry joins it.
+- **`POST /api/usage` is the one unauthenticated write**: the event list, `USAGE_LIMIT` and the
+  per-row cap are what keep it from spending the free tier. Keep all three.
 - **Deleting a project deletes its subtree**; the confirmation counts it.
 - **A sport's root is the library's shape** (D114): never renamed, moved or deleted, never counted
   against the folder or depth caps, and every other folder lives under one. A board is filed

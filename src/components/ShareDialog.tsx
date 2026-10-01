@@ -31,6 +31,7 @@ import type { CloudBoard } from "@/lib/useCloudBoard";
 import { ApiError, publishBoard, shareUrl as boardShareUrl, unpublishBoard } from "@/share/api";
 import { URL_BUDGET, encodeBoard, shareUrl, withinBudget, withoutHash } from "@/share/urlcodec";
 import { Modal } from "@/components/ui/Modal";
+import { countUsage } from "@/share/usage";
 
 type Method = "board" | "link";
 
@@ -89,6 +90,7 @@ export function ShareDialog({ doc, view, cloud, signedIn, onClose, blocked }: Pr
     try {
       await navigator.clipboard.writeText(url);
       setLink({ kind: "copied", chars });
+      countUsage("share.snapshot");
     } catch {
       setLink({ kind: "manual", url });
     }
@@ -118,6 +120,7 @@ export function ShareDialog({ doc, view, cloud, signedIn, onClose, blocked }: Pr
     try {
       const minted = await publishBoard(cloud.board.id);
       setSlug(minted);
+      countUsage("share.live");
       await navigator.clipboard.writeText(boardShareUrl(minted)).catch(() => undefined);
       setBoardCopied(true);
       window.setTimeout(() => setBoardCopied(false), 4000);

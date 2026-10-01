@@ -134,6 +134,27 @@ export function addSceneAfter(doc: BoardDoc, index: number, name?: string): Boar
   return replace(doc, scenes);
 }
 
+/** Whether any scene has a note: what decides whether notes get room at all. */
+export const hasNotes = (doc: BoardDoc): boolean => doc.scenes.some((scene) => scene.note?.trim());
+
+/** A scene's note: a few coaching points, not an essay — it has to fit a caption. */
+export const MAX_NOTE_CHARS = 500;
+
+/**
+ * Write a scene's note, as typed — trailing spaces and all, since it is written per keystroke.
+ * Emptying it removes the field, so a board with no notes serialises as it always did.
+ */
+export function setSceneNote(doc: BoardDoc, index: number, note: string): BoardDoc {
+  const scene = doc.scenes[index];
+  if (!scene) return doc;
+  const next = { ...scene };
+  if (note.trim()) next.note = note.slice(0, MAX_NOTE_CHARS);
+  else delete next.note;
+  const scenes = doc.scenes.slice();
+  scenes[index] = next;
+  return { ...doc, scenes };
+}
+
 /** Copy a scene wholesale, paths included — useful for a repeated movement. */
 export function duplicateScene(doc: BoardDoc, index: number, name?: string): BoardDoc {
   const base = doc.scenes[index];

@@ -6,7 +6,17 @@ import { App } from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { I18nProvider } from "./i18n/react";
 import { clearBoard } from "./share/local";
-import { APP_PATH, HOME_STATE, cameHome, isLandingPath, wantsApp, wantsHome } from "./share/routes";
+import {
+  APP_PATH,
+  HOME_STATE,
+  cameHome,
+  isAdminPath,
+  isLandingPath,
+  readShareSlug,
+  wantsApp,
+  wantsHome,
+} from "./share/routes";
+import { countUsage } from "./share/usage";
 import { wasSignedIn } from "./share/signedIn";
 import { readHash } from "./share/urlcodec";
 import { loadBoardFonts } from "./fonts";
@@ -39,6 +49,13 @@ if (isLandingPath() && wantsHome()) {
 ) {
   const { search, hash } = window.location;
   window.history.replaceState(null, "", `${APP_PATH}${search}${hash}`);
+}
+
+// One page view per load, decided here rather than in an effect, which StrictMode runs twice.
+// The operator's own page is not a visit (D119).
+if (!isAdminPath()) {
+  const shared = readShareSlug() !== null || readHash(window.location.hash) !== null;
+  countUsage(shared ? "page.viewer" : isLandingPath() ? "page.landing" : "page.editor");
 }
 
 // Before the first draw, because the board canvas only redraws when the board changes: a label

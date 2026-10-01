@@ -65,13 +65,40 @@ export type Team = {
    * reset without also resetting names, links and scenes.
    */
   formation?: string;
+  /**
+   * A shape drawn by hand in place of `formation` (D122). Carried on the document, not left in
+   * the library it was picked from, so a shared board resets to it without that library.
+   */
+  shape?: TeamShape;
   /** Absent means the keeper wears the team's kit, as every board did before this existed. */
   keeper?: TeamKeeper;
+};
+
+/**
+ * A formation drawn by hand rather than written as notation (D122): where each slot stands,
+ * keeper first, and the units it links.
+ *
+ * Measured as the side defending the LEFT goal sees it — `depth` from its own goal line and
+ * `across` from the top touchline, both fractions of the board — so one shape lays out for
+ * either side and on any board of its sport, mirrored for the side defending the right.
+ */
+export type TeamShape = {
+  /** What the picker calls it — "Our 4-4-2 diamond". */
+  name: string;
+  slots: { depth: number; across: number; number: number }[];
+  /** A unit links slots by index, in chain order. */
+  units?: { name: string; style: LinkStyle; slots: number[] }[];
 };
 
 export type Scene = {
   id: string;
   name: string;
+  /**
+   * What the coach wants said about this scene — "the 6 steps into the gap as the 8 turns".
+   * Shown under the board in the viewer and while presenting, and in an export's caption when
+   * asked for. Absent is no note; an emptied one is removed rather than kept as "".
+   */
+  note?: string;
   /** Travel time INTO this scene. Meaningless on scene 0 — nothing to travel from. */
   transitionMs: number;
   /** Still time at this scene. */
@@ -397,7 +424,7 @@ export type Origin = {
 };
 
 /** Every game a board can be drawn for, in the order a picker offers them. */
-export const SPORT_IDS = ["football", "futsal", "basketball", "handball", "hockey", "volleyball"] as const;
+export const SPORT_IDS = ["football", "futsal", "basketball", "handball", "hockey", "icehockey", "volleyball"] as const;
 
 /** The game a board is drawn for. Its court, markings, goals, ball and lineups follow it. */
 export type Sport = (typeof SPORT_IDS)[number];
@@ -570,9 +597,9 @@ export type RenderView = Viewport & {
   transparent?: boolean;
   /**
    * Export only: a caption in the corner of the frame — a title, and optionally
-   * the name of the scene being played into, which changes as the clip runs.
+   * the name of the scene being played into and its note, which change as the clip runs.
    */
-  caption?: { title: string; scene: boolean } | null;
+  caption?: { title: string; scene: boolean; note?: boolean } | null;
 };
 
 /** The ball is addressed by this id wherever an entity id is expected. */

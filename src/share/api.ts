@@ -12,6 +12,7 @@
 /** A board's row, without the document — what a list needs and no more. */
 import type { Sport } from "@/board/types";
 import { sharePath } from "./routes";
+import type { UsageEvent } from "./usage";
 
 export interface BoardSummary {
   id: string;
@@ -343,6 +344,38 @@ export async function deletePreset(id: string): Promise<void> {
   await call(`/presets/${id}`, { method: "DELETE" });
 }
 
+// --- hand-drawn formations (D122) ----------------------------------------------------------
+
+export interface StoredFormation {
+  id: string;
+  name: string;
+  body: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export async function listFormations(): Promise<StoredFormation[]> {
+  const { formations } = await call<{ formations: StoredFormation[] }>("/formations");
+  return formations;
+}
+
+export async function createFormation(name: string, body: string): Promise<StoredFormation> {
+  const { formation } = await call<{ formation: StoredFormation }>("/formations", {
+    method: "POST",
+    body: JSON.stringify({ name, body }),
+  });
+  return formation;
+}
+
+/** A whole update — renaming and re-saving a shape are the same request. */
+export async function saveFormation(id: string, name: string, body: string): Promise<void> {
+  await call(`/formations/${id}`, { method: "PUT", body: JSON.stringify({ name, body }) });
+}
+
+export async function deleteFormation(id: string): Promise<void> {
+  await call(`/formations/${id}`, { method: "DELETE" });
+}
+
 // --- sharing -----------------------------------------------------------------------------
 
 /**
@@ -420,6 +453,8 @@ export interface AdminStats {
   };
   /** How accounts sign in; each account is in exactly one bucket. */
   methods: { google: number; password: number; both: number };
+  /** Everybody's use, per UTC day and event, only where there was any (D119). */
+  usage: Array<{ day: string; event: UsageEvent; n: number }>;
 }
 
 export interface AdminUserDetail {
