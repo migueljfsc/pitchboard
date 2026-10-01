@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.88.1 (2026-10-01)
+
+### Fix
+
+- **ui**: chalk favicon and logo ink to match the dark-grass identity
+
 ## v0.88.0 (2026-10-01)
 
 ### Feat
