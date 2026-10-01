@@ -2,7 +2,7 @@
   "name": "pitchboard",
   "private": true,
   "type": "module",
-  "version": "0.88.1",
+  "version": "0.89.0",
   "description": "Animated multi-sport tactics board with client-side MP4/GIF/PNG export.",
   "packageManager": "pnpm@11.9.0",
   "engines": {

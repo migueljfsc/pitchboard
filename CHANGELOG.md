@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.89.0 (2026-10-01)
+
+### Feat
+
+- **editor**: scene controls back under the timeline, folded run sections
+
 ## v0.88.1 (2026-10-01)
 
 ### Fix
