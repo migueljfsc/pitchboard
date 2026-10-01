@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { BookmarkPlus, Check, Pencil, Trash2, X } from "lucide-react";
+import { BookmarkPlus, Check, ChevronDown, Pencil, Trash2, X } from "lucide-react";
 import type { BoardDoc } from "@/board/types";
 import { formationGroupsFor, formationsFor } from "@/formations";
 import { formationLabel, groupLabel } from "@/lib/formationText";
@@ -121,6 +121,7 @@ export function FormationPicker({
         </div>
       ) : (
         <div className="flex gap-1">
+          <span className="relative flex min-w-0 flex-1">
           <select
             value={value}
             onChange={(e) => {
@@ -130,7 +131,7 @@ export function FormationPicker({
               else onFormationChange(teamIndex, next);
             }}
             aria-label={t("team.formation")}
-            className="min-w-0 flex-1 rounded-md border border-ink-600 bg-ink-900 px-2 py-1.5 text-xs text-ink-200 outline-none focus:border-accent"
+            className="min-w-0 flex-1 appearance-none rounded-md border border-ink-600 bg-ink-900 py-1.5 pl-2 pr-7 text-xs text-ink-200 outline-none transition hover:border-ink-400 focus:border-accent"
           >
             {shape && !kept && <option value={OWN}>{shape.name}</option>}
             {shapes.length > 0 && (
@@ -154,6 +155,12 @@ export function FormationPicker({
               </optgroup>
             ))}
           </select>
+          <ChevronDown
+            size={13}
+            aria-hidden
+            className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-ink-400"
+          />
+          </span>
           <LibraryButton
             onClick={() => {
               setDraft(shape?.name ?? t("shape.defaultName"));

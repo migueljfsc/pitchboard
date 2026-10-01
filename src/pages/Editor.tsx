@@ -12,7 +12,8 @@ import { loadSport, saveSport } from "@/share/sport";
 import { BALL_ID, DEFAULT_PITCH_VIEW, DEFAULT_TOOL, isDrawTool } from "@/board/types";
 import { BoardCanvas } from "@/components/BoardCanvas";
 import { TeamControls } from "@/components/TeamControls";
-import { ViewControls, type Ghosts } from "@/components/ViewControls";
+import { type Ghosts } from "@/components/ViewControls";
+import { BoardViewBar } from "@/components/BoardViewBar";
 import { Section } from "@/components/ui/Section";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
@@ -31,7 +32,6 @@ import {
   FileText,
   EyeOff,
   FastForward,
-  Frame,
   Goal,
   Link2,
   MousePointer2,
@@ -61,13 +61,13 @@ import {
   Upload,
   Users,
 } from "lucide-react";
-import { Inspector } from "@/components/Inspector";
+import { CarryMenu, Inspector } from "@/components/Inspector";
 import { DrawingsPanel } from "@/components/DrawingsPanel";
 import { ExportDialog } from "@/components/ExportDialog";
 import { ShortcutsDialog } from "@/components/ShortcutsDialog";
 import { ShareDialog } from "@/components/ShareDialog";
 import { ImportDialog, type ImportKind } from "@/components/ImportDialog";
-import { LinkPanel } from "@/components/LinkPanel";
+import { LinkCard, LinkPanel } from "@/components/LinkPanel";
 import { DrawPanel, DrawToolStrip } from "@/components/DrawPanel";
 import { SceneThumb } from "@/components/SceneThumb";
 import { SpeedButton, Timeline } from "@/components/Timeline";
@@ -194,7 +194,6 @@ type TourRestore = {
   chosenScene: number;
   time: number;
   playing: boolean;
-  viewOpen: boolean;
   formationsOpen: boolean;
   formationsFolded: boolean;
   selectionOpen: boolean;
@@ -298,6 +297,9 @@ export function Editor({ initialDoc }: Props = {}) {
   // How fast playback runs. Editor-only: an export always renders at 1×.
   const [speed, setSpeed] = useState(1);
   const [expandedLink, setExpandedLink] = useState<string | null>(null);
+  // The link last picked on the board. The Selection card shows it while the selection is still
+  // exactly its players — a pick selects them first — so any other click hands the card back.
+  const [cardLink, setCardLink] = useState<string | null>(null);
   const [pitchView, setPitchView] = useState<PitchView>(DEFAULT_PITCH_VIEW);
   const [pending, setPending] = useState<Pending | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
@@ -323,7 +325,6 @@ export function Editor({ initialDoc }: Props = {}) {
     if (present) countUsage("present");
   }, [present]);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const [viewOpen, setViewOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   // A floating menu: the board's right-click, the template picker, or the history.
   const [menu, setMenu] = useState<
@@ -511,6 +512,13 @@ export function Editor({ initialDoc }: Props = {}) {
     const kept = [...selection].filter((id) => live.has(id) && !concealed.has(id));
     return kept.length === selection.size ? selection : new Set(kept);
   }, [doc, selection]);
+  const shownLink = useMemo(() => {
+    const link = cardLink ? doc.links.find((l) => l.id === cardLink) : undefined;
+    return link && link.members.length === selection.size && link.members.every((id) => selection.has(id))
+      ? link
+      : null;
+  }, [cardLink, doc.links, selection]);
+  if (cardLink && !shownLink) setCardLink(null);
 
   // Adjusted while rendering rather than in an effect: it follows the selection
   // however it changed — a click, a marquee, a link's members, an undo.
@@ -518,14 +526,6 @@ export function Editor({ initialDoc }: Props = {}) {
   const [hadSelection, setHadSelection] = useState(hasSelection);
   if (hadSelection !== hasSelection) {
     setHadSelection(hasSelection);
-    if (hasSelection && formationsOpen) {
-      setFormationsOpen(false);
-      setFormationsFolded(true);
-      setSelectionOpen(true);
-    } else if (!hasSelection && formationsFolded) {
-      setFormationsOpen(true);
-      setFormationsFolded(false);
-    }
   }
 
   // Playback. Driven by wall-clock delta rather than a fixed step so the animation
@@ -586,7 +586,6 @@ export function Editor({ initialDoc }: Props = {}) {
    */
   const stageTour = (step: number) => {
     const stage: TourStage = TOUR_STEPS[step].stage;
-    setViewOpen(stage.panel === "view");
     setFormationsOpen(stage.panel === "formations");
     setFormationsFolded(false);
     setSelectionOpen(stage.panel === "selection");
@@ -614,7 +613,6 @@ export function Editor({ initialDoc }: Props = {}) {
         chosenScene,
         time,
         playing,
-        viewOpen,
         formationsOpen,
         formationsFolded,
         selectionOpen,
@@ -638,7 +636,6 @@ export function Editor({ initialDoc }: Props = {}) {
     setActiveScene(r.chosenScene);
     setTime(r.time);
     setPlaying(r.playing);
-    setViewOpen(r.viewOpen);
     setFormationsOpen(r.formationsOpen);
     setFormationsFolded(r.formationsFolded);
     setSelectionOpen(r.selectionOpen);
@@ -1163,6 +1160,12 @@ export function Editor({ initialDoc }: Props = {}) {
           icon: <LayoutTemplate size={13} />,
           onSelect: () => openTemplates(menu?.at ?? { x: 0, y: 0 }),
         },
+        {
+          label: t("reset.positions"),
+          title: t("reset.positions.title"),
+          icon: <Users size={13} />,
+          onSelect: () => setPending({ kind: "positions" }),
+        },
       ];
     }
 
@@ -1331,6 +1334,13 @@ export function Editor({ initialDoc }: Props = {}) {
     "divider",
     { label: t("bar.import"), title: t("bar.import.title"), icon: <Upload size={13} />, onSelect: () => setImportOpen(true) },
     { label: t("bar.export"), title: t("bar.export.title"), icon: <Download size={13} />, onSelect: () => setExportOpen(true) },
+    "divider",
+    {
+      label: t("reset.positions"),
+      title: t("reset.positions.title"),
+      icon: <Users size={13} />,
+      onSelect: () => setPending({ kind: "positions" }),
+    },
   ];
 
   const historyMenu = (): MenuItem[] => {
@@ -2000,26 +2010,11 @@ export function Editor({ initialDoc }: Props = {}) {
         {!present && (
         <aside
           style={{ width: layout.left }}
-          className="flex shrink-0 flex-col overflow-y-auto border-r border-ink-700 bg-ink-800"
+          className="flex shrink-0 flex-col border-r border-ink-700 bg-ink-800"
         >
-          <Section
-            title={t("section.view")}
-            icon={<Frame size={13} />}
-            open={viewOpen}
-            onOpenChange={setViewOpen}
-            tour="view"
-          >
-            <ViewControls
-              view={pitchView}
-              onChange={setPitchView}
-              doc={doc}
-              onTokenScaleChange={(tokenScale) => setDoc({ ...doc, tokenScale }, "token-scale")}
-              onGrassChange={(grass) => setDoc({ ...doc, grass }, "grass")}
-              ghosts={ghosts}
-              onGhostsChange={setGhosts}
-            />
-          </Section>
-
+          {/* The board's setup, as tall as it is and scrolling once it is taller than there is room
+              for: the teams, then the links between them. */}
+          <div className="min-h-0 shrink overflow-y-auto">
           {/* Both sides in one section, one at a time: a tab per side, like the
               Selection panel's, so the section is half the height it was with the
               two stacked. */}
@@ -2079,6 +2074,8 @@ export function Editor({ initialDoc }: Props = {}) {
                     onSaveShape={onSaveShape}
                     onRenameShape={shapes.rename}
                     onDeleteShape={shapes.remove}
+                    selection={visible}
+                    onSelectPlayer={(id) => setSelection(new Set([id]))}
                   />
                 </div>
               ))}
@@ -2090,50 +2087,19 @@ export function Editor({ initialDoc }: Props = {}) {
                   {tm(libraryError)}
                 </p>
               )}
+              {/* Beside the formations it puts everyone back on: where a coach looks for it. */}
+              <button
+                type="button"
+                onClick={() => setPending({ kind: "positions" })}
+                title={t("reset.positions.title")}
+                className="flex items-center justify-center gap-1.5 rounded-md border border-ink-600 px-2 py-1.5 text-xs text-ink-300 transition hover:border-accent hover:text-white"
+              >
+                <RotateCcw size={13} />
+                {t("reset.positions")}
+              </button>
             </div>
           </Section>
 
-          <Section
-            title={t("section.selection")}
-            icon={<MousePointer2 size={13} />}
-            tour="selection"
-            badge={visible.size ? String(visible.size) : undefined}
-            open={selectionOpen}
-            onOpenChange={setSelectionOpen}
-          >
-            <Inspector
-              doc={doc}
-              selection={visible}
-              activeScene={activeScene}
-              canEditPaths={editScene !== undefined}
-              onCarrierChange={onCarrierChange}
-              onClearPaths={onClearPaths}
-              canStraighten={canStraighten}
-              onRename={(id, label) => setDoc(setPlayerLabel(doc, id, label), `label:${id}`)}
-              onRenumber={(id, n) => setDoc(setPlayerNumber(doc, id, n), `number:${id}`)}
-              onTravelChange={onTravelChange}
-              onDelayChange={onDelayChange}
-              onRunStyleChange={onRunStyleChange}
-              carry={carry}
-              onCarryChange={setCarry}
-              onRemovePlayer={onRemovePlayer}
-              onSwitchSide={(id) => setDoc(switchSide(doc, id))}
-              onMakeKeeper={(id) => setDoc(setKeeper(doc, id))}
-              runsHidden={runsHidden}
-              onRunsHiddenChange={onRunsHiddenChange}
-              highlighted={highlighted}
-              highlightColor={litColor}
-              onHighlightChange={onHighlightChange}
-              onGoToScene={(index) => selectScene(index)}
-              onResetMove={onResetMove}
-              canResetMove={canResetMove(doc, activeScene, selectedPlayers)}
-              onRemoveAllMovement={onRemoveAllMovement}
-              hasMovement={hasMovement(doc, selectedPlayers)}
-              trailOn={trailOn}
-              onTrailChange={setTrailOn}
-              focusName={focusName}
-            />
-          </Section>
           <Section
             title={t("section.links")}
             icon={<Link2 size={13} />}
@@ -2157,29 +2123,87 @@ export function Editor({ initialDoc }: Props = {}) {
             />
           </Section>
 
-          <div className="mt-auto flex flex-col gap-1.5 border-t border-ink-700 p-4">
-            <button
-              type="button"
-              title={t("template.open.title")}
-              onClick={(e) => {
-                const r = e.currentTarget.getBoundingClientRect();
-                openTemplates({ x: r.left, y: r.top - 4 }, true);
-              }}
-              className="flex w-full items-center justify-center gap-1.5 rounded-md border border-ink-600 px-2 py-1.5 text-xs text-ink-300 transition hover:border-accent hover:text-white"
-            >
-              <LayoutTemplate size={13} />
-              {t("template.open")}
-            </button>
-            {/* Puts the shape back. Starting again is File → New board. */}
-            <button
-              type="button"
-              onClick={() => setPending({ kind: "positions" })}
-              className="flex w-full items-center justify-center gap-1.5 rounded-md border border-ink-600 px-2 py-1.5 text-xs text-ink-300 transition hover:border-accent hover:text-white"
-            >
-              <Users size={13} />
-              {t("reset.positions")}
-            </button>
           </div>
+
+          {/* Whatever is selected, filling the rest of the column: its height follows the sections
+              above it, never the selection, so nothing moves as the selection changes; a long
+              inspector scrolls inside it. Folded, it is its header and the setup has the column. */}
+          <section
+            data-tour="selection"
+            className={cn(
+              "flex flex-col border-t border-ink-600 bg-ink-900/40 shadow-[0_-8px_16px_-12px_rgb(0_0_0/0.6)]",
+              selectionOpen ? "min-h-64 flex-1" : "shrink-0",
+            )}
+          >
+            <header className="flex shrink-0 items-center gap-2 border-b border-ink-700 bg-ink-900/70 pr-3 transition hover:bg-ink-700/60">
+              <button
+                type="button"
+                onClick={() => setSelectionOpen(!selectionOpen)}
+                aria-expanded={selectionOpen}
+                className="flex shrink-0 flex-1 items-center gap-2 py-2.5 pl-3 text-left"
+              >
+                <span className="flex size-5 shrink-0 items-center justify-center rounded bg-ink-700 text-ink-200">
+                  <ChevronDown
+                    size={13}
+                    className={cn("transition-transform duration-200 ease-(--ease-out)", !selectionOpen && "-rotate-90")}
+                  />
+                </span>
+                <MousePointer2 size={13} className={cn("shrink-0", selectionOpen ? "text-accent" : "text-ink-400")} />
+                <span className="flex-1 whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-white">
+                  {t("section.selection")}
+                </span>
+                {!selectionOpen && visible.size > 0 && (
+                  <span className="font-mono text-[11px] text-ink-400">{visible.size}</span>
+                )}
+              </button>
+              <CarryMenu carry={carry} onChange={setCarry} />
+            </header>
+            {selectionOpen && (
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3">
+              {shownLink ? (
+                <LinkCard
+                  doc={doc}
+                  linkId={shownLink.id}
+                  onDocChange={setDoc}
+                  sceneIndex={activeScene}
+                  onPlayers={() => setCardLink(null)}
+                />
+              ) : (
+          <Inspector
+                doc={doc}
+                selection={visible}
+                activeScene={activeScene}
+                canEditPaths={editScene !== undefined}
+                onCarrierChange={onCarrierChange}
+                onClearPaths={onClearPaths}
+                canStraighten={canStraighten}
+                onRename={(id, label) => setDoc(setPlayerLabel(doc, id, label), `label:${id}`)}
+                onRenumber={(id, n) => setDoc(setPlayerNumber(doc, id, n), `number:${id}`)}
+                onTravelChange={onTravelChange}
+                onDelayChange={onDelayChange}
+                onRunStyleChange={onRunStyleChange}
+                carry={carry}
+                onRemovePlayer={onRemovePlayer}
+                onSwitchSide={(id) => setDoc(switchSide(doc, id))}
+                onMakeKeeper={(id) => setDoc(setKeeper(doc, id))}
+                runsHidden={runsHidden}
+                onRunsHiddenChange={onRunsHiddenChange}
+                highlighted={highlighted}
+                highlightColor={litColor}
+                onHighlightChange={onHighlightChange}
+                onGoToScene={(index) => selectScene(index)}
+                onResetMove={onResetMove}
+                canResetMove={canResetMove(doc, activeScene, selectedPlayers)}
+                onRemoveAllMovement={onRemoveAllMovement}
+                hasMovement={hasMovement(doc, selectedPlayers)}
+                trailOn={trailOn}
+                onTrailChange={setTrailOn}
+                focusName={focusName}
+              />
+              )}
+            </div>
+            )}
+          </section>
         </aside>
         )}
 
@@ -2371,6 +2395,17 @@ export function Editor({ initialDoc }: Props = {}) {
               />
             )}
             <Toaster toasts={toasts} onDismiss={dismissToast} />
+            {!present && (
+              <BoardViewBar
+                view={pitchView}
+                onChange={setPitchView}
+                doc={doc}
+                onTokenScaleChange={(tokenScale) => setDoc({ ...doc, tokenScale }, "token-scale")}
+                onGrassChange={(grass) => setDoc({ ...doc, grass }, "grass")}
+                ghosts={ghosts}
+                onGhostsChange={setGhosts}
+              />
+            )}
             <BoardCanvas
               doc={doc}
               t={time}
@@ -2393,10 +2428,7 @@ export function Editor({ initialDoc }: Props = {}) {
               sticky={sticky}
               annotationSelection={present ? null : annotation}
               onAnnotationSelect={selectAnnotation}
-              onLinkPick={(id) => {
-                setLinksOpen(true);
-                setExpandedLink(id);
-              }}
+              onLinkPick={setCardLink}
               trail={trailOn && !present ? selectedPlayers : undefined}
               sceneCamera={playing || present}
               playing={playing}

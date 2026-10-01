@@ -51,14 +51,18 @@ export function Section({
         type="button"
         onClick={toggle}
         aria-expanded={open}
-        className="flex w-full items-center gap-1.5 px-4 py-2.5 text-left transition hover:bg-ink-700/40"
+        className="sticky top-0 z-[5] flex w-full items-center gap-2 border-b border-ink-700 bg-ink-900/70 px-3 py-2.5 text-left backdrop-blur transition hover:bg-ink-700/60"
       >
-        <ChevronDown
-          size={13}
-          className={cn("shrink-0 text-ink-400 transition-transform duration-200 ease-(--ease-out)", !open && "-rotate-90")}
-        />
-        {icon && <span className="flex shrink-0 items-center text-ink-400">{icon}</span>}
-        <span className="flex-1 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-ink-200">
+        {/* A chevron in a box of its own: in a long panel the header has to read as a control,
+            not as one more line of the panel's own text. Sticky, so it stays in reach. */}
+        <span className="flex size-5 shrink-0 items-center justify-center rounded bg-ink-700 text-ink-200">
+          <ChevronDown
+            size={13}
+            className={cn("transition-transform duration-200 ease-(--ease-out)", !open && "-rotate-90")}
+          />
+        </span>
+        {icon && <span className={cn("flex shrink-0 items-center", open ? "text-accent" : "text-ink-400")}>{icon}</span>}
+        <span className="flex-1 shrink-0 text-xs font-semibold uppercase tracking-wide text-white">
           {title}
         </span>
         {/* One line, shortened if it must: a long lineup name wraps the header otherwise. */}

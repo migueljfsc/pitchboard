@@ -242,13 +242,17 @@ Each is one line of what breaks; the reasoning is in the cited decision.
 - **A dragged ball is played from the document the drag STARTED from** (D111), or a carrier
   sticks to every player it passes over. Only the net infers a shot.
 
-### Editing (D41, D26, D93)
+### Editing (D41, D26, D93, D125)
 - **A carry is judged scene-by-scene, never against the edited scene**, or a second nudge
   captures a scene the first stopped at.
 - **A drag emits a document per `pointermove`** — history needs the merge key.
 - **Anything that deletes or replaces work goes through `notify`**, or the Undo is silently lost.
 - **Presenting edits nothing.** The key handler's `present` branch returns before any editing
   key; a new shortcut that edits goes below it (D116).
+- **The squad list's order is the formations' slot order** (D125) — never sort or reorder its
+  rows; a renumber that moved a row looked like a player being added.
+- **The Selection card shows a link only while the selection is exactly its members** (D125);
+  a pick selects them first, so any other click hands the card back.
 - **A field that validates per keystroke blocks the value being typed** (7 → 12 passes through 1;
   20 passes through ""). Use `components/ui/NumberField.tsx`; `SizeField` in `DrawPanel.tsx` is
   the one remaining copy.

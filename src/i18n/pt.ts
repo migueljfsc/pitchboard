@@ -154,6 +154,10 @@ export const pt: Dictionary = {
   "view.board": "Quadro",
   "view.players": "Jogadores",
   "view.ghostsShort": "Fantasmas",
+  "viewbar.move": "Arraste para mover",
+  "viewbar.collapse": "Recolher a barra de vista",
+  "viewbar.expand": "Expandir a barra de vista",
+  "viewbar.reset": "Repor a barra de vista",
   "view.left": "Esquerda",
   "view.full": "Todo",
   "view.right": "Direita",
@@ -202,12 +206,16 @@ export const pt: Dictionary = {
   "team.color.pick": "Escolher a cor da camisola do {team}",
   "team.keeper.pick": "Escolher o equipamento do guarda-redes do {team}",
   "team.shirt": "Camisola",
+  "team.squad": "Plantel",
+  "team.squad.select": "Selecionar o número {number} no quadro",
+  "team.kit": "Equipamento",
   "pattern.solid": "Liso",
   "pattern.vertical": "Riscas verticais",
   "pattern.horizontal": "Riscas horizontais",
 
   // ----------------------------------------------------------------- reset
   "reset.positions": "Repor posições",
+  "reset.positions.title": "Repor todos os jogadores na posição do sistema, em todas as cenas",
 
   // ---------------------------------------------------------------- share
   "share.dialog": "Partilhar",
@@ -463,8 +471,16 @@ export const pt: Dictionary = {
   "timeline.deleteScene": "Apagar a cena",
 
   // ------------------------------------------------------------- inspector
-  "inspect.empty":
-    "Clique num jogador para o selecionar, duplo clique para lhe mudar o nome. Shift+clique para juntar, ou arraste sobre um espaço vazio para marcar uma área. As setas deslocam; com shift, cinco vezes mais. O espaço reproduz.",
+  "inspect.empty.lead": "Clique num jogador, na bola ou numa ligação no quadro.",
+  "inspect.quick.ball": "Dar bola",
+  "inspect.quick.release": "Soltar",
+  "inspect.quick.highlight": "Destaque",
+  "inspect.quick.path": "Trajeto",
+  "inspect.quick.arrow": "Seta",
+  "inspect.run.title": "Corrida até {scene}",
+  "inspect.run.summary": "{travel}s · {style}",
+  "inspect.run.summaryWait": "{wait}s + {travel}s · {style}",
+  "inspect.everyScene": "Em todas as cenas",
   "inspect.carry": "Ao arrastar ou mover",
   "inspect.carry.scene": "Só esta cena",
   "inspect.carry.scene.hint":
@@ -762,6 +778,7 @@ export const pt: Dictionary = {
   "links.unhighlight": "Deixar de destacar a ligação nesta cena",
   "links.keepLit": "Manter a ligação fora do escuro em todas as cenas",
   "links.letDim": "Escurecer a ligação com o resto do quadro",
+  "links.card.players": "Editar os {n} jogadores",
   "links.selectMembers": "Selecionar {n} jogadores",
   "links.name": "Nome",
   "links.name.label": "Nome da ligação",
@@ -1137,7 +1154,7 @@ export const pt: Dictionary = {
     "Não há bola até a dar a alguém. Clique com o botão direito num jogador e escolha Dar a bola, ou selecione-o e carregue em B. Fica nos pés dele enquanto conduz.\nPara a jogar, adicione uma cena e arraste a bola para onde vai: para um colega para passar, para a baliza ou o cesto para rematar, para um espaço vazio para a soltar. Chega ao recetor em movimento. Clique com o botão direito na bola para a levantar do chão.",
   "tour.links.title": "Ligações",
   "tour.links.body":
-    "Selecione dois ou mais jogadores e ligue-os para mostrar uma linha de quatro ou um bloco de pressão. A ligação segue os jogadores a cada fotograma, por isso a forma estica à medida que se movem.\nCadeia desenha uma linha aberta pela ordem dos membros. Forma e Preenchida fecham-na. Também pode limitar uma ligação a um intervalo de cenas.",
+    "Selecione dois ou mais jogadores e ligue-os para mostrar uma linha de quatro ou um bloco de pressão. A ligação segue os jogadores a cada fotograma, por isso a forma estica à medida que se movem.\nCadeia desenha uma linha aberta pela ordem dos membros. Forma e Preenchida fecham-na. Clique numa ligação no campo para a editar em Seleção, ou limite-a a um intervalo de cenas.",
   "tour.draw.title": "Desenho",
   "tour.draw.body":
     "As ferramentas de desenho estão neste painel: setas, linhas, zonas, a caneta, texto e uma bola. O que desenhar fica onde o pôs, nas cenas que escolher. Os jogadores não o mexem.\nUma bola desenhada é só uma imagem. A bola do jogo é a que dá aos jogadores.",
@@ -1146,7 +1163,7 @@ export const pt: Dictionary = {
     "Clique com o botão direito num jogador (ou use este painel) para o destacar. O resto do quadro escurece à volta dele, e Escurecer, na linha temporal, define quanto.\nUm destaque pertence a uma só cena. Os movimentos passam para as cenas seguintes e os destaques não, por isso a atenção cai exatamente onde a pôs.",
   "tour.view.title": "Vista",
   "tour.view.body":
-    "Rode o campo, mostre só metade ou passe para 3D. Também pode mudar o piso e o tamanho dos jogadores. Os fantasmas mostram a cena anterior ou a seguinte, esbatidas por baixo.\nMantenha {mod} e use a roda do rato para fazer zoom. Cada cena guarda o seu zoom, e a reprodução e as exportações seguem-no.",
+    "Esta barra ao lado do campo roda-o, mostra só metade ou passa para 3D. Os fantasmas mostram a cena anterior ou a seguinte, esbatidas por baixo, e os controlos deslizantes definem o piso e o tamanho dos jogadores. Arraste a barra pela pega para onde não incomode.\nMantenha {mod} e use a roda do rato para fazer zoom. Cada cena guarda o seu zoom, e a reprodução e as exportações seguem-no.",
   "tour.present.title": "Apresentar",
   "tour.present.body":
     "Enche a janela com o quadro e esconde os painéis, para explicar a jogada a uma equipa. Esc volta atrás.",

@@ -159,6 +159,10 @@ export const en = {
   "view.board": "Board",
   "view.players": "Players",
   "view.ghostsShort": "Ghosts",
+  "viewbar.move": "Drag to move",
+  "viewbar.collapse": "Fold the view bar",
+  "viewbar.expand": "Unfold the view bar",
+  "viewbar.reset": "Put the view bar back",
   "view.left": "Left",
   "view.full": "Full",
   "view.right": "Right",
@@ -207,12 +211,16 @@ export const en = {
   "team.color.pick": "Choose {team} shirt colour",
   "team.keeper.pick": "Choose {team} goalkeeper kit",
   "team.shirt": "Shirt",
+  "team.squad": "Squad",
+  "team.squad.select": "Select number {number} on the board",
+  "team.kit": "Kit",
   "pattern.solid": "Solid",
   "pattern.vertical": "Vertical stripes",
   "pattern.horizontal": "Hooped",
 
   // ----------------------------------------------------------------- reset
   "reset.positions": "Reset positions",
+  "reset.positions.title": "Put every player back on their formation mark, in every scene",
 
   // ---------------------------------------------------------------- share
   "share.dialog": "Share",
@@ -473,8 +481,16 @@ export const en = {
   "timeline.deleteScene": "Delete scene",
 
   // ------------------------------------------------------------- inspector
-  "inspect.empty":
-    "Click a player to select, double-click to rename. Shift-click to add, or drag on empty space to marquee. Arrow keys nudge; hold shift to go five times as far. Space plays.",
+  "inspect.empty.lead": "Click a player, the ball or a link on the board.",
+  "inspect.quick.ball": "Give ball",
+  "inspect.quick.release": "Release",
+  "inspect.quick.highlight": "Glow",
+  "inspect.quick.path": "Path",
+  "inspect.quick.arrow": "Arrow",
+  "inspect.run.title": "Run into {scene}",
+  "inspect.run.summary": "{travel}s · {style}",
+  "inspect.run.summaryWait": "{wait}s + {travel}s · {style}",
+  "inspect.everyScene": "In every scene",
   "inspect.carry": "When I drag or nudge",
   "inspect.carry.scene": "This scene",
   "inspect.carry.scene.hint":
@@ -769,6 +785,7 @@ export const en = {
   "links.unhighlight": "Stop highlighting link on this scene",
   "links.keepLit": "Keep link out of the dark on every scene",
   "links.letDim": "Let the link dim with the rest of the board",
+  "links.card.players": "Edit the {n} players",
   "links.selectMembers": "Select {n} players",
   "links.name": "Name",
   "links.name.label": "Link name",
@@ -1145,7 +1162,7 @@ export const en = {
     "There's no ball until you give it to someone. Right-click a player and choose Give the ball, or select them and press B. It stays at their feet while they dribble.\nTo play it, add a scene and drag the ball where it goes: onto a team-mate to pass, into the goal to shoot, onto empty space to set it loose. It meets the receiver in stride. Right-click the ball to lift it off the ground.",
   "tour.links.title": "Links",
   "tour.links.body":
-    "Select two or more players and link them to show a back four or a pressing unit. The link follows its players on every frame, so the shape stretches as they move.\nChain draws an open line in member order. Shape and Filled close it. You can also limit a link to a range of scenes.",
+    "Select two or more players and link them to show a back four or a pressing unit. The link follows its players on every frame, so the shape stretches as they move.\nChain draws an open line in member order. Shape and Filled close it. Click a link on the board to edit it under Selection, or limit it to a range of scenes.",
   "tour.draw.title": "Drawing",
   "tour.draw.body":
     "The drawing tools live in this panel: arrows, lines, zones, the pen, text and a ball. Whatever you draw stays where you put it, on the scenes you choose. The players don't move it.\nA drawn ball is only a picture. The match ball is the one you give to players.",
@@ -1154,7 +1171,7 @@ export const en = {
     "Right-click a player (or use this panel) to highlight them. The rest of the board goes dark around them, and Dim on the timeline sets how dark.\nA highlight belongs to a single scene. Moves carry forward and highlights don't, so the attention lands exactly where you put it.",
   "tour.view.title": "View",
   "tour.view.body":
-    "Turn the board, show only half of it, or switch to 3D. You can also change the surface and how big the players are. Ghosts show the previous or next scene faintly underneath.\nHold {mod} and scroll to zoom. Each scene keeps its own zoom, and playback and exports follow it.",
+    "This bar beside the board turns it, shows only half of it, or switches to 3D. Ghosts show the previous or next scene faintly underneath, and the sliders set the surface and how big the players are. Drag the bar by its grip anywhere it's out of the way.\nHold {mod} and scroll to zoom. Each scene keeps its own zoom, and playback and exports follow it.",
   "tour.present.title": "Present",
   "tour.present.body":
     "Fills the window with the board and hides the panels, for walking a team through the play. Esc takes you back.",

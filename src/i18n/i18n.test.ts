@@ -54,6 +54,8 @@ describe("the dictionaries", () => {
     expect(shared.sort()).toEqual([
       "app.name",
       "export.bitrate",
+      "inspect.run.summary",
+      "inspect.run.summaryWait",
       "inspect.runStyle.summary",
       "line.futsal.fixo",
       "sport.futsal",

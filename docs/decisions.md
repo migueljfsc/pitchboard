@@ -255,7 +255,7 @@ sharing what it did not touch, so an entry costs a pointer. A drag emits a docum
 `pointermove`, so entries merge on a gesture key or one drag is forty steps.
 
 ## D93 — The editor's shape: play left, drawing right, and it explains itself
-The left sidebar is the play — view, formations, selection, links; the right rail is the drawing
+The left sidebar is the play — formations, links and selection (D125 reshaped it); the right rail is the drawing
 — tools and style on top, the list below. The rail opens when a tool is armed or a shape
 selected; Formations fold while anything is selected. Both follow the rendered state, not each
 handler that can change it. A shape's style rows appear in its card, or in a "next shape" card
@@ -733,6 +733,38 @@ hidden, painting a still instead.
 **An empty list says what to do next.** An empty folder of the board's own sport offers to save the
 board there (when it is not saved yet); an empty squad library is a button to save this side; a
 side with no links left can have its formation's lines back (`seededLinks`, pairing by order).
+
+## D125 — The left sidebar: setup above, one Selection card below, the view on the board
+**The setup scrolls; the selection fills the rest.** Formations and Links sit in one scrolling
+block as tall as they are; Selection takes the remaining column, so nothing below it moves as the
+selection changes and there is no gap between them. Every section, Selection included, folds from
+a header that reads as a control — the chevron in a box of its own, sticky in its scroller.
+Formations no longer fold themselves when something is selected.
+
+**How the board is looked at moved onto the board.** 2D/3D, the turn, the crop and the ghosts are
+a vertical bar in the dead space beside the pitch (`BoardViewBar`); player size and the surface are
+one click further, in a popover from that bar. It is dragged by a grip, folds to the grip, and a
+corner button puts it back; where it is lives in this browser only (`share/viewBar.ts`) — it is a
+preference about a window, not about a board. Reset positions moved out of a footer to where it
+is looked for: the Formations section, the File menu and the board's right-click menu.
+
+**Selection is one card, not two tabs.** Who it is (token, name and number), a row of one-tap
+actions (the ball, the glow, the path, the arrow), the run into this scene folded behind a
+one-line summary, and what applies in every scene — the keeper, the side, removal — under a title
+saying so. Nothing selected is one line. How far a drag carries (D41) is a small menu in the
+card's header, always in view since it governs the next drag, selection or not.
+
+**A link picked on the board is edited in the card** (`LinkCard`, the list's own `LinkEditor`).
+A pick selects the link's players first, then names the link; the card shows the link while the
+selection is still exactly its members, so any other click hands the card back with nothing to
+clear. The card cannot add members — choosing them would change the selection — so adding stays
+in the list.
+
+**The squad is a list in Teams**: each player's token selects him, his name and shirt edit in
+place, the arrows skip to the next free shirt as the card's do. Rows keep the team's order and
+cannot be reordered: that order is the formations' slot order (D11), so a list that re-sorted by
+number looked like players arriving, and one that could be dragged would quietly decide who
+stands where on the next reset.
 
 ---
 

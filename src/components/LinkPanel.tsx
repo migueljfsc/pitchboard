@@ -344,22 +344,7 @@ function LinkRow({
   onDragEnd: () => void;
   i18n: I18n;
 }) {
-  const { t, tn } = i18n;
-  const span = sceneSpan(doc, link);
-  // Which member chip is in the air, and which GAP it would land in — 0 before the
-  // first, n after the last. Local, because only one row is expanded at a time.
-  const [lift, setLift] = useState<number | null>(null);
-  const [gap, setGap] = useState<number | null>(null);
-
-  const dropMember = () => {
-    // The gap counts positions in the list as it stands; once the chip is lifted
-    // out, everything after it shifts down one.
-    if (lift !== null && gap !== null && gap !== lift && gap !== lift + 1) {
-      onMove(lift, gap > lift ? gap - 1 : gap);
-    }
-    setLift(null);
-    setGap(null);
-  };
+  const { t } = i18n;
 
   // Opened from the board — a click on the connector itself — the row may be far down
   // a long list, so it is brought into view. Nearest, so a row already showing stays put.
@@ -485,223 +470,387 @@ function LinkRow({
           >
             {t("links.selectMembers", { n: link.members.length })}
           </button>
-
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("links.name")}</span>
-            <input
-              value={link.name}
-              onChange={(e) => onChange({ name: e.target.value }, `link-name:${link.id}`)}
-              className="w-full rounded border border-ink-600 bg-ink-900 px-1.5 py-1 text-[11px] text-ink-200 outline-none transition hover:border-ink-400 focus:border-accent"
-              aria-label={t("links.name.label")}
-            />
-          </label>
-
-          <div className="flex gap-1">
-            {STYLES.map((s) => (
-              <button
-                key={s.value}
-                type="button"
-                title={t(`links.style.${s.value}.hint` as MessageKey)}
-                onClick={() => onChange({ style: s.value })}
-                className={cn(
-                  "flex-1 rounded border px-1 py-1 text-[11px] transition",
-                  link.style === s.value
-                    ? "border-accent text-accent"
-                    : "border-ink-600 text-ink-400 hover:text-ink-200",
-                )}
-              >
-                {t(`links.style.${s.value}` as MessageKey)}
-              </button>
-            ))}
-          </div>
-
-          {/* One row for the line: its dash, its heads, and whether the dots march.
-              Drawn rather than named, so five choices cost one line of panel. */}
-          <div className="flex items-center gap-1">
-            <Segmented
-              options={LINES}
-              value={link.line ?? "solid"}
-              label={(v) => t(`links.line.${v}` as MessageKey)}
-              glyph={(v) => <LineGlyph line={v} arrows="none" />}
-              onPick={(v) => onChange({ line: v === "solid" ? undefined : v })}
-            />
-            <Segmented
-              options={ARROWS}
-              value={link.arrows ?? "none"}
-              label={(v) => t(`links.arrows.${v}` as MessageKey)}
-              glyph={(v) => <LineGlyph line="solid" arrows={v} />}
-              onPick={(v) => onChange({ arrows: v === "none" ? undefined : v })}
-            />
-            {link.line === "dotted" && (
-              <Tiny
-                label={t("links.animate.title")}
-                active={link.animate === true}
-                onClick={() => onChange({ animate: link.animate ? undefined : true })}
-              >
-                <Play size={12} />
-              </Tiny>
-            )}
-          </div>
-
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("links.colour")}</span>
-              {/* Auto is the default: the link tracks its members' kit, so
-                  recolouring the team recolours the link with it. */}
-              <ColorPicker
-                size="md"
-                value={link.color ?? null}
-                label={t("links.colour.pick", { name: link.name })}
-                optionLabel={(c) => t("links.colorAria", { name: link.name, color: c })}
-                none={{ label: t("links.auto"), title: t("links.auto.title"), preview: linkColor(doc, link) }}
-                onChange={(c) => onChange({ color: c ?? undefined })}
-              />
-            </div>
-          </div>
-
-          {/* Ids, not indices, so reordering scenes carries the unit's span along.
-              A link that has never been ranged shows the first scene to the end,
-              which is what it has always meant (D47). */}
-          {doc.scenes.length > 1 && (
-            <div>
-              <span className="text-[11px] uppercase tracking-wide text-ink-400">
-                {t("links.scenes")}
-              </span>
-              <div className="mt-1 flex items-center gap-1">
-                <SceneSelect
-                  title={t("links.visibleFrom", { name: link.name })}
-                  doc={doc}
-                  value={link.from ?? doc.scenes[0]?.id}
-                  onChange={(id) => id && onChange({ from: id })}
-                />
-                <span className="shrink-0 text-[11px] text-ink-500">→</span>
-                <SceneSelect
-                  title={t("links.visibleTo", { name: link.name })}
-                  doc={doc}
-                  value={link.to}
-                  allowEnd
-                  onChange={(id) => onChange({ to: id })}
-                />
-                <span className="ml-auto shrink-0 font-mono text-[11px] text-ink-500">
-                  {tn("drawn.span", span[1] - span[0] + 1)}
-                </span>
-              </div>
-            </div>
-          )}
-
-          <div>
-            <span className="text-[11px] uppercase tracking-wide text-ink-400">
-              {t("links.members")}
-            </span>
-            <div className="mt-1 flex flex-wrap gap-1">
-              {link.members.map((id, i) => (
-                <span
-                  key={id}
-                  draggable
-                  title={t("links.dragMember")}
-                  onDragStart={(e) => {
-                    // Firefox refuses to start a drag without payload.
-                    e.dataTransfer.effectAllowed = "move";
-                    e.dataTransfer.setData("text/plain", id);
-                    setLift(i);
-                  }}
-                  onDragEnd={() => {
-                    setLift(null);
-                    setGap(null);
-                  }}
-                  // Only while a chip is in the air. A link ROW dragged over this
-                  // one must keep bubbling to the row's own handler, or it loses
-                  // its drop marker over anything expanded.
-                  onDragOver={(e) => {
-                    if (lift === null) return;
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const box = e.currentTarget.getBoundingClientRect();
-                    setGap(e.clientX < box.left + box.width / 2 ? i : i + 1);
-                  }}
-                  onDrop={(e) => {
-                    if (lift === null) return;
-                    e.preventDefault();
-                    e.stopPropagation();
-                    dropMember();
-                  }}
-                  className={cn(
-                    "relative flex cursor-grab items-center gap-0.5 rounded border border-ink-600 bg-ink-900 pl-1.5 text-[11px] text-ink-200 active:cursor-grabbing",
-                    lift === i && "opacity-40",
-                  )}
-                >
-                  {/* In the gap between chips, so it marks a position rather than
-                      a chip. Absolute, so nothing reflows mid-drag. */}
-                  {gap === i && <DropBar className="-left-1" />}
-                  {gap === link.members.length && i === link.members.length - 1 && (
-                    <DropBar className="-right-1" />
-                  )}
-                  {numberOf(id)}
-                  <button
-                    type="button"
-                    aria-label={t("links.moveEarlier", { number: numberOf(id) })}
-                    title={t("links.moveEarlier", { number: numberOf(id) })}
-                    disabled={i === 0}
-                    onClick={() => onMove(i, i - 1)}
-                    className="px-0.5 text-ink-400 enabled:hover:text-accent disabled:opacity-45"
-                  >
-                    <ChevronLeft size={11} />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={t("links.moveLater", { number: numberOf(id) })}
-                    title={t("links.moveLater", { number: numberOf(id) })}
-                    disabled={i === link.members.length - 1}
-                    onClick={() => onMove(i, i + 1)}
-                    className="px-0.5 text-ink-400 enabled:hover:text-accent disabled:opacity-45"
-                  >
-                    <ChevronRight size={11} />
-                  </button>
-                  {/* Refused at two, where the link would have no edge left to
-                      draw. Deleting the link is its own button below. */}
-                  <button
-                    type="button"
-                    aria-label={t("links.removeMember", { number: numberOf(id) })}
-                    title={t(
-                      link.members.length > MIN_MEMBERS
-                        ? "links.removeMember.title"
-                        : "links.removeMember.min",
-                    )}
-                    disabled={link.members.length <= MIN_MEMBERS}
-                    onClick={() => onRemoveMember(id)}
-                    className="pr-1 text-ink-400 enabled:hover:text-red-400 disabled:opacity-45"
-                  >
-                    <X size={11} />
-                  </button>
-                </span>
-              ))}
-            </div>
-
-            {/* Same gesture that made the link in the first place: pick players on
-                the board, then say where they go. */}
-            <button
-              type="button"
-              disabled={addable.length === 0 || link.members.length >= MAX_MEMBERS}
-              onClick={() => onAdd(addable)}
-              title={t("links.addSelected.title")}
-              className="mt-1.5 flex w-full items-center justify-center gap-1 rounded border border-ink-600 bg-ink-800 px-1.5 py-1 text-[11px] text-ink-200 transition enabled:hover:border-accent enabled:hover:text-white disabled:opacity-45"
-            >
-              <Plus size={11} />
-              {addable.length > 0
-                ? t("links.addSelected", { n: addable.length })
-                : t("links.addSelected.none")}
-            </button>
-          </div>
-
-          <button
-            type="button"
-            onClick={onDelete}
-            className="flex items-center justify-center gap-1 rounded border border-ink-600 px-1.5 py-1 text-[11px] text-ink-400 transition hover:border-red-500/60 hover:text-red-400"
-          >
-            <Trash2 size={11} /> {t("links.delete")}
-          </button>
+          <LinkEditor
+            doc={doc}
+            link={link}
+            numberOf={numberOf}
+            onChange={onChange}
+            onMove={onMove}
+            addable={addable}
+            onAdd={onAdd}
+            onRemoveMember={onRemoveMember}
+            onDelete={onDelete}
+            i18n={i18n}
+          />
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Everything about one link past its name in the list: its name, look, colour, scenes and
+ * members. The list opens it under the row; the Selection card shows it for a link picked on
+ * the board.
+ */
+function LinkEditor({
+  doc,
+  link,
+  numberOf,
+  onChange,
+  onMove,
+  addable,
+  onAdd,
+  onRemoveMember,
+  onDelete,
+  i18n,
+}: {
+  doc: BoardDoc;
+  link: Link;
+  numberOf: (id: string) => number | string;
+  onChange: (patch: Partial<Omit<Link, "id">>, merge?: string) => void;
+  onMove: (from: number, to: number) => void;
+  /** Selected players this link does not hold yet; absent where adding cannot be offered. */
+  addable?: string[];
+  onAdd?: (ids: string[]) => void;
+  onRemoveMember: (id: string) => void;
+  onDelete: () => void;
+  i18n: I18n;
+}) {
+  const { t, tn } = i18n;
+  const span = sceneSpan(doc, link);
+  // Which member chip is in the air, and which GAP it would land in — 0 before the
+  // first, n after the last.
+  const [lift, setLift] = useState<number | null>(null);
+  const [gap, setGap] = useState<number | null>(null);
+
+  const dropMember = () => {
+    // The gap counts positions in the list as it stands; once the chip is lifted
+    // out, everything after it shifts down one.
+    if (lift !== null && gap !== null && gap !== lift && gap !== lift + 1) {
+      onMove(lift, gap > lift ? gap - 1 : gap);
+    }
+    setLift(null);
+    setGap(null);
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      <label className="flex flex-col gap-1">
+        <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("links.name")}</span>
+        <input
+          value={link.name}
+          onChange={(e) => onChange({ name: e.target.value }, `link-name:${link.id}`)}
+          className="w-full rounded border border-ink-600 bg-ink-900 px-1.5 py-1 text-[11px] text-ink-200 outline-none transition hover:border-ink-400 focus:border-accent"
+          aria-label={t("links.name.label")}
+        />
+      </label>
+
+      <div className="flex gap-1">
+        {STYLES.map((s) => (
+          <button
+            key={s.value}
+            type="button"
+            title={t(`links.style.${s.value}.hint` as MessageKey)}
+            onClick={() => onChange({ style: s.value })}
+            className={cn(
+              "flex-1 rounded border px-1 py-1 text-[11px] transition",
+              link.style === s.value
+                ? "border-accent text-accent"
+                : "border-ink-600 text-ink-400 hover:text-ink-200",
+            )}
+          >
+            {t(`links.style.${s.value}` as MessageKey)}
+          </button>
+        ))}
+      </div>
+
+      {/* One row for the line: its dash, its heads, and whether the dots march.
+          Drawn rather than named, so five choices cost one line of panel. */}
+      <div className="flex items-center gap-1">
+        <Segmented
+          options={LINES}
+          value={link.line ?? "solid"}
+          label={(v) => t(`links.line.${v}` as MessageKey)}
+          glyph={(v) => <LineGlyph line={v} arrows="none" />}
+          onPick={(v) => onChange({ line: v === "solid" ? undefined : v })}
+        />
+        <Segmented
+          options={ARROWS}
+          value={link.arrows ?? "none"}
+          label={(v) => t(`links.arrows.${v}` as MessageKey)}
+          glyph={(v) => <LineGlyph line="solid" arrows={v} />}
+          onPick={(v) => onChange({ arrows: v === "none" ? undefined : v })}
+        />
+        {link.line === "dotted" && (
+          <Tiny
+            label={t("links.animate.title")}
+            active={link.animate === true}
+            onClick={() => onChange({ animate: link.animate ? undefined : true })}
+          >
+            <Play size={12} />
+          </Tiny>
+        )}
+      </div>
+
+      <div>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("links.colour")}</span>
+          {/* Auto is the default: the link tracks its members' kit, so
+              recolouring the team recolours the link with it. */}
+          <ColorPicker
+            size="md"
+            value={link.color ?? null}
+            label={t("links.colour.pick", { name: link.name })}
+            optionLabel={(c) => t("links.colorAria", { name: link.name, color: c })}
+            none={{ label: t("links.auto"), title: t("links.auto.title"), preview: linkColor(doc, link) }}
+            onChange={(c) => onChange({ color: c ?? undefined })}
+          />
+        </div>
+      </div>
+
+      {/* Ids, not indices, so reordering scenes carries the unit's span along.
+          A link that has never been ranged shows the first scene to the end,
+          which is what it has always meant (D47). */}
+      {doc.scenes.length > 1 && (
+        <div>
+          <span className="text-[11px] uppercase tracking-wide text-ink-400">
+            {t("links.scenes")}
+          </span>
+          <div className="mt-1 flex items-center gap-1">
+            <SceneSelect
+              title={t("links.visibleFrom", { name: link.name })}
+              doc={doc}
+              value={link.from ?? doc.scenes[0]?.id}
+              onChange={(id) => id && onChange({ from: id })}
+            />
+            <span className="shrink-0 text-[11px] text-ink-500">→</span>
+            <SceneSelect
+              title={t("links.visibleTo", { name: link.name })}
+              doc={doc}
+              value={link.to}
+              allowEnd
+              onChange={(id) => onChange({ to: id })}
+            />
+            <span className="ml-auto shrink-0 font-mono text-[11px] text-ink-500">
+              {tn("drawn.span", span[1] - span[0] + 1)}
+            </span>
+          </div>
+        </div>
+      )}
+
+      <div>
+        <span className="text-[11px] uppercase tracking-wide text-ink-400">
+          {t("links.members")}
+        </span>
+        <div className="mt-1 flex flex-wrap gap-1">
+          {link.members.map((id, i) => (
+            <span
+              key={id}
+              draggable
+              title={t("links.dragMember")}
+              onDragStart={(e) => {
+                // Firefox refuses to start a drag without payload.
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", id);
+                setLift(i);
+              }}
+              onDragEnd={() => {
+                setLift(null);
+                setGap(null);
+              }}
+              // Only while a chip is in the air. A link ROW dragged over this
+              // one must keep bubbling to the row's own handler, or it loses
+              // its drop marker over anything expanded.
+              onDragOver={(e) => {
+                if (lift === null) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const box = e.currentTarget.getBoundingClientRect();
+                setGap(e.clientX < box.left + box.width / 2 ? i : i + 1);
+              }}
+              onDrop={(e) => {
+                if (lift === null) return;
+                e.preventDefault();
+                e.stopPropagation();
+                dropMember();
+              }}
+              className={cn(
+                "relative flex cursor-grab items-center gap-0.5 rounded border border-ink-600 bg-ink-900 pl-1.5 text-[11px] text-ink-200 active:cursor-grabbing",
+                lift === i && "opacity-40",
+              )}
+            >
+              {/* In the gap between chips, so it marks a position rather than
+                  a chip. Absolute, so nothing reflows mid-drag. */}
+              {gap === i && <DropBar className="-left-1" />}
+              {gap === link.members.length && i === link.members.length - 1 && (
+                <DropBar className="-right-1" />
+              )}
+              {numberOf(id)}
+              <button
+                type="button"
+                aria-label={t("links.moveEarlier", { number: numberOf(id) })}
+                title={t("links.moveEarlier", { number: numberOf(id) })}
+                disabled={i === 0}
+                onClick={() => onMove(i, i - 1)}
+                className="px-0.5 text-ink-400 enabled:hover:text-accent disabled:opacity-45"
+              >
+                <ChevronLeft size={11} />
+              </button>
+              <button
+                type="button"
+                aria-label={t("links.moveLater", { number: numberOf(id) })}
+                title={t("links.moveLater", { number: numberOf(id) })}
+                disabled={i === link.members.length - 1}
+                onClick={() => onMove(i, i + 1)}
+                className="px-0.5 text-ink-400 enabled:hover:text-accent disabled:opacity-45"
+              >
+                <ChevronRight size={11} />
+              </button>
+              {/* Refused at two, where the link would have no edge left to
+                  draw. Deleting the link is its own button below. */}
+              <button
+                type="button"
+                aria-label={t("links.removeMember", { number: numberOf(id) })}
+                title={t(
+                  link.members.length > MIN_MEMBERS
+                    ? "links.removeMember.title"
+                    : "links.removeMember.min",
+                )}
+                disabled={link.members.length <= MIN_MEMBERS}
+                onClick={() => onRemoveMember(id)}
+                className="pr-1 text-ink-400 enabled:hover:text-red-400 disabled:opacity-45"
+              >
+                <X size={11} />
+              </button>
+            </span>
+          ))}
+        </div>
+
+        {/* Same gesture that made the link in the first place: pick players on
+            the board, then say where they go. */}
+        {addable && onAdd && (
+          <button
+            type="button"
+            disabled={addable.length === 0 || link.members.length >= MAX_MEMBERS}
+            onClick={() => onAdd(addable)}
+            title={t("links.addSelected.title")}
+            className="mt-1.5 flex w-full items-center justify-center gap-1 rounded border border-ink-600 bg-ink-800 px-1.5 py-1 text-[11px] text-ink-200 transition enabled:hover:border-accent enabled:hover:text-white disabled:opacity-45"
+          >
+            <Plus size={11} />
+            {addable.length > 0
+              ? t("links.addSelected", { n: addable.length })
+              : t("links.addSelected.none")}
+          </button>
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={onDelete}
+        className="flex items-center justify-center gap-1 rounded border border-ink-600 px-1.5 py-1 text-[11px] text-ink-400 transition hover:border-red-500/60 hover:text-red-400"
+      >
+        <Trash2 size={11} /> {t("links.delete")}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * A link picked on the board, in the Selection card: its four switches, then the same editor
+ * the list opens. `onPlayers` hands the card back to the players the link joins.
+ */
+export function LinkCard({
+  doc,
+  linkId,
+  onDocChange,
+  sceneIndex,
+  onPlayers,
+}: {
+  doc: BoardDoc;
+  linkId: string;
+  onDocChange: Change<BoardDoc>;
+  sceneIndex: number;
+  onPlayers: () => void;
+}) {
+  const i18n = useI18n();
+  const { t } = i18n;
+  const link = doc.links.find((l) => l.id === linkId);
+  if (!link) return null;
+  const numberOf = (id: string) => doc.teams.flatMap((team) => team.players).find((p) => p.id === id)?.number ?? "?";
+  const onChange = (patch: Partial<Omit<Link, "id">>, merge?: string) =>
+    onDocChange(updateLink(doc, link.id, patch), merge);
+  const lit = isHighlighted(doc.scenes[sceneIndex], link.id);
+  const switches: { label: string; on: boolean; icon: React.ReactNode; flip: () => void }[] = [
+    {
+      label: t(link.hidden ? "links.show" : "links.hide"),
+      on: !link.hidden,
+      icon: link.hidden ? <EyeOff size={13} /> : <Eye size={13} />,
+      flip: () => onChange({ hidden: !link.hidden }),
+    },
+    {
+      label: t(link.showDistances ? "links.hideDistances" : "links.showDistances"),
+      on: !!link.showDistances,
+      icon: <Ruler size={13} />,
+      flip: () => onChange({ showDistances: !link.showDistances }),
+    },
+    {
+      label: t(lit ? "links.unhighlight" : "links.highlight"),
+      on: lit,
+      icon: <Sparkles size={13} />,
+      flip: () => onDocChange(setHighlight(doc, sceneIndex, [link.id], lit ? null : linkColor(doc, link))),
+    },
+    {
+      label: t(link.lit ? "links.letDim" : "links.keepLit"),
+      on: !!link.lit,
+      icon: <Sun size={13} />,
+      flip: () => onChange({ lit: link.lit ? undefined : true }),
+    },
+  ];
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <Link2 size={14} className="shrink-0" style={{ color: linkColor(doc, link) }} />
+        <span className="min-w-0 flex-1 truncate text-xs font-medium text-white">{link.name}</span>
+        <button
+          type="button"
+          onClick={onPlayers}
+          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-ink-300 transition hover:bg-white/[0.06] hover:text-white"
+        >
+          {t("links.card.players", { n: link.members.length })}
+        </button>
+      </div>
+      <div className="grid grid-cols-4 gap-1.5">
+        {switches.map(({ label, on, icon, flip }) => (
+          <button
+            key={label}
+            type="button"
+            title={label}
+            aria-label={label}
+            aria-pressed={on}
+            onClick={flip}
+            className={cn(
+              "flex h-8 items-center justify-center rounded-lg border transition",
+              on
+                ? "border-accent/50 bg-accent/10 text-accent"
+                : "border-ink-600 text-ink-300 hover:border-ink-400 hover:text-white",
+            )}
+          >
+            {icon}
+          </button>
+        ))}
+      </div>
+      <LinkEditor
+        doc={doc}
+        link={link}
+        numberOf={numberOf}
+        onChange={onChange}
+        onMove={(from, to) => onDocChange(moveMember(doc, link.id, from, to))}
+        onRemoveMember={(id) => onDocChange(removeMember(doc, link.id, id))}
+        onDelete={() => onDocChange(deleteLink(doc, link.id))}
+        i18n={i18n}
+      />
     </div>
   );
 }

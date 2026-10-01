@@ -3,7 +3,10 @@ import {
   ArrowLeftRight,
   Ban,
   ChevronRight,
+  Eye,
+  EyeOff,
   Info,
+  Move,
   RotateCcw,
   Route,
   Shirt,
@@ -29,7 +32,6 @@ import { Stepper } from "@/components/ui/Stepper";
 import { ColorPicker } from "@/components/ui/ColorPicker";
 import { useI18n } from "@/i18n/context";
 import type { Message } from "@/i18n/core";
-import { TabHighlight } from "@/components/ui/TabHighlight";
 
 const RUN_STARTS = [
   { value: "gradual", key: "inspect.runStart.gradual" },
@@ -65,7 +67,6 @@ type Props = {
   onRunStyleChange: (style: { start?: RunStart; end?: RunEnd }) => void;
   /** How far a move of this selection reaches forward through the scenes. */
   carry: Carry;
-  onCarryChange: (carry: Carry) => void;
   onRemovePlayer: (playerId: string) => void;
   onSwitchSide: (playerId: string) => void;
   onMakeKeeper: (playerId: string) => void;
@@ -113,7 +114,6 @@ export function Inspector({
   onDelayChange,
   onRunStyleChange,
   carry,
-  onCarryChange,
   onRemovePlayer,
   onSwitchSide,
   onMakeKeeper,
@@ -134,19 +134,6 @@ export function Inspector({
   const { t, tn } = useI18n();
   const nameRef = useRef<HTMLInputElement>(null);
 
-  // Which tab is showing. It stays where it was left when the selection changes:
-  // working down a line of players setting their runs is one tab, one click each.
-  const [tab, setTab] = useState<Tab>("scene");
-
-  // A double-click on the board asks for the name, which is on the Player tab.
-  // Adjusted while rendering, so the tab is there by the time the effect below
-  // puts the cursor in it.
-  const [seenFocus, setSeenFocus] = useState(focusName);
-  if (seenFocus !== focusName) {
-    setSeenFocus(focusName);
-    if (focusName) setTab("player");
-  }
-
   useEffect(() => {
     if (!focusName) return;
     // Focusing also scrolls the sidebar to it, which matters when the board is
@@ -166,11 +153,7 @@ export function Inspector({
   };
 
   if (selection.size === 0) {
-    return (
-      <p className="text-[11px] leading-relaxed text-ink-300">
-        {t("inspect.empty")}
-      </p>
-    );
+    return <EmptyState />;
   }
 
   const players = [...selection].filter((id) => id !== BALL_ID);
@@ -202,8 +185,6 @@ export function Inspector({
       onClick={onResetMove}
     />
   );
-  const tabs = player !== null && player !== undefined;
-  const showing: Tab = tabs ? tab : "scene";
 
   // Read across the selection: the value when everyone agrees, null when not.
   const shared = <T,>(read: (id: string) => T): T | null => {
@@ -224,52 +205,47 @@ export function Inspector({
     only !== null && runEnd === "through" && !lastScene && !runsThrough(doc, only, activeScene);
 
 
+
+  const runSummary = (() => {
+    if (!canEditPaths || ballOnly || doc.flow || !scene) return null;
+    const style =
+      runStart === null || runEnd === null
+        ? t("inspect.mixed")
+        : runStart === "gradual" && runEnd === "gradual"
+          ? t("inspect.runStyle.default")
+          : t("inspect.runStyle.summary", {
+              start: t(`inspect.runStart.${runStart}`),
+              end: t(`inspect.runEnd.${runEnd}`),
+            });
+    const seconds = travel === null ? t("inspect.mixed") : ((travel ?? scene.transitionMs) / 1000).toFixed(1);
+    return delay
+      ? t("inspect.run.summaryWait", { travel: seconds, wait: (delay / 1000).toFixed(1), style })
+      : t("inspect.run.summary", { travel: seconds, style });
+  })();
+
   return (
-    <div className="flex flex-col gap-3">
-      {/* Who, and which scene the "This scene" tab is about. The scene chip is what
-          tells the two scopes apart: everything under it changes this scene only. */}
-      <div className="flex items-center gap-2">
-        <span className="min-w-0 flex-1 truncate text-xs font-medium text-white">
-          {player
-            ? nameOf(player.id)
-            : ballOnly
-              ? t("inspect.ballName")
-              : tn("inspect.count", selection.size)}
-        </span>
-        {scene && (
-          <span
-            title={showing === "player" ? t("inspect.tab.player.note") : t("inspect.scope.hint")}
-            className="max-w-[45%] shrink-0 truncate rounded bg-ink-700 px-1.5 py-0.5 text-[10px] text-ink-300"
-          >
-            {showing === "player" ? t("inspect.scope.all") : scene.name}
+    <div className="flex flex-col gap-4">
+      {/* WHO — the player, the players or the ball, and the scene everything below is about. */}
+      <div className="flex flex-col gap-2.5">
+        <div className="flex items-center gap-2">
+          {player ? (
+            <Token doc={doc} id={player.id} />
+          ) : ballOnly ? (
+            <span aria-hidden className="text-base leading-none">{sportOf(doc).ballGlyph}</span>
+          ) : null}
+          <span className="min-w-0 flex-1 truncate text-xs font-medium text-white">
+            {player ? nameOf(player.id) : ballOnly ? t("inspect.ballName") : tn("inspect.count", selection.size)}
           </span>
-        )}
-      </div>
-
-      {tabs && (
-        <div role="tablist" className="flex gap-1 rounded-md bg-ink-900 p-0.5">
-          {(["scene", "player"] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              role="tab"
-              aria-selected={showing === value}
-              title={t(`inspect.tab.${value}.hint`)}
-              onClick={() => setTab(value)}
-              className={cn(
-                "relative isolate flex-1 rounded px-2 py-1 text-[11px] transition",
-                showing === value ? "text-white" : "text-ink-400 hover:text-ink-200",
-              )}
+          {scene && (
+            <span
+              title={t("inspect.scope.hint")}
+              className="max-w-[45%] shrink-0 truncate rounded bg-ink-700 px-1.5 py-0.5 text-[10px] text-ink-300"
             >
-              {showing === value && <TabHighlight id="inspect-tab" />}
-              {t(`inspect.tab.${value}`)}
-            </button>
-          ))}
+              {scene.name}
+            </span>
+          )}
         </div>
-      )}
-
-      {showing === "player" && player ? (
-        <div className="flex flex-col gap-3">
+        {player && (
           <IdentityFields
             key={player.id}
             doc={doc}
@@ -278,57 +254,89 @@ export function Inspector({
             onRename={onRename}
             onRenumber={onRenumber}
           />
-          <p className="text-[11px] leading-relaxed text-ink-400">{t("inspect.tab.player.note")}</p>
-          <div className="flex flex-col gap-1.5">
-            {/* His path through every scene: about the player, not about this scene. */}
-            <SmallButton
-              label={t(trailOn ? "menu.trail.hide" : "menu.trail.show")}
-              title={t("inspect.trail.hint")}
-              icon={<Route size={13} />}
-              onClick={() => onTrailChange(!trailOn)}
-            />
-            <SmallButton
-              label={t("inspect.removeMovement")}
-              title={t(hasMovement ? "inspect.removeMovement.hint" : "inspect.removeMovement.none")}
-              icon={<RotateCcw size={13} />}
-              disabled={!hasMovement}
-              onClick={onRemoveAllMovement}
-            />
-            {!isKeeper && sportOf(doc).keeper && (
-              <SmallButton
-                label={t("inspect.makeKeeper")}
-                title={t("inspect.makeKeeper.hint")}
-                icon={<Shirt size={13} />}
-                onClick={() => onMakeKeeper(player.id)}
-              />
-            )}
-            <SmallButton
-              label={t("inspect.switchSide")}
-              title={t("inspect.switchSide.hint")}
-              icon={<ArrowLeftRight size={13} />}
-              onClick={() => onSwitchSide(player.id)}
-            />
-            <SmallButton
-              label={t("inspect.remove")}
-              title={t("inspect.remove.hint")}
-              icon={<UserMinus size={13} />}
-              danger
-              onClick={() => onRemovePlayer(player.id)}
-            />
-          </div>
-        </div>
-      ) : (
-        <>
-          {!player && !ballOnly && (
-            <p className="text-[11px] leading-relaxed text-ink-300">
-              {[...selection].map(nameOf).join(", ")}
-            </p>
-          )}
+        )}
+        {!player && !ballOnly && (
+          <p className="text-[11px] leading-relaxed text-ink-400">{[...selection].map(nameOf).join(", ")}</p>
+        )}
+      </div>
 
-          {/* MOVEMENT — the run into this scene. Never hidden: where it cannot apply it
-              says why, and how to get to where it does. */}
-          <Group label={t("inspect.group.movement")}>
-            {!canEditPaths ? (
+      {/* QUICK — the things done most, one tap each, in this scene. */}
+      {players.length > 0 && (
+        <div className="grid auto-cols-fr grid-flow-col gap-1.5">
+          {only && (
+            <Quick
+              label={carries ? t("inspect.quick.release") : t("inspect.quick.ball")}
+              title={t("inspect.ball.hint")}
+              active={carries}
+              onClick={() => onCarrierChange(carries ? null : only)}
+            >
+              <span aria-hidden className="text-sm leading-none">{sportOf(doc).ballGlyph}</span>
+            </Quick>
+          )}
+          {/* The whole tile opens the palette: a click off the ball is passed on to it. The
+              palette is portalled, so a click inside it is not inside the tile. */}
+          <div
+            title={t("inspect.highlight.on.hint")}
+            onClick={(e) => {
+              const target = e.target as Element;
+              if (e.currentTarget.contains(target) && !target.closest("button")) {
+                e.currentTarget.querySelector("button")?.click();
+              }
+            }}
+            className={cn(
+              "flex cursor-pointer flex-col items-center gap-1 rounded-lg border py-1.5 transition",
+              highlighted ? "border-accent/50 bg-accent/10" : "border-ink-600 hover:border-ink-400",
+            )}
+          >
+            <ColorPicker
+              size="md"
+              value={highlighted ? highlightColor : null}
+              label={t("inspect.highlight.pick")}
+              optionLabel={(c) => t("inspect.highlight.colour", { color: c })}
+              none={{
+                label: t("inspect.highlight.none"),
+                title: t("inspect.highlight.off.hint"),
+                icon: <Ban size={10} />,
+              }}
+              onChange={onHighlightChange}
+            />
+            <span className={cn("text-[10px] leading-none", highlighted ? "text-accent" : "text-ink-300")}>
+              {t("inspect.quick.highlight")}
+            </span>
+          </div>
+          <Quick
+            label={t("inspect.quick.path")}
+            title={t(trailOn ? "menu.trail.hide" : "menu.trail.show")}
+            active={trailOn}
+            onClick={() => onTrailChange(!trailOn)}
+          >
+            <Route size={14} />
+          </Quick>
+          <Quick
+            label={t("inspect.quick.arrow")}
+            title={t(runsHidden ? "inspect.showRuns.hint" : "inspect.hideRuns.hint")}
+            active={!runsHidden}
+            disabled={!canEditPaths}
+            onClick={() => onRunsHiddenChange(!runsHidden)}
+          >
+            {runsHidden ? <EyeOff size={14} /> : <Eye size={14} />}
+          </Quick>
+        </div>
+      )}
+
+      {/* BALL — selected on its own: who has it here, and where its pass is set. */}
+      {ballOnly && (
+        <Why title={t("inspect.ball.timingWhere")}>
+          {holder ? t("inspect.ball.heldBy", { who: nameOf(holder) }) : t("inspect.ball.loose")}
+        </Why>
+      )}
+
+      {/* THE RUN into this scene, summed up in one line and opened for the detail. Where it
+          cannot apply it says why, and how to get to where it does. */}
+      {players.length > 0 && (
+        <Section title={scene ? t("inspect.run.title", { scene: scene.name }) : t("inspect.group.movement")} summary={runSummary}>
+          {!canEditPaths ? (
+            <>
               <Why title={t("inspect.why.firstScene")}>
                 {t("inspect.why.firstScene.short")}{" "}
                 {doc.scenes.length > 1 && (
@@ -341,193 +349,292 @@ export function Inspector({
                   </button>
                 )}
               </Why>
-            ) : null}
-            {!canEditPaths && resetButton}
-            {!canEditPaths ? null : ballOnly ? (
-              <Why title={t("inspect.why.ball")}>{t("inspect.why.ball.short")}</Why>
-            ) : doc.flow ? (
-              <Why title={t("inspect.why.flow")}>{t("inspect.why.flow.short")}</Why>
-            ) : (
-              <>
-                <div className="grid grid-cols-2 gap-2">
-                  <NumberField
-                    label={t("inspect.travelShort")}
-                    title={t("inspect.travel.hint", {
-                      seconds: (sceneTravelMs(scene!) / 1000).toFixed(1),
-                    })}
-                    value={(travel ?? scene!.transitionMs) / 1000}
-                    mixed={travel === null}
-                    mixedLabel={t("inspect.mixed")}
-                    min={0}
-                    max={60}
-                    step={0.1}
-                    decimals={1}
-                    unit="s"
-                    onCommit={(seconds) => onTravelChange(seconds * 1000)}
-                    action={
-                      travelOwn !== false && (
-                        <ResetLink
-                          label={t("inspect.matchScene")}
-                          onClick={() => onTravelChange(null)}
-                        />
-                      )
-                    }
-                  />
-                  <NumberField
-                    label={t("inspect.delayShort")}
-                    title={t("inspect.delay.hint")}
-                    value={(delay ?? 0) / 1000}
-                    mixed={delay === null}
-                    mixedLabel={t("inspect.mixed")}
-                    min={0}
-                    max={60}
-                    step={0.1}
-                    decimals={1}
-                    unit="s"
-                    onCommit={(seconds) => onDelayChange(seconds * 1000)}
-                    action={
-                      delay !== 0 && (
-                        <ResetLink label={t("inspect.delay.none")} onClick={() => onDelayChange(null)} />
-                      )
-                    }
-                  />
-                </div>
+              {resetButton}
+            </>
+          ) : doc.flow ? (
+            <Why title={t("inspect.why.flow")}>{t("inspect.why.flow.short")}</Why>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <NumberField
+                  label={t("inspect.travelShort")}
+                  title={t("inspect.travel.hint", { seconds: (sceneTravelMs(scene!) / 1000).toFixed(1) })}
+                  value={(travel ?? scene!.transitionMs) / 1000}
+                  mixed={travel === null}
+                  mixedLabel={t("inspect.mixed")}
+                  min={0}
+                  max={60}
+                  step={0.1}
+                  decimals={1}
+                  unit="s"
+                  onCommit={(seconds) => onTravelChange(seconds * 1000)}
+                  action={
+                    travelOwn !== false && (
+                      <ResetLink label={t("inspect.matchScene")} onClick={() => onTravelChange(null)} />
+                    )
+                  }
+                />
+                <NumberField
+                  label={t("inspect.delayShort")}
+                  title={t("inspect.delay.hint")}
+                  value={(delay ?? 0) / 1000}
+                  mixed={delay === null}
+                  mixedLabel={t("inspect.mixed")}
+                  min={0}
+                  max={60}
+                  step={0.1}
+                  decimals={1}
+                  unit="s"
+                  onCommit={(seconds) => onDelayChange(seconds * 1000)}
+                  action={delay !== 0 && <ResetLink label={t("inspect.delay.none")} onClick={() => onDelayChange(null)} />}
+                />
+              </div>
 
-                {/* How the run starts and finishes, folded behind its summary: the
-                    default is what almost every run wants, and the row says when a
-                    run is not the default without spending three rows saying so. */}
-                <Disclosure
-                  label={t("inspect.runStyle")}
-                  summary={
-                    runStart === null || runEnd === null
-                      ? t("inspect.mixed")
-                      : runStart === "gradual" && runEnd === "gradual"
-                        ? t("inspect.runStyle.default")
-                        : t("inspect.runStyle.summary", {
+              <Disclosure
+                label={t("inspect.runStyle")}
+                summary={
+                  runStart === null || runEnd === null
+                    ? t("inspect.mixed")
+                    : runStart === "gradual" && runEnd === "gradual"
+                      ? t("inspect.runStyle.default")
+                      : t("inspect.runStyle.summary", {
                           start: t(`inspect.runStart.${runStart}`),
                           end: t(`inspect.runEnd.${runEnd}`),
                         })
-                  }
-                  highlight={runStart !== "gradual" || runEnd !== "gradual"}
-                >
-                  <Segmented
-                    label={t("inspect.runStart")}
-                    options={RUN_STARTS.map(({ value, key }) => ({
-                      value,
-                      label: t(key),
-                      title: t(`${key}.hint` as Message["key"]),
-                    }))}
-                    value={runStart}
-                    onChange={(start) => onRunStyleChange({ start })}
-                  />
-                  <Segmented
-                    label={t("inspect.runEnd")}
-                    options={RUN_ENDS.map(({ value, key }) => ({
-                      value,
-                      label: t(key),
-                      title:
-                        value === "through" && lastScene
-                          ? t("inspect.runEnd.through.last")
-                          : t(`${key}.hint` as Message["key"]),
-                      disabled: value === "through" && lastScene,
-                    }))}
-                    value={runEnd}
-                    onChange={(end) => onRunStyleChange({ end })}
-                  />
-                  {blockedThrough && (
-                    <p className="text-[11px] leading-relaxed text-amber-300">
-                      {t("inspect.runEnd.through.blocked")}
-                    </p>
-                  )}
-                </Disclosure>
+                }
+                highlight={runStart !== "gradual" || runEnd !== "gradual"}
+              >
+                <Segmented
+                  label={t("inspect.runStart")}
+                  options={RUN_STARTS.map(({ value, key }) => ({
+                    value,
+                    label: t(key),
+                    title: t(`${key}.hint` as Message["key"]),
+                  }))}
+                  value={runStart}
+                  onChange={(start) => onRunStyleChange({ start })}
+                />
+                <Segmented
+                  label={t("inspect.runEnd")}
+                  options={RUN_ENDS.map(({ value, key }) => ({
+                    value,
+                    label: t(key),
+                    title:
+                      value === "through" && lastScene
+                        ? t("inspect.runEnd.through.last")
+                        : t(`${key}.hint` as Message["key"]),
+                    disabled: value === "through" && lastScene,
+                  }))}
+                  value={runEnd}
+                  onChange={(end) => onRunStyleChange({ end })}
+                />
+                {blockedThrough && (
+                  <p className="text-[11px] leading-relaxed text-amber-300">{t("inspect.runEnd.through.blocked")}</p>
+                )}
+              </Disclosure>
 
-                <TimingBars doc={doc} index={activeScene} players={players} />
-              </>
-            )}
+              <TimingBars doc={doc} index={activeScene} players={players} />
 
-            {canEditPaths && resetButton}
-
-
-            {canEditPaths && (
-              <div className="grid grid-cols-2 gap-1.5">
+              <div className="flex flex-col gap-1.5">
                 <SmallButton
                   label={t("inspect.straighten")}
                   title={t(canStraighten ? "inspect.straighten.hint" : "inspect.straighten.none")}
                   disabled={!canStraighten}
                   onClick={onClearPaths}
                 />
-                <SmallButton
-                  label={t(runsHidden ? "inspect.showRuns.short" : "inspect.hideRuns.short")}
-                  title={t(runsHidden ? "inspect.showRuns.hint" : "inspect.hideRuns.hint")}
-                  onClick={() => onRunsHiddenChange(!runsHidden)}
-                />
+                {resetButton}
               </div>
-            )}
-          </Group>
-
-          {/* BALL — who has it here. The pass itself, its timing, shot and loft, are the
-              scene's and live in the scene bar under the timeline. */}
-          {(only || ballOnly) && (
-            <Group label={t("inspect.group.ball")}>
-              {ballOnly ? (
-                <Why title={t("inspect.ball.timingWhere")}>
-                  {holder
-                    ? t("inspect.ball.heldBy", { who: nameOf(holder) })
-                    : t("inspect.ball.loose")}
-                </Why>
-              ) : (
-                <SmallButton
-                  icon={<span aria-hidden>{sportOf(doc).ballGlyph}</span>}
-                  label={carries ? t("inspect.ball.release") : t("inspect.ball.give")}
-                  title={t("inspect.ball.hint")}
-                  onClick={() => onCarrierChange(carries ? null : only)}
-                />
-              )}
-            </Group>
+            </>
           )}
+        </Section>
+      )}
 
-          {/* HIGHLIGHT — one ball: a colour lights the selection in it, Off puts it out.
-              Also offered on the first scene: there is no run into it, but there is
-              certainly someone to watch in it. Never carried forward (D100). */}
-          <Group label={t("inspect.group.highlight")}>
-            <div className="flex items-center gap-2">
-              <ColorPicker
-                size="md"
-                value={highlighted ? highlightColor : null}
-                label={t("inspect.highlight.pick")}
-                optionLabel={(c) => t("inspect.highlight.colour", { color: c })}
-                none={{
-                  label: t("inspect.highlight.none"),
-                  title: t("inspect.highlight.off.hint"),
-                  icon: <Ban size={10} />,
-                }}
-                onChange={onHighlightChange}
-              />
-              <span className="text-[11px] text-ink-400">{t("inspect.highlight.on.hint")}</span>
-            </div>
-          </Group>
-
-          {/* WHEN I DRAG — read when a drag or a nudge lands, so it has to be visible
-              BEFORE one, which is exactly when something is selected (D41). */}
-          {doc.scenes.length > 1 && (
-            <Segmented
-              label={t("inspect.carry")}
-              options={CARRY_MODES.map(({ mode, key }) => ({
-                value: mode,
-                label: t(key),
-                title: t(`${key}.hint` as Message["key"]),
-              }))}
-              value={carry}
-              onChange={onCarryChange}
+      {/* IN EVERY SCENE — about the player rather than this moment, said so in its title. */}
+      {players.length > 0 && (
+        <Section title={t("inspect.everyScene")}>
+          <div className="flex flex-col gap-1">
+            <RowButton
+              label={t("inspect.removeMovement")}
+              title={t(hasMovement ? "inspect.removeMovement.hint" : "inspect.removeMovement.none")}
+              icon={<RotateCcw size={13} />}
+              disabled={!hasMovement}
+              onClick={onRemoveAllMovement}
             />
-          )}
-        </>
+            {player && !isKeeper && sportOf(doc).keeper && (
+              <RowButton
+                label={t("inspect.makeKeeper")}
+                title={t("inspect.makeKeeper.hint")}
+                icon={<Shirt size={13} />}
+                onClick={() => onMakeKeeper(player.id)}
+              />
+            )}
+            {player && (
+              <RowButton
+                label={t("inspect.switchSide")}
+                title={t("inspect.switchSide.hint")}
+                icon={<ArrowLeftRight size={13} />}
+                onClick={() => onSwitchSide(player.id)}
+              />
+            )}
+            {player && (
+              <RowButton
+                label={t("inspect.remove")}
+                title={t("inspect.remove.hint")}
+                icon={<UserMinus size={13} />}
+                danger
+                onClick={() => onRemovePlayer(player.id)}
+              />
+            )}
+          </div>
+        </Section>
       )}
     </div>
   );
 }
 
-type Tab = "scene" | "player";
+/** The selected player's token as the board draws it: his kit and his number. */
+function Token({ doc, id }: { doc: BoardDoc; id: string }) {
+  const team = doc.teams.find((t) => t.players.some((p) => p.id === id));
+  const number = team?.players.find((p) => p.id === id)?.number;
+  if (!team) return null;
+  return (
+    <span
+      aria-hidden
+      className="flex size-6 shrink-0 items-center justify-center rounded-full font-mono text-[10px] font-bold ring-1 ring-white/25"
+      style={{ background: team.color, color: team.textColor }}
+    >
+      {number}
+    </span>
+  );
+}
+
+/** One of the quick actions: an icon over a word, lit while it is on. */
+function Quick({
+  label,
+  title,
+  active,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  title: string;
+  active: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-pressed={active}
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "flex flex-col items-center gap-1 rounded-lg border py-1.5 transition disabled:opacity-35",
+        active
+          ? "border-accent/50 bg-accent/10 text-accent"
+          : "border-ink-600 text-ink-300 enabled:hover:border-ink-400 enabled:hover:text-white",
+      )}
+    >
+      <span className="flex h-5 items-center">{children}</span>
+      <span className="text-[10px] leading-none">{label}</span>
+    </button>
+  );
+}
+
+/** A titled part of the card; `summary` sits beside the title and the body folds behind it. */
+function Section({ title, summary, children }: { title: string; summary?: string | null; children: React.ReactNode }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <section className="flex flex-col gap-2.5">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="flex items-center gap-2 rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 text-left transition hover:border-ink-600 hover:bg-ink-700/60"
+      >
+        <span className="flex size-5 shrink-0 items-center justify-center rounded bg-ink-700 text-ink-200">
+          <ChevronRight size={12} className={cn("transition-transform", open && "rotate-90")} />
+        </span>
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="truncate text-[11px] font-semibold uppercase tracking-wide text-ink-200">{title}</span>
+          {summary && <span className="truncate font-mono text-[10px] text-ink-400">{summary}</span>}
+        </span>
+      </button>
+      {open && <div className="flex flex-col gap-2.5">{children}</div>}
+    </section>
+  );
+}
+
+/** A full-width action in a list: an icon, then what it does. */
+function RowButton({
+  label,
+  title,
+  icon,
+  disabled,
+  danger,
+  onClick,
+}: {
+  label: string;
+  title?: string;
+  icon: React.ReactNode;
+  disabled?: boolean;
+  danger?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <span title={title} className={cn("flex", disabled && "cursor-not-allowed")}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onClick}
+        className={cn(
+          "flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition disabled:pointer-events-none disabled:opacity-40",
+          danger ? "text-red-300 hover:bg-red-500/10" : "text-ink-200 hover:bg-white/[0.06] hover:text-white",
+        )}
+      >
+        <span className={cn("shrink-0", danger ? "text-red-300" : "text-ink-400")}>{icon}</span>
+        {label}
+      </button>
+    </span>
+  );
+}
+
+/** Nothing selected: what to click. */
+function EmptyState() {
+  const { t } = useI18n();
+  return <p className="text-xs leading-relaxed text-ink-300">{t("inspect.empty.lead")}</p>;
+}
+
+/**
+ * How far a drag or a nudge of the selection reaches (D41), as a small menu in the Selection
+ * card's header: read the moment a drag lands, so it is always in view, selection or not.
+ */
+export function CarryMenu({ carry, onChange }: { carry: Carry; onChange: (carry: Carry) => void }) {
+  const { t } = useI18n();
+  return (
+    <label
+      className="flex min-w-0 shrink items-center gap-1 text-ink-400"
+      title={`${t("inspect.carry")}: ${t(`${CARRY_MODES.find((m) => m.mode === carry)!.key}.hint` as Message["key"])}`}
+    >
+      <Move size={12} className="shrink-0" aria-hidden />
+      <select
+        value={carry}
+        onChange={(e) => onChange(e.target.value as Carry)}
+        aria-label={t("inspect.carry")}
+        className="min-w-0 max-w-28 truncate rounded border border-ink-600 bg-ink-900 px-1 py-0.5 text-[10px] text-ink-200 outline-none transition hover:border-ink-400 focus:border-accent"
+      >
+        {CARRY_MODES.map(({ mode, key }) => (
+          <option key={mode} value={mode}>
+            {t(key)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
 
 /** How many players' timing bars are drawn before the rest are left out. */
 const TIMING_BARS_MAX = 6;
@@ -595,16 +702,6 @@ function TimingBars({
         </span>
       )}
     </div>
-  );
-}
-
-/** A titled block inside a tab. */
-function Group({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <section className="flex flex-col gap-2">
-      <span className="text-[11px] uppercase tracking-wide text-ink-400">{label}</span>
-      {children}
-    </section>
   );
 }
 

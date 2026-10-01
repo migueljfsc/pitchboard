@@ -35,6 +35,8 @@ type Props = {
    */
   ghosts?: Ghosts;
   onGhostsChange?: (ghosts: Ghosts) => void;
+  /** Only how the board looks — player size and the surface — for the board bar's popover. */
+  only?: "look";
 };
 
 /** Neighbouring scenes to outline behind the board. */
@@ -62,6 +64,7 @@ export function ViewControls({
   showHalves = true,
   ghosts,
   onGhostsChange,
+  only,
 }: Props) {
   const { t } = useI18n();
   const scale = doc ? tokenScaleOf(doc) : DEFAULT_TOKEN_SCALE;
@@ -74,7 +77,7 @@ export function ViewControls({
     // at a glance and set once, and full-width buttons for three-letter words made
     // it the tallest panel in the sidebar.
     <div className="flex flex-col gap-2">
-      {showHalves && (
+      {showHalves && !only && (
         <Row label={t("view.area")} title={view.half !== "full" && !framing.rotated ? t("view.halfHint") : undefined}>
           <Segmented
             options={HALVES.map((h) => ({ value: h.value, label: t(framing.rotated ? h.upright : h.flat) }))}
@@ -87,6 +90,7 @@ export function ViewControls({
       {/* Tilt implies vertical, so it disables the rotation control rather than
           disagreeing with it — but it must not WRITE rotation, or the flat
           orientation is lost the moment you look at the board in 3D. */}
+      {!only && (
       <Row label={t("view.board")}>
         <div className="flex flex-1 gap-1">
           <Segmented
@@ -116,6 +120,7 @@ export function ViewControls({
           </button>
         </div>
       </Row>
+      )}
 
       {doc && onTokenScaleChange && (
         <Row label={t("view.players")}>
@@ -139,7 +144,7 @@ export function ViewControls({
         <GrassControls grass={doc.grass} surface={sportOf(doc).surface} onChange={onGrassChange} />
       )}
 
-      {ghosts && onGhostsChange && (
+      {ghosts && onGhostsChange && !only && (
         <Row label={t("view.ghostsShort")} title={t("view.ghosts.hint")}>
           <div className="flex flex-1 gap-1">
             {(
