@@ -1,138 +1,97 @@
-# Pitchboard — animated football tactics board
+# Pitchboard — animated tactics board
 
-Working conventions for this repo. Architecture detail lives in
-[`docs/architecture.md`](docs/architecture.md), the build order in
-[`docs/implementation-plan.md`](docs/implementation-plan.md), and the reasoning behind every
-choice in [`docs/decisions.md`](docs/decisions.md) — cited below as Dn.
+Working conventions. Architecture: [`docs/architecture.md`](docs/architecture.md); what is built:
+[`docs/implementation-plan.md`](docs/implementation-plan.md); every choice's reasoning:
+[`docs/decisions.md`](docs/decisions.md), cited as Dn.
 
 ## Mission
 
-A browser tactics board — football, futsal, basketball, handball, field hockey, ice hockey and volleyball, one engine (D113, D123) — where a coach draws a formation, moves players between scenes along
-curved runs, and exports the result as MP4, GIF, or PNG. Everything renders client-side; there
-is no server-side video pipeline and there will not be one.
+A browser tactics board — football, futsal, basketball, handball, field hockey, ice hockey and
+volleyball on one engine (D113) — where a coach draws a formation, moves players between scenes
+along curved runs, and exports MP4, GIF or PNG. Everything renders client-side; there is no server
+video pipeline and will not be one.
 
-The differentiating feature is **live links** — a connector between a group of players that is
-recomputed every frame from their interpolated positions, so the shape deforms as they move
-independently. Build for that; it is what the reference tools do badly.
+The differentiator is **live links**: a connector recomputed every frame from its players'
+interpolated positions, so the shape deforms as they move. Build for that.
 
 ## The two invariants
 
-Everything else is negotiable. These are not.
-
-1. **`drawBoard` is pure.** No DOM, no React, no `Date.now()`, no `Math.random()`, no
-   module-level mutable state. Given `(doc, t, view)` it emits the same pixels in any thread.
-   If the renderer needs a value, that value belongs in `BoardDoc` or `Viewport` — there is no
-   third source of truth. Breaking this breaks export fidelity, and the symptom shows up far
-   from the cause.
-
-2. **No pixels in the document.** All coordinates are board units on `doc.pitch`: metres on a
-   football pitch, and every other court scaled to football's 105-unit length, with
-   `sportOf(doc).metresPerUnit` turning a unit back into metres (D113). `Viewport` converts at the edges; `devicePixelRatio` lives in the canvas transform and never
-   in `Viewport.scale`. Breaking this shows up as players drifting on window resize or on a
-   retina display — and DPR applied twice looks right on a 1× monitor only.
+1. **`drawBoard` is pure.** No DOM, React, `Date.now()`, `Math.random()` or module-level state;
+   `(doc, t, view)` gives the same pixels in any thread. A value it needs belongs in `BoardDoc` or
+   `Viewport` — no third source of truth. Breaking it breaks export fidelity, far from the cause.
+2. **No pixels in the document.** Coordinates are board units on `doc.pitch`: metres on football,
+   other courts scaled to its 105-unit length, `sportOf(doc).metresPerUnit` back to metres (D113).
+   `Viewport` converts at the edges; `devicePixelRatio` lives in the canvas transform, never in
+   `Viewport.scale`. Breaking it shows as players drifting on resize or retina — and DPR applied
+   twice looks right on a 1× monitor only.
 
 ## Hard decisions — do not relitigate without asking
 
-- **No canvas library.** Konva and SVG were both considered and rejected. A scene graph between
-  the code and the pixels is exactly where preview/export divergence comes from. Hit-testing is
-  hand-rolled and small.
-- **Scenes with per-transition paths**, not pure keyframes and not a pure Gantt of paths.
-- **A pass is a carrier change** (`scene.carrier`), not a separate object type.
-- **`mediabunny`**, not `mp4-muxer`/`webm-muxer` (deprecated) and not `MediaRecorder` (realtime,
-  drops frames).
-- **`#d=` share links are immutable snapshots**, with no edit keys and no server. An account's
-  published `/share/<slug>` is the other mechanism: a live pointer to its board (D7).
-- **OpenTofu owns durable infra; wrangler owns the deploy.** Do not add
-  `cloudflare_workers_script` to the stack. This is not a preference: deploying a Worker with
-  static assets needs a completion JWT that Cloudflare expires after an hour, obtained by
-  hashing and uploading `dist/` first, and Terraform can neither produce it nor hold it in
-  state. CI deploys via `.github/workflows/deploy-worker.yml` (D40).
+- **No canvas library** — Konva and SVG rejected; a scene graph is where preview/export diverge.
+- **Scenes with per-transition paths**, not pure keyframes nor a Gantt of paths.
+- **A pass is a carrier change** (`scene.carrier`), not an object.
+- **`mediabunny`**, not `mp4-muxer`/`webm-muxer` (deprecated) nor `MediaRecorder` (realtime, drops frames).
+- **`#d=` links are immutable snapshots**, no edit keys, no server; an account's `/share/<slug>` is
+  the live pointer (D7).
+- **OpenTofu owns durable infra; wrangler owns the deploy.** Never add `cloudflare_workers_script`:
+  a Worker with assets needs a completion JWT, expiring in an hour, obtained by uploading `dist/`,
+  which Terraform can neither produce nor hold. CI deploys via `deploy-worker.yml` (D40).
 
 ## Non-goals for v1 — do not build
 
-Real player data and autocomplete, cones, thirds views, touch support, heatmaps.
-All are deliberate deferrals (D9). The drawing toolkit, half-pitch and a custom domain were once
-on this list and have shipped (D20, D109).
+Real player data and autocomplete, cones, thirds views, touch support, heatmaps (D9).
 
 ## Repository layout
 
 ```
 docs/                     architecture, implementation plan, decisions
 src/board/                the engine — zero React, zero DOM
-  types.ts                BoardDoc — single source of truth for the schema
-  schema.ts               zod validator, shared with the Worker
-  migrate.ts              version dispatch, run before validation on every load
-  sports.ts               every sport's spec — court, goal, headroom, snaps — and units ↔ metres
-  pitch.ts                IFAB dimensions table + markings
-  surfaces.ts             each sport's court theme and drawing — the renderer never asks which sport
-  court.ts                the basketball court: floor, FIBA markings, rings from above
-  futsal.ts, handball.ts, hockey.ts, icehockey.ts, volleyball.ts
-                          the other courts, each in its rulebook's metres
-  markings.ts             shapes more than one court draws: the goal-area D, one path for both ends
+  types.ts, schema.ts     BoardDoc (the schema); its zod validator, shared with the Worker
+  migrate.ts              version dispatch, before validation on every load
+  sports.ts               every sport's spec, and units ↔ metres
+  surfaces.ts             each sport's theme and drawing — the renderer never asks which sport
+  pitch.ts, court.ts, futsal.ts, handball.ts, hockey.ts, icehockey.ts, volleyball.ts
+                          each court in its rulebook's metres; markings.ts holds shared shapes
   geometry.ts             bezier, arc-length LUT, easing
-  timeline.ts             (doc, t) → resolved positions, incl. ball carrier
-  links.ts                connector geometry + distances, and when a link shows
-  range.ts                scene ranges — shared by links and annotations, owned by neither
-  annotations.ts          the coach's drawing — shapes, scene ranges, hit geometry
-  glyphs.ts               the label face's advance widths — what every label is measured by
-  highlights.ts           what a scene's highlight names, and pruning it when that leaves
-  projection.ts           the 3D view — one fixed camera, and the ground warp
+  timeline.ts             (doc, t) → resolved positions, incl. the ball
+  links.ts, range.ts      connector geometry; scene ranges shared with annotations
+  annotations.ts          the coach's drawing — shapes, ranges, hit geometry
+  glyphs.ts               the label face's advance widths
+  highlights.ts           what a highlight names, and pruning it
+  projection.ts           the 3D camera and ground warp
   render.ts               drawBoard() — the one renderer
   interaction.ts          hit-testing, drag, selection, snapping
-src/formations/           preset shapes, each seeding its own links
+src/formations/           preset shapes, each seeding its links
 src/export/               worker render loop, mediabunny, gifenc, PNG
-src/import/               video-derived tracks in, a board out — see the sibling repo below
-  tracks.ts               tracks.json's zod schema; the contract with football-tracks
-  reduce.ts               the numerical half — fragments to runs, the roster, the ball
-  index.ts                what becomes a player, what becomes a scene, what is refused
-src/share/                localStorage, URL-hash codec, API client
-  storage.ts              the ONLY place localStorage is touched; never throws
-  urlcodec.ts             #d= share links: deflate + base64url, and the budget
-  password.ts             the browser's half of password hashing; every constant load-bearing
-  json.ts                 board and setup files in and out; owns setupTeamSchema
-  presets.ts              named one-team squad presets, built on setupTeamSchema
-  local.ts                autosave of the board in progress
-src/i18n/                 EN and PT; en.ts is the source of truth for the keys
-  core.ts                 pure runtime — the engine imports only `Message` from here
-src/fonts.ts              registers the label face, for the page and the export worker
-src/App.tsx               picks Viewer or Editor from the hash; no router
-src/pages/                Landing — the front door at `/` for visitors (D118) — Editor at `/app`,
-                          Viewer — read-only playback of a shared board, with fork —
-                          and Admin, the operator's usage view (D108)
+src/import/               tracks.ts (the contract), reduce.ts (numbers), index.ts (what becomes a board)
+src/share/                storage.ts (the ONLY localStorage access; never throws), urlcodec.ts (#d=),
+                          password.ts (browser KDF), json.ts (board and setup files), presets.ts,
+                          local.ts (autosave), small per-browser prefs (viewBar, scenePreviews, …)
+src/i18n/                 EN and PT; en.ts declares the keys; core.ts is all the engine imports
+src/fonts.ts              registers the canvas label face, for page and export worker
+src/pages/                Landing (`/`, D118), Editor (`/app`), Viewer (shared boards), Admin (D108)
 src/components/           React chrome; ui/ holds shadcn-style primitives
 scripts/board.ts          `pnpm board <tracks.json>` — a tracks file through the real importer
-worker/                   Cloudflare Worker — the API, and the SPA's static passthrough
-  index.ts                the router: /api/*, and /share/<slug> pages named after their board;
-                          every other asset is served ahead of it
-  lib/                    session, google, users, auth (email and password), password, account,
-                          mail, turnstile, boards (and the project tree), presets, usage,
-                          admin (the operator's /admin view), crypto, http, headers, limits
-  migrations/             D1 schema, applied by CI before the script is deployed
+worker/                   the Worker: index.ts routes /api/* and /share/<slug>; lib/ by concern;
+                          migrations/ for D1, applied by CI before deploy
 wrangler.jsonc            bindings and asset routing; the ONLY place a binding is declared
-infrastructure/terraform/cloudflare/    OpenTofu — R2, D1, KV, Turnstile, DNS. Durable resources only
+infrastructure/terraform/cloudflare/    OpenTofu — R2, D1, KV, Turnstile, DNS
 ```
 
-The Worker is application code and lives with the application, not under `infrastructure/`.
-`pnpm types` regenerates the ambient bindings; `pnpm deploy:worker` is a local dry-run escape
-hatch, but CI owns the real deploy. `src/board/types.ts` is the canonical schema: components
-never redefine document shape.
+The Worker is application code, not infrastructure. `pnpm types` regenerates bindings;
+`pnpm deploy:worker` is a local dry run — CI owns the deploy. Components never redefine document shape.
 
 ## The sibling repo
 
-`src/import/` reads `tracks.json`, and nothing in this repo produces one. It comes from
-[`football-tracks`](../football-tracks) — a Python pipeline that turns a broadcast clip into
-player positions in pitch metres, so a coach corrects a play instead of drawing it. The two
-repos meet at that file and at nothing else: this one knows no video, that one knows no
-`BoardDoc`. Its `schema/tracks.schema.json` and our `src/import/tracks.ts` describe the same
-format and have to be changed together.
+`src/import/` reads `tracks.json` from [`football-tracks`](../football-tracks), a Python pipeline
+turning a broadcast clip into positions in pitch metres. The repos meet at that file only — this one
+knows no video, that one no `BoardDoc` — so its `schema/tracks.schema.json` and our `tracks.ts`
+change together. **Active work is over there**: read `football-tracks/PLAN.md` (*Where this stands*)
+before touching the seam.
 
-**Active work is over there, not here.** `football-tracks/PLAN.md` opens with *Where this
-stands*; read it before touching either side of the seam.
-
-**`pnpm board` is how a change over there is judged** — a tracks file through the real
-`boardFromTracks`, loaded through Vite, printing the roster, the window, observed
-player-seconds, `seen`/`worst`, travel, curved runs and turnovers. Anything measured on the
-source is re-measured through it before it counts: a better ball is not a better board.
+**`pnpm board` judges a change there** — a tracks file through the real `boardFromTracks`, printing
+roster, window, observed player-seconds, `seen`/`worst`, travel, curved runs and turnovers. Anything
+measured on the source is re-measured through it: a better ball is not a better board.
 
 ```
 pnpm board ../football-tracks/work/SNGS-151/tracks.json          # one clip
@@ -142,19 +101,25 @@ pnpm board ../football-tracks/work/Untitled/tracks.json --scenes  # who has the 
 
 ## Engineering conventions
 
-- pnpm, Node >= 22.12. TypeScript strict.
-- React 19 + Vite 8 + Tailwind v4, following `wtc/ui/` — its ESLint config and `components/ui/`
-  primitives are directly reusable.
-- Conventional Commits, enforced by commitizen in `commit-msg` and by CI on PRs. Use `cz commit`.
-- `pre-commit install` after cloning.
-- Tests are Vitest, engine only — no component tests. The engine is pure numerical code where
-  tests are cheap and load-bearing: test behaviour through the engine's public operations, and
-  keep a test for every trap below rather than for every helper.
-- Match the surrounding style. Do not refactor beyond the task.
+- pnpm, Node >= 22.12, TypeScript strict; React 19, Vite 8, Tailwind v4 after `wtc/ui/`.
+- Conventional Commits via commitizen (`cz commit`), enforced in `commit-msg` and CI;
+  `pre-commit install` after cloning.
+- Vitest, engine only: test behaviour through public operations, and keep a test for every trap
+  below rather than every helper.
+- Match the surrounding style; do not refactor beyond the task.
 
 ## Known traps
 
 Each is one line of what breaks; the reasoning is in the cited decision.
+
+### The look (D126)
+- **The accent is chalk and is no kit's colour.** Amber means the home kit, the ball and warnings;
+  bringing it back to the chrome makes a selection vanish on the home side.
+- **On is a filled, outlined tile** (`bg-accent/15`, 70% chalk border or ring); off has no fill.
+  A colour change alone does not read as on.
+- **Pass `DISPLAY` to `cn` after any text size**, or tailwind-merge drops its leading.
+- **`BoardCanvas` is transparent** — editor and viewer show the page round the pitch; only an
+  export paints the surround. In 3D, shading darkens painted pixels only (`source-atop`).
 
 ### Sports (D113)
 - **A unit is a metre only on a football pitch.** Anything a person reads — link distances, the
@@ -394,14 +359,11 @@ Each is one line of what breaks; the reasoning is in the cited decision.
 
 ## Definition of done
 
-What is built and what is left is in
-[`docs/implementation-plan.md`](docs/implementation-plan.md). Two checks belong to every change,
-whatever it touches:
+Every change, whatever it touches:
 
 - resize the window and confirm players do not move relative to the pitch
 - `pnpm lint && pnpm typecheck && pnpm test && pnpm build` clean
 
 ## Git
 
-Never create branches, commits, or PRs unless explicitly asked. "Fix X" means prepare the
-change, not commit it.
+Never create branches, commits or PRs unless asked. "Fix X" means prepare the change, not commit it.

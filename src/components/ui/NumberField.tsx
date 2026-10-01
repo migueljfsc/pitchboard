@@ -80,7 +80,7 @@ export function NumberField({
 
   return (
     <label className={cn("flex flex-col gap-1", disabled && "opacity-45")} title={title}>
-      <span className="flex items-baseline justify-between gap-2 text-[11px] uppercase tracking-wide text-ink-400">
+      <span className="flex items-baseline justify-between gap-2 text-xs text-ink-400">
         {label}
         {action}
       </span>

@@ -1,21 +1,52 @@
 @import "tailwindcss";
 
-@theme {
-  --color-ink-900: #0b1210;
-  --color-ink-800: #111a17;
-  --color-ink-700: #1c2a25;
-  /* Borders and dividers — the old value was almost invisible on ink-800. */
-  --color-ink-600: #35473f;
-  /* Quieter than muted: counts, separators, placeholders. About 4.2:1 on ink-800, so for
-     text that is secondary to something beside it, never for text that stands alone. */
-  --color-ink-500: #6b807a;
-  /* Muted text. Roughly 6:1 on ink-800; the previous #6b807a fell under 4.5:1. */
-  --color-ink-400: #8fa39d;
-  --color-ink-300: #b6c4bf;
-  --color-ink-200: #dde5e2;
-  --color-accent: #fbbf24;
+/* The UI face: one variable family, its width axis giving headings a narrower, signage cut. */
+@font-face {
+  font-family: Archivo;
+  font-style: normal;
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-display: swap;
+  src: url("./assets/fonts/archivo-latin-var.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 
-  --font-sans: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+@font-face {
+  font-family: Archivo;
+  font-style: normal;
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-display: swap;
+  src: url("./assets/fonts/archivo-latin-ext-var.woff2") format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+@theme {
+  /* Dark grass: the chrome is the ground the pitch sits on, not a black frame around it. */
+  --color-ink-900: #0e1f17;
+  --color-ink-800: #132a1f;
+  --color-ink-700: #1d3a2b;
+  /* Borders and dividers. */
+  --color-ink-600: #345440;
+  /* Quieter than muted: counts, separators, placeholders. For text secondary to something
+     beside it, never for text that stands alone. */
+  --color-ink-500: #6f8e7b;
+  /* Muted text. */
+  --color-ink-400: #98b0a0;
+  --color-ink-300: #bccdc1;
+  --color-ink-200: #e2eae3;
+  /* Chalk: the colour of the pitch's lines. It marks what is active or chosen in the chrome,
+     and is no team's kit — amber is the home side's default and the ball's. */
+  --color-accent: #eef1ea;
+  /* Crema: the one warm colour in the chrome, worn only by the coffee link. */
+  --color-crema: #e8c9a0;
+
+  --font-sans: Archivo, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
 
   /* Motion. `src/lib/motion.ts` mirrors these for components animated through `motion`. */
@@ -72,6 +103,16 @@
     transform: scale(0.97);
   }
 
+  /* One chevron for every select, inset from the edge; a select's own classes leave room for
+     it with `pr-*`. The browser's arrow sat dark against the dark field and flush to its edge. */
+  select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2398b0a0' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-position: right 0.4rem center;
+    background-repeat: no-repeat;
+    background-size: 0.75rem;
+  }
+
   button:focus-visible,
   a:focus-visible,
   summary:focus-visible,
@@ -126,6 +167,11 @@ body,
   height: 100%;
 }
 
+/* Native popups, scrollbars and form controls drawn for a dark page. */
+html {
+  color-scheme: dark;
+}
+
 body {
   margin: 0;
   background: var(--color-ink-900);
@@ -158,7 +204,7 @@ body {
   border-radius: 9999px;
   background: var(--color-accent);
   border: 2px solid var(--color-ink-900);
-  box-shadow: 0 0 0 3px rgb(251 191 36 / 0.2);
+  box-shadow: 0 0 0 3px rgb(238 241 234 / 0.18);
   transition: box-shadow var(--duration-fast) var(--ease-out);
 }
 
@@ -168,12 +214,12 @@ body {
   border-radius: 9999px;
   background: var(--color-accent);
   border: 2px solid var(--color-ink-900);
-  box-shadow: 0 0 0 3px rgb(251 191 36 / 0.2);
+  box-shadow: 0 0 0 3px rgb(238 241 234 / 0.18);
 }
 
 .scrubber:hover::-webkit-slider-thumb,
 .scrubber:active::-webkit-slider-thumb {
-  box-shadow: 0 0 0 6px rgb(251 191 36 / 0.25);
+  box-shadow: 0 0 0 6px rgb(238 241 234 / 0.22);
 }
 
 /**

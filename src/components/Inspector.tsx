@@ -285,7 +285,7 @@ export function Inspector({
             }}
             className={cn(
               "flex cursor-pointer flex-col items-center gap-1 rounded-lg border py-1.5 transition",
-              highlighted ? "border-accent/50 bg-accent/10" : "border-ink-600 hover:border-ink-400",
+              highlighted ? "border-accent/70 bg-accent/15" : "border-ink-600 hover:border-ink-400",
             )}
           >
             <ColorPicker
@@ -534,7 +534,7 @@ function Quick({
       className={cn(
         "flex flex-col items-center gap-1 rounded-lg border py-1.5 transition disabled:opacity-35",
         active
-          ? "border-accent/50 bg-accent/10 text-accent"
+          ? "border-accent/70 bg-accent/15 text-white"
           : "border-ink-600 text-ink-300 enabled:hover:border-ink-400 enabled:hover:text-white",
       )}
     >
@@ -559,7 +559,7 @@ function Section({ title, summary, children }: { title: string; summary?: string
           <ChevronRight size={12} className={cn("transition-transform", open && "rotate-90")} />
         </span>
         <span className="flex min-w-0 flex-col gap-0.5">
-          <span className="truncate text-[11px] font-semibold uppercase tracking-wide text-ink-200">{title}</span>
+          <span className="truncate text-[11px] font-semibold text-ink-200">{title}</span>
           {summary && <span className="truncate font-mono text-[10px] text-ink-400">{summary}</span>}
         </span>
       </button>
@@ -624,7 +624,7 @@ export function CarryMenu({ carry, onChange }: { carry: Carry; onChange: (carry:
         value={carry}
         onChange={(e) => onChange(e.target.value as Carry)}
         aria-label={t("inspect.carry")}
-        className="min-w-0 max-w-28 truncate rounded border border-ink-600 bg-ink-900 px-1 py-0.5 text-[10px] text-ink-200 outline-none transition hover:border-ink-400 focus:border-accent"
+        className="min-w-0 max-w-28 truncate rounded border border-ink-600 bg-ink-900 py-0.5 pl-1.5 pr-5 text-[10px] text-ink-200 outline-none transition hover:border-ink-400 focus:border-accent"
       >
         {CARRY_MODES.map(({ mode, key }) => (
           <option key={mode} value={mode}>
@@ -818,7 +818,7 @@ function IdentityFields({
     <div className="flex flex-col gap-1.5">
       <div className="flex gap-1.5">
         <label className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("inspect.name")}</span>
+          <span className="text-xs text-ink-400">{t("inspect.name")}</span>
           <input
             ref={nameRef}
             value={player.label}
@@ -828,7 +828,7 @@ function IdentityFields({
           />
         </label>
         <label className="flex w-16 shrink-0 flex-col gap-1">
-          <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("inspect.number")}</span>
+          <span className="text-xs text-ink-400">{t("inspect.number")}</span>
           <span
             className={cn(
               "flex items-stretch overflow-hidden rounded border bg-ink-900 transition",
@@ -951,7 +951,7 @@ function Segmented<T extends string>({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] uppercase tracking-wide text-ink-400">{label}</span>
+      <span className="text-xs text-ink-400">{label}</span>
       <div className="flex gap-1">
         {options.map((option) => (
           <button
@@ -964,7 +964,7 @@ function Segmented<T extends string>({
             className={cn(
               "flex-1 rounded border px-1 py-1.5 text-[11px] transition disabled:opacity-40",
               value === option.value
-                ? "border-accent text-accent"
+                ? "border-accent/70 bg-accent/15 text-white"
                 : "border-ink-600 text-ink-400 enabled:hover:text-ink-200",
             )}
           >

@@ -37,7 +37,7 @@ export function SceneSelect({
       aria-label={title}
       title={title}
       onChange={(e) => onChange(e.target.value || null)}
-      className="min-w-0 flex-1 rounded border border-ink-600 bg-ink-900 px-1 py-0.5 text-[11px] text-ink-300 outline-none focus:border-accent"
+      className="min-w-0 flex-1 rounded border border-ink-600 bg-ink-900 py-0.5 pl-1.5 pr-6 text-[11px] text-ink-300 outline-none focus:border-accent"
     >
       {allowEnd && <option value="">{t("drawn.end")}</option>}
       {doc.scenes.map((s) => (

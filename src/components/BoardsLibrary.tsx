@@ -685,7 +685,7 @@ function Library({
                       <span
                         className={cn(
                           "truncate",
-                          project.sport && "font-semibold uppercase tracking-wide",
+                          project.sport && "font-semibold",
                         )}
                       >
                         {labelOf(project)}
@@ -743,7 +743,7 @@ function Library({
                     setSelection(allShown ? new Set() : new Set(visible.map((b) => b.id)))
                   }
                 />
-                <span className="text-[10px] uppercase tracking-wide text-ink-500">
+                <span className="text-[11px] text-ink-500">
                   {tn("boards.count", visible.length, { count: visible.length })}
                 </span>
                 <span className="ml-auto text-[10px] text-ink-500">{t("library.openHint")}</span>

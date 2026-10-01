@@ -47,7 +47,7 @@ export function PickProject({
           placement === "up" ? "bottom-full mb-1" : "top-full mt-1",
         )}
       >
-        <p className="px-1 py-0.5 text-[10px] uppercase tracking-wide text-ink-500">
+        <p className="px-1 py-0.5 text-[11px] text-ink-500">
           {t("library.pick")}
         </p>
         {rows.length === 0 ? (
@@ -63,7 +63,7 @@ export function PickProject({
               style={{ paddingLeft: 6 + depth * 12 }}
               className={cn(
                 "flex items-center gap-1.5 truncate rounded py-1 pr-1.5 text-left text-[11px] transition hover:bg-ink-700 hover:text-white",
-                project.sport ? "font-semibold uppercase tracking-wide text-ink-100" : "text-ink-300",
+                project.sport ? "font-semibold text-ink-100" : "text-ink-300",
               )}
             >
               {project.sport && <SportIcon sport={project.sport} className="size-3.5 shrink-0" />}

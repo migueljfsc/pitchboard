@@ -135,7 +135,7 @@ export function BoardViewBar({ view, onChange, doc, onTokenScaleChange, onGrassC
       >
         <div
           data-tour="view"
-          className="relative flex w-9 flex-col items-center gap-0.5 rounded-xl border border-ink-600 bg-ink-800/90 p-1 shadow-lg shadow-black/30 backdrop-blur"
+          className="relative flex w-10 flex-col items-center gap-0.5 rounded-xl border border-ink-600 bg-ink-800/90 p-1 shadow-lg shadow-black/30 backdrop-blur"
         >
           {/* The cursor is set here, not by a class: the stylesheet gives every button a pointer,
               and that rule would win over a utility's grab. */}
@@ -152,12 +152,14 @@ export function BoardViewBar({ view, onChange, doc, onTokenScaleChange, onGrassC
 
           {!place.collapsed && (
             <>
-              <Pill active={!view.tilt} onClick={() => onChange({ ...view, tilt: false })} label={t("view.flat")}>
-                <span className="text-[10px] font-semibold">2D</span>
-              </Pill>
-              <Pill active={!!view.tilt} onClick={() => onChange({ ...view, tilt: true })} label={t("view.3d")}>
-                <Box size={13} />
-              </Pill>
+              <Well>
+                <Pill active={!view.tilt} onClick={() => onChange({ ...view, tilt: false })} label={t("view.flat")}>
+                  <span className="text-[10px] font-semibold">2D</span>
+                </Pill>
+                <Pill active={!!view.tilt} onClick={() => onChange({ ...view, tilt: true })} label={t("view.3d")}>
+                  <Box size={13} />
+                </Pill>
+              </Well>
               <Pill
                 active={framing.rotated && !view.tilt}
                 disabled={view.tilt}
@@ -168,37 +170,37 @@ export function BoardViewBar({ view, onChange, doc, onTokenScaleChange, onGrassC
               </Pill>
 
               <Divider />
-              {HALVES.map(({ value, icon: Icon, flat, upright }) => (
-                <Pill
-                  key={value}
-                  active={view.half === value}
-                  onClick={() => onChange({ ...view, half: value })}
-                  label={t(framing.rotated ? upright : flat)}
-                >
-                  <Icon size={13} className={cn(framing.rotated && value !== "full" && "-rotate-90")} />
-                </Pill>
-              ))}
+              <Well>
+                {HALVES.map(({ value, icon: Icon, flat, upright }) => (
+                  <Pill
+                    key={value}
+                    active={view.half === value}
+                    onClick={() => onChange({ ...view, half: value })}
+                    label={t(framing.rotated ? upright : flat)}
+                  >
+                    <Icon size={13} className={cn(framing.rotated && value !== "full" && "-rotate-90")} />
+                  </Pill>
+                ))}
+              </Well>
 
               <Divider />
               <Pill
                 active={ghosts.before}
                 onClick={() => onGhostsChange({ ...ghosts, before: !ghosts.before })}
                 label={`${t("view.ghostsShort")}: ${t("view.ghosts.before")}`}
+                tall
               >
-                <span className="relative flex">
-                  <Ghost size={13} />
-                  <span className="absolute -bottom-1 -left-1.5 text-[9px] leading-none">−1</span>
-                </span>
+                <Ghost size={13} />
+                <span className="font-mono text-[9px] leading-none">−1</span>
               </Pill>
               <Pill
                 active={ghosts.after}
                 onClick={() => onGhostsChange({ ...ghosts, after: !ghosts.after })}
                 label={`${t("view.ghostsShort")}: ${t("view.ghosts.after")}`}
+                tall
               >
-                <span className="relative flex">
-                  <Ghost size={13} />
-                  <span className="absolute -bottom-1 -right-1.5 text-[9px] leading-none">+1</span>
-                </span>
+                <Ghost size={13} />
+                <span className="font-mono text-[9px] leading-none">+1</span>
               </Pill>
 
               <Divider />
@@ -259,17 +261,25 @@ export function BoardViewBar({ view, onChange, doc, onTokenScaleChange, onGrassC
   );
 }
 
+/** A set of pills only one of which is ever on, sunk into the bar so it reads as one choice. */
+function Well({ children }: { children: React.ReactNode }) {
+  return <div className="flex flex-col gap-0.5 rounded-lg bg-ink-900/80 p-0.5">{children}</div>;
+}
+
 function Pill({
   active,
   disabled,
   onClick,
   label,
+  tall = false,
   children,
 }: {
   active: boolean;
   disabled?: boolean;
   onClick: () => void;
   label: string;
+  /** Room for a line of text under the icon. */
+  tall?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -281,8 +291,9 @@ function Pill({
       aria-label={label}
       title={label}
       className={cn(
-        "flex size-7 items-center justify-center rounded-lg transition disabled:opacity-35",
-        active ? "bg-accent/15 text-accent" : "text-ink-300 enabled:hover:bg-white/[0.07] enabled:hover:text-white",
+        "flex w-7 flex-col items-center justify-center gap-0.5 rounded-lg transition disabled:opacity-35",
+        tall ? "h-9" : "h-7",
+        active ? "bg-accent text-ink-900" : "text-ink-300 enabled:hover:bg-white/[0.07] enabled:hover:text-white",
       )}
     >
       {children}

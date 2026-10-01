@@ -213,7 +213,7 @@ export function Viewer({ doc, initialView, onFork }: Props) {
           title={t(loop ? "viewer.loop.off" : "viewer.loop.on")}
           className={cn(
             "flex size-8 shrink-0 items-center justify-center rounded-md border transition",
-            loop ? "border-accent text-accent" : "border-ink-600 text-ink-400 hover:text-ink-200",
+            loop ? "border-accent/70 bg-accent/15 text-white" : "border-ink-600 text-ink-400 hover:text-ink-200",
           )}
         >
           <Repeat size={14} />

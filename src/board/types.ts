@@ -590,9 +590,10 @@ export type RenderView = Viewport & {
   sceneCamera?: boolean;
 
   /**
-   * Export only: leave the surround unpainted, so a PNG has the pitch on a
-   * transparent background. The frame is no longer complete in one call, which
-   * is exactly what was asked for.
+   * Leave the surround unpainted: a PNG with the pitch on a transparent background,
+   * and the editor and the landing page, where the page itself is the ground around
+   * the board. The frame is no longer complete in one call, which is exactly what
+   * was asked for.
    */
   transparent?: boolean;
   /**

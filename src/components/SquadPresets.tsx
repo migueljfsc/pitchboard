@@ -72,7 +72,7 @@ export function SquadPresets({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center gap-2">
-        <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("preset.label")}</span>
+        <span className="text-xs text-ink-400">{t("preset.label")}</span>
         {presets.length > 0 && writable && !naming && (
           <button
             type="button"
@@ -82,7 +82,7 @@ export function SquadPresets({
             title={t("preset.manage.title")}
             className={cn(
               "ml-auto flex size-5 items-center justify-center rounded transition",
-              managing ? "text-accent" : "text-ink-400 hover:text-ink-200",
+              managing ? "bg-accent/15 text-white ring-1 ring-inset ring-accent/70" : "text-ink-400 hover:text-ink-200",
             )}
           >
             <Pencil size={11} />
@@ -132,7 +132,7 @@ export function SquadPresets({
             disabled={presets.length === 0}
             onChange={(e) => e.target.value && onApply(teamIndex, e.target.value)}
             aria-label={t("preset.loadInto", { team: team.name })}
-            className="min-w-0 flex-1 rounded-md border border-ink-600 bg-ink-900 px-2 py-1.5 text-xs text-ink-200 outline-none transition focus:border-accent disabled:opacity-45"
+            className="min-w-0 flex-1 rounded-md border border-ink-600 bg-ink-900 py-1.5 pl-2 pr-7 text-xs text-ink-200 outline-none transition focus:border-accent disabled:opacity-45"
           >
             <option value="">
               {t(

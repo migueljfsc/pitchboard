@@ -79,34 +79,32 @@ export function TeamControls({
 
   return (
     <div className={cn("flex flex-col gap-3", team.hidden && "opacity-55")}>
-      <div className="flex items-center gap-2">
-        <span
-          className="size-3 shrink-0 rounded-full ring-1 ring-white/20"
-          style={{ background: team.color }}
-        />
+      <div className="flex flex-col gap-1.5">
         {/* Free text: name the sides whatever the tactic calls for. */}
         <input
           value={team.name}
           onChange={(e) => patch({ name: e.target.value }, `team-name:${team.id}`)}
           placeholder={t("team.namePlaceholder")}
           aria-label={t("team.nameLabel", { n: teamIndex + 1 })}
-          className="min-w-0 flex-1 rounded border border-ink-600 bg-ink-900 px-2 py-1 text-xs font-medium text-ink-200 outline-none transition placeholder:text-ink-400 hover:border-ink-400 focus:border-accent focus:text-white"
+          className="w-full rounded border border-ink-600 bg-ink-900 px-2 py-1 text-xs font-medium text-ink-200 outline-none transition placeholder:text-ink-400 hover:border-ink-400 focus:border-accent focus:text-white"
         />
-        <span className="shrink-0 font-mono text-[11px] text-ink-400" title={t("team.direction")}>
-          {direction === "left" ? "→" : "←"}
-        </span>
-        <button
-          type="button"
-          onClick={() => patch({ hidden: !team.hidden })}
-          aria-label={t(team.hidden ? "team.showAria" : "team.hideAria", { team: team.name })}
-          title={t(team.hidden ? "team.show" : "team.hide")}
-          className={cn(
-            "flex size-6 shrink-0 items-center justify-center rounded transition",
-            team.hidden ? "text-ink-400 hover:text-ink-200" : "text-accent",
-          )}
-        >
-          {team.hidden ? <EyeOff size={13} /> : <Eye size={13} />}
-        </button>
+        {/* Which way the side plays and whether it is drawn, said in words: an arrow and an
+            eye on their own were read as decoration. */}
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] text-ink-400" title={t("team.direction")}>
+            {t(direction === "left" ? "team.attacks.right" : "team.attacks.left")}
+          </span>
+          <button
+            type="button"
+            onClick={() => patch({ hidden: !team.hidden })}
+            aria-label={t(team.hidden ? "team.showAria" : "team.hideAria", { team: team.name })}
+            aria-pressed={team.hidden ?? false}
+            className="flex items-center gap-1 rounded px-1 py-0.5 text-[11px] text-ink-400 transition hover:bg-white/[0.06] hover:text-white"
+          >
+            {team.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
+            {t(team.hidden ? "team.show" : "team.hide")}
+          </button>
+        </div>
       </div>
 
       <FormationPicker
@@ -142,7 +140,7 @@ export function TeamControls({
         className="flex items-center gap-2 rounded-md px-1 py-1 text-left transition hover:bg-white/[0.04]"
       >
         <ChevronDown size={12} className={cn("shrink-0 text-ink-400 transition-transform", !squadOpen && "-rotate-90")} />
-        <span className="flex-1 text-[11px] uppercase tracking-wide text-ink-400">{t("team.squad")}</span>
+        <span className="flex-1 text-xs text-ink-400">{t("team.squad")}</span>
         <span className="font-mono text-[11px] text-ink-500">{team.players.length}</span>
       </button>
       {squadOpen && (
@@ -184,7 +182,7 @@ export function TeamControls({
         className="flex items-center gap-2 rounded-md px-1 py-1 text-left transition hover:bg-white/[0.04]"
       >
         <ChevronDown size={12} className={cn("shrink-0 text-ink-400 transition-transform", !kitOpen && "-rotate-90")} />
-        <span className="flex-1 text-[11px] uppercase tracking-wide text-ink-400">{t("team.kit")}</span>
+        <span className="flex-1 text-xs text-ink-400">{t("team.kit")}</span>
         <span className="h-3.5 w-6 rounded-sm ring-1 ring-white/20" style={{ background: swatch(team.pattern ?? "solid", team.color) }} />
         {sportOf(doc).keeper && (
           <span
@@ -198,7 +196,7 @@ export function TeamControls({
           {/* The kit: one ball for the shirt, which the pattern paints over, and one for
               the keeper, whose empty state is the team's own kit struck through. */}
           <div className="flex items-center gap-2" title={t("team.kit.title")}>
-            <span className="w-16 shrink-0 text-[11px] uppercase tracking-wide text-ink-400">
+            <span className="w-16 shrink-0 text-xs text-ink-400">
               {t("team.shirt")}
             </span>
             <ColorPicker
@@ -232,7 +230,7 @@ export function TeamControls({
 
           {sportOf(doc).keeper && (
             <div className="flex items-center gap-2">
-              <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("team.keeperKit")}</span>
+              <span className="text-xs text-ink-400">{t("team.keeperKit")}</span>
               <ColorPicker
                 size="md"
                 value={team.keeper?.color ?? null}

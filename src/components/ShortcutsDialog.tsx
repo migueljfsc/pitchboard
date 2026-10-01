@@ -99,7 +99,7 @@ export function ShortcutsDialog({ onClose, onTour }: { onClose: () => void; onTo
 
         {GROUPS.map((group) => (
           <div key={group.title} className="flex flex-col gap-1.5">
-            <span className="text-[11px] uppercase tracking-wide text-ink-400">
+            <span className="text-xs text-ink-400">
               {t(group.title)}
             </span>
             {group.rows.map((row) => (
@@ -129,7 +129,7 @@ export function ShortcutsDialog({ onClose, onTour }: { onClose: () => void; onTo
         ))}
 
         <div className="flex flex-col gap-1.5 border-t border-ink-700 pt-3">
-          <span className="text-[11px] uppercase tracking-wide text-ink-400">
+          <span className="text-xs text-ink-400">
             {t("shortcuts.group.mouse")}
           </span>
           <p className="text-xs leading-relaxed text-ink-300">{t("shortcuts.mouse")}</p>

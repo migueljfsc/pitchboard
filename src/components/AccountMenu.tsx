@@ -224,7 +224,7 @@ export function AccountMenu({ account, loading, signOut }: AccountState) {
           className="absolute animate-pop-in origin-top right-0 top-full z-40 mt-1.5 flex w-64 flex-col gap-1.5 rounded-md border border-ink-600 bg-ink-800 p-2 shadow-lg shadow-black/40"
         >
           <div className="px-1 pb-1">
-            <p className="text-[10px] uppercase tracking-wide text-ink-400">
+            <p className="text-[11px] text-ink-400">
               {t("account.signedInAs")}
             </p>
             {/* The address can be longer than the menu and must not widen it. */}

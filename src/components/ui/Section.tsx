@@ -62,7 +62,7 @@ export function Section({
           />
         </span>
         {icon && <span className={cn("flex shrink-0 items-center", open ? "text-accent" : "text-ink-400")}>{icon}</span>}
-        <span className="flex-1 shrink-0 text-xs font-semibold uppercase tracking-wide text-white">
+        <span className="flex-1 shrink-0 text-sm font-semibold font-stretch-semi-condensed text-white">
           {title}
         </span>
         {/* One line, shortened if it must: a long lineup name wraps the header otherwise. */}

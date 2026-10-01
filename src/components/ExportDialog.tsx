@@ -604,7 +604,7 @@ export function ExportDialog({ doc, t, pitchView, onClose, exportJob }: Props) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <span className="mb-1.5 block text-[11px] uppercase tracking-wide text-ink-400">
+      <span className="mb-1.5 block text-xs text-ink-400">
         {label}
       </span>
       {children}
@@ -615,7 +615,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function Stat({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col">
-      <dt className="text-[10px] uppercase tracking-wide text-ink-400">{label}</dt>
+      <dt className="text-[11px] text-ink-400">{label}</dt>
       <dd className="text-ink-200">{children}</dd>
     </div>
   );
@@ -638,7 +638,7 @@ function Choice({
       className={cn(
         "flex-1 basis-16 rounded border px-2 py-1.5 text-[11px] transition",
         active
-          ? "border-accent bg-accent/15 font-medium text-white"
+          ? "border-accent/70 bg-accent/15 font-medium text-white"
           : "border-ink-600 text-ink-300 hover:border-ink-400 hover:text-white",
       )}
     >

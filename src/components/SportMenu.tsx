@@ -87,7 +87,7 @@ export function SportMenu({ value, onChange, nameOf, label, hint, disabled = fal
             setOpen(true);
           }
         }}
-        className="flex items-center gap-2 rounded-md px-2 py-1 text-sm font-bold uppercase tracking-wide text-white outline-none transition hover:bg-white/5 focus-visible:bg-white/5 focus-visible:ring-1 focus-visible:ring-accent disabled:cursor-default disabled:hover:bg-transparent"
+        className="flex items-center gap-2 rounded-md px-2 py-1 text-base font-semibold font-stretch-semi-condensed text-white outline-none transition hover:bg-white/5 focus-visible:bg-white/5 focus-visible:ring-1 focus-visible:ring-accent disabled:cursor-default disabled:hover:bg-transparent"
       >
         <SportIcon sport={value} className="size-[18px] shrink-0 text-ink-200" />
         {nameOf(value)}
@@ -118,7 +118,7 @@ export function SportMenu({ value, onChange, nameOf, label, hint, disabled = fal
                 aria-selected={chosen}
                 onClick={() => pick(sport)}
                 className={cn(
-                  "flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm font-bold uppercase tracking-wide outline-none transition",
+                  "flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-base font-semibold font-stretch-semi-condensed outline-none transition",
                   "hover:bg-white/5 focus-visible:bg-white/5",
                   chosen ? "text-accent" : "text-ink-100 hover:text-white",
                 )}

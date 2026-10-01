@@ -318,13 +318,14 @@ export function BoardCanvas({
   /** Where the pointer is while hovering, in CSS pixels — where the hover card sits. */
   const [hoverAt, setHoverAt] = useState<Vec2 | null>(null);
   /**
-   * What the pointer is over, when it is over a control point.
+   * What the pointer is over, when it is over a control point or a link.
    *
    * Separate from `hover`, which is the entity under the pointer and feeds the
    * renderer. This one only picks the cursor — a handle is drawn on top of
-   * whatever it edits, so it wins the cursor without stealing the highlight.
+   * whatever it edits, so it wins the cursor without stealing the highlight; a
+   * link is reached only on grass with nothing else on it, as a click reaches it.
    */
-  const [grip, setGrip] = useState<"grab" | "resize" | null>(null);
+  const [grip, setGrip] = useState<"grab" | "resize" | "link" | null>(null);
   const [drag, setDrag] = useState<Drag>(null);
 
   /**
@@ -395,6 +396,8 @@ export function BoardCanvas({
       ...view,
       width: size.w,
       height: size.h,
+      // The page shows through outside the pitch, so the board sits on the editor's own ground.
+      transparent: true,
       interactive: live,
       turf: turf.current,
       tilt: framing.tilt,
@@ -940,19 +943,20 @@ export function BoardCanvas({
         (editScene === undefined || !onGrass(p)
           ? null
           : hitTestHandle(doc, editScene, selection, p));
+      const frame = frameAt(doc, t);
+      const token =
+        (tilted ? hitTestTilted(doc, frame, screenFrom(e), cameraFrom(e)) : hitTest(doc, frame, p))?.id ?? null;
+      const grabs = !!onHandle || shapeUnder(e, p);
       setGrip(
         annHandle?.hit.which === "w"
           ? "resize"
-          : onHandle || shapeUnder(e, p)
+          : grabs
             ? "grab"
-            : null,
+            : !token && onGrass(p) && hitTestLink(doc, frame.resolved, p)
+              ? "link"
+              : null,
       );
-      setHover(
-        (tilted
-          ? hitTestTilted(doc, frameAt(doc, t), screenFrom(e), cameraFrom(e))
-          : hitTest(doc, frameAt(doc, t), p)
-        )?.id ?? null,
-      );
+      setHover(token);
       setHoverAt(rawFrom(e));
       return;
     }
@@ -1227,6 +1231,8 @@ export function BoardCanvas({
       return "grabbing";
     }
     if (grip === "resize") return resize;
+    // A link is picked, not dragged: the hand that says "click".
+    if (grip === "link") return "pointer";
     // An open hand over empty grass too, where the Pan tool has somewhere to go.
     return grip === "grab" || hover || pans ? "grab" : "default";
   };

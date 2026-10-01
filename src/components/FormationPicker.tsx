@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { BookmarkPlus, Check, ChevronDown, Pencil, Trash2, X } from "lucide-react";
+import { BookmarkPlus, Check, Pencil, Trash2, X } from "lucide-react";
 import type { BoardDoc } from "@/board/types";
 import { formationGroupsFor, formationsFor } from "@/formations";
 import { formationLabel, groupLabel } from "@/lib/formationText";
@@ -78,7 +78,7 @@ export function FormationPicker({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center gap-2">
-        <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("team.formation")}</span>
+        <span className="text-xs text-ink-400">{t("team.formation")}</span>
         {shapes.length > 0 && writable && !naming && (
           <button
             type="button"
@@ -88,7 +88,7 @@ export function FormationPicker({
             title={t("shape.manage.title")}
             className={cn(
               "ml-auto flex size-5 items-center justify-center rounded transition",
-              managing ? "text-accent" : "text-ink-400 hover:text-ink-200",
+              managing ? "bg-accent/15 text-white ring-1 ring-inset ring-accent/70" : "text-ink-400 hover:text-ink-200",
             )}
           >
             <Pencil size={11} />
@@ -155,11 +155,6 @@ export function FormationPicker({
               </optgroup>
             ))}
           </select>
-          <ChevronDown
-            size={13}
-            aria-hidden
-            className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-ink-400"
-          />
           </span>
           <LibraryButton
             onClick={() => {

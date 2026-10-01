@@ -26,7 +26,7 @@ export function Toggle({
       className={cn(
         "rounded border px-2 py-1 text-[11px] transition",
         active
-          ? "border-accent text-accent"
+          ? "border-accent/70 bg-accent/15 text-white"
           : "border-ink-600 text-ink-400 hover:border-ink-400 hover:text-ink-200",
       )}
     >

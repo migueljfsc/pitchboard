@@ -13,6 +13,6 @@ export const BAR_BUTTON =
 export const BAR_BUTTON_OPEN = "bg-white/[0.08] text-white";
 
 export const BAR_PRIMARY =
-  "flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-ink-900 shadow-[0_0_0_1px_rgb(251_191_36/0.35),0_6px_18px_-6px_rgb(251_191_36/0.55)] transition hover:brightness-110";
+  "flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-ink-900 transition hover:bg-white";
 
 export const BAR_DIVIDER = "mx-1 h-5 w-px bg-ink-700";

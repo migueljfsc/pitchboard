@@ -135,7 +135,7 @@ export function PasswordForm({
             <GoogleMark />
             {t("account.signIn.google")}
           </button>
-          <p className="text-center text-[10px] uppercase tracking-wide text-ink-400">
+          <p className="text-center text-[11px] text-ink-400">
             {t("account.signIn.or")}
           </p>
         </>

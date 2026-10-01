@@ -106,7 +106,7 @@ export function DrawToolStrip({ tool, onToolChange }: { tool: Tool; onToolChange
           onClick={() => onToolChange(item.value)}
           className={cn(
             "flex size-7 items-center justify-center rounded-md transition",
-            tool === item.value ? "bg-ink-700 text-accent" : "text-ink-300 hover:bg-ink-700/60 hover:text-white",
+            tool === item.value ? "bg-accent/15 text-white ring-1 ring-inset ring-accent/70" : "text-ink-300 hover:bg-ink-700/60 hover:text-white",
           )}
         >
           <item.icon size={14} />
@@ -168,7 +168,7 @@ export function DrawPanel({
     kind === null || kind === "ball" ? null : (
       <>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("draw.color")}</span>
+          <span className="text-xs text-ink-400">{t("draw.color")}</span>
           <ColorPicker
             size="md"
             value={active?.color ?? color}
@@ -203,7 +203,7 @@ export function DrawPanel({
                 className={cn(
                   "flex-1 rounded border px-1 py-1 text-[11px] transition",
                   activeFilled === value
-                    ? "border-accent text-accent"
+                    ? "border-accent/70 bg-accent/15 text-white"
                     : "border-ink-600 text-ink-400 hover:text-ink-200",
                 )}
               >
@@ -230,7 +230,7 @@ export function DrawPanel({
                 className={cn(
                   "flex-1 rounded border px-1 py-1 text-[11px] transition",
                   activeDash === d.value
-                    ? "border-accent text-accent"
+                    ? "border-accent/70 bg-accent/15 text-white"
                     : "border-ink-600 text-ink-400 hover:text-ink-200",
                 )}
               >
@@ -275,7 +275,7 @@ export function DrawPanel({
             className={cn(
               "flex min-w-0 flex-col items-center gap-0.5 rounded-md border px-1 py-1.5 text-[10px] transition",
               tool === item.value
-                ? "border-accent bg-ink-700 text-accent"
+                ? "border-accent/70 bg-accent/15 text-white"
                 : "border-ink-600 text-ink-300 hover:border-ink-400 hover:text-white",
             )}
           >
@@ -294,7 +294,7 @@ export function DrawPanel({
           className={cn(
             "flex min-w-0 flex-col items-center gap-0.5 rounded-md border px-1 py-1.5 text-[10px] transition",
             sticky
-              ? "border-accent bg-ink-700 text-accent"
+              ? "border-accent/70 bg-accent/15 text-white"
               : "border-ink-600 text-ink-300 hover:border-ink-400 hover:text-white",
           )}
         >
@@ -331,7 +331,7 @@ export function DrawPanel({
               is nothing for it to apply to, so it is not shown. */}
           {kind && styleRows && (
             <div className="flex flex-col gap-2 rounded-md border border-ink-600 bg-ink-800 p-2">
-              <span className="text-[11px] uppercase tracking-wide text-ink-300">
+              <span className="text-xs text-ink-300">
                 {t("draw.next", { kind: t(KIND_KEY[kind]) })}
               </span>
               {styleRows}
@@ -394,7 +394,7 @@ function Selected({
   return (
     <div className="flex flex-col gap-2 rounded-md border border-accent bg-ink-700 p-2">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] uppercase tracking-wide text-ink-300">
+        <span className="text-xs text-ink-300">
           {t(KIND_KEY[ann.kind])}
         </span>
         <div className="flex items-center gap-0.5">
@@ -408,7 +408,7 @@ function Selected({
               onClick={() => onPatch({ lit: ann.lit ? undefined : true })}
               className={cn(
                 "flex size-5 items-center justify-center rounded transition",
-                ann.lit ? "text-accent" : "text-ink-400 hover:text-white",
+                ann.lit ? "bg-accent/15 text-white ring-1 ring-inset ring-accent/70" : "text-ink-400 hover:text-white",
               )}
             >
               <Sun size={12} />
@@ -423,7 +423,7 @@ function Selected({
             onClick={onToggleLit}
             className={cn(
               "flex size-5 items-center justify-center rounded transition",
-              lit ? "text-accent" : "text-ink-400 hover:text-white",
+              lit ? "bg-accent/15 text-white ring-1 ring-inset ring-accent/70" : "text-ink-400 hover:text-white",
             )}
           >
             <Sparkles size={12} />
@@ -554,7 +554,7 @@ function TextAlignRow({
           className={cn(
             "flex size-6 items-center justify-center rounded border transition",
             ann.align === value
-              ? "border-accent text-white"
+              ? "border-accent/70 bg-accent/15 text-white"
               : "border-ink-600 text-ink-400 hover:border-ink-400 hover:text-ink-200",
           )}
         >
@@ -586,7 +586,7 @@ function TextBackground({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center gap-2">
-        <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("draw.bg")}</span>
+        <span className="text-xs text-ink-400">{t("draw.bg")}</span>
         <ColorPicker
           size="md"
           value={ann.bg ?? null}
@@ -689,11 +689,11 @@ function SceneSelect({
   const { t } = useI18n();
   return (
     <label className="flex min-w-0 flex-1 flex-col gap-1">
-      <span className="text-[11px] uppercase tracking-wide text-ink-400">{label}</span>
+      <span className="text-xs text-ink-400">{label}</span>
       <select
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value || null)}
-        className="w-full rounded border border-ink-600 bg-ink-900 px-1 py-1 text-[11px] text-ink-200 outline-none focus:border-accent"
+        className="w-full rounded border border-ink-600 bg-ink-900 py-1 pl-1.5 pr-6 text-[11px] text-ink-200 outline-none focus:border-accent"
       >
         {allowEnd && <option value="">{t("drawn.end")}</option>}
         {doc.scenes.map((s) => (

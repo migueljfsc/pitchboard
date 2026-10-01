@@ -144,7 +144,7 @@ function Shell({
           <a href={HOME_PATH} title="Pitchboard" className="rounded-lg">
             <Wordmark name="Pitchboard" />
           </a>
-          <span className="rounded-full border border-accent/25 bg-accent/[0.07] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-accent">
+          <span className="rounded-full border border-accent/25 bg-accent/[0.07] px-2 py-0.5 text-[10px] font-medium text-accent">
             Usage
           </span>
           <div className="ml-auto flex items-center gap-1.5">
@@ -634,7 +634,7 @@ function Tiles({ items }: { items: Tile[] }) {
           transition={{ duration: 0.4, ease: EASE_OUT, delay: i * 0.04 }}
           className="rounded-xl border border-ink-700 bg-gradient-to-b from-ink-800 to-ink-800/60 p-3 transition-colors duration-300 hover:border-ink-600"
         >
-          <div className="text-[11px] tracking-wide text-ink-400 uppercase">{label}</div>
+          <div className="text-[11px] text-ink-400">{label}</div>
           <div className="mt-1 text-2xl font-semibold tabular-nums text-white">
             {typeof value === "number" ? <CountUp value={value} /> : value}
           </div>

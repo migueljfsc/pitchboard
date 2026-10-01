@@ -1,12 +1,10 @@
 # Pitchboard — Implementation Plan
 
-What has been built, and what is left. Architecture is in [`architecture.md`](./architecture.md),
-the reasoning in [`decisions.md`](./decisions.md), the traps in [`AGENTS.md`](../AGENTS.md).
+What is built and what is open. Architecture: [`architecture.md`](./architecture.md); reasoning:
+[`decisions.md`](./decisions.md); traps and the definition of done: [`AGENTS.md`](../AGENTS.md).
 
-**Sequencing principle, still in force:** the pure engine (`src/board/`) is built and tested
-before any React touches it, and every phase ends at a state you can look at.
-
----
+**Sequencing, still in force:** the pure engine (`src/board/`) is built and tested before React
+touches it, and every phase ends at something you can look at.
 
 ## Shipped
 
@@ -14,51 +12,40 @@ before any React touches it, and every phase ends at a state you can look at.
 |---|---|
 | M1 | Static board — pitch, two teams from 27 notation-generated formations, drag and marquee (D11) |
 | M2 | Scenes, curved runs, arc-length reparameterisation, passes, playback (D1, D44) |
-| M3 | Links — live connectors recomputed every frame, with distances (D47) |
-| M4 | Export — MP4, WebM, GIF, PNG, all client-side (D6) |
-| M5 | Autosave, `#d=` share links, the read-only viewer, the migration seam (D7, D31) |
-| M6 | OpenTofu stack, CI, release workflow, deploy (D40) |
-| M7 | Drawings — arrows, zones, freehand, text labels (D20) |
+| M3 | Live links with distances (D47) |
+| M4 | Client-side export — MP4, WebM, GIF, PNG (D6) |
+| M5 | Autosave, `#d=` share links, the viewer, the migration seam (D7, D31) |
+| M6 | OpenTofu stack, CI, releases, deploy (D40) |
+| M7 | Drawings — arrows, zones, freehand, text (D20) |
 | M8 | JSON import/export, shots, run hiding, undo (D23, D26) |
 | M9 | Seamless flow at a fixed pace (D14) |
 | M10 | Squad presets (D30) |
-| — | Accounts, nested projects and saved boards on a Worker + D1 + KV (D39) |
-| — | Email and password sign-in, verified by email, on a custom domain (D109, D40) |
-| — | Framing: half-pitch, vertical, and the 3D view, which edits everything the flat board does (D12, D34, D91) |
+| — | Accounts, nested projects and saved boards on Worker + D1 + KV (D39); email sign-in on a custom domain (D109, D40) |
+| — | Half-pitch, vertical, and an editable 3D view (D12, D34, D91) |
 | — | Carry-forward editing, per-entity waits, run styles, the ball's own timing, lofts (D41, D14, D44) |
-| — | Kits with patterns and keepers, EN/PT, the grass and goals (D37, D38, D18) |
-| — | The spotlight — highlights for players, drawings and links, and drawings kept out of the dark (D100) |
-| — | Drawing: outlines, corners, drawn balls, link lines and heads, labels that snap and measure (D20, D47, D103) |
-| — | Editor layout, undo notices, the command palette, the tour, the colour picker (D93, D37) |
-| — | Export shapes, captions and transparent PNGs (D6) |
-| — | Video import from the `football-tracks` sibling repo (D52, D71, D75, D81, D87, D88) |
-| — | Sports: one engine, courts in board units — basketball, handball, field hockey, volleyball (D113) |
-| — | The library filed by sport: locked sport roots, per-sport templates (D114) |
-| — | Built-in templates for every sport; crash screen, keyboard menus, link previews (D115) |
-| — | Futsal, second in every list after football: FIFA's 40 x 20 m court, five a side, four systems, three plays (D117) |
-| — | Read-only presenting, security headers, links by side, scene-range export with preview and scene sheets, File menu, set-piece templates, viewer present and download (D116) |
-| — | A landing page at `/` playing live boards, the editor at `/app`, and a motion system: animated dialogs, menus, sections, timeline and toasts, a settling selection ring (D118) |
-| — | Anonymous daily usage counters — visits, exports, shares, imports, presenting — in the admin view (D119) |
-| — | A daily sweep of expired rows, pages as lazy chunks, and a zip of everything an account holds (D120) |
-| — | A note per scene, in the viewer, while presenting and in export captions (D121) |
-| — | Formations drawn by hand: saved from the board, kept in a library like squads, carried on the team (D122) |
-| — | Ice hockey: the IIHF rink, goals standing on the ice with play behind them, six a side (D123) |
-| — | The viewer in the app's style, a landing page that loads visible, empty lists with a next step (D124) |
+| — | Kits, patterns and keepers; EN/PT; grass and goals (D37, D38, D18) |
+| — | The spotlight — highlights for players, drawings and links (D100) |
+| — | Drawing outlines, corners, drawn balls, link lines and heads, snapping labels (D20, D47, D103) |
+| — | Editor layout, undo notices, command palette, tour, colour picker (D93, D37) |
+| — | Export shapes, captions, transparent PNGs (D6) |
+| — | Video import from `football-tracks` (D52, D71, D75, D81, D87, D88) |
+| — | Seven sports on one engine in board units: basketball, handball, field hockey, volleyball (D113), futsal (D117), ice hockey (D123) |
+| — | The library filed by sport, built-in templates for every sport, crash screen (D114, D115) |
+| — | Read-only presenting, security headers, scene-range export and sheets, File menu (D116) |
+| — | Landing page at `/`, editor at `/app`, a motion system (D118, D124) |
+| — | Anonymous usage counters, daily sweep, lazy pages, account zip (D119, D120) |
+| — | Scene notes (D121); formations drawn by hand (D122) |
+| — | Left sidebar redesign: one Selection card, view bar on the board, squad list (D125) |
+| — | Visual identity and editor layout: dark grass, chalk, Archivo; scene track and Scene card (D126) |
 
 ## Open
 
-- Known defects are in [`bugs.md`](./bugs.md). Non-goals are in `AGENTS.md` (D9).
-
-## Definition of done, per change
-
-- resize the window and confirm players do not move relative to the pitch — a pixel value
-  reaching the document is the most likely bug in the project, and this is how it shows
-- `pnpm lint && pnpm typecheck && pnpm test && pnpm build` clean
+No known defects. Non-goals are in `AGENTS.md` (D9). Pending from D126: merging Formation and
+Squad preset into one line-up block.
 
 ## Testing
 
-Vitest, engine only, no component tests. Tests exercise behaviour through the engine's public
-operations — build a board, edit it the way the editor does, and assert what the timeline, the
-renderer or the importer produce — and every known trap in `AGENTS.md` has a test that fails when
-it is reintroduced. The renderer is tested through a recording-proxy `ctx` that logs every call,
-so draw order and geometry are asserted without a canvas polyfill or image diffing.
+Vitest, engine only. Tests build a board, edit it as the editor does, and assert what the
+timeline, renderer or importer produce; every trap in `AGENTS.md` has a test that fails when it
+returns. The renderer is tested through a recording-proxy `ctx` that logs every call, so draw
+order and geometry are asserted without a canvas polyfill or image diffing.

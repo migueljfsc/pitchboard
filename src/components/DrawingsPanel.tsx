@@ -124,7 +124,7 @@ export function DrawingsPanel({
           className={cn(
             "min-w-0 flex-1 truncate rounded border px-1.5 py-1 text-[11px] transition",
             thisScene
-              ? "border-accent text-accent"
+              ? "border-accent/70 bg-accent/15 text-white"
               : "border-ink-600 text-ink-400 hover:border-ink-400 hover:text-ink-200",
           )}
         >
@@ -242,7 +242,7 @@ function SceneGroup({
         />
         <span
           className={cn(
-            "min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wide",
+            "min-w-0 flex-1 truncate text-[11px] font-semibold",
             current ? "text-accent" : "text-ink-300",
           )}
         >
@@ -402,7 +402,6 @@ function Row({
 
         <Tiny
           label={t(ann.hidden ? "drawn.showShape" : "drawn.hideShape")}
-          active={!ann.hidden}
           onClick={() => onPatch({ hidden: !ann.hidden })}
         >
           {ann.hidden ? <EyeOff size={12} /> : <Eye size={12} />}
@@ -466,11 +465,12 @@ function Tiny({
     <button
       type="button"
       aria-label={label}
+      aria-pressed={active}
       title={label}
       onClick={onClick}
       className={cn(
         "flex size-5 shrink-0 items-center justify-center rounded transition",
-        active ? "text-accent" : "text-ink-400 hover:text-ink-200",
+        active ? "bg-accent/15 text-white ring-1 ring-inset ring-accent/70" : "text-ink-400 hover:text-ink-200",
       )}
     >
       {children}

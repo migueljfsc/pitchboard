@@ -146,7 +146,7 @@ export function LinkPanel({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] uppercase tracking-wide text-ink-400">
+        <span className="text-xs text-ink-400">
           {t("links.count", { n: doc.links.length })}
         </span>
         {doc.links.length > 0 && (
@@ -537,7 +537,7 @@ function LinkEditor({
   return (
     <div className="flex flex-col gap-2">
       <label className="flex flex-col gap-1">
-        <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("links.name")}</span>
+        <span className="text-xs text-ink-400">{t("links.name")}</span>
         <input
           value={link.name}
           onChange={(e) => onChange({ name: e.target.value }, `link-name:${link.id}`)}
@@ -552,11 +552,12 @@ function LinkEditor({
             key={s.value}
             type="button"
             title={t(`links.style.${s.value}.hint` as MessageKey)}
+            aria-pressed={link.style === s.value}
             onClick={() => onChange({ style: s.value })}
             className={cn(
               "flex-1 rounded border px-1 py-1 text-[11px] transition",
               link.style === s.value
-                ? "border-accent text-accent"
+                ? "border-accent/70 bg-accent/15 text-white"
                 : "border-ink-600 text-ink-400 hover:text-ink-200",
             )}
           >
@@ -595,7 +596,7 @@ function LinkEditor({
 
       <div>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] uppercase tracking-wide text-ink-400">{t("links.colour")}</span>
+          <span className="text-xs text-ink-400">{t("links.colour")}</span>
           {/* Auto is the default: the link tracks its members' kit, so
               recolouring the team recolours the link with it. */}
           <ColorPicker
@@ -614,7 +615,7 @@ function LinkEditor({
           which is what it has always meant (D47). */}
       {doc.scenes.length > 1 && (
         <div>
-          <span className="text-[11px] uppercase tracking-wide text-ink-400">
+          <span className="text-xs text-ink-400">
             {t("links.scenes")}
           </span>
           <div className="mt-1 flex items-center gap-1">
@@ -640,7 +641,7 @@ function LinkEditor({
       )}
 
       <div>
-        <span className="text-[11px] uppercase tracking-wide text-ink-400">
+        <span className="text-xs text-ink-400">
           {t("links.members")}
         </span>
         <div className="mt-1 flex flex-wrap gap-1">
@@ -833,7 +834,7 @@ export function LinkCard({
             className={cn(
               "flex h-8 items-center justify-center rounded-lg border transition",
               on
-                ? "border-accent/50 bg-accent/10 text-accent"
+                ? "border-accent/70 bg-accent/15 text-white"
                 : "border-ink-600 text-ink-300 hover:border-ink-400 hover:text-white",
             )}
           >
@@ -898,11 +899,12 @@ function Tiny({
     <button
       type="button"
       aria-label={label}
+      aria-pressed={active}
       title={label}
       onClick={onClick}
       className={cn(
         "flex size-5 shrink-0 items-center justify-center rounded transition",
-        active ? "text-accent" : "text-ink-400 hover:text-ink-200",
+        active ? "bg-accent/15 text-white ring-1 ring-inset ring-accent/70" : "text-ink-400 hover:text-ink-200",
         folds && !active && "hidden group-hover:flex group-focus-within:flex",
       )}
     >
@@ -937,7 +939,7 @@ function Segmented<T extends string>({
           onClick={() => onPick(v)}
           className={cn(
             "flex items-center px-1 py-1 transition",
-            value === v ? "bg-ink-700 text-accent" : "text-ink-400 hover:text-ink-200",
+            value === v ? "bg-accent/15 text-white ring-1 ring-inset ring-accent/70" : "text-ink-400 hover:text-ink-200",
           )}
         >
           {glyph(v)}

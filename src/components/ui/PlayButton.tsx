@@ -3,7 +3,7 @@ import { Pause, Play } from "lucide-react";
 import { spring } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
-/** Play and pause in one round button, the icon turning over between them, glowing while it plays. */
+/** Play and pause in one round button, the icon turning over between them, ringed while it plays. */
 export function PlayButton({
   playing,
   onToggle,
@@ -19,8 +19,8 @@ export function PlayButton({
       onClick={onToggle}
       aria-label={label}
       className={cn(
-        "flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent text-ink-900 transition hover:brightness-110",
-        playing && "shadow-[0_0_0_4px_rgb(251_191_36/0.18),0_0_18px_rgb(251_191_36/0.35)]",
+        "flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent text-ink-900 transition hover:bg-white",
+        playing && "shadow-[0_0_0_4px_rgb(238_241_234/0.16)]",
       )}
     >
       <AnimatePresence mode="popLayout" initial={false}>

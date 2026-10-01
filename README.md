@@ -3,96 +3,67 @@
 [![ci](https://github.com/migueljfsc/pitchboard/actions/workflows/ci.yml/badge.svg)](https://github.com/migueljfsc/pitchboard/actions/workflows/ci.yml)
 [![deploy](https://github.com/migueljfsc/pitchboard/actions/workflows/deploy-worker.yml/badge.svg)](https://github.com/migueljfsc/pitchboard/actions/workflows/deploy-worker.yml)
 
-An animated tactics board that runs in the browser — football, futsal, basketball, handball,
-field hockey, ice hockey and volleyball on one engine. Draw a formation, move players between scenes along
-curved runs, and export the result as **MP4**, **GIF**, or **PNG** — all client-side, no server
-rendering.
+An animated tactics board in the browser — football, futsal, basketball, handball, field hockey,
+ice hockey and volleyball on one engine. Draw a formation, move players between scenes along curved
+runs, export **MP4**, **GIF** or **PNG** — all client-side.
 
 **Live:** https://pitchboard.migueljfsc.dev — one Cloudflare Worker serving the app and its API,
 deployed by [`deploy-worker.yml`](.github/workflows/deploy-worker.yml) on every push to `main`.
-
-> Releases are cut by [`release.yml`](.github/workflows/release.yml): commitizen bumps the
-> version from conventional commits, updates the changelog, tags, and opens a GitHub Release.
-> It needs a `CZ_TOKEN` secret, because `main` is protected and the built-in `GITHUB_TOKEN`
-> cannot push to a protected branch.
-
-> **Status: usable.** M1–M10 are built — the board, animation, live links, export, sharing,
-> infrastructure, annotations, board handling, seamless playback, and squad presets — along with
-> seven sports, a 3D view, read-only presenting, video import, English and Portuguese, and
-> accounts with a library of saved boards filed by sport. See
-> [`docs/implementation-plan.md`](docs/implementation-plan.md) for the plan and
-> [`docs/bugs.md`](docs/bugs.md) for known defects.
+[`release.yml`](.github/workflows/release.yml) cuts releases with commitizen; it needs a
+`CZ_TOKEN` secret because `main` is protected.
 
 ## What makes it different
 
-**Live links.** Select the back 4 or the midfield 3 and draw a connector between them. The
-connector is recomputed every frame from the players' interpolated positions, so it deforms as
-they move independently — you watch the unit stretch when the left 8 jumps to press, and see
-the gap open behind them. Existing tactics boards treat group shapes as static decoration.
-
-Chain, polygon, or filled per link, with optional live distance labels in metres.
+**Live links.** Connect the back 4 or the midfield 3 and the connector is recomputed every frame
+from the players' interpolated positions, so it deforms as they move — the unit stretches when
+the 8 jumps to press, and the gap opens behind him. Other boards treat group shapes as static.
+Chain, polygon or filled, with optional live distances in metres.
 
 ## Design
 
 | Piece | Approach |
 |---|---|
-| **Animation** | Timeline of scenes. An arrow drawn on a player defines the curve it travels to its next-scene position; no arrow means a straight tween. A player can take longer than the scene, or wait before setting off, so one scene can hold a sequence rather than two scenes existing to order it. |
-| **Renderer** | One pure `drawBoard(ctx, doc, t, view)` — plain Canvas2D, no DOM or React. The editor draws it to a visible canvas; the exporter draws the same function to an `OffscreenCanvas` in a Web Worker; the scene strip draws it again at thumbnail size. Preview and export cannot diverge. |
-| **Coordinates** | Board units, never pixels: metres on a football pitch (105 × 68), every other court scaled to the same 105-unit length and converted back to metres wherever a person reads a distance. |
-| **Sports** | One engine; each sport is a spec — court, goal, keeper, snaps — plus its own court drawer. Nothing branches on a sport's name. |
-| **Ball** | Attaches to a carrying player. A pass is a *carrier change*, not a separate object. |
-| **Editing** | A move carries forward through the later scenes the player was not already running into, so fixing scene 4 of ten does not mean repeating the drag six times. |
-| **Drawing** | Arrows, lines, freehand, zones and text labels, each with a range of scenes it appears on. |
-| **Views** | Full pitch or either half, horizontal or vertical, flat or through one fixed angled camera. |
-| **Export** | `mediabunny` for MP4 (H.264) and WebM (VP9), `gifenc` for GIF. Format chosen by runtime capability check; size follows the board's own aspect rather than a broadcast one. |
-| **Sharing** | A board fits in a compressed URL fragment with no backend, frozen as it was. A board saved to an account can also be published to a short link that follows its edits. |
-| **Import** | A `tracks.json` from the sibling [`football-tracks`](../football-tracks) pipeline (broadcast clip → player positions) becomes a board to correct rather than draw. |
-| **Storage** | Signed out, squad presets and the board in progress live in `localStorage`, validated on every read and discarded rather than repaired. Signed in, presets move to the account, and boards are saved in nested projects under one root per sport. |
+| **Animation** | Scenes on a timeline. An arrow on a player is the curve he runs to his next position; none is a straight tween. A player can take longer than the scene, or wait, so one scene can hold a sequence. |
+| **Renderer** | One pure `drawBoard(ctx, doc, t, view)` on plain Canvas2D. The editor, the export Web Worker and the scene previews all call it, so preview and export cannot diverge. |
+| **Coordinates** | Board units, never pixels: metres on a football pitch, every other court scaled to the same length and converted back to metres wherever a distance is read. |
+| **Sports** | Each sport is a spec — court, goal, keeper, snaps — plus its court drawer. Nothing branches on a sport's name. |
+| **Ball** | Attached to a carrier. A pass is a *carrier change*, not an object. |
+| **Editing** | A move carries forward through later scenes the player was not already running into. |
+| **Drawing** | Arrows, lines, freehand, zones and text, each over a range of scenes. |
+| **Views** | Full pitch or a half, horizontal or vertical, flat or through one angled camera. |
+| **Export** | `mediabunny` for MP4 (H.264) / WebM (VP9), `gifenc` for GIF, chosen by capability check; size follows the board's aspect. |
+| **Sharing** | A frozen board in a compressed URL fragment, no backend; or, from an account, a short link that follows its edits. |
+| **Import** | A `tracks.json` from the sibling [`football-tracks`](../football-tracks) (broadcast clip → positions) becomes a board to correct. |
+| **Storage** | Signed out, `localStorage`, validated on read and discarded rather than repaired. Signed in, boards in nested projects under one root per sport. |
 
 ## Stack
 
-React 19 + TypeScript (strict) + Vite 8 + Tailwind v4.
-
-The Worker in [`worker/`](worker/) serves the built app, `/api/*` and the share pages, behind the
-same lint / typecheck / test / build gates CI runs. OpenTofu in
-[`infrastructure/terraform/cloudflare`](infrastructure/terraform/cloudflare) owns the durable
-resources — R2, D1, KV, Turnstile, DNS — and deliberately does not own the deploy, which is
-[`deploy-worker.yml`](.github/workflows/deploy-worker.yml). The reasoning is D40 in
-[`docs/decisions.md`](docs/decisions.md).
+React 19, TypeScript (strict), Vite 8, Tailwind v4. The Worker in [`worker/`](worker/) serves the
+app, `/api/*` and share pages. OpenTofu in
+[`infrastructure/terraform/cloudflare`](infrastructure/terraform/cloudflare) owns R2, D1, KV,
+Turnstile and DNS, and deliberately not the deploy (D40).
 
 ## Develop
 
 ```bash
 pnpm install
-pnpm dev          # http://localhost:5173
-pnpm test         # vitest — engine only
-pnpm lint
-pnpm typecheck
-pnpm build
+pnpm dev                   # http://localhost:5173
+pnpm test                  # vitest, engine only
+pnpm lint && pnpm typecheck && pnpm build
 pnpm board <tracks.json>   # a football-tracks file through the real importer
+pre-commit install         # hooks; commits are Conventional (`cz commit`), enforced in CI
 ```
 
-Node >= 22.12. Package manager: pnpm.
-
-### Contributing to yourself later
-
-```bash
-pre-commit install        # commit-msg + pre-commit hooks
-cz commit                 # guided conventional commit
-```
-
-Commits follow [Conventional Commits](https://www.conventionalcommits.org/); CI rejects
-anything else on a PR.
+Node >= 22.12, pnpm.
 
 ## Documentation
 
 | Document | Contents |
 |---|---|
-| [`docs/architecture.md`](docs/architecture.md) | Renderer contract, coordinate system, `BoardDoc` schema, timeline and ball model, links, export pipeline, sharing |
-| [`docs/implementation-plan.md`](docs/implementation-plan.md) | What is built, what is left, and the checks every change passes |
-| [`docs/decisions.md`](docs/decisions.md) | Decision log — why the design is what it is |
-| [`docs/bugs.md`](docs/bugs.md) | Known defects, with the cause where it is understood |
-| [`AGENTS.md`](AGENTS.md) | Working conventions and the invariants that must not be broken |
+| [`docs/architecture.md`](docs/architecture.md) | Renderer contract, coordinates, schema, timeline, ball, links, export, sharing, API |
+| [`docs/implementation-plan.md`](docs/implementation-plan.md) | What is built, what is open, how it is tested |
+| [`docs/decisions.md`](docs/decisions.md) | Why the design is what it is |
+| [`AGENTS.md`](AGENTS.md) | Conventions and the invariants that must not break |
 
 ## Licence
 

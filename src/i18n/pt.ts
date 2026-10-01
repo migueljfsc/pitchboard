@@ -190,6 +190,8 @@ export const pt: Dictionary = {
   "team.namePlaceholder": "Nome da equipa",
   "team.nameLabel": "Nome da equipa {n}",
   "team.direction": "Sentido do ataque",
+  "team.attacks.right": "Ataca →",
+  "team.attacks.left": "Ataca ←",
   "team.show": "Mostrar esta equipa",
   "team.hide": "Ocultar esta equipa",
   "team.showAria": "Mostrar {team}",
@@ -338,7 +340,7 @@ export const pt: Dictionary = {
   "timeline.flow.off": "Voltar aos tempos de deslocação e de espera por cena",
   "timeline.thumbs": "Pré-visualização das cenas",
   "timeline.thumbs.on": "Mostrar uma pré-visualização de cada cena",
-  "timeline.thumbs.off": "Apenas os nomes",
+  "timeline.thumbs.off": "Ocultar as pré-visualizações",
   "timeline.addScene": "Adicionar cena",
   "timeline.scene": "Cena",
   "timeline.note": "Nota",
@@ -454,7 +456,7 @@ export const pt: Dictionary = {
   "hover.runsOn": "Continua a correr para a cena seguinte",
   "hover.unseen": "Não visto aqui — posição mantida",
   "timeline.track.block": "{name} — deslocação {travel} s, pausa {hold} s",
-  "timeline.track.legend.hint": "A barra por baixo da linha do tempo: um bloco por cena. Às riscas enquanto os jogadores se deslocam para ela, liso enquanto ficam parados. A amarelo está a cena selecionada. Clique num bloco para ir até ela; arraste uma margem para mudar um tempo.",
+  "timeline.track.legend.hint": "A faixa das cenas: um bloco por cena, tão longo quanto ela dura. Às riscas enquanto os jogadores se deslocam para ela, liso enquanto ficam parados. O bloco claro é a cena selecionada. Clique num bloco para ir até ela, arraste-o para mudar a ordem, arraste uma margem para mudar um tempo.",
   "timeline.track.travel": "Arraste para mudar quanto demora a deslocação para esta cena",
   "timeline.track.hold": "Arraste para mudar quanto tempo esta cena fica parada",
   "timeline.shotMark": "remate",
@@ -469,6 +471,7 @@ export const pt: Dictionary = {
   "timeline.moveLater": "Mover a cena para a frente",
   "timeline.duplicate": "Duplicar a cena",
   "timeline.deleteScene": "Apagar a cena",
+  "scene.panel.hint": "Clique num jogador, na bola ou numa ligação no quadro para os editar.",
 
   // ------------------------------------------------------------- inspector
   "inspect.empty.lead": "Clique num jogador, na bola ou numa ligação no quadro.",
@@ -885,7 +888,6 @@ export const pt: Dictionary = {
   "landing.nav.features": "Funcionalidades",
   "landing.nav.how": "Como funciona",
   "landing.nav.open": "Abrir o quadro",
-  "landing.hero.eyebrow": "Um quadro tático para sete modalidades",
   "landing.hero.title": "Mova os jogadores.",
   "landing.hero.title2": "O Pitchboard dá vida à jogada.",
   "landing.hero.lead": "Disponha duas equipas e mova-as ao longo de algumas cenas. A animação entre elas faz-se sozinha. Exporte-a em vídeo ou envie-a por link.",
@@ -1178,8 +1180,6 @@ export const pt: Dictionary = {
     "{undo} desfaz qualquer coisa. {palette} encontra qualquer ação pelo nome, e ? lista os atalhos. Clique com o botão direito num jogador ou numa forma para ver o que pode fazer.\nO menu Ajuda traz o guia de volta.",
   // ---------------------------------------------------------------- strip and kit
   "timeline.tick": "Cena {n} — {name}",
-  "timeline.scrollEarlier": "Cenas anteriores",
-  "timeline.scrollLater": "Cenas seguintes",
   "team.kit.title": "Cor da camisola, padrão e equipamento do guarda-redes",
   // ---------------------------------------------------------------- export look
   "export.shape": "Formato",

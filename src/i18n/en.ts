@@ -195,6 +195,8 @@ export const en = {
   "team.namePlaceholder": "Team name",
   "team.nameLabel": "Name for team {n}",
   "team.direction": "Attacking direction",
+  "team.attacks.right": "Attacks →",
+  "team.attacks.left": "Attacks ←",
   "team.show": "Show this team",
   "team.hide": "Hide this team",
   "team.showAria": "Show {team}",
@@ -348,7 +350,7 @@ export const en = {
   "timeline.flow.off": "Back to per-scene travel and hold times",
   "timeline.thumbs": "Scene previews",
   "timeline.thumbs.on": "Show a preview of each scene",
-  "timeline.thumbs.off": "Names only",
+  "timeline.thumbs.off": "Hide the scene previews",
   "timeline.addScene": "Add scene",
   "timeline.scene": "Scene",
   "timeline.note": "Note",
@@ -464,7 +466,7 @@ export const en = {
   "hover.runsOn": "Runs on into the next scene",
   "hover.unseen": "Not seen here — position held",
   "timeline.track.block": "{name} — travel {travel} s, hold {hold} s",
-  "timeline.track.legend.hint": "The bar under the scrubber: one block per scene. Striped while the players travel into it, solid while they hold there. Yellow is the selected scene. Click a block to go to it; drag an edge to change a time.",
+  "timeline.track.legend.hint": "The scene track: one block per scene, as long as it lasts. Striped while the players travel into it, solid while they hold there. The light block is the selected scene. Click a block to go to it, drag it to reorder, drag an edge to change a time.",
   "timeline.track.travel": "Drag to change how long the travel into this scene takes",
   "timeline.track.hold": "Drag to change how long this scene holds",
   "timeline.shotMark": "shot",
@@ -479,6 +481,7 @@ export const en = {
   "timeline.moveLater": "Move scene later",
   "timeline.duplicate": "Duplicate scene",
   "timeline.deleteScene": "Delete scene",
+  "scene.panel.hint": "Click a player, the ball or a link on the board to edit it instead.",
 
   // ------------------------------------------------------------- inspector
   "inspect.empty.lead": "Click a player, the ball or a link on the board.",
@@ -893,7 +896,6 @@ export const en = {
   "landing.nav.features": "Features",
   "landing.nav.how": "How it works",
   "landing.nav.open": "Open the board",
-  "landing.hero.eyebrow": "A tactics board for seven sports",
   "landing.hero.title": "Move the players.",
   "landing.hero.title2": "Pitchboard plays it back.",
   "landing.hero.lead": "Set out two teams and move them through a few scenes. The animation in between takes care of itself. Export it as a video or send it as a link.",
@@ -1186,8 +1188,6 @@ export const en = {
     "{undo} undoes anything. {palette} finds any action by name, and ? lists the shortcuts. Right-click a player or a shape to see what you can do with it.\nThe Help menu brings the tour back.",
   // ---------------------------------------------------------------- strip and kit
   "timeline.tick": "Scene {n} — {name}",
-  "timeline.scrollEarlier": "Earlier scenes",
-  "timeline.scrollLater": "Later scenes",
   "team.kit.title": "Shirt colour, pattern and goalkeeper kit",
   // ---------------------------------------------------------------- export look
   "export.shape": "Shape",

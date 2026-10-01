@@ -68,6 +68,7 @@ import { ShortcutsDialog } from "@/components/ShortcutsDialog";
 import { ShareDialog } from "@/components/ShareDialog";
 import { ImportDialog, type ImportKind } from "@/components/ImportDialog";
 import { LinkCard, LinkPanel } from "@/components/LinkPanel";
+import { ScenePanel } from "@/components/ScenePanel";
 import { DrawPanel, DrawToolStrip } from "@/components/DrawPanel";
 import { SceneThumb } from "@/components/SceneThumb";
 import { SpeedButton, Timeline } from "@/components/Timeline";
@@ -2149,7 +2150,7 @@ export function Editor({ initialDoc }: Props = {}) {
                   />
                 </span>
                 <MousePointer2 size={13} className={cn("shrink-0", selectionOpen ? "text-accent" : "text-ink-400")} />
-                <span className="flex-1 whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-white">
+                <span className="flex-1 whitespace-nowrap text-sm font-semibold font-stretch-semi-condensed text-white">
                   {t("section.selection")}
                 </span>
                 {!selectionOpen && visible.size > 0 && (
@@ -2167,6 +2168,14 @@ export function Editor({ initialDoc }: Props = {}) {
                   onDocChange={setDoc}
                   sceneIndex={activeScene}
                   onPlayers={() => setCardLink(null)}
+                />
+              ) : visible.size === 0 ? (
+                <ScenePanel
+                  doc={doc}
+                  activeScene={activeScene}
+                  onDocChange={setDoc}
+                  onActiveSceneChange={selectScene}
+                  onDeleteScene={removeScene}
                 />
               ) : (
           <Inspector
@@ -2464,7 +2473,6 @@ export function Editor({ initialDoc }: Props = {}) {
               onLoopChange={setLoop}
               speed={speed}
               onSpeedChange={setSpeed}
-              onDeleteScene={removeScene}
             />
           )}
         </main>
@@ -2500,7 +2508,7 @@ export function Editor({ initialDoc }: Props = {}) {
           >
             {railOpen ? <PanelRightClose size={14} /> : <PanelRightOpen size={14} />}
             {railOpen ? (
-              <span className="flex-1 text-left text-[11px] font-semibold uppercase tracking-wide text-ink-200">
+              <span className="flex-1 text-left text-[11px] font-semibold text-ink-200">
                 {t("section.draw")}
               </span>
             ) : (

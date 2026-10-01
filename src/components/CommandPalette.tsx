@@ -114,7 +114,7 @@ export function CommandPalette({
             return (
               <li key={command.id} role="presentation">
                 {heading && (
-                  <div className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+                  <div className="px-3 pb-1 pt-2 text-[10px] font-semibold text-ink-400">
                     {command.group}
                   </div>
                 )}

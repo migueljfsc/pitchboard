@@ -527,7 +527,12 @@ function drawTilted(
   }
 
   warpGround(ctx, ground, proj);
+  // Shading darkens only what is already painted: on an opaque frame that is every pixel, and
+  // on a transparent one it is the ground, not a dark box around it.
+  ctx.save();
+  ctx.globalCompositeOperation = "source-atop";
   drawDepthShading(ctx, proj);
+  ctx.restore();
 
   // The crop has to be applied twice. The ground layer took it in metre space like
   // the flat board does, but billboards are drawn straight onto the destination and
@@ -2641,9 +2646,10 @@ const UNSEEN_RIM_ALPHA = 0.9;
 /**
  * The editor's ring around a selected or hovered entity.
  *
- * Selection wears a soft amber glow under its ring: a thin ring alone vanished
- * against the white of the centre circle and the touchlines. Hover is a plain
- * white ring, bright enough to promise what a click will pick up.
+ * Selection is a chalk ring on a dark keyline: no kit colour, so it shows on any team —
+ * the amber it used to be all but vanished on the home side's default amber — and the keyline
+ * keeps it apart from the white of the centre circle and the touchlines. Hover is a thinner,
+ * fainter white ring, bright enough to promise what a click will pick up.
  */
 function drawFocusRing(
   ctx: Ctx,
@@ -2658,24 +2664,19 @@ function drawFocusRing(
   const settle = state.selected ? easeOutQuad(clamp(state.focusIn ?? 1, 0, 1)) : 1;
   const ring = radius + gap + (1 - settle) * FOCUS_SPREAD * k;
 
-  if (state.selected) {
-    const glow = ctx.createRadialGradient(p.x, p.y, radius, p.x, p.y, ring + 1.1 * k);
-    glow.addColorStop(0, `rgba(251,191,36,${0.5 * settle})`);
-    glow.addColorStop(1, "rgba(251,191,36,0)");
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, ring + 1.1 * k, 0, Math.PI * 2);
-    ctx.fillStyle = glow;
-    ctx.fill();
-  }
-
   ctx.beginPath();
   ctx.arc(p.x, p.y, ring, 0, Math.PI * 2);
-  ctx.strokeStyle = !state.selected
-    ? "rgba(255,255,255,0.8)"
-    : settle < 1
-      ? `rgba(251,191,36,${settle})`
-      : "#fbbf24";
-  ctx.lineWidth = (state.selected ? 0.28 : 0.2) * k;
+  if (!state.selected) {
+    ctx.strokeStyle = "rgba(255,255,255,0.7)";
+    ctx.lineWidth = 0.2 * k;
+    ctx.stroke();
+    return;
+  }
+  ctx.strokeStyle = `rgba(0,0,0,${0.6 * settle})`;
+  ctx.lineWidth = 0.56 * k;
+  ctx.stroke();
+  ctx.strokeStyle = `rgba(238,241,234,${settle})`;
+  ctx.lineWidth = 0.3 * k;
   ctx.stroke();
 }
 

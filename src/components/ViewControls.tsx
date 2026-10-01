@@ -112,7 +112,7 @@ export function ViewControls({
               "flex shrink-0 items-center justify-center rounded border px-1.5 transition",
               "disabled:cursor-not-allowed disabled:opacity-40",
               framing.rotated
-                ? "border-accent text-accent"
+                ? "border-accent/70 bg-accent/15 text-white"
                 : "border-ink-600 text-ink-400 enabled:hover:text-ink-200",
             )}
           >
@@ -162,7 +162,7 @@ export function ViewControls({
                 className={cn(
                   "flex-1 rounded border px-1 py-0.5 text-[10px] transition",
                   ghosts[which]
-                    ? "border-accent text-accent"
+                    ? "border-accent/70 bg-accent/15 text-white"
                     : "border-ink-600 text-ink-400 hover:text-ink-200",
                 )}
               >
@@ -189,7 +189,7 @@ function Row({
   return (
     <div className="flex items-center gap-2.5" title={title}>
       {/* Wide enough for the longest label in either language — JOGADORES, FANTASMAS. */}
-      <span className="w-[4.5rem] shrink-0 truncate text-[10px] uppercase tracking-wide text-ink-400">
+      <span className="w-[4.5rem] shrink-0 truncate text-[11px] text-ink-400">
         {label}
       </span>
       {children}
@@ -218,7 +218,7 @@ function Segmented<T extends string>({
           className={cn(
             "flex min-w-0 flex-1 items-center justify-center gap-1 truncate rounded border px-1 py-0.5 text-[10px] transition",
             value === o.value
-              ? "border-accent text-accent"
+              ? "border-accent/70 bg-accent/15 text-white"
               : "border-ink-600 text-ink-400 hover:text-ink-200",
           )}
         >
