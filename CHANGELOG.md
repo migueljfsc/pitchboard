@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.88.0 (2026-10-01)
+
+### Feat
+
+- **ui**: dark-grass identity, scene track and Scene card, condensed docs
+
 ## v0.87.0 (2026-10-01)
 
 ### Feat
