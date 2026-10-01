@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.85.0 (2026-10-01)
+
+### Feat
+
+- usage counters, scene notes, drawn formations and ice hockey
+
 ## v0.84.2 (2026-09-30)
 
 ### Fix
