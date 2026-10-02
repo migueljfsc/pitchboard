@@ -572,7 +572,8 @@ highlight. Splash and error screens match.
 **The landing page never starts invisible.** A script-faded headline was measured late and, in a
 background tab or to a crawler, waited at zero opacity forever. The headline draws at once; the rest
 fades up in CSS or reveals on a scroll timeline, and is simply there where neither runs. Showcase
-boards draw at 30 fps and stop while hidden.
+boards draw at the display's rate — 30 fps stepped visibly once the hero went full width, and a
+frame there costs ~1.4 ms — and stop while hidden or off screen.
 
 **An empty list says what to do next**: an empty sport folder offers to save the board there; an
 empty squad library is a button to save this side; a side with no links can have its formation's
