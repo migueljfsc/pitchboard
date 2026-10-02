@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.90.1 (2026-10-02)
+
+### Perf
+
+- **landing**: showcase boards draw at the display's rate, not 30 fps
+
 ## v0.90.0 (2026-10-01)
 
 ### Feat
