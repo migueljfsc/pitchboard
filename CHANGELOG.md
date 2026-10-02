@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v0.91.0 (2026-10-02)
+
+### Feat
+
+- **ui**: line-up block, labelled drawing rail, tour and privacy page in the new look
+
 ## v0.90.1 (2026-10-02)
 
 ### Perf
