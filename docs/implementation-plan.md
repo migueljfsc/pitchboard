@@ -40,8 +40,7 @@ touches it, and every phase ends at something you can look at.
 
 ## Open
 
-No known defects. Non-goals are in `AGENTS.md` (D9). Pending from D126: merging Formation and
-Squad preset into one line-up block.
+No known defects. Non-goals are in `AGENTS.md` (D9).
 
 ## Testing
 

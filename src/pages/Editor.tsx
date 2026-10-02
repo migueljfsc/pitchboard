@@ -2187,6 +2187,7 @@ export function Editor({ initialDoc }: Props = {}) {
                 onSwitchSide={(id) => setDoc(switchSide(doc, id))}
                 onMakeKeeper={(id) => setDoc(setKeeper(doc, id))}
                 runsHidden={runsHidden}
+                runOpen={tour !== null && "run" in TOUR_STEPS[tour.step].stage}
                 onRunsHiddenChange={onRunsHiddenChange}
                 highlighted={highlighted}
                 highlightColor={litColor}
@@ -2484,7 +2485,7 @@ export function Editor({ initialDoc }: Props = {}) {
         {!present && (
         <aside
           data-tour="draw"
-          style={{ width: railOpen ? layout.right : 36 }}
+          style={{ width: railOpen ? layout.right : 56 }}
           className="flex shrink-0 flex-col overflow-y-auto border-l border-ink-700 bg-ink-800 transition-[width]"
         >
           <button
@@ -2504,11 +2505,12 @@ export function Editor({ initialDoc }: Props = {}) {
                 {t("section.draw")}
               </span>
             ) : (
-              annotationsOf(doc).length > 0 && (
-                <span className="font-mono text-[11px] text-ink-400">
-                  {annotationsOf(doc).length}
-                </span>
-              )
+              <>
+                <span className="text-[9px] leading-none text-ink-300">{t("section.draw")}</span>
+                {annotationsOf(doc).length > 0 && (
+                  <span className="font-mono text-[11px] text-ink-400">{annotationsOf(doc).length}</span>
+                )}
+              </>
             )}
           </button>
 

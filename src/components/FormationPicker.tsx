@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { BookmarkPlus, Check, Pencil, Trash2, X } from "lucide-react";
+import { BookmarkPlus, Check, Trash2, X } from "lucide-react";
 import type { BoardDoc } from "@/board/types";
 import { formationGroupsFor, formationsFor } from "@/formations";
 import { formationLabel, groupLabel } from "@/lib/formationText";
 import { MAX_FORMATION_NAME, type FormationLibrary } from "@/share/formationLibrary";
 import type { PresetSource } from "@/lib/usePresets";
 import { LibraryButton, LibraryNameInput } from "@/components/ui/LibraryControls";
-import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n/context";
 
 type Props = {
   doc: BoardDoc;
+  /** Whether the saved list is open for renaming and deleting — the Line-up heading's pencil. */
+  managing: boolean;
   teamIndex: 0 | 1;
   /** The side's catalogue formation, when it stands in one rather than a drawn shape. */
   formation: string;
@@ -38,6 +39,7 @@ const OWN = "own-shape";
  */
 export function FormationPicker({
   doc,
+  managing,
   teamIndex,
   formation,
   onFormationChange,
@@ -53,7 +55,6 @@ export function FormationPicker({
   const writable = source === "local" || source === "account";
   const [naming, setNaming] = useState(false);
   const [draft, setDraft] = useState("");
-  const [managing, setManaging] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -77,24 +78,6 @@ export function FormationPicker({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-ink-400">{t("team.formation")}</span>
-        {shapes.length > 0 && writable && !naming && (
-          <button
-            type="button"
-            onClick={() => setManaging(!managing)}
-            aria-expanded={managing}
-            aria-label={t("shape.manage")}
-            title={t("shape.manage.title")}
-            className={cn(
-              "ml-auto flex size-5 items-center justify-center rounded transition",
-              managing ? "bg-accent/15 text-white ring-1 ring-inset ring-accent/70" : "text-ink-400 hover:text-ink-200",
-            )}
-          >
-            <Pencil size={11} />
-          </button>
-        )}
-      </div>
 
       {naming ? (
         <div className="flex gap-1">

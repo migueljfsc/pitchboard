@@ -202,6 +202,7 @@ export const en = {
   "team.showAria": "Show {team}",
   "team.hideAria": "Hide {team}",
   "team.formation": "Formation",
+  "team.lineup": "Line-up",
   "team.addPlayer": "Add player ({n})",
   "team.colorAria": "Set {team} colour to {color}",
   "team.patternAria": "{pattern} kit for {team}",
@@ -812,9 +813,8 @@ export const en = {
   "links.visibleTo": "Last scene {name} appears on",
 
   // ---------------------------------------------------------- squad presets
-  "preset.label": "Squad preset",
-  "preset.manage": "Manage saved squads",
-  "preset.manage.title": "Rename or delete saved squads",
+  "lineup.manage": "Manage saved formations and squads",
+  "lineup.manage.title": "Rename or delete your saved formations and squads",
   "preset.namePlaceholder": "Name this squad",
   "preset.nameLabel": "Name for the saved squad",
   "preset.save": "Save squad",
@@ -874,8 +874,6 @@ export const en = {
   "shape.namePlaceholder": "Name this formation",
   "shape.nameLabel": "Name for the saved formation",
   "shape.defaultName": "My formation",
-  "shape.manage": "Manage your formations",
-  "shape.manage.title": "Rename or delete your formations",
   "shape.rename": "Name of formation {name}",
   "shape.delete": "Delete formation {name}",
   "shape.offline": "Your formations are saved to your account, which cannot be reached right now.",
@@ -1154,7 +1152,7 @@ export const en = {
     "Drag a player to move them. Click to select, shift-click to add more, or drag across empty space to box in a group. Arrow keys nudge the selection (five times as far with ⇧). Drop one player on another and they swap places.\nA move carries into later scenes where that player was standing still, so you don't have to repeat it. Hold Alt to change this scene only. Hold {mod} to place a player freely without snapping to a teammate's line.",
   "tour.scenes.title": "Scenes",
   "tour.scenes.body":
-    "A scene is a snapshot of where everybody stands. Add one, move some players, and the gap between the two scenes becomes the animation. Step through them with [ and ], and press Space to play.\nTurn on Seamless flow and the whole thing plays as one movement, with no stop at each scene.",
+    "A scene is a snapshot of where everybody stands. Add one, move some players, and the gap between the two scenes becomes the animation. Step through them with [ and ], and press Space to play.\nEach block on the track is one scene, as long as it lasts: drag it to reorder, or drag its edge to change the timing. Name the scene and add a note beside the previews. Turn on Seamless flow and the whole thing plays as one movement.",
   "tour.runs.title": "Runs and timing",
   "tour.runs.body":
     "Every move draws a run. Drag its amber handles to bend it.\nSelect a player and this panel sets when they go and how long they take. A wait holds them before they set off. The run style decides how they start and finish, and can send them straight on through the next scene.",

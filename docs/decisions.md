@@ -647,9 +647,12 @@ onto another to reorder, drag an edge to retime. Previews of each scene can be s
 per-browser choice (`share/scenePreviews.ts`) — and the dashed add-scene slot follows the last
 scene. The board gained about a quarter of the editor's height.
 
-**Smaller:** the team row says "Attacks →" and "Hide this team" in words; a link under the pointer
-shows the pointing hand, on otherwise empty grass, as a click reaches it. Pending: Formation and
-Squad preset as one line-up block.
+**Smaller:** the team row says "Attacks →" and "Hide this team" in words; the folded drawing rail
+names each tool under its icon; a link under the pointer shows the pointing hand, on otherwise
+empty grass, as a click reaches it. The tour opens the run its card talks about (`TourStage.run`).
+The privacy page, a static file, wears the same look; Archivo lives in `public/fonts/` with its
+licence, so the page and the app load one copy. Formation and squad preset are one **Line-up**
+block — the shape and the names in it are one decision — with one pencil managing both libraries.
 
 ---
 

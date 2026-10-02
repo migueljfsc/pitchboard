@@ -72,6 +72,8 @@ type Props = {
   onMakeKeeper: (playerId: string) => void;
   /** True when every selected entity has its run arrow hidden in this scene. */
   runsHidden: boolean;
+  /** Show the run's detail whether or not it was folded — the tour's card on runs talks about it. */
+  runOpen?: boolean;
   onRunsHiddenChange: (hidden: boolean) => void;
   /** True when every selected entity is lit in this scene. */
   highlighted: boolean;
@@ -118,6 +120,7 @@ export function Inspector({
   onSwitchSide,
   onMakeKeeper,
   runsHidden,
+  runOpen = false,
   onRunsHiddenChange,
   highlighted,
   highlightColor,
@@ -334,7 +337,11 @@ export function Inspector({
       {/* THE RUN into this scene, summed up in one line and opened for the detail. Where it
           cannot apply it says why, and how to get to where it does. */}
       {players.length > 0 && (
-        <Section title={scene ? t("inspect.run.title", { scene: scene.name }) : t("inspect.group.movement")} summary={runSummary}>
+        <Section
+          title={scene ? t("inspect.run.title", { scene: scene.name }) : t("inspect.group.movement")}
+          summary={runSummary}
+          forceOpen={runOpen}
+        >
           {!canEditPaths ? (
             <>
               <Why title={t("inspect.why.firstScene")}>
@@ -549,8 +556,19 @@ function Quick({
  * folded to start with.
  * Header and body share one border, so what folds is visibly inside what it folds under.
  */
-function Section({ title, summary, children }: { title: string; summary?: string | null; children: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
+function Section({
+  title,
+  summary,
+  forceOpen = false,
+  children,
+}: {
+  title: string;
+  summary?: string | null;
+  forceOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [opened, setOpen] = useState(false);
+  const open = opened || forceOpen;
   return (
     <section className="overflow-hidden rounded-md border border-ink-700">
       <button

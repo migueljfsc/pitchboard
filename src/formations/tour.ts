@@ -28,6 +28,8 @@ export type TourStage = {
   play?: boolean;
   /** Expand this link's row in the Links panel. */
   link?: string;
+  /** Open the selected player's run, which the Selection card keeps folded. */
+  run?: boolean;
   /** Select this drawing. */
   annotation?: string;
 };
@@ -46,7 +48,7 @@ export const TOUR_STEPS = [
   { id: "formations", anchor: "formations", stage: { panel: "formations" } },
   { id: "move", anchor: "board", stage: { panel: "selection", select: ["home-8"] } },
   { id: "scenes", anchor: "timeline", stage: { play: true } },
-  { id: "runs", anchor: "selection", stage: { panel: "selection", scene: 2, select: [RUNNER] } },
+  { id: "runs", anchor: "selection", stage: { panel: "selection", scene: 2, select: [RUNNER], run: true } },
   { id: "ball", anchor: "board", stage: { scene: 2 } },
   { id: "links", anchor: "links", stage: { panel: "links", link: TOUR_LINK } },
   { id: "draw", anchor: "draw", stage: { panel: "draw", scene: 2, annotation: TOUR_ARROW } },

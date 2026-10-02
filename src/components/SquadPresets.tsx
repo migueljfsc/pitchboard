@@ -1,15 +1,16 @@
 import { formationLabel } from "@/lib/formationText";
 import { useEffect, useRef, useState } from "react";
-import { BookmarkPlus, Check, Pencil, Trash2, X } from "lucide-react";
+import { BookmarkPlus, Check, Trash2, X } from "lucide-react";
 import type { BoardDoc } from "@/board/types";
 import { MAX_PRESET_LABEL, type PresetLibrary } from "@/share/presets";
 import type { PresetSource } from "@/lib/usePresets";
 import { LibraryButton, LibraryNameInput } from "@/components/ui/LibraryControls";
-import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n/context";
 
 type Props = {
   doc: BoardDoc;
+  /** Whether the saved list is open for renaming and deleting — the Line-up heading's pencil. */
+  managing: boolean;
   teamIndex: 0 | 1;
   presets: PresetLibrary;
   /** Where the library is — the browser, the account, or nowhere reachable. */
@@ -37,6 +38,7 @@ type Props = {
  */
 export function SquadPresets({
   doc,
+  managing,
   teamIndex,
   presets,
   source,
@@ -50,7 +52,6 @@ export function SquadPresets({
   const writable = source === "local" || source === "account";
   const [naming, setNaming] = useState(false);
   const [draft, setDraft] = useState("");
-  const [managing, setManaging] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -71,24 +72,6 @@ export function SquadPresets({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-ink-400">{t("preset.label")}</span>
-        {presets.length > 0 && writable && !naming && (
-          <button
-            type="button"
-            onClick={() => setManaging(!managing)}
-            aria-expanded={managing}
-            aria-label={t("preset.manage")}
-            title={t("preset.manage.title")}
-            className={cn(
-              "ml-auto flex size-5 items-center justify-center rounded transition",
-              managing ? "bg-accent/15 text-white ring-1 ring-inset ring-accent/70" : "text-ink-400 hover:text-ink-200",
-            )}
-          >
-            <Pencil size={11} />
-          </button>
-        )}
-      </div>
 
       {naming ? (
         <div className="flex gap-1">

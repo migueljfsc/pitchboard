@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, Eye, EyeOff, UserPlus } from "lucide-react";
+import { ChevronDown, Eye, EyeOff, Pencil, UserPlus } from "lucide-react";
 import type { BoardDoc, Player, TeamPattern } from "@/board/types";
 import type { Direction } from "@/formations";
 import { sportOf } from "@/board/sports";
@@ -69,6 +69,11 @@ export function TeamControls({
   const team = doc.teams[teamIndex];
   const [kitOpen, setKitOpen] = useState(false);
   const [squadOpen, setSquadOpen] = useState(false);
+  // One switch for both saved lists: they are one decision, the shape and the names in it.
+  const [managing, setManaging] = useState(false);
+  const canManage =
+    (shapes.length > 0 && (shapeSource === "local" || shapeSource === "account")) ||
+    (presets.length > 0 && (presetSource === "local" || presetSource === "account"));
   // `merge` collapses a burst of keystrokes into one undo step; the colour
   // pickers pass nothing, so each is a step of its own.
   const patch = (fields: Partial<BoardDoc["teams"][0]>, merge?: string) => {
@@ -107,8 +112,30 @@ export function TeamControls({
         </div>
       </div>
 
+      {/* The line-up: the shape the side stands in, and the squad in it — each from the sport's
+          catalogue or the coach's own library, each saved from here. */}
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-ink-400">{t("team.lineup")}</span>
+          {canManage && (
+            <button
+              type="button"
+              onClick={() => setManaging(!managing)}
+              aria-expanded={managing}
+              aria-label={t("lineup.manage")}
+              title={t("lineup.manage.title")}
+              className={cn(
+                "ml-auto flex size-5 items-center justify-center rounded transition",
+                managing ? "bg-accent/15 text-white ring-1 ring-inset ring-accent/70" : "text-ink-400 hover:text-ink-200",
+              )}
+            >
+              <Pencil size={11} />
+            </button>
+          )}
+        </div>
       <FormationPicker
         doc={doc}
+        managing={managing}
         teamIndex={teamIndex}
         formation={formation}
         onFormationChange={onFormationChange}
@@ -122,6 +149,7 @@ export function TeamControls({
 
       <SquadPresets
         doc={doc}
+        managing={managing}
         teamIndex={teamIndex}
         presets={presets}
         source={presetSource}
@@ -130,6 +158,7 @@ export function TeamControls({
         onRename={onRenamePreset}
         onDelete={onDeletePreset}
       />
+      </div>
 
       {/* Who is on the team, by shirt: renamed and renumbered in place, and a click on the
           token selects him on the board — finding the 7 among twenty-two tokens is slower. */}

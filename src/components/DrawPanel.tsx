@@ -88,14 +88,15 @@ const TOOLS: { value: Tool; icon: typeof Minus; key: string }[] = [
 ];
 
 /**
- * The drawing tools as a column of icons, for the rail while it is folded: the tools stay
- * one click from the board without the rail taking the pitch's width. Arming one opens
- * the rail, as arming it anywhere does.
+ * The drawing tools as a column, each icon named under it, for the rail while it is folded:
+ * the tools stay one click from the board without the rail taking the pitch's width, and an
+ * icon alone did not say which was the zone and which the text. Arming one opens the rail, as
+ * arming it anywhere does.
  */
 export function DrawToolStrip({ tool, onToolChange }: { tool: Tool; onToolChange: (tool: Tool) => void }) {
   const { t } = useI18n();
   return (
-    <div className="flex flex-col items-center gap-1 border-t border-ink-700 py-2">
+    <div className="flex flex-col items-center gap-0.5 border-t border-ink-700 px-1 py-2">
       {TOOLS.filter((item) => isDrawTool(item.value)).map((item) => (
         <button
           key={item.value}
@@ -105,11 +106,12 @@ export function DrawToolStrip({ tool, onToolChange }: { tool: Tool; onToolChange
           aria-pressed={tool === item.value}
           onClick={() => onToolChange(item.value)}
           className={cn(
-            "flex size-7 items-center justify-center rounded-md transition",
+            "flex w-full flex-col items-center gap-1 rounded-md px-0.5 py-1.5 transition",
             tool === item.value ? "bg-accent/15 text-white ring-1 ring-inset ring-accent/70" : "text-ink-300 hover:bg-ink-700/60 hover:text-white",
           )}
         >
           <item.icon size={14} />
+          <span className="max-w-full truncate text-[9px] leading-none">{t(`draw.tool.${item.key}` as MessageKey)}</span>
         </button>
       ))}
     </div>

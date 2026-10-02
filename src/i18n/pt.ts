@@ -197,6 +197,7 @@ export const pt: Dictionary = {
   "team.showAria": "Mostrar {team}",
   "team.hideAria": "Ocultar {team}",
   "team.formation": "Sistema",
+  "team.lineup": "Formação",
   "team.addPlayer": "Adicionar jogador ({n})",
   "team.colorAria": "Definir a cor do {team} como {color}",
   "team.patternAria": "Equipamento {pattern} do {team}",
@@ -805,9 +806,8 @@ export const pt: Dictionary = {
   "links.visibleTo": "Última cena em que {name} aparece",
 
   // ---------------------------------------------------------- squad presets
-  "preset.label": "Plantel guardado",
-  "preset.manage": "Gerir plantéis guardados",
-  "preset.manage.title": "Mudar o nome ou apagar plantéis guardados",
+  "lineup.manage": "Gerir sistemas e plantéis guardados",
+  "lineup.manage.title": "Mudar o nome ou apagar os seus sistemas e plantéis guardados",
   "preset.namePlaceholder": "Dê um nome a este plantel",
   "preset.nameLabel": "Nome do plantel guardado",
   "preset.save": "Guardar plantel",
@@ -866,8 +866,6 @@ export const pt: Dictionary = {
   "shape.namePlaceholder": "Dê um nome a este sistema",
   "shape.nameLabel": "Nome do sistema guardado",
   "shape.defaultName": "O meu sistema",
-  "shape.manage": "Gerir os seus sistemas",
-  "shape.manage.title": "Mudar o nome ou apagar os seus sistemas",
   "shape.rename": "Nome do sistema {name}",
   "shape.delete": "Apagar o sistema {name}",
   "shape.offline": "Os seus sistemas estão guardados na sua conta, que de momento não está acessível.",
@@ -1146,7 +1144,7 @@ export const pt: Dictionary = {
     "Arraste um jogador para o mover. Clique para selecionar, shift-clique para juntar mais, ou arraste num espaço vazio para apanhar um grupo. As setas deslocam a seleção (cinco vezes mais com ⇧). Largue um jogador sobre outro e trocam de lugar.\nUm movimento passa para as cenas seguintes em que esse jogador estava parado, por isso não tem de o repetir. Mantenha Alt para mudar só esta cena. Mantenha {mod} para o colocar livremente, sem alinhar com a linha de um colega.",
   "tour.scenes.title": "Cenas",
   "tour.scenes.body":
-    "Uma cena é um retrato de onde todos estão. Adicione uma, mova alguns jogadores, e o intervalo entre as duas cenas torna-se a animação. Percorra-as com [ e ], e carregue em Espaço para reproduzir.\nCom o Movimento contínuo ligado, tudo corre como um só movimento, sem parar em cada cena.",
+    "Uma cena é um retrato de onde todos estão. Adicione uma, mova alguns jogadores, e o intervalo entre as duas cenas torna-se a animação. Percorra-as com [ e ], e carregue em Espaço para reproduzir.\nCada bloco na faixa é uma cena, tão longo quanto ela dura: arraste-o para mudar a ordem, ou arraste a sua margem para mudar o tempo. Dê nome à cena e acrescente uma nota ao lado das pré-visualizações. Com o Movimento contínuo ligado, tudo corre como um só movimento.",
   "tour.runs.title": "Corridas e tempos",
   "tour.runs.body":
     "Cada movimento desenha uma corrida. Arraste as pegas cor de âmbar para a curvar.\nSelecione um jogador e este painel define quando parte e quanto demora. Uma espera segura-o antes de arrancar. O estilo de corrida decide como começa e acaba, e pode pô-lo a correr direto pela cena seguinte.",
