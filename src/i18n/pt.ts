@@ -928,6 +928,7 @@ export const pt: Dictionary = {
   "landing.cta.title": "Abra um quadro e mova um jogador.",
   "landing.cta.body": "É grátis e funciona no navegador. Só precisa de entrar se quiser os seus quadros em todos os dispositivos.",
   "landing.footer.note": "Tudo é desenhado no seu navegador.",
+  "landing.footer.by": "Feito por Miguel Cardoso",
   "account.signIn": "Entrar",
   "account.signIn.google": "Continuar com Google",
   "account.signIn.why": "Inicie sessão para guardar os seus quadros e agrupá-los em projetos.",

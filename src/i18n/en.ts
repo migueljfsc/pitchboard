@@ -936,6 +936,7 @@ export const en = {
   "landing.cta.title": "Open a board and move a player.",
   "landing.cta.body": "It's free and runs in your browser. Sign in only if you want your boards on every device.",
   "landing.footer.note": "Everything is drawn in your browser.",
+  "landing.footer.by": "Made by Miguel Cardoso",
   "account.signIn": "Sign in",
   "account.signIn.google": "Continue with Google",
   "account.signIn.why": "Sign in to keep your boards and group them into projects.",

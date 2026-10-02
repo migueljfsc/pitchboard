@@ -369,6 +369,14 @@ function Footer() {
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-4 py-8 text-xs text-ink-500 sm:px-6">
         <Wordmark name={t("app.name")} />
         <span>{t("landing.footer.note")}</span>
+        <a
+          href="https://migueljfsc.dev/"
+          target="_blank"
+          rel="noopener"
+          className="underline decoration-ink-600 underline-offset-4 transition-colors hover:text-ink-100"
+        >
+          {t("landing.footer.by")}
+        </a>
         <div className="ml-auto flex items-center gap-2">
           <LocaleSwitch />
           <span className={BAR_DIVIDER} />
