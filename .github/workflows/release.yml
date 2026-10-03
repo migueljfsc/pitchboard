@@ -41,7 +41,7 @@ jobs:
       - if: ${{ env.REVISION != '' }}
         uses: ncipollo/release-action@v1
         with:
-          tag: ${{ env.REVISION }}
+          tag: v${{ env.REVISION }}
           bodyFile: body.md
           skipIfReleaseExists: true
         env:
