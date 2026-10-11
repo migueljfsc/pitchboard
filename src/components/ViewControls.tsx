@@ -4,6 +4,7 @@ import { sportOf, type SportSpec } from "@/board/sports";
 import { framingOf } from "@/board/projection";
 import { DEFAULT_TOKEN_SCALE, MAX_TOKEN_SCALE, MIN_TOKEN_SCALE, tokenScaleOf } from "@/board/pitch";
 import { cn } from "@/lib/utils";
+import { Clipped } from "@/components/ui/Clipped";
 import { useI18n } from "@/i18n/context";
 import type { MessageKey } from "@/i18n/core";
 
@@ -216,14 +217,14 @@ function Segmented<T extends string>({
           aria-pressed={value === o.value}
           onClick={() => onChange(o.value)}
           className={cn(
-            "flex min-w-0 flex-1 items-center justify-center gap-1 truncate rounded border px-1 py-0.5 text-[10px] transition",
+            "flex min-w-0 flex-1 items-center justify-center gap-1 rounded border px-1 py-0.5 text-[10px] transition",
             value === o.value
               ? "border-accent/70 bg-accent/15 text-white"
               : "border-ink-600 text-ink-400 hover:text-ink-200",
           )}
         >
           {o.icon}
-          {o.label}
+          <Clipped>{o.label}</Clipped>
         </button>
       ))}
     </div>

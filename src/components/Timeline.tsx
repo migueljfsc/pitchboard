@@ -10,6 +10,7 @@ import { useI18n } from "@/i18n/context";
 import type { Change } from "@/lib/history";
 import { cn } from "@/lib/utils";
 import { PlayButton } from "@/components/ui/PlayButton";
+import { Clipped } from "@/components/ui/Clipped";
 
 type Props = {
   doc: BoardDoc;
@@ -257,7 +258,7 @@ function ScenePreviews({
                 {i + 1}
               </span>
             </span>
-            <span className={cn("truncate px-0.5 text-[11px]", active ? "text-white" : "text-ink-300")}>{s.name}</span>
+            <Clipped className={cn("px-0.5 text-[11px]", active ? "text-white" : "text-ink-300")}>{s.name}</Clipped>
           </button>
         );
       })}

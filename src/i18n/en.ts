@@ -547,7 +547,7 @@ export const en = {
   "inspect.highlight.none": "Off",
   "inspect.ball.heldBy": "{who} has the ball in this scene.",
   "inspect.ball.loose": "The ball is loose in this scene.",
-  "inspect.ball.timingWhere": "The pass into it — timing, shot, loft — is set in the scene bar under the timeline.",
+  "inspect.ball.timingWhere": "The timing of the pass into it is set in the scene bar under the timeline.",
   "inspect.resetMove": "Reset this move",
   "inspect.resetMove.hint":
     "Puts the selection back where it was in {scene}, and clears the run. Carried forward as “{mode}” says, like a drag.",
@@ -601,6 +601,8 @@ export const en = {
   "inspect.straighten.none": "Curve a run first, by dragging the amber handles on its arrow.",
   "inspect.showRuns.hint": "Draws the arrows for this scene again.",
   "inspect.hideRuns.hint": "Hides the arrows in this scene. The players still run.",
+  "inspect.showRuns.ball.hint": "Draws the ball’s line into this scene again.",
+  "inspect.hideRuns.ball.hint": "Hides the ball’s line into this scene. The ball still travels.",
   "inspect.name": "Name",
   "inspect.number": "No.",
   "inspect.playerPlaceholder": "Player {number}",

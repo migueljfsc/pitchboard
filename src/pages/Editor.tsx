@@ -26,13 +26,13 @@ import {
   CircleStop,
   Command as CommandIcon,
   Copy,
+  Crosshair,
   FilePlus,
   FolderOpen,
   Eye,
   FileText,
   EyeOff,
   FastForward,
-  Goal,
   Link2,
   MousePointer2,
   PencilLine,
@@ -53,6 +53,7 @@ import {
   Play,
   Presentation,
   Share2,
+  Shirt,
   PanelRightClose,
   PanelRightOpen,
   Redo2,
@@ -78,6 +79,7 @@ import { tourSeen } from "@/share/tour";
 import { dismissStartHint, startHintDismissed } from "@/share/startHint";
 import { TOUR_STEPS, buildTourBoard, type TourStage } from "@/formations/tour";
 import { ContextMenu, type MenuItem } from "@/components/ContextMenu";
+import { Clipped } from "@/components/ui/Clipped";
 import type { ContextTarget } from "@/components/BoardCanvas";
 import { describeChange } from "@/board/describe";
 import { SPORT_TEMPLATES, buildTemplate, sportOfTemplate, type TemplateId } from "@/formations/templates";
@@ -143,6 +145,7 @@ import {
 } from "@/board/scenes";
 import {
   addPlayer,
+  keeperOf,
   removePlayer,
   setKeeper,
   setPlayerLabel,
@@ -1181,7 +1184,7 @@ export function Editor({ initialDoc }: Props = {}) {
         {
           label: t(scene.shot ? "menu.shot.off" : "menu.shot.on"),
           title: t(canShoot(doc, activeScene) ? "timeline.shot.can" : "timeline.shot.cannot"),
-          icon: <Goal size={13} />,
+          icon: <Crosshair size={13} />,
           disabled: !canShoot(doc, activeScene),
           onSelect: () => setDoc(setShot(doc, activeScene, !scene.shot)),
         },
@@ -1193,6 +1196,15 @@ export function Editor({ initialDoc }: Props = {}) {
           onSelect: () => setDoc(setLoft(doc, activeScene, !scene.loft)),
         },
       );
+      if (editScene !== undefined) {
+        const hidden = isRunHidden(scene, BALL_ID);
+        items.push({
+          label: t(hidden ? "inspect.showRuns.short" : "inspect.hideRuns.short"),
+          title: t(hidden ? "inspect.showRuns.ball.hint" : "inspect.hideRuns.ball.hint"),
+          icon: hidden ? <Eye size={13} /> : <EyeOff size={13} />,
+          onSelect: () => setDoc(setRunHidden(doc, editScene, BALL_ID, !hidden)),
+        });
+      }
       if (scene.carrier) {
         items.push({
           label: t("inspect.ball.release"),
@@ -1262,6 +1274,16 @@ export function Editor({ initialDoc }: Props = {}) {
       items.push(
         "divider",
         { label: t("menu.rename"), icon: <PencilLine size={13} />, onSelect: () => onEditName() },
+      );
+      if (sportOf(doc).keeper && !doc.teams.some((team) => keeperOf(team) === only)) {
+        items.push({
+          label: t("inspect.makeKeeper"),
+          title: t("inspect.makeKeeper.hint"),
+          icon: <Shirt size={13} />,
+          onSelect: () => setDoc(setKeeper(doc, only)),
+        });
+      }
+      items.push(
         {
           label: t("inspect.removeMovement"),
           icon: <RotateCcw size={13} />,
@@ -2048,7 +2070,7 @@ export function Editor({ initialDoc }: Props = {}) {
                       className="size-2 shrink-0 rounded-full ring-1 ring-white/20"
                       style={{ background: doc.teams[i].color }}
                     />
-                    <span className="truncate">{doc.teams[i].name || formationName(i)}</span>
+                    <Clipped>{doc.teams[i].name || formationName(i)}</Clipped>
                   </button>
                 ))}
               </div>
@@ -2189,6 +2211,10 @@ export function Editor({ initialDoc }: Props = {}) {
                 runsHidden={runsHidden}
                 runOpen={tour !== null && "run" in TOUR_STEPS[tour.step].stage}
                 onRunsHiddenChange={onRunsHiddenChange}
+                canShoot={canShoot(doc, activeScene)}
+                onShotChange={(on) => setDoc(setShot(doc, activeScene, on))}
+                canLoft={canLoft(doc, activeScene)}
+                onLoftChange={(on) => setDoc(setLoft(doc, activeScene, on))}
                 highlighted={highlighted}
                 highlightColor={litColor}
                 onHighlightChange={onHighlightChange}

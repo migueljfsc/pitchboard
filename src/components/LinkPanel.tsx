@@ -33,6 +33,7 @@ import { sceneSpan } from "@/board/range";
 import { isHighlighted, setHighlight } from "@/board/scenes";
 import { ColorPicker } from "@/components/ui/ColorPicker";
 import { SceneSelect } from "@/components/ui/SceneSelect";
+import { Clipped } from "@/components/ui/Clipped";
 import type { Change } from "@/lib/history";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n/context";
@@ -194,7 +195,7 @@ export function LinkPanel({
                   style={{ background: doc.teams[s].color }}
                 />
               )}
-              <span className="truncate">{s === "both" ? t("links.both") : teamLabel(s)}</span>
+              <Clipped>{s === "both" ? t("links.both") : teamLabel(s)}</Clipped>
               <span className="font-mono text-[10px] text-ink-500">{count}</span>
             </button>
           );

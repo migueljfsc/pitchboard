@@ -14,6 +14,7 @@ import { useMemo } from "react";
 
 import type { Sport } from "@/board/types";
 import { SportIcon } from "@/components/SportMenu";
+import { Clipped } from "@/components/ui/Clipped";
 import { useI18n } from "@/i18n/context";
 import { allRows, buildTree, projectsOf } from "@/lib/projects";
 import { cn } from "@/lib/utils";
@@ -67,7 +68,7 @@ export function PickProject({
               )}
             >
               {project.sport && <SportIcon sport={project.sport} className="size-3.5 shrink-0" />}
-              <span className="truncate">{project.sport ? t(`sport.${project.sport}`) : project.name}</span>
+              <Clipped>{project.sport ? t(`sport.${project.sport}`) : project.name}</Clipped>
             </button>
           ))
         )}

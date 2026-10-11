@@ -3,6 +3,7 @@ import {
   ArrowLeftRight,
   Ban,
   ChevronRight,
+  Crosshair,
   Eye,
   EyeOff,
   Info,
@@ -10,6 +11,7 @@ import {
   RotateCcw,
   Route,
   Shirt,
+  Spline,
   Undo2,
   UserMinus,
 } from "lucide-react";
@@ -30,6 +32,7 @@ import { cn } from "@/lib/utils";
 import { NumberField } from "@/components/ui/NumberField";
 import { Stepper } from "@/components/ui/Stepper";
 import { ColorPicker } from "@/components/ui/ColorPicker";
+import { Clipped } from "@/components/ui/Clipped";
 import { useI18n } from "@/i18n/context";
 import type { Message } from "@/i18n/core";
 
@@ -75,6 +78,12 @@ type Props = {
   /** Show the run's detail whether or not it was folded — the tour's card on runs talks about it. */
   runOpen?: boolean;
   onRunsHiddenChange: (hidden: boolean) => void;
+  /** Whether the ball's travel into this scene can be drawn as a strike (`canShoot`). */
+  canShoot: boolean;
+  onShotChange: (on: boolean) => void;
+  /** Whether the ball's travel into this scene can be lofted (`canLoft`). */
+  canLoft: boolean;
+  onLoftChange: (on: boolean) => void;
   /** True when every selected entity is lit in this scene. */
   highlighted: boolean;
   /** The colour the selection is lit in here; null when it is not, or in several. */
@@ -122,6 +131,10 @@ export function Inspector({
   runsHidden,
   runOpen = false,
   onRunsHiddenChange,
+  canShoot,
+  onShotChange,
+  canLoft,
+  onLoftChange,
   highlighted,
   highlightColor,
   onHighlightChange,
@@ -264,14 +277,24 @@ export function Inspector({
       </div>
 
       {/* QUICK — the things done most, one tap each, in this scene. */}
-      {players.length > 0 && (
-        <div className="grid auto-cols-fr grid-flow-col gap-1.5">
+      {(players.length > 0 || ballOnly) && (
+        <div className="grid auto-cols-[minmax(0,1fr)] grid-flow-col gap-1.5">
           {only && (
             <Quick
               label={carries ? t("inspect.quick.release") : t("inspect.quick.ball")}
               title={t("inspect.ball.hint")}
               active={carries}
               onClick={() => onCarrierChange(carries ? null : only)}
+            >
+              <span aria-hidden className="text-sm leading-none">{sportOf(doc).ballGlyph}</span>
+            </Quick>
+          )}
+          {ballOnly && holder && (
+            <Quick
+              label={t("inspect.quick.release")}
+              title={t("inspect.ball.release")}
+              active
+              onClick={() => onCarrierChange(null)}
             >
               <span aria-hidden className="text-sm leading-none">{sportOf(doc).ballGlyph}</span>
             </Quick>
@@ -287,7 +310,7 @@ export function Inspector({
               }
             }}
             className={cn(
-              "flex cursor-pointer flex-col items-center gap-1 rounded-lg border py-1.5 transition",
+              "flex min-w-0 cursor-pointer flex-col items-center gap-1 rounded-lg border py-1.5 transition",
               highlighted ? "border-accent/70 bg-accent/15" : "border-ink-600 hover:border-ink-400",
             )}
           >
@@ -303,21 +326,53 @@ export function Inspector({
               }}
               onChange={onHighlightChange}
             />
-            <span className={cn("text-[10px] leading-none", highlighted ? "text-accent" : "text-ink-300")}>
+            <Clipped className={cn("max-w-full px-0.5 text-[10px] leading-tight", highlighted ? "text-accent" : "text-ink-300")}>
               {t("inspect.quick.highlight")}
-            </span>
+            </Clipped>
           </div>
-          <Quick
-            label={t("inspect.quick.path")}
-            title={t(trailOn ? "menu.trail.hide" : "menu.trail.show")}
-            active={trailOn}
-            onClick={() => onTrailChange(!trailOn)}
-          >
-            <Route size={14} />
-          </Quick>
+          {players.length > 0 && (
+            <Quick
+              label={t("inspect.quick.path")}
+              title={t(trailOn ? "menu.trail.hide" : "menu.trail.show")}
+              active={trailOn}
+              onClick={() => onTrailChange(!trailOn)}
+            >
+              <Route size={14} />
+            </Quick>
+          )}
+          {ballOnly && (
+            <>
+              <Quick
+                label={t("timeline.shot")}
+                title={t(canShoot ? "timeline.shot.can" : "timeline.shot.cannot")}
+                active={scene?.shot ?? false}
+                disabled={!canShoot}
+                onClick={() => onShotChange(!scene?.shot)}
+              >
+                <Crosshair size={14} />
+              </Quick>
+              <Quick
+                label={t("timeline.loft.label")}
+                title={t(canLoft ? "timeline.loft.can" : "timeline.loft.cannot")}
+                active={scene?.loft ?? false}
+                disabled={!canLoft}
+                onClick={() => onLoftChange(!scene?.loft)}
+              >
+                <Spline size={14} />
+              </Quick>
+            </>
+          )}
           <Quick
             label={t("inspect.quick.arrow")}
-            title={t(runsHidden ? "inspect.showRuns.hint" : "inspect.hideRuns.hint")}
+            title={t(
+              ballOnly
+                ? runsHidden
+                  ? "inspect.showRuns.ball.hint"
+                  : "inspect.hideRuns.ball.hint"
+                : runsHidden
+                  ? "inspect.showRuns.hint"
+                  : "inspect.hideRuns.hint",
+            )}
             active={!runsHidden}
             disabled={!canEditPaths}
             onClick={() => onRunsHiddenChange(!runsHidden)}
@@ -539,14 +594,14 @@ function Quick({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "flex flex-col items-center gap-1 rounded-lg border py-1.5 transition disabled:opacity-35",
+        "flex min-w-0 flex-col items-center gap-1 rounded-lg border py-1.5 transition disabled:opacity-35",
         active
           ? "border-accent/70 bg-accent/15 text-white"
           : "border-ink-600 text-ink-300 enabled:hover:border-ink-400 enabled:hover:text-white",
       )}
     >
       <span className="flex h-5 items-center">{children}</span>
-      <span className="text-[10px] leading-none">{label}</span>
+      <Clipped className="max-w-full px-0.5 text-[10px] leading-tight">{label}</Clipped>
     </button>
   );
 }

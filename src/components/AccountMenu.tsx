@@ -25,6 +25,7 @@ import { DeleteAccountDialog } from "@/components/DeleteAccountDialog";
 import { SignInDialog } from "@/components/SignInDialog";
 import { useI18n } from "@/i18n/context";
 import { BAR_BUTTON, BAR_BUTTON_OPEN } from "@/components/ui/bar";
+import { Clipped } from "@/components/ui/Clipped";
 import type { MessageKey } from "@/i18n/core";
 import { enterSignedIn, errorKey } from "@/lib/signIn";
 import { cn } from "@/lib/utils";
@@ -215,7 +216,7 @@ export function AccountMenu({ account, loading, signOut }: AccountState) {
         className={cn(BAR_BUTTON, "max-w-[11rem]", open && BAR_BUTTON_OPEN)}
       >
         <UserRound size={13} className="shrink-0" />
-        <span className="truncate">{label}</span>
+        <Clipped>{label}</Clipped>
       </button>
 
       {open && (

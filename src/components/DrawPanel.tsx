@@ -38,6 +38,7 @@ import { KIND_KEY } from "@/components/ui/kinds";
 import { NumberField } from "@/components/ui/NumberField";
 import { Stepper } from "@/components/ui/Stepper";
 import { ColorPicker } from "@/components/ui/ColorPicker";
+import { Clipped } from "@/components/ui/Clipped";
 import type { Change } from "@/lib/history";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n/context";
@@ -111,7 +112,7 @@ export function DrawToolStrip({ tool, onToolChange }: { tool: Tool; onToolChange
           )}
         >
           <item.icon size={14} />
-          <span className="max-w-full truncate text-[9px] leading-none">{t(`draw.tool.${item.key}` as MessageKey)}</span>
+          <Clipped className="max-w-full text-[9px] leading-tight">{t(`draw.tool.${item.key}` as MessageKey)}</Clipped>
         </button>
       ))}
     </div>
@@ -282,9 +283,7 @@ export function DrawPanel({
             )}
           >
             <item.icon size={14} />
-            <span className="w-full truncate text-center">
-              {t(`draw.tool.${item.key}` as MessageKey)}
-            </span>
+            <Clipped className="w-full text-center">{t(`draw.tool.${item.key}` as MessageKey)}</Clipped>
           </button>
         ))}
         <button
@@ -301,7 +300,7 @@ export function DrawPanel({
           )}
         >
           <Pin size={14} />
-          <span className="w-full truncate text-center">{t("draw.keep")}</span>
+          <Clipped className="w-full text-center">{t("draw.keep")}</Clipped>
         </button>
       </div>
 

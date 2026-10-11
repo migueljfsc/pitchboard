@@ -37,6 +37,7 @@ import type { Sport } from "@/board/types";
 import { AnimatePresence } from "motion/react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Modal } from "@/components/ui/Modal";
+import { Clipped } from "@/components/ui/Clipped";
 import { BAR_BUTTON } from "@/components/ui/bar";
 import { useI18n } from "@/i18n/context";
 import { cn } from "@/lib/utils";
@@ -582,7 +583,7 @@ function Library({
                   )}
                 >
                   <Layers size={12} className="shrink-0" />
-                  <span className="truncate">{t("library.all")}</span>
+                  <Clipped>{t("library.all")}</Clipped>
                   <span
                     className={cn(
                       "ml-auto shrink-0",
@@ -682,14 +683,7 @@ function Library({
                       ) : (
                         <FolderOpen size={12} className="shrink-0" />
                       )}
-                      <span
-                        className={cn(
-                          "truncate",
-                          project.sport && "font-semibold",
-                        )}
-                      >
-                        {labelOf(project)}
-                      </span>
+                      <Clipped className={cn(project.sport && "font-semibold")}>{labelOf(project)}</Clipped>
                       <span
                         className={cn(
                           "ml-auto shrink-0",
@@ -803,18 +797,18 @@ function Library({
                           selection.has(board.id) ? "opacity-100" : "opacity-0 group-hover:opacity-100",
                         )}
                       />
-                      <span
+                      <Clipped
                         className={cn(
-                          "min-w-0 flex-1 truncate text-[11px]",
+                          "min-w-0 flex-1 text-[11px]",
                           cloud.board?.id === board.id ? "text-accent" : "text-ink-200",
                         )}
                       >
                         {board.name}
-                      </span>
+                      </Clipped>
                       {active === null && (
-                        <span className="shrink-0 truncate text-[10px] text-ink-500">
+                        <Clipped className="shrink-0 text-[10px] text-ink-500">
                           {projects?.find((p) => p.id === board.project_id)?.name}
-                        </span>
+                        </Clipped>
                       )}
                       <span className="shrink-0 text-[10px] text-ink-500">
                         {when(board.updated_at)}

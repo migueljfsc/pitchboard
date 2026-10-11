@@ -537,7 +537,7 @@ export const pt: Dictionary = {
   "inspect.highlight.none": "Limpar",
   "inspect.ball.heldBy": "{who} tem a bola nesta cena.",
   "inspect.ball.loose": "A bola está solta nesta cena.",
-  "inspect.ball.timingWhere": "O passe para esta cena — tempo, remate, passe alto — define-se na barra da cena, por baixo da linha do tempo.",
+  "inspect.ball.timingWhere": "O tempo do passe para esta cena define-se na barra da cena, por baixo da linha do tempo.",
   "inspect.resetMove": "Repor este movimento",
   "inspect.resetMove.hint":
     "Põe a seleção onde estava em {scene} e limpa a corrida. A alteração segue como diz “{mode}”, tal como ao arrastar.",
@@ -593,6 +593,8 @@ export const pt: Dictionary = {
   "inspect.straighten.none": "Curve primeiro uma corrida, arrastando as pegas âmbar da seta.",
   "inspect.showRuns.hint": "Volta a desenhar as setas desta cena.",
   "inspect.hideRuns.hint": "Esconde as setas nesta cena. Os jogadores continuam a correr.",
+  "inspect.showRuns.ball.hint": "Volta a desenhar a linha da bola nesta cena.",
+  "inspect.hideRuns.ball.hint": "Esconde a linha da bola nesta cena. A bola continua a viajar.",
   "inspect.name": "Nome",
   "inspect.number": "N.º",
   "inspect.playerPlaceholder": "Jogador {number}",
