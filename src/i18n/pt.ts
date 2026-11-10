@@ -1028,6 +1028,7 @@ export const pt: Dictionary = {
   "boards.error.board_limit_reached": "Atingiste o limite de quadros.",
   "boards.error.invalid_name": "Os nomes têm entre um e cem caracteres.",
   "boards.error.invalid_document": "Não foi possível ler esse quadro.",
+  "boards.error.unsaveable": "Há algo neste quadro acima de um limite, por isso não pode ser guardado na conta.",
   "boards.error.not_found": "Esse quadro já não existe.",
   "boards.error.invalid_project": "Esse projeto já não existe.",
   "boards.error.offline": "Não foi possível contactar o servidor. O seu quadro continua guardado neste navegador.",

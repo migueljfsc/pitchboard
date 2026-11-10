@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import type { BoardDoc, Player, RunEnd, RunStart } from "@/board/types";
 import { BALL_ID } from "@/board/types";
-import { displayName, keeperOf, shirtClash } from "@/board/players";
+import { MAX_LABEL, displayName, keeperOf, shirtClash } from "@/board/players";
 import { sportOf } from "@/board/sports";
 import type { Carry } from "@/board/interaction";
 import {
@@ -899,6 +899,7 @@ function IdentityFields({
           <input
             ref={nameRef}
             value={player.label}
+            maxLength={MAX_LABEL}
             onChange={(e) => onRename(player.id, e.target.value)}
             placeholder={t("inspect.playerPlaceholder", { number: player.number })}
             className="w-full rounded border border-ink-600 bg-ink-900 px-2 py-1 text-xs text-ink-200 outline-none transition placeholder:text-ink-400 hover:border-ink-400 focus:border-accent"

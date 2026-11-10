@@ -3,6 +3,7 @@ import type { BoardDoc } from "@/board/types";
 import { BALL_ID } from "@/board/types";
 import { NumberField } from "@/components/ui/NumberField";
 import {
+  MAX_SCENE_NAME,
   ballTravelBetween,
   canLoft as canLoftInto,
   canShoot as canShootInto,
@@ -87,6 +88,7 @@ function SceneName({
       <span className="text-xs text-ink-400">{t("timeline.scene")}</span>
       <input
         value={scene.name}
+        maxLength={MAX_SCENE_NAME}
         onChange={(e) => onDocChange(renameScene(doc, activeScene, e.target.value), `scene-name:${scene.id}`)}
         className={cn(
           "rounded-md border border-ink-600 bg-ink-900 px-2 py-1 text-xs text-ink-200 outline-none focus:border-accent",
@@ -288,9 +290,10 @@ export function ScenePanel({
         </IconButton>
         <IconButton
           label={t("timeline.duplicate")}
-          onClick={() =>
-            mutate(duplicateScene(doc, activeScene, t("doc.sceneCopy", { name: scene.name })), activeScene + 1)
-          }
+          onClick={() => {
+            const next = duplicateScene(doc, activeScene, t("doc.sceneCopy", { name: scene.name }));
+            if (next !== doc) mutate(next, activeScene + 1);
+          }}
         >
           <Copy size={14} />
         </IconButton>

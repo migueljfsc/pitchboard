@@ -25,6 +25,7 @@ import {
 import type { Annotation, AnnotationDash, AnnotationKind, BoardDoc, TextAlign, Tool } from "@/board/types";
 import { isDrawTool } from "@/board/types";
 import {
+  MAX_TEXT_CHARS,
   POLYGON_SIDES_MAX,
   POLYGON_SIDES_MIN,
   TEXT_SCALE_MAX,
@@ -465,6 +466,7 @@ function Selected({
             ref={textRef}
             rows={2}
             value={ann.text}
+            maxLength={MAX_TEXT_CHARS}
             onChange={(e) => onPatch({ text: e.target.value }, `ann-text:${ann.id}`)}
             placeholder={t("draw.label.placeholder")}
             aria-label={t("draw.label.aria")}

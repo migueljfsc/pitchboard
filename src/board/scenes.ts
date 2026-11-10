@@ -112,7 +112,7 @@ function freshId(doc: BoardDoc): string {
  *  fallback keeps the engine usable, and testable, without one. */
 export function addSceneAfter(doc: BoardDoc, index: number, name?: string): BoardDoc {
   const base = doc.scenes[index];
-  if (!base) return doc;
+  if (!base || doc.scenes.length >= MAX_SCENES) return doc;
 
   const scene: Scene = {
     id: freshId(doc),
@@ -139,6 +139,10 @@ export const hasNotes = (doc: BoardDoc): boolean => doc.scenes.some((scene) => s
 
 /** A scene's note: a few coaching points, not an essay — it has to fit a caption. */
 export const MAX_NOTE_CHARS = 500;
+/** The most scenes one board may hold. */
+export const MAX_SCENES = 60;
+/** The longest a scene's name may be. */
+export const MAX_SCENE_NAME = 60;
 
 /**
  * Write a scene's note, as typed — trailing spaces and all, since it is written per keystroke.
@@ -158,12 +162,12 @@ export function setSceneNote(doc: BoardDoc, index: number, note: string): BoardD
 /** Copy a scene wholesale, paths included — useful for a repeated movement. */
 export function duplicateScene(doc: BoardDoc, index: number, name?: string): BoardDoc {
   const base = doc.scenes[index];
-  if (!base) return doc;
+  if (!base || doc.scenes.length >= MAX_SCENES) return doc;
 
   const scene: Scene = {
     ...structuredClone(base),
     id: freshId(doc),
-    name: name ?? `${base.name} copy`,
+    name: (name ?? `${base.name} copy`).slice(0, MAX_SCENE_NAME).trimEnd(),
     transitionMs: base.transitionMs || DEFAULT_TRANSITION_MS,
   };
 

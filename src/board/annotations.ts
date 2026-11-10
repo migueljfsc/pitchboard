@@ -79,6 +79,12 @@ export const MIN_POLYGON = 3;
 export const MAX_POLYGON = 24;
 /** Corners an arrow or a line may have between its ends. */
 export const MAX_VIA = 16;
+/** The most drawings one board may hold. */
+export const MAX_ANNOTATIONS = 200;
+/** The longest a drawing's name may be. */
+export const MAX_ANNOTATION_NAME = 60;
+/** The most characters a text label may hold. */
+export const MAX_TEXT_CHARS = 400;
 /** Sides of a freshly dragged polygon, and the range the tool offers. */
 export const POLYGON_SIDES = 5;
 export const POLYGON_SIDES_MIN = 3;
@@ -496,6 +502,7 @@ export function draftAnnotation(
 }
 
 export function addAnnotation(doc: BoardDoc, ann: Annotation): BoardDoc {
+  if (annotationsOf(doc).length >= MAX_ANNOTATIONS) return doc;
   return withAnnotations(doc, [...annotationsOf(doc), ann]);
 }
 
@@ -526,9 +533,10 @@ export function updateAnnotation(
 export function duplicateAnnotation(doc: BoardDoc, id: string, name?: string): BoardDoc {
   const list = annotationsOf(doc);
   const i = list.findIndex((a) => a.id === id);
-  if (i < 0) return doc;
+  if (i < 0 || list.length >= MAX_ANNOTATIONS) return doc;
 
-  const copy = { ...structuredClone(list[i]), id: freshId(doc), name: name ?? list[i].name };
+  const copyName = (name ?? list[i].name)?.slice(0, MAX_ANNOTATION_NAME).trimEnd();
+  const copy = { ...structuredClone(list[i]), id: freshId(doc), name: copyName };
   const next = list.slice();
   next.splice(i + 1, 0, copy);
   // Shifted through moveAnnotation so the offset knows about pen points, a label's

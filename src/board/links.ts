@@ -141,6 +141,7 @@ export function createLink(
   members: Iterable<string>,
   options: { name?: string; style?: LinkStyle; color?: string } = {},
 ): BoardDoc {
+  if (doc.links.length >= MAX_LINKS) return doc;
   const wanted = new Set(members);
   const ordered: string[] = [];
   const names: string[] = [];
@@ -148,6 +149,7 @@ export function createLink(
   for (const team of doc.teams) {
     for (const player of team.players) {
       if (!wanted.has(player.id)) continue;
+      if (ordered.length >= MAX_MEMBERS) break;
       ordered.push(player.id);
       // Same rule as players.displayName, inlined to keep this module free of a
       // cycle: players.ts needs pruneLinks from here.
@@ -163,7 +165,7 @@ export function createLink(
     id: freshId(doc),
     // Named after its members, in link order — far more use than "Link 3".
     // Players fall back to their shirt number until they are given a name.
-    name: options.name ?? names.join(", "),
+    name: (options.name ?? names.join(", ")).slice(0, MAX_LINK_NAME).trimEnd(),
     members: ordered,
     style,
     // Left unset unless asked for: the link tracks its members' kit colour.
@@ -216,6 +218,10 @@ export function moveLink(doc: BoardDoc, from: number, to: number): BoardDoc {
  * The most players one link may hold. Matches the schema, and an eleven.
  */
 export const MAX_MEMBERS = 11;
+/** The most links one board may hold. */
+export const MAX_LINKS = 20;
+/** The longest a link's name may be. A name made from its members is cut to it. */
+export const MAX_LINK_NAME = 60;
 /** Below this a link has no geometry to draw, and the schema rejects it. */
 export const MIN_MEMBERS = 2;
 

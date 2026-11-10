@@ -1036,6 +1036,7 @@ export const en = {
   "boards.error.board_limit_reached": "You have reached the limit on boards.",
   "boards.error.invalid_name": "Names run from one to a hundred characters.",
   "boards.error.invalid_document": "That board could not be read.",
+  "boards.error.unsaveable": "Something on this board is over a limit, so it cannot be saved to your account.",
   "boards.error.not_found": "That board is no longer there.",
   "boards.error.invalid_project": "That project is no longer there.",
   "boards.error.offline": "Could not reach the server. Your board is still saved in this browser.",

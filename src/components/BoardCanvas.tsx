@@ -894,14 +894,16 @@ export function BoardCanvas({
       points: [p],
     });
 
+    const added = addAnnotation(doc, ann);
+    if ((tool === "text" || tool === "ball") && added === doc) return;
     if (tool === "text") {
-      onDocChange(addAnnotation(doc, ann));
+      onDocChange(added);
       onAnnotationSelect?.(ann.id);
       onToolChange?.(DEFAULT_TOOL);
       return;
     }
     if (tool === "ball") {
-      onDocChange(addAnnotation(doc, ann));
+      onDocChange(added);
       onAnnotationSelect?.(ann.id);
       if (!sticky) onToolChange?.(DEFAULT_TOOL);
       return;
@@ -1204,9 +1206,10 @@ export function BoardCanvas({
         ? ann.points.length >= 2 && spread(ann.points) >= MIN_DRAG
         : Math.hypot(ann.b.x - ann.a.x, ann.b.y - ann.a.y) >= MIN_DRAG;
 
-    if (!drawn) return;
+    const added = addAnnotation(doc, ann);
+    if (!drawn || added === doc) return;
 
-    onDocChange(addAnnotation(doc, ann));
+    onDocChange(added);
     onAnnotationSelect?.(ann.id);
     // Back to select unless the tool is pinned: one accidental extra arrow is
     // more annoying than one extra click.

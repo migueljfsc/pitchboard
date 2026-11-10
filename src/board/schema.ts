@@ -8,7 +8,10 @@
 import { z } from "zod";
 import { BALL_ID, SPORT_IDS } from "./types";
 import {
+  MAX_ANNOTATIONS,
+  MAX_ANNOTATION_NAME,
   MAX_POLYGON,
+  MAX_TEXT_CHARS,
   MAX_VIA,
   MIN_POLYGON,
   TEXT_SCALE_MAX,
@@ -18,7 +21,9 @@ import {
 } from "./annotations";
 import { MAX_FLOW_SPEED, MIN_FLOW_SPEED } from "./timeline";
 import { MAX_SCENE_ZOOM } from "./camera";
-import { MAX_NOTE_CHARS, MAX_SPOTLIGHT } from "./scenes";
+import { MAX_NOTE_CHARS, MAX_SCENES, MAX_SCENE_NAME, MAX_SPOTLIGHT } from "./scenes";
+import { MAX_LINKS, MAX_LINK_NAME, MAX_MEMBERS } from "./links";
+import { MAX_LABEL, MAX_SQUAD, MAX_TEAM_NAME } from "./players";
 
 const vec2 = z.object({ x: z.number().finite(), y: z.number().finite() });
 
@@ -27,7 +32,7 @@ const pathCurve = z.object({ c1: vec2, c2: vec2 });
 const player = z.object({
   id: z.string().min(1),
   number: z.number().int().min(0).max(99),
-  label: z.string().max(40),
+  label: z.string().max(MAX_LABEL),
 });
 
 /** A hand-drawn formation (D122): shared by the board, the setup file and the formation library. */
@@ -61,11 +66,12 @@ export const teamShapeSchema = z
 
 const team = z.object({
   id: z.string().min(1),
-  name: z.string().min(1).max(60),
+  /** Empty is a side drawn without a name, as the renderer already treats it. */
+  name: z.string().max(MAX_TEAM_NAME),
   color: z.string().min(1),
   textColor: z.string().min(1),
   pattern: z.enum(["solid", "vertical", "horizontal"]).optional(),
-  players: z.array(player).max(30),
+  players: z.array(player).max(MAX_SQUAD),
   keeper: z
     .object({ player: z.string().min(1).optional(), color: z.string().min(1), textColor: z.string().min(1) })
     .optional(),
@@ -76,7 +82,7 @@ const team = z.object({
 
 const scene = z.object({
   id: z.string().min(1),
-  name: z.string().max(60),
+  name: z.string().max(MAX_SCENE_NAME),
   note: z.string().max(MAX_NOTE_CHARS).optional(),
   transitionMs: z.number().int().min(0).max(60_000),
   holdMs: z.number().int().min(0).max(60_000),
@@ -110,8 +116,8 @@ const scene = z.object({
 
 const link = z.object({
   id: z.string().min(1),
-  name: z.string().max(60),
-  members: z.array(z.string().min(1)).min(2).max(11),
+  name: z.string().max(MAX_LINK_NAME),
+  members: z.array(z.string().min(1)).min(2).max(MAX_MEMBERS),
   style: z.enum(["chain", "polygon", "filled"]),
   color: z.string().min(1).optional(),
   showDistances: z.boolean(),
@@ -129,7 +135,7 @@ const link = z.object({
 
 const annotationBase = {
   id: z.string().min(1),
-  name: z.string().max(60).optional(),
+  name: z.string().max(MAX_ANNOTATION_NAME).optional(),
   /** Scene ids, checked against the real scene list by the refinement below. */
   from: z.string().min(1),
   to: z.string().min(1).nullable(),
@@ -175,7 +181,7 @@ const annotation = z.discriminatedUnion("kind", [
     at: vec2,
     // Raised from 120 when labels gained a box: a wrapped note is a sentence or two, not a
     // caption. Still bounded, because every character of it ends up in the share URL.
-    text: z.string().max(400),
+    text: z.string().max(MAX_TEXT_CHARS),
     size: z.number().min(TEXT_SCALE_MIN).max(TEXT_SCALE_MAX).optional(),
     width: z.number().min(TEXT_WIDTH_MIN).max(TEXT_WIDTH_MAX).optional(),
     // Absent is no panel, so there is nothing to migrate for a label drawn before one existed.
@@ -206,9 +212,9 @@ const boardDocShape = z.object({
     })
     .optional(),
   teams: z.tuple([team, team]),
-  scenes: z.array(scene).min(1).max(60),
-  links: z.array(link).max(20),
-  annotations: z.array(annotation).max(200).optional(),
+  scenes: z.array(scene).min(1).max(MAX_SCENES),
+  links: z.array(link).max(MAX_LINKS),
+  annotations: z.array(annotation).max(MAX_ANNOTATIONS).optional(),
   grass: z
     .object({
       shade: z.number().min(-1).max(1).optional(),

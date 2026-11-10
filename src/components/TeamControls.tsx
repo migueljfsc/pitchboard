@@ -3,7 +3,7 @@ import { ChevronDown, Eye, EyeOff, Pencil, UserPlus } from "lucide-react";
 import type { BoardDoc, Player, TeamPattern } from "@/board/types";
 import type { Direction } from "@/formations";
 import { sportOf } from "@/board/sports";
-import { MAX_SQUAD, keeperOf, setPlayerLabel, setPlayerNumber, shirtClash } from "@/board/players";
+import { MAX_LABEL, MAX_SQUAD, MAX_TEAM_NAME, keeperOf, setPlayerLabel, setPlayerNumber, shirtClash } from "@/board/players";
 import { ColorPicker } from "@/components/ui/ColorPicker";
 import { Stepper } from "@/components/ui/Stepper";
 import { contrastOn } from "@/lib/color";
@@ -88,6 +88,7 @@ export function TeamControls({
         {/* Free text: name the sides whatever the tactic calls for. */}
         <input
           value={team.name}
+          maxLength={MAX_TEAM_NAME}
           onChange={(e) => patch({ name: e.target.value }, `team-name:${team.id}`)}
           placeholder={t("team.namePlaceholder")}
           aria-label={t("team.nameLabel", { n: teamIndex + 1 })}
@@ -344,6 +345,7 @@ function SquadRow({
       </button>
       <input
         value={player.label}
+        maxLength={MAX_LABEL}
         onChange={(e) => onRename(e.target.value)}
         placeholder={t("inspect.playerPlaceholder", { number: player.number })}
         aria-label={t("inspect.name")}

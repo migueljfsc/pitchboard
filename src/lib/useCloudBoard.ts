@@ -16,8 +16,9 @@
  * (D26) — and pointed at a network that is forty requests per gesture.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
+import { boardDocSchema } from "@/board/schema";
 import type { BoardDoc } from "@/board/types";
 import { useAutosave } from "@/lib/useAutosave";
 import { ApiError, createBoard, fetchBoard, saveBoard as saveRemote } from "@/share/api";
@@ -32,6 +33,12 @@ import { goToBoard, readBoardId } from "@/share/routes";
  * still holds anyway.
  */
 export const CLOUD_AUTOSAVE_MS = 4000;
+
+/**
+ * Whether a document would load again. The Worker stores a board without reading it, so a
+ * document the schema refuses is stopped here rather than saved and then refused on open.
+ */
+const loadable = (doc: BoardDoc): boolean => boardDocSchema.safeParse(doc).success;
 
 export interface LinkedBoard {
   id: string;
@@ -52,7 +59,8 @@ export type SyncStatus =
 export interface CloudBoard {
   board: LinkedBoard | null;
   status: SyncStatus;
-  open: (boardId: string) => Promise<void>;
+  /** True when the board is on screen; false leaves the reason on `status`. */
+  open: (boardId: string) => Promise<boolean>;
   /** First save only — creates the row, then the address points at it. */
   saveInto: (projectId: string, name: string) => Promise<boolean>;
   /** True when the server took it. A caller that says "Saved" has to know it did. */
@@ -83,6 +91,16 @@ export function useCloudBoard(
    */
   const [wanted] = useState(() => readBoardId());
 
+  /**
+   * The editor's `setDoc` changes identity with the active scene and with playback. Held in a
+   * ref so the load below runs once per sign-in, not once per scene change — each run would put
+   * the board the address named at mount back over whatever has been opened since.
+   */
+  const setDocRef = useRef(setDoc);
+  useEffect(() => {
+    setDocRef.current = setDoc;
+  });
+
   // Opening what the address asks for, once there is an account to ask with. Written as an
   // inline promise rather than a call to a loader, because setState may not happen
   // synchronously inside an effect — only in the callbacks it schedules.
@@ -91,13 +109,14 @@ export function useCloudBoard(
     let live = true;
     void fetchBoard(wanted)
       .then((row) => {
-        if (!live) return;
+        // A board opened from the library while this was in flight owns the address now.
+        if (!live || readBoardId() !== wanted) return;
         const parsed = parseStoredDoc(row.doc);
         if (!parsed) {
           setStatus({ kind: "error", code: "invalid_document" });
           return;
         }
-        setDoc(parsed);
+        setDocRef.current(parsed);
         setBoard({
           id: row.id,
           projectId: row.project_id,
@@ -114,11 +133,15 @@ export function useCloudBoard(
     return () => {
       live = false;
     };
-  }, [signedIn, wanted, setDoc]);
+  }, [signedIn, wanted]);
 
   const push = useCallback(
     async (value: BoardDoc, force?: number): Promise<boolean> => {
       if (!board || !signedIn) return false;
+      if (!loadable(value)) {
+        setStatus({ kind: "error", code: "unsaveable" });
+        return false;
+      }
       setStatus({ kind: "saving" });
       try {
         const version = await saveRemote(
@@ -152,21 +175,23 @@ export function useCloudBoard(
   useAutosave(doc, (value) => void push(value), CLOUD_AUTOSAVE_MS);
 
   const open = useCallback(
-    async (boardId: string) => {
+    async (boardId: string): Promise<boolean> => {
       setStatus({ kind: "loading" });
       try {
         const row = await fetchBoard(boardId);
         const parsed = parseStoredDoc(row.doc);
         if (!parsed) {
           setStatus({ kind: "error", code: "invalid_document" });
-          return;
+          return false;
         }
         setDoc(parsed);
         setBoard({ id: row.id, projectId: row.project_id, version: row.version, name: row.name });
         goToBoard(row.id);
         setStatus({ kind: "saved", at: Date.now() });
+        return true;
       } catch (error) {
         setStatus({ kind: "error", code: error instanceof ApiError ? error.code : "offline" });
+        return false;
       }
     },
     [setDoc],
@@ -175,6 +200,10 @@ export function useCloudBoard(
   /** The only thing that ever creates a row. Everything after it is an update. */
   const saveInto = useCallback(
     async (projectId: string, name: string): Promise<boolean> => {
+      if (!loadable(doc)) {
+        setStatus({ kind: "error", code: "unsaveable" });
+        return false;
+      }
       setStatus({ kind: "saving" });
       try {
         const row = await createBoard(projectId, name, serialiseDoc(doc));
@@ -198,6 +227,10 @@ export function useCloudBoard(
       setStatus({ kind: "saving" });
       try {
         const copy = { ...doc, name };
+        if (!loadable(copy)) {
+          setStatus({ kind: "error", code: "unsaveable" });
+          return false;
+        }
         const row = await createBoard(board.projectId, name, serialiseDoc(copy));
         setDoc(copy);
         setBoard({ id: row.id, projectId: board.projectId, version: row.version, name: row.name });

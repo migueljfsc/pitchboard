@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChevronDown, Copy, Eye, EyeOff, GripVertical, Trash2 } from "lucide-react";
 import type { Annotation, BoardDoc, Scene } from "@/board/types";
 import {
+  MAX_ANNOTATION_NAME,
   annotationsOf,
   reorderAnnotation,
   sceneRange,
@@ -392,6 +393,7 @@ function Row({
             no separate click to reach the shape on the board. */}
         <input
           value={ann.name ?? ""}
+          maxLength={MAX_ANNOTATION_NAME}
           placeholder={fallback}
           onFocus={onFocus}
           onChange={(e) => onPatch({ name: e.target.value || undefined }, `ann-name:${ann.id}`)}

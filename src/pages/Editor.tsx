@@ -104,7 +104,7 @@ import { cn } from "@/lib/utils";
 import { MODIFIER } from "@/lib/platform";
 import { LocaleSwitch } from "@/components/LocaleSwitch";
 import { AccountMenu } from "@/components/AccountMenu";
-import { BoardsLibrary } from "@/components/BoardsLibrary";
+import { BoardsLibrary, MAX_NAME_CHARS } from "@/components/BoardsLibrary";
 import { SaveBoardButton } from "@/components/SaveBoardButton";
 import { AdoptLocalPrompt } from "@/components/AdoptLocalPrompt";
 import { useAccount } from "@/lib/useAccount";
@@ -293,6 +293,7 @@ export function Editor({ initialDoc }: Props = {}) {
   );
   const doc = tourBoard ?? savedDoc;
   const [selection, setSelection] = useState<ReadonlySet<string>>(() => new Set());
+  const [boardNameDraft, setBoardNameDraft] = useState<string | null>(null);
   const [chosenScene, setActiveScene] = useState(0);
   const [time, setTime] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -801,6 +802,7 @@ export function Editor({ initialDoc }: Props = {}) {
       id,
       ann.name ? t("doc.shapeCopy", { name: ann.name }) : undefined,
     );
+    if (next === doc) return;
     const copy = annotationsOf(next)[annotationsOf(next).findIndex((a) => a.id === id) + 1];
     setDoc(next);
     if (copy) revealAnnotation(copy.id);
@@ -810,6 +812,7 @@ export function Editor({ initialDoc }: Props = {}) {
     const members = [...visible].filter((id) => id !== "ball");
     if (members.length < 2) return;
     const next = createLink(doc, members);
+    if (next === doc) return;
     setDoc(next);
     // Open the new link so its style and order are immediately adjustable.
     setExpandedLink(next.links[next.links.length - 1]?.id ?? null);
@@ -906,6 +909,7 @@ export function Editor({ initialDoc }: Props = {}) {
 
   const addScene = () => {
     const next = addSceneAfter(doc, activeScene, t("doc.scene", { n: doc.scenes.length + 1 }));
+    if (next === doc) return;
     setDoc(next);
     selectScene(activeScene + 1, next);
   };
@@ -914,6 +918,7 @@ export function Editor({ initialDoc }: Props = {}) {
     const scene = doc.scenes[activeScene];
     if (!scene) return;
     const next = duplicateScene(doc, activeScene, t("doc.sceneCopy", { name: scene.name }));
+    if (next === doc) return;
     setDoc(next);
     selectScene(activeScene + 1, next);
   };
@@ -1688,8 +1693,10 @@ export function Editor({ initialDoc }: Props = {}) {
       if (!e.metaKey && !e.ctrlKey && !e.altKey && (e.key === "n" || e.key === "N")) {
         e.preventDefault();
         const next = addSceneAfter(doc, activeScene, t("doc.scene", { n: doc.scenes.length + 1 }));
-        setDoc(next);
-        selectScene(activeScene + 1, next);
+        if (next !== doc) {
+          setDoc(next);
+          selectScene(activeScene + 1, next);
+        }
         return;
       }
       if (!e.metaKey && !e.ctrlKey && !e.altKey && (e.key === "b" || e.key === "B")) {
@@ -1813,9 +1820,17 @@ export function Editor({ initialDoc }: Props = {}) {
           </a>
         </h1>
 
+        {/* A blank name is held here while typing and never reaches the document, which needs
+            one; leaving the field puts the last name back. */}
         <input
-          value={doc.name}
-          onChange={(e) => setDoc({ ...doc, name: e.target.value }, "board-name")}
+          value={boardNameDraft ?? doc.name}
+          maxLength={MAX_NAME_CHARS}
+          onChange={(e) => {
+            const name = e.target.value;
+            setBoardNameDraft(name.trim() ? null : name);
+            if (name.trim()) setDoc({ ...doc, name }, "board-name");
+          }}
+          onBlur={() => setBoardNameDraft(null)}
           placeholder={t("bar.name.placeholder")}
           aria-label={t("bar.name.label")}
           className="w-56 min-w-24 shrink rounded border border-transparent bg-transparent px-2 py-1 text-xs text-ink-200 outline-none transition placeholder:text-ink-400 hover:border-ink-600 focus:border-accent focus:bg-ink-900"

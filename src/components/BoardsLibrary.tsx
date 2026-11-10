@@ -80,7 +80,7 @@ const codeOf = (error: unknown) =>
  * what the Worker accepts — a duplicate refused for a name the user never typed would be a
  * strange way to find out a board's name was long.
  */
-const MAX_NAME_CHARS = 100;
+export const MAX_NAME_CHARS = 100;
 
 type Props = {
   cloud: CloudBoard;
@@ -112,7 +112,9 @@ export function BoardsLibrary({ cloud, sport, boardName, open, onOpenChange: set
           <Dot className="bg-amber-400" />
         )}
         {cloud.status.kind === "saved" && <Dot className="bg-accent" />}
-        {cloud.status.kind === "conflict" && <Dot className="bg-red-400" />}
+        {(cloud.status.kind === "conflict" || cloud.status.kind === "error") && (
+          <Dot className="bg-red-400" />
+        )}
       </button>
 
       {/* Unmounted when closed, so every visit starts on a fresh list rather than on
@@ -422,8 +424,8 @@ function Library({
     setPending(null);
     try {
       if (pending.kind === "open") {
-        await cloud.open(pending.boardId);
-        onClose();
+        // A board that did not open leaves the library up, where `failure` says why.
+        if (await cloud.open(pending.boardId)) onClose();
         return;
       }
       if (pending.kind === "boards") {

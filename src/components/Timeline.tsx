@@ -67,6 +67,7 @@ export function Timeline({
 
   const addScene = () => {
     const next = addSceneAfter(doc, activeScene, t("doc.scene", { n: doc.scenes.length + 1 }));
+    if (next === doc) return;
     onDocChange(next);
     onActiveSceneChange(activeScene + 1, next);
   };

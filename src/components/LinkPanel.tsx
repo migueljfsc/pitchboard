@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import type { BoardDoc, Link, LinkArrows, LinkLine, LinkStyle } from "@/board/types";
 import {
+  MAX_LINKS,
+  MAX_LINK_NAME,
   MAX_MEMBERS,
   MIN_MEMBERS,
   addMembers,
@@ -207,7 +209,8 @@ export function LinkPanel({
           <p className="text-[11px] leading-relaxed text-ink-500">{t("links.noneOnSide")}</p>
         )}
         {/* A side with nothing linked can have its formation's lines back, in one step. */}
-        {shown.length === 0 && tab !== "both" && seeded(tab).length > 0 && (
+        {shown.length === 0 && tab !== "both" && seeded(tab).length > 0 &&
+          doc.links.length + seeded(tab).length <= MAX_LINKS && (
           <button
             type="button"
             onClick={() => onDocChange({ ...doc, links: [...doc.links, ...seeded(tab)] })}
@@ -541,6 +544,7 @@ function LinkEditor({
         <span className="text-xs text-ink-400">{t("links.name")}</span>
         <input
           value={link.name}
+          maxLength={MAX_LINK_NAME}
           onChange={(e) => onChange({ name: e.target.value }, `link-name:${link.id}`)}
           className="w-full rounded border border-ink-600 bg-ink-900 px-1.5 py-1 text-[11px] text-ink-200 outline-none transition hover:border-ink-400 focus:border-accent"
           aria-label={t("links.name.label")}

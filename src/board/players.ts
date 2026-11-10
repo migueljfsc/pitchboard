@@ -116,6 +116,10 @@ export function setPlayerNumber(doc: BoardDoc, id: string, number: number): Boar
 
 /** Matches the schema's cap. */
 export const MAX_SQUAD = 30;
+/** The longest a player's label may be. */
+export const MAX_LABEL = 40;
+/** The longest a team's name may be. */
+export const MAX_TEAM_NAME = 60;
 
 const allIds = (doc: BoardDoc): Set<string> =>
   new Set(doc.teams.flatMap((t) => t.players.map((p) => p.id)));
