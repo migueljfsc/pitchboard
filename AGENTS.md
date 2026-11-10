@@ -311,6 +311,9 @@ Each is one line of what breaks; the reasoning is in the cited decision.
 - **`usage_daily` names nobody** (D119) — no user, session, address or board, ever; that is why
   it is off `deleteAccount`'s list. A new event goes in `USAGE_EVENTS` on both sides.
 - **Expired rows are the daily sweep's** (`cleanup.ts`, D120) — a new table with an expiry joins it.
+- **A deleted board goes to `deleted_boards` by trigger** (D127) — never copy it there by hand, and
+  never delete from `boards` where the board must not be restorable without also clearing the trash.
+  `eraseAccount` clears a user's trash LAST, after the deletes the trigger copies.
 - **`POST /api/usage` is the one unauthenticated write**: the event list, `USAGE_LIMIT` and the
   per-row cap are what keep it from spending the free tier. Keep all three.
 - **Deleting a project deletes its subtree**; the confirmation counts it.

@@ -210,11 +210,12 @@ through the same `exportView`.
 | `GET/POST /api/projects`, `PATCH/DELETE /api/projects/:id` | the project tree (D39, D114) |
 | `GET/POST /api/projects/:id/boards`, `GET/PATCH/DELETE /api/boards` | boards in a project; bulk move, delete |
 | `GET/PUT/PATCH/DELETE /api/boards/:id`, `POST /api/boards/:id/copy` | one board |
+| `GET/DELETE /api/trash`, `POST /api/trash/restore` | Recently deleted: list, delete forever, restore (D127) |
 | `POST/DELETE /api/boards/:id/publish`, `GET /api/shares/:slug` | live share link |
 | `GET/POST /api/presets`, `PUT/DELETE /api/presets/:id` | squad presets (D30) |
 | `GET/POST /api/formations`, `PUT/DELETE /api/formations/:id` | drawn formations (D122) |
 | `POST /api/usage` | anonymous daily counters, the one unauthenticated write (D119) |
-| `GET /api/admin/{stats,users/:id}`, `DELETE /api/admin/users/:id` | operator view; 404 to anyone else (D108) |
+| `GET /api/admin/{stats,users/:id}`, `DELETE /api/admin/users/:id`, `POST /api/admin/users/:id/restore` | operator view and restore; 404 to anyone else (D108, D127) |
 
 Writes are size-capped (`MAX_DOC_BYTES`, 256 KB) and zod-validated. Projects nest as an
 adjacency list; cycle and depth guards and every walk's row bound live in `worker/lib/boards.ts`.

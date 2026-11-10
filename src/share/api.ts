@@ -294,6 +294,44 @@ export async function moveBoards(ids: string[], projectId: string): Promise<numb
   return moved;
 }
 
+/**
+ * How long a deleted board can be restored (D127). Mirrors `TRASH_KEEP_DAYS` in
+ * `worker/lib/limits.ts`; the Worker's sweep is what enforces it.
+ */
+export const TRASH_KEEP_DAYS = 30;
+
+/** A board in Recently deleted. `project_id` may name a folder that is gone. */
+export interface DeletedBoardSummary {
+  id: string;
+  name: string;
+  project_id: string;
+  sport: Sport;
+  deleted_at: number;
+}
+
+export async function listDeletedBoards(): Promise<DeletedBoardSummary[]> {
+  const { boards } = await call<{ boards: DeletedBoardSummary[] }>("/trash");
+  return boards;
+}
+
+/** Back into the folder each left, or its sport's root where that folder is gone. */
+export async function restoreBoards(ids: string[]): Promise<number> {
+  const { restored } = await call<{ restored: number }>("/trash/restore", {
+    method: "POST",
+    body: JSON.stringify({ ids }),
+  });
+  return restored;
+}
+
+/** Out of Recently deleted for good. */
+export async function purgeBoards(ids: string[]): Promise<number> {
+  const { purged } = await call<{ purged: number }>("/trash", {
+    method: "DELETE",
+    body: JSON.stringify({ ids }),
+  });
+  return purged;
+}
+
 /** Deleting a selection. The ids ride in the body — a hundred of them do not fit in a URL. */
 export async function deleteBoards(ids: string[]): Promise<number> {
   const { deleted } = await call<{ deleted: number }>("/boards", {
@@ -473,6 +511,8 @@ export interface AdminUserDetail {
     scenes: number | null;
   }>;
   presets: Array<{ id: string; label: string; created_at: number; updated_at: number }>;
+  /** Boards in this account's Recently deleted (D127). */
+  deleted: Array<{ id: string; name: string; project_id: string; deleted_at: number; bytes: number }>;
 }
 
 /** A 404 for anyone who is not the operator — the route does not admit to existing. */
@@ -493,5 +533,14 @@ export async function fetchAdminUser(id: string): Promise<AdminUserDetail> {
   if (!detail.user || !detail.boards || !detail.projects || !detail.presets) {
     throw new ApiError("offline", 0);
   }
-  return detail as AdminUserDetail;
+  return { ...detail, deleted: detail.deleted ?? [] } as AdminUserDetail;
+}
+
+/** Restores another account's deleted boards (D127). */
+export async function adminRestoreBoards(id: string, ids: string[]): Promise<number> {
+  const { restored } = await call<{ restored: number }>(`/admin/users/${id}/restore`, {
+    method: "POST",
+    body: JSON.stringify({ ids }),
+  });
+  return restored;
 }

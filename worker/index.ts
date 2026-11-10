@@ -33,8 +33,11 @@ import {
   getBoard,
   listAllBoards,
   listBoards,
+  listDeletedBoards,
   listProjects,
   moveBoard,
+  purgeDeletedBoards,
+  restoreDeletedBoards,
   moveBoards,
   updateProject,
   updateBoard,
@@ -47,7 +50,7 @@ import {
   savePreset,
 } from "./lib/presets";
 import { deleteAccount } from "./lib/account";
-import { adminDeleteUser, adminStats, adminUser, isAdmin } from "./lib/admin";
+import { adminDeleteUser, adminRestoreBoards, adminStats, adminUser, isAdmin } from "./lib/admin";
 import { countUsage } from "./lib/usage";
 import { createFormation, deleteFormation, listFormations, saveFormation } from "./lib/formations";
 import { sweep } from "./lib/cleanup";
@@ -256,24 +259,28 @@ async function publicRoute(env: Env, request: Request, url: URL): Promise<Respon
 }
 
 /**
- * The operator's surface (D108). Reads are GETs; the one write is DELETE on a user (D110).
+ * The operator's surface (D108). Reads are GETs; the writes are DELETE on a user (D110) and
+ * POST to restore that user's deleted boards (D127).
  * Anything under /api/admin/ that is not one of those, not signed in or not an admin answers
  * the same 404, so none of it can be told apart from a
  * path that does not exist. The session is checked only once the path matches.
  */
 const ADMIN_STATS = /^\/api\/admin\/stats$/;
 const ADMIN_USER = new RegExp(`^/api/admin/users/${ID}$`);
+const ADMIN_RESTORE = new RegExp(`^/api/admin/users/${ID}/restore$`);
 
 async function adminRoute(env: Env, request: Request, url: URL, now: number): Promise<Response | null> {
   if (!url.pathname.startsWith("/api/admin/")) return null;
   const userId = ADMIN_USER.exec(url.pathname)?.[1];
   const read = request.method === "GET" && (ADMIN_STATS.test(url.pathname) || userId !== undefined);
   const erase = request.method === "DELETE" && userId !== undefined;
-  if (!read && !erase) return fail("not_found", 404);
+  const restoreFor = request.method === "POST" ? ADMIN_RESTORE.exec(url.pathname)?.[1] : undefined;
+  if (!read && !erase && !restoreFor) return fail("not_found", 404);
   if (!isAdmin(await resolveSession(env, request, now), env.ADMIN_EMAILS)) {
     return fail("not_found", 404);
   }
   if (erase) return adminDeleteUser({ env, now }, request, userId);
+  if (restoreFor) return adminRestoreBoards({ env, now }, request, restoreFor);
   return userId ? adminUser({ env, now }, userId) : adminStats({ env, now });
 }
 
@@ -292,6 +299,9 @@ const ROUTES: Array<{ method: string; pattern: RegExp; handle: (ctx: Ctx, ...p: 
   { method: "PATCH", pattern: new RegExp(`^/api/boards/${ID}$`), handle: moveBoard },
   { method: "POST", pattern: new RegExp(`^/api/boards/${ID}/copy$`), handle: copyBoard },
   { method: "DELETE", pattern: new RegExp(`^/api/boards/${ID}$`), handle: deleteBoard },
+  { method: "GET", pattern: new RegExp(`^/api/trash$`), handle: listDeletedBoards },
+  { method: "POST", pattern: new RegExp(`^/api/trash/restore$`), handle: restoreDeletedBoards },
+  { method: "DELETE", pattern: new RegExp(`^/api/trash$`), handle: purgeDeletedBoards },
   { method: "POST", pattern: new RegExp(`^/api/boards/${ID}/publish$`), handle: publishBoard },
   { method: "DELETE", pattern: new RegExp(`^/api/boards/${ID}/publish$`), handle: unpublishBoard },
   { method: "GET", pattern: new RegExp(`^/api/presets$`), handle: listPresets },

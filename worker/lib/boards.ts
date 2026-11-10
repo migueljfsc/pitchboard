@@ -24,6 +24,7 @@ import {
   MAX_NAME_CHARS,
   MAX_PROJECTS_PER_USER,
   MAX_PROJECT_DEPTH,
+  TRASH_KEEP_DAYS,
 } from "./limits";
 import type { SessionUser } from "./session";
 import { DOC_SPORT_SQL, SPORTS, sportOfDoc } from "./sports";
@@ -76,7 +77,7 @@ export function cleanDoc(value: unknown): string | null {
  * Ownership is not checked here — it stays in the WHERE clause of every statement, so an id
  * belonging to somebody else matches nothing instead of being filtered in advance.
  */
-function cleanIds(value: unknown): string[] | null {
+export function cleanIds(value: unknown): string[] | null {
   if (!Array.isArray(value)) return null;
   if (value.length === 0 || value.length > MAX_BULK_IDS) return null;
   const ok = value.every((v) => typeof v === "string" && /^[A-Za-z0-9_-]{22}$/.test(v));
@@ -686,4 +687,95 @@ export async function deleteBoard(ctx: Ctx, id: string): Promise<Response> {
     .run();
   if (result.meta.changes === 0) return fail("not_found", 404);
   return json({ ok: true });
+}
+
+// --- deleted boards (D127) --------------------------------------------------------------
+//
+// A board leaves `boards` through the `boards_into_trash` trigger, which keeps a copy in
+// `deleted_boards` for TRASH_KEEP_DAYS — whichever statement deleted it, a folder's cascade
+// included. Nothing here deletes a board; these routes read that table, put rows back, and
+// empty it early on request.
+
+const DAY_S = 24 * 60 * 60;
+
+/** Metadata only, newest first, within the keep. A row past it waits for the sweep, unseen. */
+export async function listDeletedBoards({ env, user, now }: Ctx): Promise<Response> {
+  const { results } = await env.DB.prepare(
+    `SELECT id, name, project_id, ${DOC_SPORT_SQL} AS sport, deleted_at
+       FROM deleted_boards
+      WHERE user_id = ?1 AND deleted_at > ?2
+      ORDER BY deleted_at DESC`,
+  )
+    .bind(user.id, now - TRASH_KEEP_DAYS * DAY_S)
+    .all();
+  return json({ boards: results });
+}
+
+/**
+ * Put deleted boards back, each into the folder it left or, where that folder is gone, its
+ * sport's root. Shared by the owner's route and the operator's (D108), so the two cannot drift.
+ *
+ * Each board is an INSERT … SELECT from the trash, then a DELETE of the trash row that only
+ * matches once the board is back — one batch, so a failure restores nothing. Ownership is in
+ * both WHERE clauses. The board keeps its version and creation time, gets no share link, and is
+ * stamped as updated now so it heads the library.
+ */
+export async function restoreDeleted(
+  env: Env,
+  userId: string,
+  ids: string[],
+  now: number,
+): Promise<number | "board_limit_reached"> {
+  const existing = await count(env, "SELECT count(*) n FROM boards WHERE user_id = ?", userId);
+  if (existing + ids.length > MAX_BOARDS_PER_USER) return "board_limit_reached";
+
+  // A board whose folder is gone goes to its sport's root, which an account may not have yet.
+  await ensureRoots(env, userId, now);
+
+  const results = await env.DB.batch(
+    ids.flatMap((id) => [
+      env.DB.prepare(
+        `INSERT INTO boards (id, project_id, user_id, name, doc, version, created_at, updated_at)
+         SELECT t.id,
+                COALESCE(
+                  (SELECT p.id FROM projects p WHERE p.id = t.project_id AND p.user_id = ?2),
+                  (SELECT r.id FROM projects r
+                    WHERE r.user_id = ?2
+                      AND r.sport = COALESCE(json_extract(t.doc, '$.sport'), 'football'))
+                ),
+                t.user_id, t.name, t.doc, t.version, t.created_at, ?3
+           FROM deleted_boards t
+          WHERE t.id = ?1 AND t.user_id = ?2`,
+      ).bind(id, userId, now),
+      env.DB.prepare(
+        `DELETE FROM deleted_boards
+          WHERE id = ?1 AND user_id = ?2
+            AND EXISTS (SELECT 1 FROM boards WHERE id = ?1 AND user_id = ?2)`,
+      ).bind(id, userId),
+    ]),
+  );
+  return results.reduce((n, r, i) => n + (i % 2 === 0 ? (r.meta.changes ?? 0) : 0), 0);
+}
+
+export async function restoreDeletedBoards(ctx: Ctx): Promise<Response> {
+  const ids = cleanIds((await body(ctx.request))?.ids);
+  if (!ids) return fail("invalid_selection", 400);
+  const restored = await restoreDeleted(ctx.env, ctx.user.id, ids, ctx.now);
+  if (restored === "board_limit_reached") return fail("board_limit_reached", 409);
+  if (restored === 0) return fail("not_found", 404);
+  return json({ restored });
+}
+
+/** Gone for good, before the sweep would have taken them. */
+export async function purgeDeletedBoards(ctx: Ctx): Promise<Response> {
+  const ids = cleanIds((await body(ctx.request))?.ids);
+  if (!ids) return fail("invalid_selection", 400);
+  const results = await ctx.env.DB.batch(
+    ids.map((id) =>
+      ctx.env.DB.prepare("DELETE FROM deleted_boards WHERE id = ?1 AND user_id = ?2").bind(id, ctx.user.id),
+    ),
+  );
+  const purged = results.reduce((n, r) => n + (r.meta.changes ?? 0), 0);
+  if (purged === 0) return fail("not_found", 404);
+  return json({ purged });
 }

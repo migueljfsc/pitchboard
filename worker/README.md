@@ -17,7 +17,8 @@ lib/
   mail.ts          the verification and reset emails, through Resend
   turnstile.ts     the bot check on the two routes that send mail
   account.ts       deleting an account and everything it owns (D110)
-  boards.ts        projects, the tree, and boards; ownership is a WHERE clause, never a check
+  boards.ts        projects, the tree, boards, and Recently deleted (D127); ownership is a WHERE
+                   clause, never a check
   presets.ts       the account's squad presets (D30)
   sports.ts        the sport roots a library is filed under — mirrors SPORT_IDS (D114)
   shares.ts        publishing to /share/<slug>, the one public read, and the page it is opened at

@@ -6,7 +6,9 @@ import { LogoMark, Wordmark } from "@/components/Logo";
 import { BAR_BUTTON, BAR_PRIMARY } from "@/components/ui/bar";
 import { EASE_OUT, enter, leave } from "@/lib/motion";
 import {
+  TRASH_KEEP_DAYS,
   adminDeleteUser,
+  adminRestoreBoards,
   ApiError,
   fetchAccount,
   fetchAdminStats,
@@ -410,6 +412,9 @@ function Overview({
 function UserDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const [detail, setDetail] = useState<AdminUserDetail | "failed" | null>(null);
   const [deleting, setDeleting] = useState(false);
+  /** Bumped after a restore, so the boards and the deleted list are read again together. */
+  const [version, setVersion] = useState(0);
+  const [restoreFailed, setRestoreFailed] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -419,7 +424,17 @@ function UserDetail({ id, onBack }: { id: string; onBack: () => void }) {
     return () => {
       live = false;
     };
-  }, [id]);
+  }, [id, version]);
+
+  const restore = async (boardId: string) => {
+    try {
+      await adminRestoreBoards(id, [boardId]);
+      setRestoreFailed(false);
+      setVersion((v) => v + 1);
+    } catch {
+      setRestoreFailed(true);
+    }
+  };
 
   const pathOf = (projectId: string) =>
     detail && detail !== "failed" ? projectPath(detail.projects, projectId) : "";
@@ -522,6 +537,32 @@ function UserDetail({ id, onBack }: { id: string; onBack: () => void }) {
                 ],
               }))}
               empty="No projects."
+            />
+          </Section>
+
+          <Section title="Recently deleted" count={detail.deleted.length}>
+            {restoreFailed && <p className="mb-2 text-xs text-red-300">Could not restore that board.</p>}
+            <Table
+              head={["Board", "Was in", "Size", "Deleted", ""]}
+              numeric={[2]}
+              rows={detail.deleted.map((b) => ({
+                key: b.id,
+                cells: [
+                  b.name,
+                  pathOf(b.project_id) || "(folder deleted)",
+                  formatBytes(b.bytes),
+                  <When key="d" at={b.deleted_at} />,
+                  <button
+                    key="r"
+                    type="button"
+                    onClick={() => void restore(b.id)}
+                    className="rounded border border-ink-600 px-2 py-0.5 text-ink-300 transition hover:border-accent hover:text-white"
+                  >
+                    Restore
+                  </button>,
+                ],
+              }))}
+              empty={`Nothing deleted in the last ${TRASH_KEEP_DAYS} days.`}
             />
           </Section>
 

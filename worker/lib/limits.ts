@@ -14,6 +14,12 @@ export const MAX_PROJECTS_PER_USER = 25;
 export const MAX_BOARDS_PER_USER = 200;
 
 /**
+ * How long a deleted board can be restored (D127). Mirrors `TRASH_KEEP_DAYS` in
+ * `src/share/api.ts`, which says it in the delete confirmations.
+ */
+export const TRASH_KEEP_DAYS = 30;
+
+/**
  * How many boards one bulk move or delete may name.
  *
  * A selection is made by hand, so a hundred is already far past any real gesture — it is here

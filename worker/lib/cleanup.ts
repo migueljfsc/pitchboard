@@ -3,9 +3,12 @@
  * for a request that may never come.
  *
  * A session is deleted when it is presented after expiring, and an email token when its
- * address asks for another — so one nobody presents again stays forever. This clears them, and
- * trims the usage counters (D119) to what the admin page could ever show plus a year to spare.
+ * address asks for another — so one nobody presents again stays forever. This clears them,
+ * trims the usage counters (D119) to what the admin page could ever show plus a year to spare,
+ * and empties deleted boards past their keep (D127).
  */
+
+import { TRASH_KEEP_DAYS } from "./limits";
 
 /** How long a day's usage counters are kept: a year and a season's worth of charts. */
 export const USAGE_KEEP_DAYS = 400;
@@ -18,5 +21,6 @@ export async function sweep(env: Env, now: number): Promise<void> {
     env.DB.prepare("DELETE FROM sessions WHERE expires_at <= ?1").bind(now),
     env.DB.prepare("DELETE FROM email_tokens WHERE expires_at <= ?1").bind(now),
     env.DB.prepare("DELETE FROM usage_daily WHERE day < ?1").bind(oldestKept),
+    env.DB.prepare("DELETE FROM deleted_boards WHERE deleted_at <= ?1").bind(now - TRASH_KEEP_DAYS * DAY_S),
   ]);
 }

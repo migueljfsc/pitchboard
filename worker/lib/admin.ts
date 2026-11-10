@@ -2,8 +2,9 @@
  * The operator's view: who has an account, and how much the site is used (D108).
  *
  * METADATA ONLY. Counts, dates and sizes — never a board's document, a preset's body or a
- * session. The one write is erasing an account (D110), for a deletion request that arrives by
- * email rather than through the account's own menu. Sizes and scene counts are computed inside D1 (`length`, `json_*`), so a
+ * session. The writes are erasing an account (D110), for a deletion request that arrives by
+ * email rather than through the account's own menu, and restoring that account's deleted boards
+ * (D127), for a coach who asks after the fact. Sizes and scene counts are computed inside D1 (`length`, `json_*`), so a
  * document never crosses into the Worker and the 10 ms CPU budget is spent on nothing but
  * serialising the answer.
  *
@@ -13,6 +14,7 @@
  */
 
 import { body, confirms, eraseAccount } from "./account";
+import { cleanIds, restoreDeleted } from "./boards";
 import { fail, json } from "./http";
 import type { SessionUser } from "./session";
 import { usageDay } from "./usage";
@@ -120,7 +122,7 @@ export async function adminStats({ env, now }: AdminCtx): Promise<Response> {
 }
 
 export async function adminUser({ env }: AdminCtx, userId: string): Promise<Response> {
-  const [user, projects, boards, presets] = await env.DB.batch([
+  const [user, projects, boards, presets, deleted] = await env.DB.batch([
     env.DB.prepare(`SELECT ${USER_COLUMNS} FROM users u WHERE u.id = ?1`).bind(userId),
     env.DB.prepare(
       `SELECT id, name, parent_id, created_at, updated_at
@@ -138,6 +140,10 @@ export async function adminUser({ env }: AdminCtx, userId: string): Promise<Resp
       `SELECT id, label, created_at, updated_at
          FROM presets WHERE user_id = ?1 ORDER BY label`,
     ).bind(userId),
+    env.DB.prepare(
+      `SELECT id, name, project_id, deleted_at, length(CAST(doc AS BLOB)) AS bytes
+         FROM deleted_boards WHERE user_id = ?1 ORDER BY deleted_at DESC`,
+    ).bind(userId),
   ]);
 
   if (user.results.length === 0) return fail("not_found", 404);
@@ -147,7 +153,18 @@ export async function adminUser({ env }: AdminCtx, userId: string): Promise<Resp
     projects: projects.results,
     boards: boards.results,
     presets: presets.results,
+    deleted: deleted.results,
   });
+}
+
+/** Deleted boards back into this account's library, as its owner's own restore does (D127). */
+export async function adminRestoreBoards({ env, now }: AdminCtx, request: Request, userId: string): Promise<Response> {
+  const ids = cleanIds((await body(request)).ids);
+  if (!ids) return fail("invalid_selection", 400);
+  const restored = await restoreDeleted(env, userId, ids, now);
+  if (restored === "board_limit_reached") return fail("board_limit_reached", 409);
+  console.log("admin restored boards", userId, restored);
+  return json({ restored });
 }
 
 /**

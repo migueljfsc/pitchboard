@@ -27,6 +27,7 @@ import {
   Plus,
   Search,
   Trash2,
+  Undo2,
   X,
   Save,
 } from "lucide-react";
@@ -45,6 +46,8 @@ import type { CloudBoard } from "@/lib/useCloudBoard";
 import { ancestorIds, buildTree, sportOfProject, subtreeIds, visibleRows } from "@/lib/projects";
 import {
   ApiError,
+  TRASH_KEEP_DAYS,
+  type DeletedBoardSummary,
   type Project,
   type StoredBoardSummary,
   copyBoard,
@@ -52,9 +55,12 @@ import {
   deleteBoards,
   deleteProject,
   listAllBoards,
+  listDeletedBoards,
   listProjects,
   moveBoards,
   moveProject,
+  purgeBoards,
+  restoreBoards,
 } from "@/share/api";
 import { APP_PATH } from "@/share/routes";
 
@@ -129,6 +135,7 @@ export function BoardsLibrary({ cloud, sport, boardName, open, onOpenChange: set
 type Pending =
   | { kind: "open"; boardId: string }
   | { kind: "boards"; ids: string[] }
+  | { kind: "purge"; ids: string[] }
   | { kind: "project"; id: string; name: string };
 
 /** What a drag is carrying: rows from the board list, or a folder from the rail. */
@@ -146,8 +153,11 @@ function Library({
   const { t, tn } = useI18n();
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [boards, setBoards] = useState<StoredBoardSummary[] | null>(null);
+  const [trash, setTrash] = useState<DeletedBoardSummary[] | null>(null);
   /** Project on show, or null for everything at once. */
   const [active, setActive] = useState<string | null>(null);
+  /** Recently deleted is on show in place of the boards (D127). */
+  const [inTrash, setInTrash] = useState(false);
   const [selection, setSelection] = useState<Set<string>>(new Set());
   /** Where a shift-click measures its range from. */
   const [anchor, setAnchor] = useState<string | null>(null);
@@ -169,9 +179,10 @@ function Library({
 
   const refresh = useCallback(async () => {
     try {
-      const [ps, bs] = await Promise.all([listProjects(), listAllBoards()]);
+      const [ps, bs, ts] = await Promise.all([listProjects(), listAllBoards(), listDeletedBoards()]);
       setProjects(ps);
       setBoards(bs);
+      setTrash(ts);
       setError(null);
     } catch (cause) {
       setError(codeOf(cause));
@@ -180,11 +191,12 @@ function Library({
 
   useEffect(() => {
     let live = true;
-    void Promise.all([listProjects(), listAllBoards()])
-      .then(([ps, bs]) => {
+    void Promise.all([listProjects(), listAllBoards(), listDeletedBoards()])
+      .then(([ps, bs, ts]) => {
         if (!live) return;
         setProjects(ps);
         setBoards(bs);
+        setTrash(ts);
       })
       .catch((cause: unknown) => {
         if (live) setError(codeOf(cause));
@@ -244,6 +256,14 @@ function Library({
     );
   }, [boards, scope, query]);
 
+  const trashShown = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return (trash ?? []).filter((b) => needle === "" || b.name.toLowerCase().includes(needle));
+  }, [trash, query]);
+
+  /** The rows on show, whichever list they come from: what a shift-click and select-all act on. */
+  const listed: ReadonlyArray<{ id: string }> = inTrash ? trashShown : visible;
+
   /**
    * Counted from the one list, so a move is reflected the moment it lands — and counted
    * over the subtree, so the number on a folder is what opening it will show.
@@ -284,11 +304,11 @@ function Library({
 
   const pick = (e: React.MouseEvent, id: string) => {
     if (e.shiftKey && anchor) {
-      const from = visible.findIndex((b) => b.id === anchor);
-      const to = visible.findIndex((b) => b.id === id);
+      const from = listed.findIndex((b) => b.id === anchor);
+      const to = listed.findIndex((b) => b.id === id);
       if (from >= 0 && to >= 0) {
         const [lo, hi] = from < to ? [from, to] : [to, from];
-        setSelection(new Set(visible.slice(lo, hi + 1).map((b) => b.id)));
+        setSelection(new Set(listed.slice(lo, hi + 1).map((b) => b.id)));
         return;
       }
     }
@@ -309,10 +329,11 @@ function Library({
     setAnchor(id);
   };
 
-  const allShown = visible.length > 0 && visible.every((b) => selection.has(b.id));
+  const allShown = listed.length > 0 && listed.every((b) => selection.has(b.id));
 
   const showProject = (id: string | null) => {
     setActive(id);
+    setInTrash(false);
     // Opening a folder opens the ones above it. Selecting a row that is folded away leaves
     // the rail showing no selection at all while the right pane changes underneath.
     if (id !== null) {
@@ -328,7 +349,25 @@ function Library({
     setPicking(false);
   };
 
+  const showTrash = () => {
+    setActive(null);
+    setInTrash(true);
+    setSelection(new Set());
+    setPicking(false);
+  };
+
   // --- acting on the selection ---
+
+  /** Back where they were filed, or their sport's root; they head the library from then on. */
+  const restore = async (ids: string[]) => {
+    try {
+      await restoreBoards(ids);
+      setSelection(new Set());
+      await refresh();
+    } catch (cause) {
+      setError(codeOf(cause));
+    }
+  };
 
   /**
    * "{name} (copy)", kept inside the Worker's name cap.
@@ -428,7 +467,10 @@ function Library({
         if (await cloud.open(pending.boardId)) onClose();
         return;
       }
-      if (pending.kind === "boards") {
+      if (pending.kind === "purge") {
+        await purgeBoards(pending.ids);
+        setSelection(new Set());
+      } else if (pending.kind === "boards") {
         await deleteBoards(pending.ids);
         // Deleting the board being edited leaves the address pointing at nothing, so the page
         // goes back to a plain editor rather than pretending the row is still there.
@@ -579,7 +621,7 @@ function Library({
                   onClick={() => showProject(null)}
                   className={cn(
                     "flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-[11px] transition",
-                    active === null
+                    active === null && !inTrash
                       ? "bg-accent/15 font-medium text-accent"
                       : "text-ink-300 hover:bg-ink-700/50 hover:text-white",
                   )}
@@ -589,7 +631,7 @@ function Library({
                   <span
                     className={cn(
                       "ml-auto shrink-0",
-                      active === null ? "text-accent/70" : "text-ink-500",
+                      active === null && !inTrash ? "text-accent/70" : "text-ink-500",
                     )}
                   >
                     {boards?.length ?? 0}
@@ -709,6 +751,27 @@ function Library({
                   </div>
                 </li>
               ))}
+
+              {/* Last in the rail and apart from the folders: it is not one, and nothing is
+                  dropped on it — deleting is the bulk bar's. */}
+              <li className="mt-1.5 border-t border-ink-700 pt-1.5">
+                <button
+                  type="button"
+                  onClick={showTrash}
+                  className={cn(
+                    "flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-[11px] transition",
+                    inTrash
+                      ? "bg-accent/15 font-medium text-accent"
+                      : "text-ink-300 hover:bg-ink-700/50 hover:text-white",
+                  )}
+                >
+                  <Trash2 size={12} className="shrink-0" />
+                  <Clipped>{t("library.trash")}</Clipped>
+                  <span className={cn("ml-auto shrink-0", inTrash ? "text-accent/70" : "text-ink-500")}>
+                    {trash?.length ?? 0}
+                  </span>
+                </button>
+              </li>
             </ul>
 
             <div className="flex shrink-0 gap-1.5 border-t border-ink-700 p-1.5">
@@ -730,24 +793,61 @@ function Library({
 
           {/* Boards. */}
           <div className="flex min-w-0 flex-1 flex-col">
-            {visible.length > 0 && (
+            {listed.length > 0 && (
               <div className="flex shrink-0 items-center gap-2 border-b border-ink-700 px-3 py-1.5">
                 <Box
                   checked={allShown}
                   label={t("library.selectAll")}
                   onChange={() =>
-                    setSelection(allShown ? new Set() : new Set(visible.map((b) => b.id)))
+                    setSelection(allShown ? new Set() : new Set(listed.map((b) => b.id)))
                   }
                 />
                 <span className="text-[11px] text-ink-500">
-                  {tn("boards.count", visible.length, { count: visible.length })}
+                  {tn("boards.count", listed.length, { count: listed.length })}
                 </span>
-                <span className="ml-auto text-[10px] text-ink-500">{t("library.openHint")}</span>
+                <span className="ml-auto text-[10px] text-ink-500">
+                  {inTrash ? t("library.trash.hint", { days: TRASH_KEEP_DAYS }) : t("library.openHint")}
+                </span>
               </div>
             )}
 
             <ul className="min-h-0 flex-1 overflow-y-auto p-1.5">
-              {boards === null ? (
+              {inTrash ? (
+                trash === null ? null : trashShown.length === 0 ? (
+                  <li className="px-2 py-1 text-[11px] leading-relaxed text-ink-400">
+                    {query.trim()
+                      ? t("library.noMatches", { query: query.trim() })
+                      : t("library.trash.empty", { days: TRASH_KEEP_DAYS })}
+                  </li>
+                ) : (
+                  trashShown.map((board) => (
+                    <li key={board.id}>
+                      <div
+                        onClick={(e) => pick(e, board.id)}
+                        className={cn(
+                          "group flex cursor-default items-center gap-2 rounded px-2 py-1.5 transition",
+                          selection.has(board.id) ? "bg-accent/15" : "hover:bg-ink-700/50",
+                        )}
+                      >
+                        <Box
+                          checked={selection.has(board.id)}
+                          label={board.name}
+                          onChange={() => toggle(board.id)}
+                          className={cn(
+                            "transition",
+                            selection.has(board.id) ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+                          )}
+                        />
+                        <Clipped className="min-w-0 flex-1 text-[11px] text-ink-200">{board.name}</Clipped>
+                        <Clipped className="shrink-0 text-[10px] text-ink-500">
+                          {projects?.find((p) => p.id === board.project_id)?.name ?? t(`sport.${board.sport}`)}
+                        </Clipped>
+                        <span className="shrink-0 text-[10px] text-ink-500">{when(board.deleted_at)}</span>
+                      </div>
+                    </li>
+                  ))
+                )
+              ) : boards === null ? (
                 <li role="status" aria-label={t("boards.loading")} className="flex flex-col gap-2 px-2 py-1.5">
                   {[70, 55, 82, 48, 64].map((w) => (
                     <span key={w} className="flex items-center gap-3">
@@ -827,38 +927,51 @@ function Library({
                 <span className="text-[11px] text-ink-200">
                   {tn("library.selected", selection.size, { count: selection.size })}
                 </span>
-                <div className="ml-auto flex items-center gap-1.5">
-                  <div className="relative">
-                    {/* A selection spanning sports has nowhere it can all go (D114). */}
-                    <Small
-                      onClick={() => setPicking(!picking)}
-                      disabled={selectionSport === null}
-                      title={selectionSport === null ? t("library.moveTo.mixed") : undefined}
-                    >
-                      <FolderInput size={11} />
-                      {t("library.moveTo")}
+                {inTrash ? (
+                  <div className="ml-auto flex items-center gap-1.5">
+                    <Small onClick={() => void restore([...selection])}>
+                      <Undo2 size={11} />
+                      {t("library.restore")}
                     </Small>
-                    {picking && selectionSport !== null && (
-                      <PickProject
-                        projects={projects ?? []}
-                        sport={selectionSport}
-                        onPick={(id) => void move([...selection], id)}
-                        onClose={() => setPicking(false)}
-                      />
-                    )}
+                    <Small danger onClick={() => setPending({ kind: "purge", ids: [...selection] })}>
+                      <Trash2 size={11} />
+                      {t("library.purge")}
+                    </Small>
                   </div>
-                  <Small onClick={() => void duplicate([...selection])}>
-                    <Copy size={11} />
-                    {t("boards.duplicate")}
-                  </Small>
-                  <Small
-                    danger
-                    onClick={() => setPending({ kind: "boards", ids: [...selection] })}
-                  >
-                    <Trash2 size={11} />
-                    {t("boards.delete")}
-                  </Small>
-                </div>
+                ) : (
+                  <div className="ml-auto flex items-center gap-1.5">
+                    <div className="relative">
+                      {/* A selection spanning sports has nowhere it can all go (D114). */}
+                      <Small
+                        onClick={() => setPicking(!picking)}
+                        disabled={selectionSport === null}
+                        title={selectionSport === null ? t("library.moveTo.mixed") : undefined}
+                      >
+                        <FolderInput size={11} />
+                        {t("library.moveTo")}
+                      </Small>
+                      {picking && selectionSport !== null && (
+                        <PickProject
+                          projects={projects ?? []}
+                          sport={selectionSport}
+                          onPick={(id) => void move([...selection], id)}
+                          onClose={() => setPicking(false)}
+                        />
+                      )}
+                    </div>
+                    <Small onClick={() => void duplicate([...selection])}>
+                      <Copy size={11} />
+                      {t("boards.duplicate")}
+                    </Small>
+                    <Small
+                      danger
+                      onClick={() => setPending({ kind: "boards", ids: [...selection] })}
+                    >
+                      <Trash2 size={11} />
+                      {t("boards.delete")}
+                    </Small>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -873,24 +986,35 @@ function Library({
               ? t("boards.openConfirm.title")
               : pending.kind === "project"
                 ? t("boards.deleteProject.title")
-                : tn("library.deleteBoards.title", pending.ids.length, {
-                    count: pending.ids.length,
-                  })
+                : pending.kind === "purge"
+                  ? tn("library.purge.title", pending.ids.length, { count: pending.ids.length })
+                  : tn("library.deleteBoards.title", pending.ids.length, {
+                      count: pending.ids.length,
+                    })
           }
           message={
             pending.kind === "open"
               ? t("boards.openConfirm.message")
               : pending.kind === "project"
                 ? deletingFolders(pending.id) === 0
-                  ? t("boards.deleteProject.message", { name: pending.name })
+                  ? t("boards.deleteProject.message", { name: pending.name, days: TRASH_KEEP_DAYS })
                   : tn("boards.deleteProject.nested", deletingFolders(pending.id), {
                       name: pending.name,
+                      days: TRASH_KEEP_DAYS,
                     })
-                : pending.ids.length === 1
-                  ? t("boards.deleteBoard.message", { name: nameOf(pending.ids[0]) })
-                  : t("library.deleteBoards.message", { count: pending.ids.length })
+                : pending.kind === "purge"
+                  ? t("library.purge.message")
+                  : pending.ids.length === 1
+                    ? t("boards.deleteBoard.message", { name: nameOf(pending.ids[0]), days: TRASH_KEEP_DAYS })
+                    : t("library.deleteBoards.message", { count: pending.ids.length, days: TRASH_KEEP_DAYS })
           }
-          confirmLabel={t(pending.kind === "open" ? "boards.openConfirm.confirm" : "boards.delete")}
+          confirmLabel={t(
+            pending.kind === "open"
+              ? "boards.openConfirm.confirm"
+              : pending.kind === "purge"
+                ? "library.purge"
+                : "boards.delete",
+          )}
           onConfirm={() => void confirm()}
           onCancel={() => setPending(null)}
         />

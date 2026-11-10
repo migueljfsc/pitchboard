@@ -745,6 +745,24 @@ side and number. `ft learn` diffs a coach's exported board against it and keeps 
 labels. Ids are the keys because they survive reordering; `switchSide` keeps a player's id for this.
 Left out of share links, kept in JSON export.
 
+## D127 — Recently deleted: a board can be restored for 30 days
+**A delete moves a board to `deleted_boards`, by trigger.** `boards_into_trash` (migration 0012)
+copies the row `BEFORE DELETE`, so one board, a selection and a folder's cascade all land there and
+no statement that deletes a board names the table. A `deleted_at` column was rejected: ~20 queries
+read `boards`, and each would need a filter whose omission shows a deleted board, counts it against
+the quota or serves its share link. The trash has no foreign keys, so a board outlives its folder;
+its share slug is not kept, so a published link stays dead.
+
+**Restore puts it back where it was filed**, or in its sport's root when that folder is gone, with
+its version and creation time, stamped as updated now (`restoreDeleted`, one batch per request, the
+trash row removed only once the board is back). It counts against `MAX_BOARDS_PER_USER`. The coach
+restores or deletes forever from **Recently deleted** in the library; the operator restores from the
+account's page in `/admin`, through the same function.
+
+**Kept for `TRASH_KEEP_DAYS` (30)**, longer than D1 Time Travel's 7 days on the Free plan, which can
+only restore the whole database in place. The daily sweep (D120) empties older rows; `eraseAccount`
+empties a user's rows after the deletes that fill it (D110). Folders are not kept, only their boards.
+
 ---
 
 ## Merged and retired

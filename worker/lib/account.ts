@@ -51,6 +51,8 @@ export async function eraseAccount(env: Env, id: string, email: string): Promise
     env.DB.prepare("DELETE FROM formations WHERE user_id = ?").bind(id),
     env.DB.prepare("DELETE FROM boards WHERE user_id = ?").bind(id),
     env.DB.prepare("DELETE FROM projects WHERE user_id = ?").bind(id),
+    // After both deletes above: the trash trigger copies every board they remove (D127).
+    env.DB.prepare("DELETE FROM deleted_boards WHERE user_id = ?").bind(id),
     env.DB.prepare("DELETE FROM identities WHERE user_id = ?").bind(id),
     env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(id),
     env.DB.prepare("DELETE FROM email_tokens WHERE email = ?").bind(email),
