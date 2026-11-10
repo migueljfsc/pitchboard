@@ -7,7 +7,7 @@ An animated tactics board in the browser — football, futsal, basketball, handb
 ice hockey and volleyball on one engine. Draw a formation, move players between scenes along curved
 runs, export **MP4**, **GIF** or **PNG** — all client-side.
 
-**Live:** https://pitchboard.migueljfsc.dev — one Cloudflare Worker serving the app and its API,
+**Live:** [pitchboard.migueljfsc.dev](https://pitchboard.migueljfsc.dev/?home) — one Cloudflare Worker serving the app and its API,
 deployed by [`deploy-worker.yml`](.github/workflows/deploy-worker.yml) on every push to `main`.
 [`release.yml`](.github/workflows/release.yml) cuts releases with commitizen; it needs a
 `CZ_TOKEN` secret because `main` is protected.
