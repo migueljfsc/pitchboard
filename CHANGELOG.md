@@ -3,6 +3,21 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v1.0.0 (2026-11-10)
+
+### BREAKING CHANGE
+
+- no change in behaviour. 1.0.0 marks the board document,
+#d= share links and the setup file format as the stable surface.
+
+### Feat
+
+- Pitchboard 1.0.0
+
+### Fix
+
+- **boards**: open the board asked for, and save only boards that open again
+
 ## v0.93.0 (2026-10-11)
 
 ### Feat
