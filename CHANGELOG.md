@@ -3,6 +3,12 @@
 Notable changes to Pitchboard. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); SemVer once releases begin.
 
+## v1.2.0 (2026-11-24)
+
+### Feat
+
+- **brand**: a coach's chalk mark, a live-link signature, and the brand where people meet the app
+
 ## v1.1.0 (2026-11-10)
 
 ### Feat
