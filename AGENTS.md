@@ -112,12 +112,16 @@ pnpm board ../football-tracks/work/Untitled/tracks.json --scenes  # who has the 
 
 Each is one line of what breaks; the reasoning is in the cited decision.
 
-### The look (D126)
+### The look (D126, D128)
 - **The accent is chalk and is no kit's colour.** Amber means the home kit, the ball and warnings;
   bringing it back to the chrome makes a selection vanish on the home side.
 - **On is a filled, outlined tile** (`bg-accent/15`, 70% chalk border or ring); off has no fill.
   A colour change alone does not read as on.
 - **Pass `DISPLAY` to `cn` after any text size**, or tailwind-merge drops its leading.
+- **The brand is drawn in several places** — the mark in `LogoMark`, `public/favicon.svg` and
+  `docs/brand/*.html`; the amber stroke in `ChalkStroke`, `.chalk-underline`, `og.html` and
+  `public/privacy.html`. Change
+  one, change all, then `docs/brand/render.sh` (D128). Chalk grain never reaches the editor or an export.
 - **`BoardCanvas` is transparent** — editor and viewer show the page round the pitch; only an
   export paints the surround. In 3D, shading darkens painted pixels only (`source-atop`).
 

@@ -1,0 +1,14 @@
+{
+  "name": "Pitchboard",
+  "short_name": "Pitchboard",
+  "description": "Draw a formation, animate the play scene by scene, and export it as a video.",
+  "start_url": "/app",
+  "display": "browser",
+  "background_color": "#0e1f17",
+  "theme_color": "#0e1f17",
+  "icons": [
+    { "src": "/favicon.svg", "type": "image/svg+xml", "sizes": "any" },
+    { "src": "/icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any maskable" }
+  ]
+}

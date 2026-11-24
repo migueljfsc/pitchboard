@@ -23,6 +23,7 @@ import { useI18n } from "@/i18n/context";
 import { MODIFIER } from "@/lib/platform";
 import { LocaleSwitch } from "@/components/LocaleSwitch";
 import { cn } from "@/lib/utils";
+import { LogoMark } from "@/components/Logo";
 
 type Box = { top: number; left: number; width: number; height: number };
 
@@ -181,6 +182,7 @@ export function Tour({
         style={at ?? { left: 0, top: 0, visibility: "hidden" }}
       >
         <div className="flex items-center gap-2.5 px-4 pt-3">
+          <LogoMark className="size-5" />
           <span className="font-mono text-[11px] text-ink-400">
             {t("tour.progress", { n: step + 1, total: TOUR_STEPS.length })}
           </span>

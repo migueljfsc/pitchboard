@@ -6,7 +6,7 @@ import { parseStoredDoc } from "@/share/cloud";
 import { APP_PATH, HOME_PATH, isAdminPath, isLandingPath, readShareSlug } from "@/share/routes";
 import { BAR_PRIMARY } from "@/components/ui/bar";
 import { useI18n } from "@/i18n/context";
-import { LogoMark } from "@/components/Logo";
+import { LiveLinkMark, LogoMark } from "@/components/Logo";
 import { cn } from "@/lib/utils";
 
 /** Loaded only on /admin, so no visitor downloads the operator's page. */
@@ -192,7 +192,7 @@ function Splash({ children, tone }: { children: React.ReactNode; tone?: "bad" })
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-5 bg-ink-900 p-8 text-center">
       <a href={HOME_PATH} title="Pitchboard" className="rounded-lg">
-        <LogoMark className={cn("size-10", tone !== "bad" && "animate-pulse")} />
+        {tone === "bad" ? <LogoMark chalk className="size-10" /> : <LiveLinkMark px={0.8} className="w-24" />}
       </a>
       <div
         className={`max-w-md animate-fade-up text-sm leading-relaxed ${tone === "bad" ? "text-red-300" : "text-ink-300"}`}

@@ -35,6 +35,7 @@ import { ColorPicker } from "@/components/ui/ColorPicker";
 import { Clipped } from "@/components/ui/Clipped";
 import { useI18n } from "@/i18n/context";
 import type { Message } from "@/i18n/core";
+import { Sketch } from "@/components/Sketch";
 
 const RUN_STARTS = [
   { value: "gradual", key: "inspect.runStart.gradual" },
@@ -682,7 +683,12 @@ function RowButton({
 /** Nothing selected: what to click. */
 function EmptyState() {
   const { t } = useI18n();
-  return <p className="text-xs leading-relaxed text-ink-300">{t("inspect.empty.lead")}</p>;
+  return (
+    <div className="flex items-center gap-3">
+      <Sketch kind="select" />
+      <p className="text-xs leading-relaxed text-ink-300">{t("inspect.empty.lead")}</p>
+    </div>
+  );
 }
 
 /**

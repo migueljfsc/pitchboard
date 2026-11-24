@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <!-- The app's mark, drawn the same as LogoMark in components/Logo.tsx. -->
-  <rect x="1" y="1" width="30" height="30" rx="8" fill="#eef1ea" />
-  <rect x="4" y="6" width="24" height="20" rx="2.5" fill="#1c6b3c" />
-  <rect x="6.5" y="8.5" width="19" height="15" rx="0.5" fill="none" stroke="#ffffff" stroke-width="1.2" opacity="0.55" />
-  <line x1="16" y1="8.5" x2="16" y2="23.5" stroke="#ffffff" stroke-width="1.2" opacity="0.55" />
-  <path d="M10 20 C 12.5 12, 17.5 12, 22 13.5" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" />
-  <path d="M22 13.5 l-3.2 -1.5 M22 13.5 l-2 2.8" stroke="#ffffff" stroke-width="2" stroke-linecap="round" />
-  <circle cx="10" cy="20" r="2.4" fill="#f59e0b" stroke="#0e1f17" stroke-width="0.8" />
+  <!-- LogoMark in components/Logo.tsx on the chrome's ground, the run solid for tab sizes. -->
+  <rect width="32" height="32" rx="7" fill="#0e1f17" />
+  <g fill="none" stroke="#eef1ea" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.4 19.9 11.6 27.1 M11.6 19.9 4.4 27.1" />
+    <path d="M9.5 17 C 10.5 5, 22 4.5, 23.5 16" />
+    <path d="M23.5 16 l1.8 -3.6 M23.5 16 l-2.8 -2.9" />
+    <circle cx="24.2" cy="23.6" r="3.6" />
+  </g>
 </svg>

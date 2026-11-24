@@ -7,7 +7,7 @@ import { SPORT_TEMPLATES, buildTemplate, type TemplateId } from "@/formations/te
 import { LiveBoard } from "@/components/LiveBoard";
 import { heroBoard } from "@/pages/landingBoards";
 import { LocaleSwitch } from "@/components/LocaleSwitch";
-import { Wordmark } from "@/components/Logo";
+import { ChalkDefs, LiveLinkMark, Wordmark } from "@/components/Logo";
 import { SportIcon } from "@/components/SportMenu";
 import { BAR_BUTTON, BAR_DIVIDER, BAR_PRIMARY } from "@/components/ui/bar";
 import { useI18n } from "@/i18n/context";
@@ -22,6 +22,9 @@ import { CoffeeLink } from "@/components/CoffeeLink";
  * Pass it to `cn` after any text size, which would otherwise merge its leading away.
  */
 const DISPLAY = "font-extrabold font-stretch-semi-expanded leading-[0.98] tracking-[-0.02em]";
+
+/** The page's chalk grain, named by `filter: url(#…)` on HTML drawn in chalk. */
+const CHALK = "landing-chalk";
 
 const FULL: PitchView = { half: "full", rotated: false };
 const TILTED: PitchView = { half: "full", rotated: true, tilt: true };
@@ -59,6 +62,7 @@ export function Landing() {
 
   return (
     <div className="relative h-full overflow-y-auto overflow-x-hidden bg-ink-900 text-ink-200 [scroll-behavior:smooth]">
+      <ChalkDefs id={CHALK} />
       <nav className="sticky top-0 z-30 border-b border-white/[0.04] bg-ink-900/70 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-3 sm:px-6">
           <a href={HOME_PATH} className="rounded-lg">
@@ -141,8 +145,11 @@ function Hero({ doc }: { doc: BoardDoc }) {
           what a crawler or a tab opened in the background has to be able to read. */}
       <h1 className={cn("text-[clamp(2.5rem,6vw,5rem)] text-white", DISPLAY)}>
         {/* Each line balanced on its own, so a wrapped one splits evenly. */}
-        <span className="block text-balance">{t("landing.hero.title")}</span>
-        <span className="block text-balance text-ink-400">{t("landing.hero.title2")}</span>
+        <span className="block text-balance">
+          <span className="chalk-underline">{t("landing.hero.title")}</span>
+          <LiveLinkMark className="ml-[0.3em] hidden h-[0.95em] w-auto align-[-0.08em] sm:inline-block" />
+        </span>
+        <span className="mt-[0.12em] block text-balance text-ink-400">{t("landing.hero.title2")}</span>
       </h1>
 
       <div className="mt-8 grid items-end gap-6 lg:grid-cols-[minmax(0,1fr)_auto]">
@@ -330,7 +337,7 @@ function HowItWorks() {
       <ol className="mt-12 grid gap-10 md:grid-cols-3 md:gap-8">
         {steps.map((step, i) => (
           <li key={step.title} className="border-t border-ink-600 pt-6">
-            <span aria-hidden className={cn("block text-6xl text-ink-600", DISPLAY)}>
+            <span aria-hidden className={cn("block text-6xl text-ink-500", DISPLAY)} style={{ filter: `url(#${CHALK})` }}>
               {i + 1}
             </span>
             <h3 className="mt-4 text-lg font-semibold text-white">{step.title}</h3>

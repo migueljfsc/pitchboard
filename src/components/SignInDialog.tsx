@@ -10,6 +10,7 @@ import { X } from "lucide-react";
 import { PasswordForm, type PasswordMode } from "@/components/PasswordForm";
 import { useI18n } from "@/i18n/context";
 import { Modal } from "@/components/ui/Modal";
+import { LogoMark } from "@/components/Logo";
 
 export function SignInDialog({
   initialMode,
@@ -28,7 +29,8 @@ export function SignInDialog({
       className="max-w-[352px] p-5"
     >
       <div className="mb-4 flex items-center justify-between">
-        <h2 id="sign-in-title" className="text-sm font-semibold text-white">
+        <h2 id="sign-in-title" className="flex items-center gap-2 text-sm font-semibold text-white">
+          <LogoMark />
           {t("account.dialog.title")}
         </h2>
         <button

@@ -16,7 +16,7 @@ import { LocaleSwitch } from "@/components/LocaleSwitch";
 import { countUsage } from "@/share/usage";
 import { SceneNoteStrip } from "@/components/SceneNote";
 import { CoffeeLink } from "@/components/CoffeeLink";
-import { LogoMark } from "@/components/Logo";
+import { LogoMark, Wordmark } from "@/components/Logo";
 import { BAR_BUTTON, BAR_DIVIDER, BAR_PRIMARY } from "@/components/ui/bar";
 import { PlayButton } from "@/components/ui/PlayButton";
 import { HOME_PATH } from "@/share/routes";
@@ -137,7 +137,8 @@ export function Viewer({ doc, initialView, onFork }: Props) {
       {!present && (
       <header className="flex shrink-0 items-center gap-3 border-b border-ink-700 bg-ink-800 px-4 py-2">
         <a href={HOME_PATH} title={t("app.name")} className="shrink-0 rounded-lg">
-          <LogoMark />
+          <LogoMark className="sm:hidden" />
+          <Wordmark name={t("app.name")} className="hidden sm:flex" />
         </a>
         <span className={BAR_DIVIDER} />
         <div className="min-w-0">

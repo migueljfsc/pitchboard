@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Film, ImageIcon, Loader2, X } from "lucide-react";
+import { Film, ImageIcon, X } from "lucide-react";
 import type { BoardDoc, PitchView } from "@/board/types";
 import { JsonPane } from "@/components/JsonPane";
 import { sliceScenes, totalSeconds, hasNotes } from "@/board/scenes";
@@ -33,6 +33,7 @@ import { loadExportPrefs, saveExportPrefs } from "@/share/exportPrefs";
 import type { MessageKey } from "@/i18n/core";
 import { cn, slug } from "@/lib/utils";
 import { Modal } from "@/components/ui/Modal";
+import { LiveLinkMark } from "@/components/Logo";
 
 type Props = {
   doc: BoardDoc;
@@ -544,7 +545,7 @@ export function ExportDialog({ doc, t, pitchView, onClose, exportJob }: Props) {
           {job ? (
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2 text-[11px] text-ink-300">
-                <Loader2 size={13} className="animate-spin text-accent" />
+                <LiveLinkMark className="h-5 w-auto" />
                 <span>{i18n.t(PHASE[job.phase])}</span>
                 {format !== "png" && (
                   <span className="ml-auto font-mono">{Math.round(job.fraction * 100)}%</span>

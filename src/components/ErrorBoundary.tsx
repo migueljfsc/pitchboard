@@ -8,6 +8,7 @@
  */
 
 import { Component, type ReactNode } from "react";
+import { LogoMark } from "@/components/Logo";
 import { useI18n } from "@/i18n/context";
 import { storedBoardText } from "@/share/local";
 import { APP_PATH } from "@/share/routes";
@@ -48,7 +49,8 @@ function Crashed() {
     "rounded-md border border-ink-600 bg-ink-900 px-3 py-1.5 text-xs text-ink-200 transition hover:border-accent hover:text-white";
 
   return (
-    <div role="alert" className="flex h-full w-full items-center justify-center bg-ink-900 p-6">
+    <div role="alert" className="flex h-full w-full flex-col items-center justify-center gap-5 bg-ink-900 p-6">
+      <LogoMark chalk className="size-10" />
       <div className="max-w-md rounded-lg border border-ink-600 bg-ink-800 p-5 shadow-2xl">
         <h1 className="text-sm font-semibold text-white">{t("crash.title")}</h1>
         <p className="mt-2 text-xs leading-relaxed text-ink-300">{t("crash.message")}</p>

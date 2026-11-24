@@ -654,6 +654,41 @@ The privacy page, a static file, wears the same look; Archivo lives in `public/f
 licence, so the page and the app load one copy. Formation and squad preset are one **Line-up**
 block — the shape and the names in it are one decision — with one pencil managing both libraries.
 
+## D128 — The brand: a coach's chalk, and a link that bends
+**The mark is the oldest drawing in coaching** — an X, a dashed run, an O — in chalk on the chrome's
+dark grass. It names the product at a glance, extends the chalk accent D126 chose, and belongs to no
+one sport. A matchday-programme look (most football of the four), kit stripes (the commonest sports
+cliché) and a node-graph mark (generic "network") were weighed and rejected. The wordmark is
+Archivo at its widest, extra-bold, over a hand-drawn amber stroke: amber is the home kit and the
+ball, the one warm note, never a selection.
+
+**The signature is a live link**: three numbered players and the chain between them, bending as
+they run — the board's one idea nobody else has. It sits inline after the landing headline's first
+line, from `sm` up, and is the loading splash. It loops on SMIL, its own clock, so it needs no
+frames from the page and lands nowhere; asked for less motion, it is its first shape, still.
+
+**Chalk is a texture for the brand's own drawings, never the editor's.** Grain (`ChalkFilter`) is
+noise measured in the filtered drawing's units, so it takes `px`, screen pixels per unit, to stay
+one size; below ~40 px it only blurs, so the header mark and the favicon are clean strokes. A
+heading's underline is a background image (`.chalk-underline`), so a wrapped line is underlined
+line by line, and carries its grain inside the image. Used on the landing page's hero and step
+numerals, the splash and the link preview; the canvas and every export are unbranded — a coach's
+clip is the coach's.
+
+**The brand is where a person meets the product, not in the tools they work with.** Empty states
+draw what to do next as a coach would (`Sketch`: a player reached for, a run and its zone, a bare
+board), export progress is the signature, and the sign-in dialog, the tour card, the crash page,
+the shared board's header and the privacy page carry the mark or the wordmark. The editor's working
+chrome stays as D126 left it: chalk details on its sections and panels were weighed and rejected as
+decoration in a dense tool, and SVG filters there cost frames. A chalkboard pitch surface is a
+separate project — it goes through `drawBoard` and changes the exports of a board that picks it.
+
+**Raster files are drawn, not exported by hand.** `docs/brand/og.html` (the 1200×630 link preview)
+and `icon.html` (full bleed, the mark inside a maskable icon's safe zone) go through headless Chrome
+in `docs/brand/render.sh` to `public/og.png`, `icon-192/512.png` and `apple-touch-icon.png`. A
+published board's `/share/<slug>` keeps the same image; per-board previews would need the Worker to
+render or the client to upload one, and were left for later.
+
 ---
 
 ## The importer (`src/import/`)

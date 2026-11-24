@@ -14,6 +14,7 @@ import type { Change } from "@/lib/history";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n/context";
 import type { I18n } from "@/i18n/context";
+import { Sketch } from "@/components/Sketch";
 
 type Props = {
   doc: BoardDoc;
@@ -109,9 +110,10 @@ export function DrawingsPanel({
 
   if (all.length === 0) {
     return (
-      <p className="p-4 text-[11px] leading-relaxed text-ink-300">
-        {t("drawn.empty")}
-      </p>
+      <div className="flex flex-col items-start gap-3 p-4">
+        <Sketch kind="draw" />
+        <p className="text-[11px] leading-relaxed text-ink-300">{t("drawn.empty")}</p>
+      </div>
     );
   }
 

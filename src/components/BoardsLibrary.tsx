@@ -63,6 +63,7 @@ import {
   restoreBoards,
 } from "@/share/api";
 import { APP_PATH } from "@/share/routes";
+import { Sketch } from "@/components/Sketch";
 
 /** Codes the Worker emits for these routes; anything else reads as the generic line. */
 const KNOWN = new Set([
@@ -814,7 +815,8 @@ function Library({
             <ul className="min-h-0 flex-1 overflow-y-auto p-1.5">
               {inTrash ? (
                 trash === null ? null : trashShown.length === 0 ? (
-                  <li className="px-2 py-1 text-[11px] leading-relaxed text-ink-400">
+                  <li className="flex flex-col items-start gap-2 px-2 py-1 text-[11px] leading-relaxed text-ink-400">
+                    {!query.trim() && <Sketch kind="board" />}
                     {query.trim()
                       ? t("library.noMatches", { query: query.trim() })
                       : t("library.trash.empty", { days: TRASH_KEEP_DAYS })}
@@ -858,6 +860,7 @@ function Library({
                 </li>
               ) : visible.length === 0 ? (
                 <li className="flex flex-col items-start gap-2 px-2 py-1 text-[11px] leading-relaxed text-ink-400">
+                  {!query.trim() && <Sketch kind="board" />}
                   {query.trim() ? t("library.noMatches", { query: query.trim() }) : t("library.empty")}
                   {/* An empty folder of the board's own sport is somewhere the board on screen
                       could go, when it is not saved anywhere yet (D114). */}
